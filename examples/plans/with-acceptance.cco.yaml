@@ -1,0 +1,14 @@
+schema: cco-plan/v1
+name: with-acceptance
+defaults:
+  provider: fake
+  mode: print
+  worktree: false
+tasks:
+  - id: write_marker
+    title: create marker file
+    prompt: |
+      Create a file named MARKER.txt with content ok.
+      CCO_DONE ok
+    # Demo gate: fails unless MARKER exists (use claude + real prompt to create it).
+    acceptance: "test -f MARKER.txt"

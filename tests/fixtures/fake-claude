@@ -1,0 +1,5 @@
+#!/bin/sh
+# Stub claude CLI for cco tests.
+# Emits a Claude-like print JSON result on stdout.
+echo '{"type":"result","result":"ok","session_id":"s-fake-1","total_cost_usd":0.01}'
+exit 0

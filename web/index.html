@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>cco · 项目任务控制台</title>
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body style="background:#F5F5F7;margin:0">
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand" id="brand-home" title="返回欢迎页">
+        <div class="logo">cco</div>
+        <div class="tag">项目任务控制台</div>
+      </div>
+
+      <div class="sidebar-section-head">
+        <span class="section-label">我的项目</span>
+        <button id="btn-add-plus" class="icon-btn" type="button" title="添加项目">＋</button>
+      </div>
+
+      <div class="project-list" id="project-list">
+        <p class="muted empty-hint">尚未添加项目<br/>点 ＋ 添加</p>
+      </div>
+
+      <div class="sidebar-foot">
+        <div id="conn-status">启动中…</div>
+        <div class="foot-links">
+          <button type="button" class="linkish" id="btn-open-doctor">环境检查</button>
+          <button type="button" class="linkish" id="btn-open-settings">设置</button>
+          <button type="button" class="linkish" id="btn-open-help">帮助</button>
+        </div>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div class="top-title">
+          <h1 id="page-title">欢迎</h1>
+          <div id="page-sub" class="muted sub"></div>
+        </div>
+        <div class="top-actions">
+          <button id="btn-refresh" class="btn ghost" type="button">刷新</button>
+        </div>
+      </header>
+
+      <!-- Welcome / no project -->
+      <section id="page-welcome" class="page active">
+        <div class="empty-state" id="welcome-empty">
+          <h2>用计划驱动多个 Claude 一起干活</h2>
+          <p class="muted">添加项目 → 选计划 → 点「分配计划」→ AI 自动拆分并执行 → 监视每个 CLI 窗口。</p>
+          <div class="welcome-actions">
+            <button class="btn primary" id="btn-welcome-add" type="button">添加项目文件夹</button>
+            <button class="btn ghost" id="btn-welcome-help" type="button">查看帮助</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Selected project workspace -->
+      <section id="page-workspace" class="page">
+        <div id="workspace-body">
+          <!-- Environment gate -->
+          <div id="doctor-warn" class="warn-bar" hidden>
+            <div id="doctor-warn-text">环境检查未通过，请先处理后再开始运行。</div>
+            <div class="warn-actions">
+              <button class="btn sm" id="btn-doctor-recheck" type="button">重新检查</button>
+              <button class="btn ghost sm" id="btn-doctor-open" type="button">详情</button>
+              <button class="btn ghost sm" id="btn-doctor-dismiss" type="button" title="暂时隐藏">忽略</button>
+            </div>
+          </div>
+
+          <!-- Active plan bar (compact only) -->
+          <div id="plan-picker" class="plan-picker compact" hidden>
+            <div class="plan-active-bar" id="plan-active-bar">
+              <div class="plan-active-main">
+                <span class="plan-active-label">当前计划</span>
+                <div class="plan-active-meta">
+                  <strong id="plan-active-name">尚未选择</strong>
+                  <span class="muted" id="plan-active-path"></span>
+                </div>
+              </div>
+              <div class="plan-active-actions">
+                <button class="btn ghost sm" id="btn-plan-choose" type="button">选择计划</button>
+                <button class="btn primary sm" id="btn-pp-analyze" type="button" disabled>分配计划</button>
+              </div>
+            </div>
+            <div class="plan-active-foot" id="plan-active-foot">
+              <span id="pp-error" class="err-text" hidden></span>
+              <button type="button" class="linkish" id="btn-advanced-toggle">▸ 高级</button>
+              <div id="advanced-body" class="advanced-body" hidden>
+                <div class="grid-2">
+                  <label class="field">
+                    <span>规划方式</span>
+                    <select id="pp-plan-mode">
+                      <option value="ai" selected>AI 智能拆分</option>
+                      <option value="parse">直接解析</option>
+                      <option value="fake">模拟拆分</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Provider</span>
+                    <select id="pp-provider">
+                      <option value="claude" selected>Claude</option>
+                      <option value="codex">Codex</option>
+                      <option value="fake">模拟运行</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>执行方式</span>
+                    <select id="pp-mode">
+                      <option value="print">前台运行（推荐）</option>
+                      <option value="bg">后台运行</option>
+                      <option value="auto">自动选择</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <!-- legacy hooks kept for JS compat (hidden) -->
+            <div id="plan-collapsed-summary" hidden></div>
+            <strong id="plan-collapsed-name" hidden>—</strong>
+            <span id="plan-picker-label" hidden></span>
+            <div id="plan-picker-tools" hidden>
+              <button id="btn-pp-scan" type="button"></button>
+              <button id="btn-pp-pick" type="button"></button>
+              <button id="btn-pp-pick-empty" type="button"></button>
+              <button id="btn-pp-set-default" type="button"></button>
+              <button id="btn-plan-expand" type="button"></button>
+            </div>
+            <div id="plan-picker-body" hidden>
+              <div id="pp-empty" hidden></div>
+              <div id="pp-plan-list"></div>
+              <div id="pp-preview" hidden>
+                <span id="pp-name"></span>
+                <span id="pp-tasks"></span>
+                <div id="pp-task-list"></div>
+              </div>
+              <div id="pp-controls" hidden></div>
+            </div>
+          </div>
+
+          <!-- Plan chooser sheet -->
+          <div id="plan-chooser" class="plan-chooser" hidden>
+            <div class="plan-chooser-card" role="dialog" aria-label="选择计划">
+              <div class="plan-chooser-head">
+                <div>
+                  <h3>选择计划</h3>
+                  <p class="muted">只选一份要执行的任务说明文档</p>
+                </div>
+                <button class="btn ghost sm" id="btn-chooser-close" type="button">关闭</button>
+              </div>
+              <div class="plan-chooser-tools">
+                <button class="btn ghost sm" id="btn-chooser-scan" type="button">扫描项目</button>
+                <button class="btn ghost sm" id="btn-chooser-pick" type="button">选择文件…</button>
+              </div>
+              <div id="chooser-empty" class="empty-state soft" hidden style="min-height:100px;padding:1rem">
+                <p class="muted">未发现计划文档。可点「选择文件…」指定一份 .md</p>
+              </div>
+              <div id="chooser-list" class="plan-list chooser-list"></div>
+            </div>
+          </div>
+
+          <!-- B0: planning phase -->
+          <div id="plan-phase-planning" class="plan-phase" hidden>
+            <div class="plan-phase-head">
+              <h3>AI 正在拆分任务…</h3>
+              <p class="muted" id="planning-sub">读取计划并生成带顺序的任务图</p>
+            </div>
+            <pre id="planner-log" class="detail-log planner-log" aria-live="polite"></pre>
+            <div class="plan-actions">
+              <button class="btn ghost" id="btn-cancel-planning" type="button">返回选计划</button>
+            </div>
+          </div>
+
+          <!-- B0: confirm phase (waves + start) -->
+          <div id="plan-phase-confirm" class="plan-phase" hidden>
+            <div class="plan-phase-head">
+              <div>
+                <h3 id="confirm-title">待确认的执行计划</h3>
+                <p class="muted" id="confirm-meta"></p>
+              </div>
+              <div class="plan-actions">
+                <button class="btn ghost sm" id="btn-replan" type="button">重新规划</button>
+                <button class="btn ghost sm" id="btn-skip-confirm" type="button" hidden>跳过预览</button>
+                <button class="btn primary" id="btn-confirm-start" type="button">开始运行</button>
+              </div>
+            </div>
+            <div class="confirm-layout">
+              <div class="confirm-waves" id="confirm-waves"></div>
+              <div class="confirm-detail">
+                <div id="confirm-task-title" class="confirm-task-title muted">选择左侧任务查看说明</div>
+                <div id="confirm-task-deps" class="muted confirm-deps"></div>
+                <pre id="confirm-task-prompt" class="confirm-prompt"></pre>
+              </div>
+            </div>
+            <span id="confirm-error" class="err-text" hidden></span>
+          </div>
+
+          <!-- Run top bar -->
+          <div class="run-banner" id="run-banner" hidden>
+            <div class="run-meta">
+              <span id="run-status-badge"></span>
+              <span class="run-progress" id="run-progress-label"></span>
+              <span class="muted" id="run-wave-label"></span>
+              <span class="muted" id="run-elapsed-label"></span>
+              <span class="muted" id="run-plan-label"></span>
+            </div>
+            <div class="row gap">
+              <button class="btn primary sm" id="btn-ws-resume" type="button" hidden>继续未完成任务</button>
+              <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
+              <button class="btn ghost sm" id="btn-ws-dismiss-run" type="button">隐藏运行</button>
+            </div>
+          </div>
+
+          <!-- Failure summary -->
+          <div id="error-summary" class="error-bar" hidden>
+            <strong>失败</strong>
+            <span id="error-summary-text"></span>
+          </div>
+
+          <!-- Completion -->
+          <div id="completion-panel" class="completion-panel compact" hidden>
+            <h3 id="completion-title">运行结束</h3>
+            <div class="completion-stats" id="completion-stats"></div>
+            <div class="completion-list" id="completion-list"></div>
+            <div class="completion-actions">
+              <button class="btn primary" id="btn-rerun" type="button">再跑一次</button>
+              <button class="btn ghost" id="btn-change-plan" type="button">换计划</button>
+            </div>
+          </div>
+
+          <!-- Multi-window CLI board -->
+          <div id="monitor" class="monitor board-mode" hidden>
+            <div class="board-toolbar">
+              <div class="row gap">
+                <span class="section-label">CLI 窗口</span>
+                <button type="button" class="filter-chip" id="btn-filter-failed" title="仅看失败">仅失败</button>
+                <button type="button" class="btn ghost sm" id="btn-restore-panels" hidden>恢复已关闭</button>
+              </div>
+              <div class="detail-tools">
+                <div class="seg" id="log-view-mode" title="日志视图">
+                  <button type="button" data-mode="term" class="active">终端</button>
+                  <button type="button" data-mode="pretty">结构</button>
+                  <button type="button" data-mode="raw">原始</button>
+                </div>
+                <div class="font-size-group" id="log-font-group" title="日志字号">
+                  <button type="button" data-size="12">A</button>
+                  <button type="button" data-size="14" class="active">A</button>
+                  <button type="button" data-size="16" style="font-size:.85rem">A</button>
+                </div>
+              </div>
+            </div>
+            <div id="cli-board" class="cli-board" aria-live="polite"></div>
+            <!-- legacy detail hooks (single focus panel) -->
+            <aside class="task-list-pane" id="task-list-pane" hidden>
+              <div class="task-list-head"><span>任务</span></div>
+              <div class="task-list" id="task-list"></div>
+            </aside>
+            <section class="detail-pane" id="detail-pane" hidden>
+              <div class="detail-head">
+                <div class="detail-title" id="detail-title"></div>
+                <div class="detail-tools">
+                  <button class="btn ghost sm" id="btn-copy-log" type="button">复制</button>
+                  <button class="btn danger sm" id="btn-stop-task" type="button" hidden>停止</button>
+                </div>
+              </div>
+              <div id="cli-error-banner" class="error-banner" hidden></div>
+              <div class="detail-log log-console" id="cli-detail-log" role="log" aria-live="polite"></div>
+              <div class="detail-foot">
+                <span id="detail-foot-left">—</span>
+                <span id="detail-foot-right">—</span>
+              </div>
+            </section>
+          </div>
+
+          <div id="cli-empty" class="empty-state soft" hidden>
+            <p class="muted">选一份计划 →「分配计划」→ 自动拆分并执行。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-doctor" class="page">
+        <div class="panel">
+          <div class="row gap" style="margin-bottom:.75rem">
+            <button class="btn" id="btn-doctor" type="button">重新检查</button>
+            <button class="btn ghost" id="btn-doctor-back" type="button">返回</button>
+          </div>
+          <div id="doctor-list" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="page-settings" class="page">
+        <div class="panel">
+          <div class="row gap" style="margin-bottom:.75rem">
+            <button class="btn" id="btn-settings-save" type="button">保存</button>
+            <button class="btn ghost" id="btn-settings-back" type="button">返回</button>
+          </div>
+          <div class="settings-grid">
+            <div class="settings-group">
+              <h3 class="settings-group-title">监视</h3>
+              <label class="field">状态刷新间隔（秒）
+                <input id="s-poll-interval" type="number" min="1" max="60" step="1" placeholder="5" />
+                <span class="field-hint">界面多久问一次「任务跑得怎样」。建议 2–5 秒。</span>
+              </label>
+              <label class="field">日志字号
+                <select id="s-log-font">
+                  <option value="12">12px（紧凑）</option>
+                  <option value="14" selected>14px（推荐）</option>
+                  <option value="16">16px（大）</option>
+                </select>
+                <span class="field-hint">运行监视主日志的默认字号，也可在监视页随时切换。</span>
+              </label>
+            </div>
+            <div class="settings-group">
+              <h3 class="settings-group-title">运行默认值</h3>
+              <label class="field">运行引擎
+                <select id="s-default-provider">
+                  <!-- options filled or static -->
+                  <option value="claude">claude（真实 CLI）</option>
+                  <option value="codex">Codex</option>
+                  <option value="fake">fake（本地模拟，不调 API）</option>
+                </select>
+                <span class="field-hint">一般用 claude；调试界面可用 fake。</span>
+              </label>
+              <label class="field">执行方式
+                <select id="s-default-mode">
+                  <option value="0">前台运行（推荐）</option>
+                  <option value="1">后台运行</option>
+                  <option value="2">自动选择</option>
+                </select>
+              </label>
+              <label class="field">最多同时跑几个任务
+                <input id="s-max-parallel" type="number" min="1" max="32" step="1" placeholder="2" />
+              </label>
+            </div>
+          </div>
+          <div id="s-save-status" class="save-status" hidden></div>
+        </div>
+      </section>
+
+      <section id="page-help" class="page">
+        <div class="panel prose">
+          <div class="row gap" style="margin-bottom:.75rem">
+            <button class="btn ghost" id="btn-help-back" type="button">返回</button>
+          </div>
+          <h2>上手（模式 B）</h2>
+          <ol>
+            <li>点侧栏 <strong>＋</strong> 添加本机项目文件夹</li>
+            <li>选择一份<strong>计划文档</strong>（.md 即可，不必手写任务表）</li>
+            <li>点<strong>分配计划</strong> — AI 自动拆分任务并开始执行</li>
+            <li>每个任务一个 CLI 窗口，可拖动位置、可关闭；需要时再展开日志</li>
+            <li>监视页：排队 / 运行中 / 已完成 的 CLI 都能点开看日志</li>
+          </ol>
+          <h3>计划是什么？</h3>
+          <p>计划 = 给 AI 的任务说明书。优先用 <code>.md</code>；已有结构化任务表也可用「解析已有结构」跳过启发式拆分。</p>
+          <h3>常见操作</h3>
+          <ul>
+            <li><strong>重新规划</strong>：回到选计划，改高级选项后再拆一次</li>
+            <li><strong>全部停止</strong>：结束当前运行中的全部任务</li>
+            <li><strong>继续未完成任务</strong>：在暂停/失败后尝试 resume</li>
+            <li><strong>高级选项</strong>：规划方式（AI / 解析 / 模拟拆分）、运行引擎、执行方式</li>
+            <li><strong>环境检查</strong>：确认本机 Claude CLI 与密钥是否就绪</li>
+          </ul>
+          <h3>Claude 路径示例</h3>
+          <pre class="log-box">[providers.claude]
+bin = "/Users/你/.local/bin/claude"</pre>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal: add project only -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h2 id="modal-title">添加项目</h2>
+        <button type="button" class="icon-btn" id="modal-close" title="关闭">×</button>
+      </div>
+      <p class="muted modal-hint">选择本机项目目录，加入左侧「我的项目」。</p>
+      <label class="field">项目路径
+        <div class="input-row">
+          <input id="m-project-path" type="text" placeholder="/absolute/path/to/repo" />
+          <button class="btn ghost" id="m-pick-folder" type="button">选择…</button>
+        </div>
+      </label>
+      <label class="field">显示名称（可选）
+        <input id="m-project-name" type="text" placeholder="默认用文件夹名" />
+      </label>
+      <div class="modal-actions">
+        <button class="btn ghost" type="button" id="m-cancel-project">取消</button>
+        <button class="btn primary" type="button" id="m-confirm-project">添加到列表</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" hidden></div>
+  <script src="/app.js"></script>
+</body>
+</html>

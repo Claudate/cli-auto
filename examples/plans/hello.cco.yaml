@@ -1,0 +1,26 @@
+schema: cco-plan/v1
+name: hello
+defaults:
+  provider: fake
+  mode: print
+  worktree: false
+  providers:
+    fake: {}
+    claude:
+      max_turns: 20
+      max_budget_usd: 2
+      permission_mode: dontAsk
+      allowed_tools: [Read, Glob, Grep]
+tasks:
+  - id: inventory
+    title: list project shape
+    prompt: |
+      只读探索本仓库顶层结构与 README。
+      用中文写一份不超过 30 行的结构摘要。
+      最后一行输出：CCO_DONE ok
+  - id: summarize
+    title: short summary
+    depends_on: [inventory]
+    prompt: |
+      根据上一步，写三行总结。
+      CCO_DONE ok
