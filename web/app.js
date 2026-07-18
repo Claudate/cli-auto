@@ -330,12 +330,14 @@ async function selectProject(path) {
   const proj = state.projects.find((p) => p.path === path);
   const candidate =
     state.live?.plan_path || proj?.default_plan || proj?.last_plan || state.plans[0] || null;
-  if (candidate && state.phase === "pick") {
+  // 完成/运行中也要回填「当前计划」，避免顶栏空白
+  if (candidate) {
     await selectPlan(candidate);
   } else {
     renderPlanPicker();
   }
   renderPhasePanels();
+  renderWorkspace();
 }
 
 function renderPhasePanels() {
@@ -440,19 +442,24 @@ function renderDoctorWarn() {
     bar.hidden = true;
     return;
   }
-  // 已成功跑过时只软提示，不恐吓
   const live = state.live;
-  const soft =
-    live &&
-    ["completed", "done"].includes(String(live.run_status || "").toLowerCase());
-  bar.classList.toggle("soft", !!soft);
+  const st = String(live?.run_status || "").toLowerCase();
+  const historyOk = live && ["completed", "done"].includes(st);
+  // 历史已成功：默认不刷黄条，避免「明明跑完还骂环境」
+  if (historyOk && !isLiveStatus(st)) {
+    bar.hidden = true;
+    return;
+  }
   const detail = fails
     .map((l) => `${l.name}: ${l.detail}`)
     .slice(0, 2)
     .join(" · ");
-  $("#doctor-warn-text").textContent = soft
-    ? `环境提示（不影响查看历史）：${detail || "部分检查未通过"}`
-    : detail || "环境检查未通过。若 Claude 已安装，请点「重新检查」或到设置确认路径。";
+  bar.classList.add("soft");
+  const textEl = $("#doctor-warn-text");
+  if (textEl) {
+    textEl.textContent =
+      detail || "环境检查未通过。若 Claude 已安装，点「重新检查」或设置 CCO_CLAUDE_BIN。";
+  }
   bar.hidden = false;
 }
 
@@ -954,102 +961,107 @@ function renderWorkspace() {
       String(runStatus || "").toLowerCase()
     );
 
-  // Don't clobber planning/confirm with live sync unless exec is active
   if (active) {
     state.phase = "running";
-  } else if (finished && state.phase === "running") {
+  } else if (finished && (state.phase === "running" || state.phase === "pick")) {
     state.phase = "done";
+  } else if (finished) {
+    state.phase = "done";
+  }
+
+  const body = $("#workspace-body");
+  if (body) {
+    body.classList.remove("mode-idle", "mode-running", "mode-done", "mode-plan");
+    if (state.phase === "planning" || state.phase === "confirm") body.classList.add("mode-plan");
+    else if (active) body.classList.add("mode-running");
+    else if (finished) body.classList.add("mode-done");
+    else body.classList.add("mode-idle");
   }
 
   renderDoctorWarn();
   renderPhasePanels();
-  if (state.phase === "pick" || state.phase === "done") {
+  if (state.phase === "pick" || state.phase === "done" || state.phase === "running") {
     renderPlanPicker();
   }
 
-  $("#run-banner").hidden = !hasRun || state.phase === "planning" || state.phase === "confirm";
-  if (hasRun) {
-    $("#run-status-badge").innerHTML = badge(runStatus || "idle");
-    const done = tasks.filter((t) => isDoneStatus(t.status)).length;
-    const total = tasks.length;
-    $("#run-progress-label").textContent = total ? `已完成 ${done}/${total}` : "";
-    const layers = live?.layers || [];
-    const waveEl = $("#run-wave-label");
-    if (waveEl) {
-      if (live?.current_wave && layers.length) {
-        waveEl.textContent = `· 第 ${live.current_wave}/${layers.length} 波`;
-      } else if (layers.length) {
-        waveEl.textContent = `· 共 ${layers.length} 波`;
+  // 统一结果卡：替代 run-banner + 空失败条 + 完成面板叠层
+  const card = $("#result-card");
+  const failedTasks = tasks.filter((t) => isFailedStatus(t.status));
+  const okN = tasks.filter((t) => isDoneStatus(t.status)).length;
+  const failN = failedTasks.length;
+  const runEnd = finished
+    ? tasks.map((t) => t.finished_at).filter(Boolean).sort().slice(-1)[0] || null
+    : null;
+  const planName = live?.plan_path ? planDisplayName(live.plan_path) : "";
+
+  // legacy hide
+  const runBanner = $("#run-banner");
+  if (runBanner) runBanner.hidden = true;
+  const errBar = $("#error-summary");
+  if (errBar) errBar.hidden = true;
+  const comp = $("#completion-panel");
+  if (comp) comp.hidden = true;
+
+  if (card) {
+    const showCard =
+      hasRun && state.phase !== "planning" && state.phase !== "confirm";
+    card.hidden = !showCard;
+    card.classList.toggle("ok", finished && failN === 0);
+    card.classList.toggle("bad", finished && failN > 0);
+
+    const badgeHost = $("#run-status-badge");
+    if (badgeHost) badgeHost.innerHTML = badge(runStatus || "idle");
+
+    const title = $("#result-title-text");
+    if (title) {
+      if (active) title.textContent = "正在运行";
+      else if (finished && failN === 0) title.textContent = "全部完成";
+      else if (finished && String(runStatus).toLowerCase() === "paused") title.textContent = "已暂停";
+      else if (finished) title.textContent = "运行结束";
+      else title.textContent = "运行状态";
+    }
+
+    const meta = $("#result-meta-text");
+    if (meta) {
+      const bits = [];
+      if (tasks.length) bits.push(`成功 ${okN} · 失败 ${failN} · 共 ${tasks.length}`);
+      if (live?.started_at) bits.push(`用时 ${formatElapsed(live.started_at, runEnd)}`);
+      if (planName) bits.push(planName);
+      if (live?.current_wave && (live?.layers || []).length) {
+        bits.push(`第 ${live.current_wave}/${live.layers.length} 波`);
+      }
+      meta.textContent = bits.join(" · ");
+    }
+
+    const errText = $("#error-summary-text");
+    if (errText) {
+      if (failN > 0) {
+        const first = failedTasks[0];
+        const sum = taskErrorSummary(first);
+        errText.hidden = false;
+        errText.textContent = sum
+          ? `${first.task_id}：${sum}`
+          : `${failN} 个任务失败`;
       } else {
-        waveEl.textContent = "";
+        errText.hidden = true;
+        errText.textContent = "";
       }
     }
-    const runEnd = finished
-      ? (tasks.map((t) => t.finished_at).filter(Boolean).sort().slice(-1)[0] || null)
-      : null;
-    $("#run-elapsed-label").textContent = live?.started_at
-      ? `用时 ${formatElapsed(live.started_at, runEnd)}`
-      : "";
-    $("#run-plan-label").textContent = live?.plan_path
-      ? `· ${planDisplayName(live.plan_path)}`
-      : "";
-    $("#btn-ws-stop-all").hidden = !active;
-    $("#btn-ws-resume").hidden = !["paused", "failed", "aborted"].includes(
-      String(runStatus || "").toLowerCase()
-    );
-    // 隐藏运行按钮：仅在非 planning/confirm 时显示
-    $("#btn-ws-dismiss-run").hidden = state.phase === "planning" || state.phase === "confirm";
-  }
 
-  // Error summary bar
-  const errBar = $("#error-summary");
-  const failedTasks = tasks.filter((t) => isFailedStatus(t.status));
-  if (failedTasks.length) {
-    const first = failedTasks[0];
-    const sum = taskErrorSummary(first);
-    $("#error-summary-text").textContent = sum
-      ? `${first.task_id}：${sum}`
-      : `${failedTasks.length} 个任务失败`;
-    errBar.hidden = false;
-  } else {
-    errBar.hidden = true;
-  }
-
-  // Completion panel
-  const comp = $("#completion-panel");
-  if (finished && tasks.length && state.phase !== "planning" && state.phase !== "confirm") {
-    comp.hidden = false;
-    comp.classList.add("compact");
-    const failN = failedTasks.length;
-    const okN = tasks.filter((t) => isDoneStatus(t.status)).length;
-    const st = String(runStatus || "").toLowerCase();
-    if (failN === 0 && (st === "completed" || st === "done")) {
-      $("#completion-title").textContent = "全部完成";
-    } else if (st === "paused") {
-      $("#completion-title").textContent = "已暂停";
-    } else {
-      $("#completion-title").textContent = "运行结束（有失败）";
+    const stop = $("#btn-ws-stop-all");
+    if (stop) stop.hidden = !active;
+    const resume = $("#btn-ws-resume");
+    if (resume) {
+      resume.hidden = !["paused", "failed", "aborted"].includes(
+        String(runStatus || "").toLowerCase()
+      );
     }
-    const endAt = tasks.map((t) => t.finished_at).filter(Boolean).sort().slice(-1)[0] || null;
-    $("#completion-stats").textContent = `成功 ${okN} · 失败 ${failN} · 共 ${tasks.length} · 用时 ${formatElapsed(
-      live.started_at,
-      endAt
-    )}`;
-    $("#completion-list").innerHTML = tasks
-      .map((t) => {
-        const cls = isFailedStatus(t.status)
-          ? "fail-item"
-          : isDoneStatus(t.status)
-            ? "ok-item"
-            : "";
-        const sum = taskErrorSummary(t);
-        return `<div class="${cls}">${esc(statusLabel(t.status))} · ${esc(t.task_id)}${
-          sum ? ` — ${esc(sum)}` : ""
-        }</div>`;
-      })
-      .join("");
-  } else {
-    comp.hidden = true;
+    const rerun = $("#btn-rerun");
+    if (rerun) rerun.hidden = !finished;
+    const change = $("#btn-change-plan");
+    if (change) change.hidden = !finished;
+    const dismiss = $("#btn-ws-dismiss-run");
+    if (dismiss) dismiss.hidden = !hasRun || state.phase === "planning" || state.phase === "confirm";
   }
 
   // Multi-window CLI board
@@ -1067,9 +1079,6 @@ function renderWorkspace() {
   }
   if (monitor) monitor.hidden = false;
   if (cliEmpty) cliEmpty.hidden = true;
-  if ($("#task-list-pane")) $("#task-list-pane").hidden = true;
-  if ($("#detail-pane")) $("#detail-pane").hidden = true;
-
   renderCliBoard(tasks);
 }
 
@@ -1112,7 +1121,14 @@ function renderCliBoard(tasks) {
     if (!shown.length) shown = tasks;
   }
   const filt = $("#btn-filter-failed");
-  if (filt) filt.classList.toggle("active", state.filterFailedOnly);
+  if (filt) {
+    filt.classList.toggle("active", state.filterFailedOnly);
+    // 单任务完成态：过滤器噪音低，仍保留
+    filt.hidden = tasks.length <= 1;
+  }
+  // 单任务时工具条更安静
+  const toolbar = document.querySelector(".board-toolbar");
+  if (toolbar) toolbar.classList.toggle("quiet", tasks.length <= 1);
 
   const closedCount = Object.keys(state.closedPanels || {}).filter((id) =>
     tasks.some((t) => t.task_id === id)

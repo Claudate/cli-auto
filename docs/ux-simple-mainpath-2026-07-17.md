@@ -48,3 +48,17 @@
 - 未实现跨显示器的系统级多窗口（仍是应用内面板）
 - 自动开跑跳过了波次人工确认；高级用户可后续加开关
 - 未在本机完成 `CCO.app` 重打包验证（需 `cargo build -p cco-desktop --release` + package 脚本）
+
+
+## 2026-07-18 视觉二次收敛
+
+根因分析：
+1. 作者 CSS 的 `display:flex` 覆盖 UA `[hidden]`，导致失败条/detail 幽灵面板常显
+2. 完成态同时渲染 run-banner + 空失败条 + completion + CLI，信息重复
+3. 历史成功仍刷环境黄条，制造「假故障」
+
+改法：
+- 全局 `[hidden]{display:none!important}`
+- 合并为单一 `result-card`
+- 移除 monitor 内可见 legacy detail-pane
+- 完成态隐藏环境恐吓条；回填当前计划

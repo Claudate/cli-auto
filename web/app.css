@@ -22,6 +22,9 @@
 }
 
 * { box-sizing: border-box; }
+/* 作者样式里的 display:flex 会压过 UA 的 [hidden]，必须强制 */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; margin: 0; }
 body {
   font-family: var(--font);
@@ -1623,4 +1626,170 @@ th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
 .completion-panel.compact .completion-list {
   max-height: 120px;
   overflow: auto;
+}
+
+
+/* ── Done-state visual cleanup (2026-07-18) ── */
+.workspace-body.mode-done .warn-bar:not(.force-show) {
+  /* 成功完成时默认不占视线；JS 会直接 hidden */
+}
+.workspace-body.mode-done .run-banner {
+  display: none !important;
+}
+.workspace-body.mode-idle .run-banner,
+.workspace-body.mode-running .completion-panel {
+  /* running 不显示完成卡 */
+}
+
+.result-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+.result-card.ok {
+  border-color: #b7ebc6;
+  background: linear-gradient(180deg, #f3fff6 0%, #fff 55%);
+}
+.result-card.bad {
+  border-color: #ffc9c7;
+  background: linear-gradient(180deg, #fff5f5 0%, #fff 55%);
+}
+.result-card .result-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.result-card .result-title {
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.result-card .result-meta {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.result-card .result-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+/* 完成态：CLI 看板更克制 */
+.workspace-body.mode-done .board-toolbar {
+  margin-bottom: 0.15rem;
+}
+.workspace-body.mode-done .cli-board {
+  max-height: min(46vh, 480px);
+  min-height: 180px;
+}
+.workspace-body.mode-done .cli-window {
+  max-height: 340px;
+  min-height: 160px;
+}
+.workspace-body.mode-done .cli-window-body {
+  max-height: 200px;
+  min-height: 96px;
+}
+
+/* 运行中：结果卡隐藏 */
+.completion-panel { display: none; } /* 用 result-card 取代叠层 */
+.completion-panel.is-legacy { display: block; }
+
+/* 计划条更扁、更像工具条 */
+.plan-picker.compact {
+  padding: 0.65rem 0.85rem;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.03);
+}
+.plan-active-bar { gap: 0.6rem; }
+.plan-active-label {
+  background: var(--bg3);
+  border-radius: 999px;
+  padding: 0.18rem 0.5rem;
+  margin-top: 0.05rem;
+}
+
+/* CLI 窗口更像真窗口 */
+.cli-window {
+  border-radius: 14px;
+  border: 1px solid #e2e3e8;
+  background: #fff;
+}
+.cli-window-head {
+  background: linear-gradient(180deg, #fbfbfc 0%, #f3f4f6 100%);
+  padding: 0.5rem 0.65rem;
+}
+.cli-window-body {
+  background: #11151c;
+  color: #d7dee8;
+  border-color: #1c222c;
+  max-height: 200px;
+  min-height: 110px;
+}
+.cli-window-body .tx-line,
+.cli-window-body .panel-log-pre {
+  font-size: 0.74rem;
+}
+.cli-board {
+  gap: 0.85rem;
+  max-height: min(52vh, 560px);
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.015), transparent 40px);
+  border-radius: 12px;
+  padding: 0.35rem;
+}
+.board-toolbar .section-label {
+  font-size: 0.7rem;
+}
+.board-toolbar.quiet .filter-chip { display: none; }
+.board-toolbar.quiet {
+  opacity: 0.92;
+}
+/* 结果卡内错误行 */
+#result-card #error-summary-text {
+  color: var(--danger);
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
+#result-card #error-summary-text[hidden] { display: none !important; }
+
+
+/* 侧栏连接状态 */
+#conn-status {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* 错误条空内容时彻底不占位 */
+.error-bar:empty,
+.error-bar:not([data-has-error="1"]) {
+  /* JS 会 hidden；双重保险靠 [hidden] */
+}
+
+/* 去掉重复的 completion 大块间距 */
+#workspace-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  gap: 0.55rem;
+}
+#workspace-body > * {
+  margin-bottom: 0 !important;
+}
+.monitor.board-mode {
+  flex: 1;
+  min-height: 0;
 }

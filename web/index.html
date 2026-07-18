@@ -196,37 +196,35 @@
             <span id="confirm-error" class="err-text" hidden></span>
           </div>
 
-          <!-- Run top bar -->
-          <div class="run-banner" id="run-banner" hidden>
-            <div class="run-meta">
-              <span id="run-status-badge"></span>
-              <span class="run-progress" id="run-progress-label"></span>
-              <span class="muted" id="run-wave-label"></span>
-              <span class="muted" id="run-elapsed-label"></span>
-              <span class="muted" id="run-plan-label"></span>
+          <!-- Unified run/result card (replaces banner + empty fail + completion stack) -->
+          <div id="result-card" class="result-card" hidden>
+            <div class="result-main">
+              <div class="result-title">
+                <span id="run-status-badge"></span>
+                <span id="result-title-text">运行状态</span>
+              </div>
+              <div class="result-meta" id="result-meta-text"></div>
+              <div class="result-meta" id="error-summary-text" hidden></div>
             </div>
-            <div class="row gap">
-              <button class="btn primary sm" id="btn-ws-resume" type="button" hidden>继续未完成任务</button>
+            <div class="result-actions">
+              <button class="btn primary sm" id="btn-ws-resume" type="button" hidden>继续</button>
               <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
-              <button class="btn ghost sm" id="btn-ws-dismiss-run" type="button">隐藏运行</button>
+              <button class="btn primary sm" id="btn-rerun" type="button" hidden>再跑一次</button>
+              <button class="btn ghost sm" id="btn-change-plan" type="button" hidden>换计划</button>
+              <button class="btn ghost sm" id="btn-ws-dismiss-run" type="button" hidden>收起</button>
             </div>
           </div>
 
-          <!-- Failure summary -->
+          <!-- legacy hooks (kept for JS safety, always hidden) -->
+          <div id="run-banner" hidden></div>
           <div id="error-summary" class="error-bar" hidden>
             <strong>失败</strong>
-            <span id="error-summary-text"></span>
           </div>
-
-          <!-- Completion -->
           <div id="completion-panel" class="completion-panel compact" hidden>
             <h3 id="completion-title">运行结束</h3>
             <div class="completion-stats" id="completion-stats"></div>
             <div class="completion-list" id="completion-list"></div>
-            <div class="completion-actions">
-              <button class="btn primary" id="btn-rerun" type="button">再跑一次</button>
-              <button class="btn ghost" id="btn-change-plan" type="button">换计划</button>
-            </div>
+            <div class="completion-actions"></div>
           </div>
 
           <!-- Multi-window CLI board -->
@@ -251,26 +249,17 @@
               </div>
             </div>
             <div id="cli-board" class="cli-board" aria-live="polite"></div>
-            <!-- legacy detail hooks (single focus panel) -->
-            <aside class="task-list-pane" id="task-list-pane" hidden>
-              <div class="task-list-head"><span>任务</span></div>
-              <div class="task-list" id="task-list"></div>
-            </aside>
-            <section class="detail-pane" id="detail-pane" hidden>
-              <div class="detail-head">
-                <div class="detail-title" id="detail-title"></div>
-                <div class="detail-tools">
-                  <button class="btn ghost sm" id="btn-copy-log" type="button">复制</button>
-                  <button class="btn danger sm" id="btn-stop-task" type="button" hidden>停止</button>
-                </div>
-              </div>
-              <div id="cli-error-banner" class="error-banner" hidden></div>
-              <div class="detail-log log-console" id="cli-detail-log" role="log" aria-live="polite"></div>
-              <div class="detail-foot">
-                <span id="detail-foot-left">—</span>
-                <span id="detail-foot-right">—</span>
-              </div>
-            </section>
+            <!-- offscreen legacy hooks for optional copy/stop APIs -->
+            <div id="task-list-pane" hidden></div>
+            <div id="task-list" hidden></div>
+            <div id="detail-pane" hidden></div>
+            <div id="detail-title" hidden></div>
+            <div id="cli-error-banner" hidden></div>
+            <div id="cli-detail-log" hidden></div>
+            <div id="detail-foot-left" hidden></div>
+            <div id="detail-foot-right" hidden></div>
+            <button id="btn-copy-log" type="button" hidden>复制</button>
+            <button id="btn-stop-task" type="button" hidden>停止</button>
           </div>
 
           <div id="cli-empty" class="empty-state soft" hidden>
