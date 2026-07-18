@@ -431,6 +431,57 @@ function clearPlanSession(projectPath = state.selectedPath) {
   if (projectPath) delete state.planSessions[projectPath];
 }
 
+/** 把磁盘/API 返回的 plan job 接到 UI（不自动开跑） */
+function applyRestoredPlanJob(view, { resumePoll = true } = {}) {
+  if (!view) return false;
+  const status = String(view.status || "").toLowerCase();
+  state.planJob = view;
+  state.planJobId = view.job_id || view.jobId || null;
+  state.selectedPlan =
+    normalizePlanPath(view.plan_path || view.planPath) ||
+    state.selectedPlan;
+  state.confirmTaskId = view.tasks?.[0]?.id || state.confirmTaskId || null;
+  state.planStartedAt = Date.now();
+  state.planPollFails = 0;
+
+  if (status === "planning") {
+    state.phase = "planning";
+    if (resumePoll) startPlanJobPoll();
+  } else if (status === "planned" || status === "confirmed") {
+    // confirmed 也可再次「开始运行」，不必重拆
+    state.phase = "confirm";
+    stopPlanJobPoll();
+    setAssignBusy(false);
+  } else {
+    return false;
+  }
+  stashPlanSession(state.selectedPath);
+  return true;
+}
+
+async function tryRestorePersistedPlanJob(projectPath) {
+  if (!projectPath) return false;
+  try {
+    const view = await invoke("latest_plan_job_cmd", { project: projectPath });
+    if (!view) return false;
+    const ok = applyRestoredPlanJob(view);
+    if (!ok) return false;
+    const status = String(view.status || "").toLowerCase();
+    const n = view.task_count || view.tasks?.length || 0;
+    if (status === "planning") {
+      toast("已接上未完成的规划任务");
+    } else if (status === "planned") {
+      toast(`已恢复上次拆分：${n} 个任务，可直接开始运行`);
+    } else if (status === "confirmed") {
+      toast(`已恢复历史拆分：${n} 个任务（可再次运行，无需重拆）`);
+    }
+    return true;
+  } catch (e) {
+    console.warn("restore persisted plan job", e);
+    return false;
+  }
+}
+
 function updateBgPlanBanner() {
   let bar = document.getElementById("bg-plan-banner");
   if (!bar) {
@@ -504,13 +555,13 @@ async function selectProject(path) {
   state.confirmTaskId = null;
   state.phase = "pick";
 
-  const restored = restorePlanSession(path);
+  const restoredMem = restorePlanSession(path);
 
   showPage("workspace");
   renderProjectList();
   await Promise.all([loadLive(), loadPlansForPicker(), ensureDoctor()]);
 
-  if (restored) {
+  if (restoredMem) {
     renderPhasePanels();
     renderPlanPicker();
     renderWorkspace();
@@ -521,6 +572,24 @@ async function selectProject(path) {
     }
     toast(state.phase === "planning" ? "已回到后台规划" : "已恢复待确认计划");
     return;
+  }
+
+  // 内存无会话 → 从磁盘接上该项目最近一次拆分（planned/confirmed/planning）
+  // 若当前有活动 run，优先显示运行；否则恢复拆分结果，避免每次重拆
+  const hasActiveRun = state.live?.run_id && isLiveStatus(state.live?.run_status);
+  if (!hasActiveRun) {
+    const restoredDisk = await tryRestorePersistedPlanJob(path);
+    if (restoredDisk) {
+      renderPhasePanels();
+      renderPlanPicker();
+      renderWorkspace();
+      updateTopPlanInfo();
+      updateBgPlanBanner();
+      if (state.phase === "planning" && state.planJobId) {
+        await refreshPlanJob().catch(() => {});
+      }
+      return;
+    }
   }
 
   if (state.live?.run_id && isLiveStatus(state.live?.run_status)) {
@@ -1173,7 +1242,6 @@ async function refreshPlanJob() {
   if (!state.planJobId) return;
   try {
     const view = await invoke("get_plan_job_cmd", {
-      job_id: state.planJobId,
       jobId: state.planJobId,
     });
     state.planPollFails = 0;
@@ -1253,12 +1321,18 @@ function renderConfirmPanel() {
   const tasks = job.tasks || [];
   const byId = Object.fromEntries(tasks.map((t) => [t.id, t]));
 
+  const st = String(job.status || "").toLowerCase();
+  const reused = st === "confirmed";
   $("#confirm-title").textContent = job.plan_name
-    ? `待确认：${job.plan_name}`
-    : "待确认的执行计划";
+    ? `${reused ? "历史拆分" : "待确认"}：${job.plan_name}`
+    : reused
+      ? "历史拆分（可再次运行）"
+      : "待确认的执行计划";
   $("#confirm-meta").textContent = `${job.task_count || tasks.length} 个任务 · 最多同时 ${
     job.max_parallel ?? "—"
-  } 个 · ${layers.length} 波 · 规划方式 ${job.plan_mode || "—"}`;
+  } 个 · ${layers.length} 波 · 规划方式 ${job.plan_mode || "—"} · ${
+    reused ? "无需重拆，可直接开始" : "确认后开始"
+  }`;
 
   const waves = $("#confirm-waves");
   waves.innerHTML = layers
@@ -1332,6 +1406,11 @@ function renderConfirmPanel() {
     }
   }
   $("#confirm-error").hidden = true;
+  const startBtn = $("#btn-confirm-start");
+  if (startBtn) {
+    const st = String(job.status || "").toLowerCase();
+    startBtn.textContent = st === "confirmed" ? "再次运行" : "开始运行";
+  }
 }
 
 /** Only from confirm phase — starts workers. */
@@ -1352,7 +1431,7 @@ async function confirmAndStart() {
     return;
   }
   try {
-    const res = await invoke("confirm_start_cmd", { job_id: state.planJobId });
+    const res = await invoke("confirm_start_cmd", { jobId: state.planJobId });
     toast("已开始运行");
     clearPlanSession(state.selectedPath);
     state.phase = "running";

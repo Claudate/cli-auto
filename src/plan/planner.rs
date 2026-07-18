@@ -189,7 +189,15 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
     let mut layers = Vec::new();
     let mut tasks = Vec::new();
     if matches!(job.status, PlanJobStatus::Planned | PlanJobStatus::Confirmed) {
-        if let Ok(ir) = load_proposed(config, &job.job_id) {
+        let ir_loaded = load_proposed(config, &job.job_id).or_else(|_| {
+            let path = job_dir(config, &job.job_id).join("plan.resolved.json");
+            let text = std::fs::read_to_string(&path)
+                .with_context(|| format!("read {}", path.display()))?;
+            let ir: PlanIR = serde_json::from_str(&text)
+                .with_context(|| format!("parse {}", path.display()))?;
+            Ok::<PlanIR, anyhow::Error>(ir)
+        });
+        if let Ok(ir) = ir_loaded {
             layers = topo_layers(&ir);
             tasks = ir.tasks.iter().map(task_view).collect();
         }
@@ -399,6 +407,73 @@ fn finish_plan_job(config: &Config, job: &mut PlanJob) {
 pub fn get_plan_job(config: &Config, job_id: &str) -> Result<PlanJobView> {
     let job = PlanJob::load(config, job_id)?;
     job_view(config, &job, 96_000)
+}
+
+/// 查找项目最近可恢复的规划会话（planning / planned / confirmed 且有任务图）。
+/// 用于进项目时接上「上次拆分结果」，避免每次重拆。
+pub fn latest_plan_job_for_project(
+    config: &Config,
+    project: &Path,
+) -> Result<Option<PlanJobView>> {
+    let root = plan_jobs_dir(config);
+    if !root.is_dir() {
+        return Ok(None);
+    }
+    let project = project
+        .canonicalize()
+        .unwrap_or_else(|_| project.to_path_buf());
+
+    let mut best: Option<PlanJob> = None;
+    for entry in std::fs::read_dir(&root)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let job_path = entry.path().join("job.json");
+        if !job_path.is_file() {
+            continue;
+        }
+        let job: PlanJob = match std::fs::read_to_string(&job_path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+        {
+            Some(j) => j,
+            None => continue,
+        };
+        let jp = job
+            .project
+            .canonicalize()
+            .unwrap_or_else(|_| job.project.clone());
+        if jp != project {
+            continue;
+        }
+        // 只恢复仍有价值的状态
+        match job.status {
+            PlanJobStatus::Planning | PlanJobStatus::Planned | PlanJobStatus::Confirmed => {}
+            PlanJobStatus::PlanFailed | PlanJobStatus::Cancelled => continue,
+        }
+        // confirmed 必须仍有图文件
+        if matches!(job.status, PlanJobStatus::Confirmed | PlanJobStatus::Planned) {
+            let dir = entry.path();
+            if !dir.join("plan.proposed.json").is_file()
+                && !dir.join("plan.resolved.json").is_file()
+            {
+                continue;
+            }
+        }
+        let replace = match &best {
+            None => true,
+            Some(b) => job.updated_at > b.updated_at,
+        };
+        if replace {
+            best = Some(job);
+        }
+    }
+
+    match best {
+        Some(job) => Ok(Some(job_view(config, &job, 96_000)?)),
+        None => Ok(None),
+    }
 }
 
 fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
@@ -1044,9 +1119,12 @@ fn first_line_title(para: &str, idx: usize) -> String {
 /// Mark job confirmed after exec run was spawned (called from services).
 pub fn mark_confirmed(config: &Config, job_id: &str, run_id: &str, ir: &PlanIR) -> Result<()> {
     let mut job = PlanJob::load(config, job_id)?;
-    if !matches!(job.status, PlanJobStatus::Planned) {
+    if !matches!(
+        job.status,
+        PlanJobStatus::Planned | PlanJobStatus::Confirmed
+    ) {
         bail!(
-            "计划任务状态为 {}，只有「待确认/planned」才能确认",
+            "计划任务状态为 {}，无法绑定 run",
             job.status.as_str()
         );
     }
@@ -1065,13 +1143,26 @@ pub fn mark_confirmed(config: &Config, job_id: &str, run_id: &str, ir: &PlanIR) 
 /// Load proposed plan and apply job's provider/mode defaults.
 pub fn load_proposed_for_exec(config: &Config, job_id: &str) -> Result<(PlanJob, PlanIR)> {
     let job = PlanJob::load(config, job_id)?;
-    if !matches!(job.status, PlanJobStatus::Planned) {
+    // planned：首次确认；confirmed：允许用同一份拆分结果再次开跑（不必重拆）
+    if !matches!(
+        job.status,
+        PlanJobStatus::Planned | PlanJobStatus::Confirmed
+    ) {
         bail!(
-            "计划任务状态为 {}，只有「待确认/planned」才能开始运行",
+            "计划任务状态为 {}，只有「待确认/已确认」才能开始运行",
             job.status.as_str()
         );
     }
-    let mut ir = load_proposed(config, job_id)?;
+    let mut ir = load_proposed(config, job_id).or_else(|_| {
+        // 回落 resolved（确认后写的冻结图）
+        let path = job_dir(config, job_id).join("plan.resolved.json");
+        let text = std::fs::read_to_string(&path).with_context(|| {
+            format!("missing plan.proposed/resolved for {job_id}")
+        })?;
+        let ir: PlanIR = serde_json::from_str(&text)
+            .with_context(|| format!("parse plan.resolved.json for {job_id}"))?;
+        Ok::<PlanIR, anyhow::Error>(ir)
+    })?;
     apply_worker_defaults(&mut ir, &job.provider, &job.exec_mode);
     ir.validate()?;
     append_log(
@@ -1185,4 +1276,37 @@ mod tests {
         // give scheduler a moment
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
+
+    #[test]
+    fn latest_job_restores_planned() {
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let plan = project.join("idea.md");
+        std::fs::write(&plan, "# x\n\n## a\n\ndo a\n\n## b\n\ndo b\n").unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let view = start_plan_job(
+            &cfg,
+            StartPlanJobRequest {
+                project: project.clone(),
+                plan: PathBuf::from("idea.md"),
+                plan_mode: Some("fake".into()),
+                provider: Some("fake".into()),
+                mode: Some("print".into()),
+            },
+        )
+        .unwrap();
+        assert_eq!(view.status, "planned");
+
+        let latest = latest_plan_job_for_project(&cfg, &project)
+            .unwrap()
+            .expect("should find latest");
+        assert_eq!(latest.job_id, view.job_id);
+        assert_eq!(latest.status, "planned");
+        assert!(latest.task_count.unwrap_or(0) >= 1);
+        assert!(!latest.tasks.is_empty());
+    }
+
 }

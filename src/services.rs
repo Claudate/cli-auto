@@ -337,7 +337,7 @@ pub fn start_run_from_plan(config: Config, project: PathBuf, ir: &PlanIR) -> Res
 
 // ── Plan job (mode B) ──────────────────────────────────────────────
 
-pub use crate::plan::planner::{get_plan_job, start_plan_job, PlanJobView, StartPlanJobRequest};
+pub use crate::plan::planner::{get_plan_job, latest_plan_job_for_project, start_plan_job, PlanJobView, StartPlanJobRequest};
 
 /// Freeze proposed plan and start scheduler; returns run_id.
 pub fn confirm_start(config: Config, job_id: &str) -> Result<String> {

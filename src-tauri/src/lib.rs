@@ -5,11 +5,11 @@ use std::sync::Mutex;
 
 use cco::config::Config;
 use cco::services::{
-    add_project, confirm_start, get_plan_job, get_settings, list_plans, list_projects, list_runs,
-    load_run, preview_plan, project_live_view, remove_project, resume_run_async, run_doctor,
-    set_settings, start_plan_job, start_run_async, stop_run, stop_task, task_logs, PlanJobView,
-    PlanPreview, ProjectLiveView, ProjectSummary, RunSummary, SettingsUpdate, SettingsView,
-    StartPlanJobRequest, StartRunRequest,
+    add_project, confirm_start, get_plan_job, get_settings, latest_plan_job_for_project, list_plans,
+    list_projects, list_runs, load_run, preview_plan, project_live_view, remove_project,
+    resume_run_async, run_doctor, set_settings, start_plan_job, start_run_async, stop_run,
+    stop_task, task_logs, PlanJobView, PlanPreview, ProjectLiveView, ProjectSummary, RunSummary,
+    SettingsUpdate, SettingsView, StartPlanJobRequest, StartRunRequest,
 };
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -209,21 +209,35 @@ fn start_plan_job_cmd(
 #[tauri::command]
 fn get_plan_job_cmd(
     state: tauri::State<'_, AppState>,
-    job_id: String,
+    // Tauri 2 IPC expects camelCase keys from the webview.
+    #[allow(non_snake_case)]
+    jobId: String,
 ) -> Result<PlanJobView, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    get_plan_job(&config, &job_id).map_err(map_err)
+    get_plan_job(&config, &jobId).map_err(map_err)
 }
+
+#[tauri::command]
+fn latest_plan_job_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<Option<PlanJobView>, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    latest_plan_job_for_project(&config, PathBuf::from(project).as_path()).map_err(map_err)
+}
+
 
 #[tauri::command]
 fn confirm_start_cmd(
     state: tauri::State<'_, AppState>,
-    job_id: String,
+    // Tauri 2 IPC expects camelCase keys from the webview.
+    #[allow(non_snake_case)]
+    jobId: String,
 ) -> Result<Value, String> {
     let mut config = state.config.lock().map_err(|e| e.to_string())?;
     // Refresh last_plan from job if possible
     let cfg_for_job = config.clone();
-    if let Ok(view) = get_plan_job(&cfg_for_job, &job_id) {
+    if let Ok(view) = get_plan_job(&cfg_for_job, &jobId) {
         let project = PathBuf::from(&view.project);
         let plan = PathBuf::from(&view.plan_path);
         if let Some(proj) = config.projects.iter_mut().find(|p| p.path == project) {
@@ -233,11 +247,11 @@ fn confirm_start_cmd(
     }
     let cfg = config.clone();
     drop(config);
-    let run_id = confirm_start(cfg, &job_id).map_err(map_err)?;
+    let run_id = confirm_start(cfg, &jobId).map_err(map_err)?;
     Ok(json!({
         "run_id": run_id,
         "status": "started",
-        "job_id": job_id,
+        "job_id": jobId,
         "message": "confirmed plan; scheduler started",
     }))
 }
@@ -332,6 +346,7 @@ pub fn run() {
             start_run,
             start_plan_job_cmd,
             get_plan_job_cmd,
+            latest_plan_job_cmd,
             confirm_start_cmd,
             stop_run_cmd,
             resume_run_cmd,
