@@ -62,3 +62,11 @@
 - 合并为单一 `result-card`
 - 移除 monitor 内可见 legacy detail-pane
 - 完成态隐藏环境恐吓条；回填当前计划
+
+## 2026-07-18 红框修订
+
+1. 顶栏标题：只显示计划名，隐藏 page-sub 路径信息
+2. 拆分任务区：`task-dash` KPI 卡片 + 正方形 `task-tile` 网格（数据看板风格）
+3. CLI 窗口体：仅 message / tool_use / tool_result / result；丢弃 stderr/meta/raw 噪音；不回落整段 log_tail
+
+[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md

@@ -254,27 +254,39 @@ function showPage(name) {
   state.page = name;
   try { updateTopPlanInfo(); } catch (_) {}
   $$(".page").forEach((p) => p.classList.toggle("active", p.id === `page-${name}`));
+  const sub = $("#page-sub");
   if (name === "welcome") {
     $("#page-title").textContent = "欢迎";
-    $("#page-sub").textContent = "添加项目 → 选计划 → 开始运行";
+    if (sub) {
+      sub.hidden = false;
+      sub.textContent = "添加项目 → 选计划 → 开始运行";
+    }
   } else if (name === "workspace") {
     updateWorkspaceTitle();
   } else if (name === "doctor") {
     $("#page-title").textContent = "环境检查";
-    $("#page-sub").textContent = "确认本机 CLI 与依赖就绪";
+    if (sub) {
+      sub.hidden = false;
+      sub.textContent = "确认本机 CLI 与依赖就绪";
+    }
   } else if (name === "help") {
     $("#page-title").textContent = "帮助";
-    $("#page-sub").textContent = "";
+    if (sub) {
+      sub.hidden = false;
+      sub.textContent = "";
+    }
   } else if (name === "settings") {
     $("#page-title").textContent = "设置";
-    $("#page-sub").textContent = "";
+    if (sub) {
+      sub.hidden = false;
+      sub.textContent = "";
+    }
   }
 }
 
 function updateWorkspaceTitle() {
-  const p = state.projects.find((x) => x.path === state.selectedPath);
-  $("#page-title").textContent = p?.name || shortPath(state.selectedPath) || "项目";
-  $("#page-sub").textContent = state.selectedPath || "";
+  // 工作区标题只展示计划，交给 updateTopPlanInfo
+  updateTopPlanInfo();
 }
 
 function goHome() {
@@ -629,7 +641,8 @@ function renderPlanPicker() {
 }
 
 function updateTopPlanInfo() {
-  // 「当前计划」UI 已移除；仅更新 page-sub 轻量提示 + 按钮态
+  // 红框1：顶栏只显示计划名，不显示路径
+  const title = $("#page-title");
   const sub = $("#page-sub");
   const proj = (state.projects || []).find((p) => p.path === state.selectedPath);
   let plan =
@@ -640,19 +653,21 @@ function updateTopPlanInfo() {
     null;
   if (plan && !state.selectedPlan) state.selectedPlan = plan;
 
-  if (sub && state.page === "workspace" && state.selectedPath) {
-    const base = state.selectedPath;
-    if (plan) {
-      const name =
-        (state.planPreview && state.planPreview.name) || planDisplayName(plan);
-      // 路径仍在标题下，计划名附带，不单独开「当前计划」大块
-      if (!sub.dataset.rawPath) sub.dataset.rawPath = base;
-      sub.textContent = `${shortPath(base)} · ${name}`;
-      sub.title = `${base}\n计划: ${plan}`;
-    } else {
-      sub.textContent = shortPath(base);
-      sub.title = base;
+  if (state.page === "workspace" && state.selectedPath) {
+    const name =
+      (state.planPreview && state.planPreview.name) ||
+      (plan ? planDisplayName(plan) : "未选择计划");
+    if (title) {
+      title.textContent = name;
+      title.title = plan || "";
     }
+    if (sub) {
+      sub.textContent = "";
+      sub.title = plan || "";
+      sub.hidden = true;
+    }
+  } else if (sub) {
+    sub.hidden = false;
   }
 
   const btnAssign = $("#btn-pp-analyze");
@@ -661,15 +676,13 @@ function updateTopPlanInfo() {
     btnAssign.disabled = !plan || !!active;
   }
 
-  // legacy nodes if present
   const nameEl = $("#top-plan-name");
   const pathEl = $("#top-plan-path");
   const box = $("#top-plan-info");
   if (box) box.hidden = true;
   if (nameEl) nameEl.textContent = plan ? planDisplayName(plan) : "";
-  if (pathEl) pathEl.textContent = plan || "";
+  if (pathEl) pathEl.textContent = "";
 }
-
 
 function renderPlanPreview() {
   // 紧凑模式不再展示大预览；保留函数避免旧调用报错
@@ -1150,9 +1163,6 @@ function renderTaskStrip(live, tasks, ctx) {
   const card = $("#result-card");
   if (!card) return;
   const { hasRun, active, finished, runStatus } = ctx;
-  const show =
-    hasRun && state.phase !== "planning" && state.phase !== "confirm" && tasks.length >= 0;
-  // 有 run 就显示任务条（即使 tasks 暂空）
   card.hidden = !(hasRun && state.phase !== "planning" && state.phase !== "confirm");
   if (card.hidden) return;
 
@@ -1167,40 +1177,35 @@ function renderTaskStrip(live, tasks, ctx) {
 
   card.classList.toggle("ok", finished && fail === 0 && done > 0);
   card.classList.toggle("bad", fail > 0);
-  card.classList.toggle("expanded", !!state.taskStripExpanded);
 
-  const badgeHost = $("#run-status-badge");
-  if (badgeHost) badgeHost.innerHTML = badge(runStatus || "idle");
-
-  const title = $("#result-title-text");
-  if (title) {
-    if (active) title.textContent = "任务进行中";
-    else if (finished && fail === 0) title.textContent = "全部完成";
-    else if (finished) title.textContent = "运行结束";
-    else title.textContent = "拆分任务";
-  }
-
-  const setStat = (id, label, n, hideZero = false) => {
+  const setN = (id, n) => {
     const el = $(id);
-    if (!el) return;
-    el.textContent = `${label} ${n}`;
-    if (hideZero) el.hidden = n === 0;
+    if (el) el.textContent = String(n);
+  };
+  setN("#stat-done-n", done);
+  setN("#stat-run-n", run);
+  setN("#stat-wait-n", wait);
+  setN("#stat-fail-n", fail);
+  const kpiFail = $("#kpi-fail");
+  if (kpiFail) kpiFail.hidden = fail === 0;
+
+  const setStat = (id, label, n) => {
+    const el = $(id);
+    if (el) el.textContent = `${label} ${n}`;
   };
   setStat("#stat-done", "完成", done);
   setStat("#stat-run", "进行中", run);
   setStat("#stat-wait", "未启动", wait);
-  setStat("#stat-fail", "失败", fail, true);
+  setStat("#stat-fail", "失败", fail);
 
   const runEnd = finished
     ? tasks.map((t) => t.finished_at).filter(Boolean).sort().slice(-1)[0] || null
     : null;
-  const planName = live?.plan_path ? planDisplayName(live.plan_path) : "";
   const meta = $("#result-meta-text");
   if (meta) {
     const bits = [];
-    if (tasks.length) bits.push(`共 ${tasks.length}`);
-    if (live?.started_at) bits.push(`用时 ${formatElapsed(live.started_at, runEnd)}`);
-    if (planName) bits.push(planName);
+    if (tasks.length) bits.push(`共 ${tasks.length} 项`);
+    if (live?.started_at) bits.push(formatElapsed(live.started_at, runEnd));
     meta.textContent = bits.join(" · ");
   }
 
@@ -1210,9 +1215,7 @@ function renderTaskStrip(live, tasks, ctx) {
       const first = tasks.find((t) => isFailedStatus(t.status));
       const sum = first ? taskErrorSummary(first) : "";
       errText.hidden = false;
-      errText.textContent = sum
-        ? `${first.task_id}：${sum}`
-        : `${fail} 个任务失败`;
+      errText.textContent = sum ? `${first.task_id}：${sum}` : `${fail} 个任务失败`;
     } else {
       errText.hidden = true;
       errText.textContent = "";
@@ -1234,45 +1237,38 @@ function renderTaskStrip(live, tasks, ctx) {
   const dismiss = $("#btn-ws-dismiss-run");
   if (dismiss) dismiss.hidden = !hasRun;
 
-  const expBtn = $("#btn-task-expand");
-  if (expBtn) {
-    expBtn.textContent = state.taskStripExpanded ? "收起列表" : `展开列表${tasks.length ? ` (${tasks.length})` : ""}`;
-  }
   const body = $("#task-strip-body");
-  if (body) body.hidden = !state.taskStripExpanded;
-
+  if (body) body.hidden = false;
   const list = $("#task-strip-list");
-  if (list && state.taskStripExpanded) {
-    if (!tasks.length) {
-      list.innerHTML = `<div class="task-strip-empty muted">暂无任务</div>`;
-    } else {
-      list.innerHTML = tasks
-        .map((t) => {
-          const b = taskBucket(t.status);
-          const label =
-            b === "done" ? "已完成" : b === "run" ? "进行中" : b === "fail" ? "失败" : "未启动";
-          const title = t.title || t.task_id;
-          const sel = t.task_id === state.selectedTaskId ? " selected" : "";
-          return `<button type="button" class="task-chip ${b}${sel}" data-task="${esc(t.task_id)}">
-            <span class="dot ${statusDot(t.status)}"></span>
-            <span class="task-chip-name" title="${esc(title)}">${esc(title)}</span>
-            <span class="task-chip-st">${esc(label)}</span>
-          </button>`;
-        })
-        .join("");
-      $$(".task-chip", list).forEach((b) => {
-        b.onclick = () => {
-          state.selectedTaskId = b.dataset.task;
-          // 展开对应 CLI：取消关闭
-          if (state.closedPanels[b.dataset.task]) {
-            delete state.closedPanels[b.dataset.task];
-          }
-          renderCliBoard(tasks);
-          renderTaskStrip(live, tasks, ctx);
-        };
-      });
-    }
+  if (!list) return;
+
+  if (!tasks.length) {
+    list.innerHTML = `<div class="task-dash-empty muted">暂无拆分任务</div>`;
+    return;
   }
+
+  list.innerHTML = tasks
+    .map((t) => {
+      const b = taskBucket(t.status);
+      const label =
+        b === "done" ? "已完成" : b === "run" ? "进行中" : b === "fail" ? "失败" : "未启动";
+      const title = t.title || t.task_id;
+      const sel = t.task_id === state.selectedTaskId ? " selected" : "";
+      const elapsed = formatElapsed(t.started_at, t.finished_at);
+      const cost = t.cost_usd != null ? `$${Number(t.cost_usd).toFixed(2)}` : "";
+      return `<button type="button" class="task-tile ${b}${sel}" data-task="${esc(t.task_id)}">
+        <div class="task-tile-top">
+          <span class="dot ${statusDot(t.status)}"></span>
+          <span class="task-tile-st">${esc(label)}</span>
+        </div>
+        <div class="task-tile-name" title="${esc(title)}">${esc(title)}</div>
+        <div class="task-tile-foot muted">
+          <span>${esc(t.task_id)}</span>
+          <span>${esc(elapsed)}${cost ? " · " + cost : ""}</span>
+        </div>
+      </button>`;
+    })
+    .join("");
 }
 
 function applyCliBodyHeight(h) {
@@ -1294,27 +1290,91 @@ function applyCliBodyHeight(h) {
   });
 }
 
+function isAiInteractionEvent(e) {
+  if (!e) return false;
+  const k = String(e.kind || "").toLowerCase();
+  // 红框3：CLI 只保留 AI 对话 / 工具调用 / 结果
+  if (k === "message" || k === "tool_use" || k === "tool_result" || k === "result") return true;
+  // 业务级 error 可保留；stderr / meta / system 噪音一律丢弃
+  if (k === "error") {
+    const lvl = String(e.level || "").toLowerCase();
+    if (lvl === "debug" || lvl === "trace") return false;
+    const blob = `${e.title || ""} ${e.summary || ""} ${e.detail || ""}`;
+    if (isNoiseText(blob)) return false;
+    return true;
+  }
+  return false;
+}
+
+function isNoiseText(s) {
+  const t = String(s || "");
+  if (!t.trim()) return true;
+  if (/Ignoring\s+--allowedTools/i.test(t)) return true;
+  if (/Ignoring\s+--[\w-]+/i.test(t)) return true;
+  if (/^\s*stderr\b/i.test(t)) return true;
+  if (/^\s*\[?(system|meta|debug|trace)\]?/i.test(t)) return true;
+  if (/permission\s*prompt/i.test(t) && /allowedTools/i.test(t)) return true;
+  if (/CLI\s*warning/i.test(t)) return true;
+  if (/deprecated\s+flag/i.test(t)) return true;
+  if (/node:?\s*warn/i.test(t)) return true;
+  if (/experimental\s+feature/i.test(t)) return true;
+  if (/^\s*warn(ing)?:/i.test(t)) return true;
+  return false;
+}
+
+function aiLogPlainText(t) {
+  const events = (Array.isArray(t?.log_events) ? t.log_events : []).filter(isAiInteractionEvent);
+  if (events.length) {
+    return events
+      .map((ev) => {
+        const kind = ev.kind || "";
+        const title = ev.title || "";
+        const summary = ev.summary || "";
+        return [kind, title, summary].filter(Boolean).join("\t");
+      })
+      .join("\n");
+  }
+  // 无结构化事件时：不回落整段 log_tail，避免系统噪音污染
+  if (isLiveStatus(t?.status)) return "AI 运行中，等待交互输出…";
+  if (isFailedStatus(t?.status)) return t?.error ? String(t.error) : "任务失败，无 AI 交互日志。";
+  return "";
+}
+
 function panelLogHtml(t) {
   const st = String(t.status || "").toLowerCase();
-  const events = Array.isArray(t.log_events) ? t.log_events : [];
-  let raw = t.log_tail || "";
-  if (!raw && t.error) raw = `error: ${t.error}`;
-  if (!raw && isLiveStatus(st)) {
-    raw = `任务已启动，等待 CLI 输出…\n状态: ${statusLabel(t.status)}`;
-  } else if (!raw && isFailedStatus(st)) {
-    raw = `任务失败，无日志输出。\n状态: ${statusLabel(t.status)}`;
-  }
+  const events = (Array.isArray(t.log_events) ? t.log_events : []).filter(isAiInteractionEvent);
   const mode = state.logViewMode || "term";
-  if (mode === "raw" || !events.length) {
-    // 短终端：最多末尾 40 行
-    const lines = String(raw || "").split("\n");
-    const tail = lines.slice(-40).join("\n");
-    return `<pre class="panel-log-pre">${esc(tail)}</pre>`;
+
+  // 默认 term / pretty：只渲染 AI 事件，绝不 dump 原始 log_tail
+  if (mode !== "raw") {
+    if (!events.length) {
+      if (isLiveStatus(st)) {
+        return '<div class="cli-empty-ai muted">AI 运行中，等待交互输出…</div>';
+      }
+      if (isFailedStatus(st)) {
+        const err = t.error && !isNoiseText(t.error) ? esc(String(t.error).slice(0, 240)) : "";
+        return err
+          ? `<div class="cli-empty-ai muted">任务失败<br/>${err}</div>`
+          : '<div class="cli-empty-ai muted">任务失败，无 AI 交互日志</div>';
+      }
+      return '<div class="cli-empty-ai muted">暂无 AI 交互内容</div>';
+    }
+    if (mode === "pretty") {
+      const html = events.slice(-40).map((e) => renderLogEvent(e)).join("");
+      return html || '<div class="cli-empty-ai muted">暂无 AI 交互内容</div>';
+    }
+    const html = events
+      .slice(-50)
+      .map((e) => renderTranscriptLine(e))
+      .filter(Boolean)
+      .join("");
+    return html || '<div class="cli-empty-ai muted">暂无 AI 交互内容</div>';
   }
-  if (mode === "pretty") {
-    return events.slice(-30).map((e) => renderLogEvent(e)).join("");
-  }
-  return events.slice(-40).map((e) => renderTranscriptLine(e)).join("");
+
+  // raw 模式：仍只展示 AI 事件文本；没有事件则给占位，不 dump 系统输出
+  const plain = aiLogPlainText(t);
+  if (!plain) return '<div class="cli-empty-ai muted">暂无 AI 交互内容</div>';
+  return '<pre class="panel-log-pre">' + esc(plain) + "</pre>";
 }
 
 function renderCliBoard(tasks) {
@@ -1463,13 +1523,10 @@ function renderCliBoard(tasks) {
     b.onclick = async (e) => {
       e.stopPropagation();
       const t = tasks.find((x) => x.task_id === b.dataset.copy);
-      const text =
-        (t && Array.isArray(t.log_events) && t.log_events.length
-          ? t.log_events.map((ev) => `${ev.kind}\t${ev.title || ""}\t${ev.summary || ""}`).join("\n")
-          : t?.log_tail) || "";
+      const text = aiLogPlainText(t);
       try {
-        await navigator.clipboard.writeText(text);
-        toast("日志已复制");
+        await navigator.clipboard.writeText(text || "");
+        toast(text ? "AI 日志已复制" : "暂无 AI 交互可复制");
       } catch (_) {
         toast("复制失败");
       }
@@ -1574,6 +1631,7 @@ function transcriptRole(e) {
 }
 
 function renderTranscriptLine(e) {
+  if (!isAiInteractionEvent(e)) return "";
   const role = transcriptRole(e);
   const label =
     role === "tool"
@@ -1585,32 +1643,32 @@ function renderTranscriptLine(e) {
         : role === "out"
           ? "out"
           : role;
-  // stderr: single folded block
-  if (e.kind === "stderr") {
-    const body = esc(e.detail || e.summary || "");
-    const title = esc(e.title || "stderr");
-    const sum = esc(e.summary || "");
-    return `<details class="tx-fold">
-      <summary>⚠ ${title}${sum ? " — " + sum : ""}</summary>
-      <pre>${body}</pre>
-    </details>`;
-  }
+  const noiseProbe = `${e.title || ""} ${e.summary || ""} ${e.detail || ""}`;
+  if (isNoiseText(noiseProbe)) return "";
   const title = e.title && e.title !== label ? esc(e.title) : "";
   const summary = esc(e.summary || "");
-  const detail = e.detail ? esc(e.detail) : "";
+  // tool_result / result 默认不把超长 detail 塞进 CLI 主视图
+  const detail =
+    e.detail && e.kind !== "result" && e.kind !== "tool_result" ? esc(e.detail) : "";
   let body = "";
   if (title && summary) body = `<span style="opacity:.85">${title}</span>  ${summary}`;
   else body = summary || title || "…";
-  if (detail && e.kind === "result") {
-    // keep result detail folded to avoid huge blocks
+  if (e.kind === "result" || e.kind === "tool_result") {
+    const short = (summary || title || "完成").slice(0, 280);
+    return `<div class="tx-line role-result">
+      <div class="tx-role">${e.kind === "tool_result" ? "tool✓" : "result"}</div>
+      <div class="tx-body">${short}</div>
+    </div>`;
+  }
+  if (detail && e.kind === "tool_use" && detail.length > 160) {
     return `<div class="tx-line role-${esc(role)}">
       <div class="tx-role">${esc(label)}</div>
       <div class="tx-body">${body}
-        <details class="tx-fold" style="margin-top:.2rem"><summary>展开详情</summary><pre>${detail}</pre></details>
+        <details class="tx-fold" style="margin-top:.15rem"><summary>…</summary><pre>${detail}</pre></details>
       </div>
     </div>`;
   }
-  if (detail && (e.kind === "tool_use" || e.kind === "message") && detail.length > 160) {
+  if (detail && e.kind === "message" && detail.length > 220) {
     return `<div class="tx-line role-${esc(role)}">
       <div class="tx-role">${esc(label)}</div>
       <div class="tx-body">${body}
@@ -1904,9 +1962,9 @@ const UI_ACTIONS = {
     const t =
       (state.live?.tasks || []).find((x) => x.task_id === state.selectedTaskId) ||
       (state.live?.tasks || [])[0];
-    const text = t?.log_tail || "";
-    await navigator.clipboard.writeText(text);
-    toast("日志已复制");
+    const text = aiLogPlainText(t);
+    await navigator.clipboard.writeText(text || "");
+    toast(text ? "AI 日志已复制" : "暂无 AI 交互可复制");
   },
   "btn-rerun": () => {
     state.phase = "pick";
@@ -1987,7 +2045,7 @@ function bindGlobalUI() {
           .catch((err) => toast(String(err?.message || err)));
         return;
       }
-      const taskChip = e.target?.closest?.(".task-chip[data-task]");
+      const taskChip = e.target?.closest?.(".task-tile[data-task], .task-chip[data-task]");
       if (taskChip) {
         e.preventDefault();
         state.selectedTaskId = taskChip.dataset.task;
@@ -2018,9 +2076,12 @@ function bindGlobalUI() {
         e.preventDefault();
         e.stopPropagation();
         const t = (state.live?.tasks || []).find((x) => x.task_id === copyBtn.dataset.copy);
-        Promise.resolve(navigator.clipboard.writeText(t?.log_tail || ""))
-          .then(() => toast("日志已复制"))
-          .catch(() => toast("复制失败"));
+        {
+          const text = aiLogPlainText(t);
+          Promise.resolve(navigator.clipboard.writeText(text || ""))
+            .then(() => toast(text ? "AI 日志已复制" : "暂无 AI 交互可复制"))
+            .catch(() => toast("复制失败"));
+        }
         return;
       }
       const stopBtn = e.target?.closest?.("[data-stop]");

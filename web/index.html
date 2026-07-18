@@ -192,20 +192,18 @@
           </div>
 
           <!-- Unified run/result card (replaces banner + empty fail + completion stack) -->
-          <!-- Fixed task strip: 拆分任务总览（不影响 CLI 高度） -->
-          <div id="result-card" class="task-strip" hidden>
-            <div class="task-strip-head">
-              <div class="task-strip-summary">
-                <span id="run-status-badge"></span>
-                <strong id="result-title-text">任务</strong>
-                <span class="task-stat ok" id="stat-done">完成 0</span>
-                <span class="task-stat run" id="stat-run">进行中 0</span>
-                <span class="task-stat wait" id="stat-wait">未启动 0</span>
-                <span class="task-stat fail" id="stat-fail" hidden>失败 0</span>
-                <span class="muted" id="result-meta-text"></span>
+          <!-- 任务看板：方形数据块（固定区域，内部可滚） -->
+          <div id="result-card" class="task-dash" hidden>
+            <div class="task-dash-head">
+              <div class="task-dash-kpis">
+                <span id="run-status-badge" hidden></span>
+                <div class="kpi-card done"><div class="kpi-n" id="stat-done-n">0</div><div class="kpi-l">已完成</div></div>
+                <div class="kpi-card run"><div class="kpi-n" id="stat-run-n">0</div><div class="kpi-l">进行中</div></div>
+                <div class="kpi-card wait"><div class="kpi-n" id="stat-wait-n">0</div><div class="kpi-l">未启动</div></div>
+                <div class="kpi-card fail" id="kpi-fail" hidden><div class="kpi-n" id="stat-fail-n">0</div><div class="kpi-l">失败</div></div>
+                <div class="kpi-meta muted" id="result-meta-text"></div>
               </div>
-              <div class="task-strip-actions" id="result-actions">
-                <button class="btn ghost sm" id="btn-task-expand" type="button">展开</button>
+              <div class="task-dash-actions" id="result-actions">
                 <button class="btn primary sm" id="btn-ws-resume" type="button" hidden>继续</button>
                 <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
                 <button class="btn primary sm" id="btn-rerun" type="button" hidden>再跑一次</button>
@@ -214,9 +212,16 @@
               </div>
             </div>
             <div id="error-summary-text" class="task-strip-err" hidden></div>
-            <div id="task-strip-body" class="task-strip-body" hidden>
-              <div id="task-strip-list" class="task-strip-list"></div>
+            <div id="task-strip-body" class="task-dash-body">
+              <div id="task-strip-list" class="task-dash-grid"></div>
             </div>
+            <!-- legacy ids for old JS -->
+            <strong id="result-title-text" hidden>任务</strong>
+            <span id="stat-done" hidden></span>
+            <span id="stat-run" hidden></span>
+            <span id="stat-wait" hidden></span>
+            <span id="stat-fail" hidden></span>
+            <button id="btn-task-expand" type="button" hidden>展开</button>
           </div>
 
           <!-- legacy hooks (kept for JS safety, always hidden) -->
