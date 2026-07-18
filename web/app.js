@@ -52,6 +52,7 @@ const state = {
   drag: null, // { id, ox, oy }
   dragSession: {}, // taskId -> true 本会话拖过才保留 free
   taskStripExpanded: localStorage.getItem("cco.taskStripExpanded") === "1",
+  taskDashCollapsed: localStorage.getItem("cco.taskDashCollapsed") === "1",
   cliBodyHeight: Number(localStorage.getItem("cco.cliBodyHeight") || 300) || 300,
 };
 
@@ -554,7 +555,25 @@ function openPlanChooser(open = true) {
   const sheet = $("#plan-chooser");
   if (!sheet) return;
   sheet.hidden = !open;
-  if (open) renderPlanChooser();
+  if (open) {
+    renderPlanChooser();
+    updateChooserAssignState();
+  }
+}
+
+function updateChooserAssignState() {
+  const btn = $("#btn-chooser-assign");
+  const label = $("#chooser-selected-label");
+  const active = isLiveStatus(state.live?.run_status);
+  const plan = state.selectedPlan;
+  if (label) {
+    label.textContent = plan ? `已选：${planDisplayName(plan)}` : "未选择计划";
+    label.title = plan || "";
+  }
+  if (btn) {
+    btn.disabled = !plan || !!active;
+    btn.textContent = active ? "运行中…" : "分配计划";
+  }
 }
 
 function renderPlanChooser() {
@@ -579,10 +598,13 @@ function renderPlanChooser() {
     .join("");
   $$(".plan-item", list).forEach((b) => {
     b.onclick = async () => {
+      // 合并弹窗：点选只高亮，不关闭；底部「分配计划」才执行
       await selectPlan(b.dataset.plan);
-      openPlanChooser(false);
+      renderPlanChooser();
+      updateChooserAssignState();
     };
   });
+  updateChooserAssignState();
 }
 
 function renderPlanPicker() {
@@ -715,6 +737,7 @@ async function selectPlan(planPath) {
   }
   renderPlanPicker();
   updateTopPlanInfo();
+  if (state.planChooserOpen) updateChooserAssignState();
 }
 
 async function pickPlanFileForPicker() {
@@ -728,7 +751,11 @@ async function pickPlanFileForPicker() {
     const rel = selected.startsWith(proj + "/") ? selected.slice(proj.length + 1) : selected;
     if (!state.plans.includes(rel)) state.plans = [rel, ...state.plans];
     await selectPlan(rel);
-    openPlanChooser(false);
+    // 留在弹窗内，方便直接点「分配计划」
+    if (state.planChooserOpen) {
+      renderPlanChooser();
+      updateChooserAssignState();
+    }
   } catch (e) {
     toast(String(e));
   }
@@ -784,6 +811,7 @@ async function analyzePlanFromPicker() {
   state.planJob = null;
   state.planJobId = null;
   stopPlanJobPoll();
+  openPlanChooser(false);
   renderPhasePanels();
   renderPlanPicker();
 
@@ -1211,7 +1239,7 @@ function renderTaskStrip(live, tasks, ctx) {
 
   const errText = $("#error-summary-text");
   if (errText) {
-    if (fail > 0) {
+    if (fail > 0 && !state.taskDashCollapsed) {
       const first = tasks.find((t) => isFailedStatus(t.status));
       const sum = first ? taskErrorSummary(first) : "";
       errText.hidden = false;
@@ -1230,15 +1258,26 @@ function renderTaskStrip(live, tasks, ctx) {
       String(runStatus || "").toLowerCase()
     );
   }
+  // 再跑一次改到 CLI 卡片标题栏；换计划删除；收起改为看板伸缩
   const rerun = $("#btn-rerun");
-  if (rerun) rerun.hidden = !finished;
+  if (rerun) rerun.hidden = true;
   const change = $("#btn-change-plan");
-  if (change) change.hidden = !finished;
+  if (change) change.hidden = true;
   const dismiss = $("#btn-ws-dismiss-run");
-  if (dismiss) dismiss.hidden = !hasRun;
+  if (dismiss) dismiss.hidden = true;
+
+  const toggle = $("#btn-task-dash-toggle");
+  if (toggle) {
+    toggle.hidden = !hasRun;
+    toggle.textContent = state.taskDashCollapsed ? "▸" : "▾";
+    toggle.title = state.taskDashCollapsed ? "展开任务看板" : "折叠任务看板";
+    toggle.setAttribute("aria-label", toggle.title);
+    toggle.setAttribute("aria-expanded", state.taskDashCollapsed ? "false" : "true");
+  }
+  card.classList.toggle("collapsed", !!state.taskDashCollapsed);
 
   const body = $("#task-strip-body");
-  if (body) body.hidden = false;
+  if (body) body.hidden = !!state.taskDashCollapsed;
   const list = $("#task-strip-list");
   if (!list) return;
 
@@ -1346,8 +1385,10 @@ function panelLogHtml(t) {
   const mode = state.logViewMode || "term";
 
   // 默认 term / pretty：只渲染 AI 事件，绝不 dump 原始 log_tail
+  // result 摘要不进黑区（成功态窗外徽章已表达）
+  const viewEvents = events.filter((e) => String(e.kind || "").toLowerCase() !== "result");
   if (mode !== "raw") {
-    if (!events.length) {
+    if (!viewEvents.length) {
       if (isLiveStatus(st)) {
         return '<div class="cli-empty-ai muted">AI 运行中，等待交互输出…</div>';
       }
@@ -1360,10 +1401,10 @@ function panelLogHtml(t) {
       return '<div class="cli-empty-ai muted">暂无 AI 交互内容</div>';
     }
     if (mode === "pretty") {
-      const html = events.slice(-40).map((e) => renderLogEvent(e)).join("");
+      const html = viewEvents.slice(-40).map((e) => renderLogEvent(e)).join("");
       return html || '<div class="cli-empty-ai muted">暂无 AI 交互内容</div>';
     }
-    const html = events
+    const html = viewEvents
       .slice(-50)
       .map((e) => renderTranscriptLine(e))
       .filter(Boolean)
@@ -1465,6 +1506,11 @@ function renderCliBoard(tasks) {
           ${badge(t.status)}
         </div>
         <div class="cli-window-actions">
+          ${
+            !isLiveStatus(state.live?.run_status) && state.live?.run_id
+              ? `<button type="button" class="btn primary sm cli-rerun-btn" data-rerun="${esc(t.task_id)}" title="再跑一次">再跑一次</button>`
+              : ""
+          }
           <button type="button" class="icon-btn sm" data-focus="${esc(t.task_id)}" title="聚焦">◉</button>
           <button type="button" class="icon-btn sm" data-close="${esc(t.task_id)}" title="关闭窗口">×</button>
         </div>
@@ -1653,10 +1699,12 @@ function renderTranscriptLine(e) {
   let body = "";
   if (title && summary) body = `<span style="opacity:.85">${title}</span>  ${summary}`;
   else body = summary || title || "…";
-  if (e.kind === "result" || e.kind === "tool_result") {
+  // 黑区只留执行交互；result success/$cost 由窗外徽章表达
+  if (e.kind === "result") return "";
+  if (e.kind === "tool_result") {
     const short = (summary || title || "完成").slice(0, 280);
     return `<div class="tx-line role-result">
-      <div class="tx-role">${e.kind === "tool_result" ? "tool✓" : "result"}</div>
+      <div class="tx-role">tool✓</div>
       <div class="tx-body">${short}</div>
     </div>`;
   }
@@ -1896,6 +1944,18 @@ const UI_ACTIONS = {
   "btn-ws-resume": () => resumeRun(),
   "btn-remove-project": () => removeSelectedProject(),
   "btn-ws-dismiss-run": () => dismissRun(),
+  "btn-task-dash-toggle": () => {
+    state.taskDashCollapsed = !state.taskDashCollapsed;
+    localStorage.setItem("cco.taskDashCollapsed", state.taskDashCollapsed ? "1" : "0");
+    const tasks = state.live?.tasks || [];
+    renderTaskStrip(state.live, tasks, {
+      hasRun: !!state.live?.run_id,
+      active: isLiveStatus(state.live?.run_status),
+      finished: !!state.live?.run_id && !isLiveStatus(state.live?.run_status),
+      runStatus: state.live?.run_status,
+    });
+  },
+  "btn-chooser-assign": () => analyzePlanFromPicker(),
   "btn-stop-task": () => cancelTask(),
   "btn-pp-scan": async () => {
     await loadPlansForPicker();
@@ -1920,7 +1980,19 @@ const UI_ACTIONS = {
       renderPlanChooser();
     }
   },
-  "btn-pp-analyze": () => analyzePlanFromPicker(),
+  "btn-pp-analyze": async () => {
+    // 弹窗化：顶栏「分配计划」打开合并弹窗，底部确认才执行
+    openPlanChooser(true);
+    try {
+      await loadPlansForPicker();
+      renderPlanChooser();
+      updateChooserAssignState();
+    } catch (e) {
+      toast(String(e));
+      renderPlanChooser();
+      updateChooserAssignState();
+    }
+  },
   "btn-pp-set-default": () => setDefaultPlan(),
   "btn-confirm-start": () => confirmAndStart(),
   "btn-replan": () => replanFromConfirm(),
@@ -1976,19 +2048,8 @@ const UI_ACTIONS = {
     openPlanChooser(true);
     toast("请先选择计划");
   },
-  "btn-change-plan": async () => {
-    state.phase = "pick";
-    state.planJobId = null;
-    state.planJob = null;
-    renderPhasePanels();
-    renderPlanPicker();
-    openPlanChooser(true);
-    try {
-      await loadPlansForPicker();
-      renderPlanChooser();
-    } catch (e) {
-      toast(String(e));
-    }
+  "btn-change-plan": () => {
+    // 已移除「换计划」入口；保留 id 防旧调用
   },
   "btn-doctor-recheck": async () => {
     await ensureDoctor(true);
@@ -2041,8 +2102,22 @@ function bindGlobalUI() {
       if (planItem) {
         e.preventDefault();
         Promise.resolve(selectPlan(planItem.dataset.plan))
-          .then(() => openPlanChooser(false))
+          .then(() => {
+            if (state.planChooserOpen) {
+              renderPlanChooser();
+              updateChooserAssignState();
+            }
+          })
           .catch((err) => toast(String(err?.message || err)));
+        return;
+      }
+      const rerunBtn = e.target?.closest?.("[data-rerun]");
+      if (rerunBtn?.dataset?.rerun) {
+        e.preventDefault();
+        e.stopPropagation();
+        state.selectedTaskId = rerunBtn.dataset.rerun;
+        const fn = UI_ACTIONS["btn-rerun"];
+        if (fn) Promise.resolve(fn()).catch((err) => toast(String(err?.message || err)));
         return;
       }
       const taskChip = e.target?.closest?.(".task-tile[data-task], .task-chip[data-task]");

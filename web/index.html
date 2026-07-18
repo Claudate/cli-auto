@@ -136,11 +136,11 @@
 
           <!-- Plan chooser sheet -->
           <div id="plan-chooser" class="plan-chooser" hidden>
-            <div class="plan-chooser-card" role="dialog" aria-label="选择计划">
+            <div class="plan-chooser-card" role="dialog" aria-label="选择并分配计划">
               <div class="plan-chooser-head">
                 <div>
-                  <h3>选择计划</h3>
-                  <p class="muted">只选一份要执行的任务说明文档</p>
+                  <h3>选择并分配计划</h3>
+                  <p class="muted">选一份任务说明，确认后点「分配计划」自动拆分并执行</p>
                 </div>
                 <button class="btn ghost sm" id="btn-chooser-close" type="button">关闭</button>
               </div>
@@ -152,6 +152,10 @@
                 <p class="muted">未发现计划文档。可点「选择文件…」指定一份 .md</p>
               </div>
               <div id="chooser-list" class="plan-list chooser-list"></div>
+              <div class="plan-chooser-foot">
+                <span id="chooser-selected-label" class="muted">未选择计划</span>
+                <button class="btn primary" id="btn-chooser-assign" type="button" disabled>分配计划</button>
+              </div>
             </div>
           </div>
 
@@ -206,9 +210,11 @@
               <div class="task-dash-actions" id="result-actions">
                 <button class="btn primary sm" id="btn-ws-resume" type="button" hidden>继续</button>
                 <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
-                <button class="btn primary sm" id="btn-rerun" type="button" hidden>再跑一次</button>
-                <button class="btn ghost sm" id="btn-change-plan" type="button" hidden>换计划</button>
-                <button class="btn ghost sm" id="btn-ws-dismiss-run" type="button" hidden>收起运行</button>
+                <button class="icon-btn sm task-dash-toggle" id="btn-task-dash-toggle" type="button" title="折叠任务看板" aria-label="折叠任务看板" hidden>▾</button>
+                <!-- legacy hooks -->
+                <button id="btn-rerun" type="button" hidden>再跑一次</button>
+                <button id="btn-change-plan" type="button" hidden>换计划</button>
+                <button id="btn-ws-dismiss-run" type="button" hidden>收起运行</button>
               </div>
             </div>
             <div id="error-summary-text" class="task-strip-err" hidden></div>

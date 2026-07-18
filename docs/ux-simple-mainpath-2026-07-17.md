@@ -70,3 +70,17 @@
 3. CLI 窗口体：仅 message / tool_use / tool_result / result；丢弃 stderr/meta/raw 噪音；不回落整段 log_tail
 
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+
+
+## 2026-07-18 红框动作区再收敛
+
+确认项：Q2 合并弹窗 / Q3 折叠 task-dash / Q4 CLI 标题栏再跑 / Q5 黑区去 result 摘要
+
+改法：
+1. 「选择计划」「分配计划」合并为 `#plan-chooser` 弹窗：列表点选不关闭，底部 `btn-chooser-assign` 执行分配
+2. 删除可见「换计划」；换计划能力并入弹窗重选
+3. 「再跑一次」移到每个 CLI 窗口标题栏（`data-rerun`），看板右上不再放
+4. 「收起运行」改为 task-dash 伸缩 icon（`btn-task-dash-toggle`），只折 KPI/任务块，不销毁 live
+5. 黑区 `cli-window-body` 过滤 `kind=result`（success/$cost 由窗外徽章表达）
+
+[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md

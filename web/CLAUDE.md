@@ -2,9 +2,9 @@
 > L2 | 父级: /CLAUDE.md
 
 成员清单
-index.html: 桌面壳结构；顶栏只显计划名；task-dash 看板 KPI；CLI 2 列外壳
-app.js: 前端状态机 + capture 事件委托；AI-only CLI 过滤；分配计划主路径
-app.css: 浅色控制台；方形 task-tile 数据看板；半宽 CLI 窗口
+index.html: 桌面壳结构；顶栏计划入口；合并「选择并分配计划」弹窗；task-dash 可折叠 KPI；CLI 标题栏「再跑一次」
+app.js: 前端状态机 + capture 事件委托；计划合并弹窗；taskDash 伸缩；黑区过滤 result 摘要
+app.css: 浅色控制台；plan-chooser-foot；task-dash.collapsed；CLI 半宽 + rerun 按钮
 
 法则: 成员完整·一行一文件·父级链接·技术词前置
 
