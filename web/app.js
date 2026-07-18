@@ -54,6 +54,8 @@ const state = {
   taskStripExpanded: localStorage.getItem("cco.taskStripExpanded") === "1",
   taskDashCollapsed: localStorage.getItem("cco.taskDashCollapsed") === "1",
   cliBodyHeight: Number(localStorage.getItem("cco.cliBodyHeight") || 300) || 300,
+  assigning: false, // 分配计划进行中（防连点 + 按钮转圈）
+  plansLoading: false,
 };
 
 /* ── Status labels (人话) ── */
@@ -433,7 +435,15 @@ function renderPhasePanels() {
 
   if (ph === "planning") {
     const log = $("#planner-log");
-    if (log) log.textContent = state.planJob?.planner_log_tail || "正在分析…";
+    if (log && state.planJob?.planner_log_tail) {
+      log.textContent = state.planJob.planner_log_tail;
+    } else if (log && !log.textContent) {
+      log.textContent = "正在分析…";
+    }
+    const sub = $("#planning-sub");
+    if (sub && state.selectedPlan) {
+      sub.textContent = `正在分析 ${planDisplayName(state.selectedPlan)}…`;
+    }
   }
   if (ph === "confirm") {
     renderConfirmPanel();
@@ -543,6 +553,72 @@ function renderDoctorWarn() {
   bar.hidden = false;
 }
 
+async function loadPlansForPicker() {
+  if (!state.selectedPath) {
+    state.plans = [];
+    state.plansLoading = false;
+    if (state.planChooserOpen) renderPlanChooser();
+    updateChooserAssignState();
+    return [];
+  }
+  state.plansLoading = true;
+  if (state.planChooserOpen) renderPlanChooser();
+  try {
+    const plans = (await invoke("get_plans", { project: state.selectedPath })) || [];
+    const list = Array.isArray(plans) ? plans.slice() : [];
+    // 用户手动选的计划若不在扫描结果中，置顶保留
+    if (state.selectedPlan && !list.includes(state.selectedPlan)) {
+      list.unshift(state.selectedPlan);
+    }
+    state.plans = list;
+  } catch (e) {
+    console.warn("loadPlansForPicker", e);
+    toast(String(e));
+  } finally {
+    state.plansLoading = false;
+  }
+  if (state.planChooserOpen) renderPlanChooser();
+  renderPlanPicker();
+  updateChooserAssignState();
+  return state.plans;
+}
+
+function setAssignBusy(busy) {
+  state.assigning = !!busy;
+  const ids = ["btn-chooser-assign", "btn-pp-analyze"];
+  for (const id of ids) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    if (busy) {
+      btn.disabled = true;
+      btn.classList.add("is-busy");
+      if (!btn.dataset.label) btn.dataset.label = btn.textContent || "分配计划";
+      btn.innerHTML = '<span class="spinner sm" aria-hidden="true"></span><span>分配中…</span>';
+    } else {
+      btn.classList.remove("is-busy");
+      const active = isLiveStatus(state.live?.run_status);
+      const label = btn.dataset.label || "分配计划";
+      btn.textContent = active ? "运行中…" : label;
+      delete btn.dataset.label;
+      if (btn.id === "btn-chooser-assign") {
+        btn.disabled = !state.selectedPlan || !!active;
+      } else {
+        btn.disabled = !!active;
+      }
+    }
+  }
+}
+
+function renderWorkspaceShell() {
+  const body = $("#workspace-body");
+  if (!body) return;
+  body.classList.remove("mode-idle", "mode-running", "mode-done", "mode-plan");
+  if (state.phase === "planning" || state.phase === "confirm") body.classList.add("mode-plan");
+  else if (isLiveStatus(state.live?.run_status)) body.classList.add("mode-running");
+  else if (state.phase === "done") body.classList.add("mode-done");
+  else body.classList.add("mode-idle");
+}
+
 function setPlanCollapsed(collapsed) {
   // 新 UX：计划区永远紧凑；collapsed 语义保留给兼容
   state.planCollapsed = true;
@@ -570,7 +646,7 @@ function updateChooserAssignState() {
     label.textContent = plan ? `已选：${planDisplayName(plan)}` : "未选择计划";
     label.title = plan || "";
   }
-  if (btn) {
+  if (btn && !state.assigning) {
     btn.disabled = !plan || !!active;
     btn.textContent = active ? "运行中…" : "分配计划";
   }
@@ -580,6 +656,13 @@ function renderPlanChooser() {
   const list = $("#chooser-list");
   const empty = $("#chooser-empty");
   if (!list) return;
+  if (state.plansLoading) {
+    if (empty) empty.hidden = true;
+    list.innerHTML =
+      '<div class="chooser-loading"><span class="spinner sm" aria-hidden="true"></span>正在扫描计划…</div>';
+    updateChooserAssignState();
+    return;
+  }
   if (!state.plans.length) {
     if (empty) empty.hidden = false;
     list.innerHTML = "";
@@ -776,9 +859,14 @@ async function setDefaultPlan() {
 async function analyzePlanFromPicker() {
   const err = $("#pp-error");
   if (err) err.hidden = true;
+  if (state.assigning) return;
   if (!state.selectedPlan) {
     openPlanChooser(true);
     toast("请先选择计划");
+    return;
+  }
+  if (!state.selectedPath) {
+    toast("请先选择项目");
     return;
   }
 
@@ -802,6 +890,7 @@ async function analyzePlanFromPicker() {
     }
   }
 
+  setAssignBusy(true);
   state.phase = "planning";
   state.planJob = null;
   state.planJobId = null;
@@ -809,6 +898,11 @@ async function analyzePlanFromPicker() {
   openPlanChooser(false);
   renderPhasePanels();
   renderPlanPicker();
+  renderWorkspaceShell();
+  const logEl0 = $("#planner-log");
+  if (logEl0) logEl0.textContent = "正在启动规划…";
+  const sub0 = $("#planning-sub");
+  if (sub0) sub0.textContent = `正在分析 ${planDisplayName(state.selectedPlan)}…`;
 
   try {
     const view = await invoke("start_plan_job_cmd", {
@@ -839,6 +933,7 @@ async function analyzePlanFromPicker() {
         renderPhasePanels();
         renderPlanPicker();
       }
+      setAssignBusy(false);
     } else if (view.status === "plan_failed") {
       state.phase = "pick";
       if (err) {
@@ -848,7 +943,9 @@ async function analyzePlanFromPicker() {
       toast(view.error || "规划失败");
       renderPhasePanels();
       renderPlanPicker();
+      setAssignBusy(false);
     } else {
+      // async AI planning — keep busy + poll until planned/failed
       state.phase = "planning";
       renderPhasePanels();
       startPlanJobPoll();
@@ -862,6 +959,7 @@ async function analyzePlanFromPicker() {
     toast(String(e));
     renderPhasePanels();
     renderPlanPicker();
+    setAssignBusy(false);
   }
 }
 
@@ -899,8 +997,10 @@ async function refreshPlanJob() {
         toast(`已拆分 ${view.task_count || 0} 个任务，请确认后开始`);
         renderPhasePanels();
       }
+      setAssignBusy(false);
     } else if (view.status === "plan_failed") {
       stopPlanJobPoll();
+      setAssignBusy(false);
       state.phase = "pick";
       const err = $("#pp-error");
       if (err) {
@@ -920,6 +1020,7 @@ async function refreshPlanJob() {
       renderPhasePanels();
     } else if (view.status === "confirmed" && view.run_id) {
       stopPlanJobPoll();
+      setAssignBusy(false);
       state.phase = "running";
       renderPhasePanels();
     } else {
@@ -1031,6 +1132,7 @@ async function confirmAndStart() {
 
 function cancelPlanning() {
   stopPlanJobPoll();
+  setAssignBusy(false);
   state.phase = "pick";
   state.planJobId = null;
   state.planJob = null;
@@ -1105,10 +1207,11 @@ function renderWorkspace() {
       String(runStatus || "").toLowerCase()
     );
 
-  if (active) {
+  // 规划/确认相位不可被历史 run 的 finished 状态冲掉（否则转圈面板闪一下就没）
+  if (state.phase === "planning" || state.phase === "confirm") {
+    // keep planning UI
+  } else if (active) {
     state.phase = "running";
-  } else if (finished && (state.phase === "running" || state.phase === "pick")) {
-    state.phase = "done";
   } else if (finished) {
     state.phase = "done";
   }

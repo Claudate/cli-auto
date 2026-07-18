@@ -162,8 +162,16 @@
           <!-- B0: planning phase -->
           <div id="plan-phase-planning" class="plan-phase" hidden>
             <div class="plan-phase-head">
-              <h3>AI 正在拆分任务…</h3>
-              <p class="muted" id="planning-sub">读取计划并生成带顺序的任务图</p>
+              <div class="planning-title-row">
+                <span class="spinner lg" aria-hidden="true"></span>
+                <div>
+                  <h3>AI 正在拆分任务…</h3>
+                  <p class="muted" id="planning-sub">读取计划并生成带顺序的任务图</p>
+                </div>
+              </div>
+            </div>
+            <div class="planning-progress" aria-live="polite">
+              <div class="planning-progress-bar"></div>
             </div>
             <pre id="planner-log" class="detail-log planner-log" aria-live="polite"></pre>
             <div class="plan-actions">

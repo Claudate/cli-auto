@@ -2312,3 +2312,74 @@ button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip
   transform: scale(0.92);
   transform-origin: left center;
 }
+
+
+/* ── Loading spinner / assign busy ── */
+@keyframes cco-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes cco-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+.spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  border-top-color: var(--accent, #0071e3);
+  border-radius: 50%;
+  animation: cco-spin 0.75s linear infinite;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+.spinner.sm {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-width: 2px;
+}
+.spinner.lg {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-width: 3px;
+}
+.planning-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.planning-title-row h3 {
+  margin: 0 0 0.2rem;
+}
+.planning-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+.planning-progress-bar {
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent, #0071e3), #64d2ff);
+  animation: cco-indeterminate 1.2s ease-in-out infinite;
+}
+.chooser-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.25rem 1rem;
+  color: var(--muted, #6e6e73);
+  font-size: 0.92rem;
+}
+.btn.is-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  pointer-events: none;
+  opacity: 0.92;
+}
+.btn.is-busy .spinner {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
