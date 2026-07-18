@@ -2092,3 +2092,24 @@ th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
 .workspace-body.mode-done .cli-board {
   max-height: none !important;
 }
+
+/* click-fix: 确保可点，遮罩 hidden 时绝不拦截 */
+button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.plan-chooser[hidden],
+.modal[hidden],
+#plan-chooser[hidden],
+#modal[hidden] {
+  display: none !important;
+  pointer-events: none !important;
+}
+.top-actions button[hidden] {
+  display: none !important;
+}
+.top-actions button:not([hidden]) {
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 5;
+}

@@ -84,6 +84,10 @@ function statusLabel(status) {
 
 function toast(msg) {
   const t = $("#toast");
+  if (!t) {
+    console.log("[toast]", msg);
+    return;
+  }
   t.hidden = false;
   t.textContent = msg;
   clearTimeout(toast._t);
@@ -93,17 +97,50 @@ function toast(msg) {
 }
 
 function getInvoke() {
-  if (window.__TAURI_INTERNALS__ || window.__TAURI__) {
-    const core = window.__TAURI__?.core;
-    if (core?.invoke) return core.invoke.bind(core);
+  const w = window;
+  // Tauri 2 多种全局形态，全部兜底
+  const candidates = [
+    w.__TAURI__?.core?.invoke && w.__TAURI__.core.invoke.bind(w.__TAURI__.core),
+    w.__TAURI__?.tauri?.invoke && w.__TAURI__.tauri.invoke.bind(w.__TAURI__.tauri),
+    w.__TAURI_INTERNALS__?.invoke && w.__TAURI_INTERNALS__.invoke.bind(w.__TAURI_INTERNALS__),
+    typeof w.__TAURI_INVOKE__ === "function" && w.__TAURI_INVOKE__,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "function") return c;
   }
   return null;
 }
 
+function isTauriReady() {
+  return !!getInvoke();
+}
+
 async function invoke(cmd, args = {}) {
   const inv = getInvoke();
-  if (!inv) throw new Error("请通过 CCO.app 启动");
-  return inv(cmd, args);
+  if (!inv) throw new Error("请通过 CCO.app 启动（invoke 不可用）");
+  try {
+    return await inv(cmd, args);
+  } catch (e) {
+    const msg = e?.message || e?.toString?.() || String(e);
+    throw new Error(msg);
+  }
+}
+
+async function openNativeDialog(opts) {
+  // tauri-plugin-dialog 全局形态兜底
+  const d =
+    window.__TAURI__?.dialog ||
+    window.__TAURI__?.plugins?.dialog ||
+    null;
+  if (d?.open) return d.open(opts);
+  // 动态 import（若打包进了 webview）
+  try {
+    if (window.__TAURI__?.core?.invoke) {
+      // plugin command path used by some builds
+      return await invoke("plugin:dialog|open", opts);
+    }
+  } catch (_) {}
+  throw new Error("对话框不可用");
 }
 
 function esc(s) {
@@ -259,19 +296,23 @@ function goHome() {
       <div class="welcome-actions">
         <button class="btn primary" id="btn-welcome-add2" type="button">添加项目文件夹</button>
       </div>`;
-    $("#btn-welcome-add2").onclick = () => openModal();
+    // 点击由全局委托处理 btn-welcome-add2
   }
 }
 
 /* ── Modal（仅添加项目） ── */
 function openModal() {
-  $("#modal").hidden = false;
-  $("#m-project-path").value = "";
-  $("#m-project-name").value = "";
+  const m = $("#modal");
+  if (m) m.hidden = false;
+  const p = $("#m-project-path");
+  const n = $("#m-project-name");
+  if (p) p.value = "";
+  if (n) n.value = "";
 }
 
 function closeModal() {
-  $("#modal").hidden = true;
+  const m = $("#modal");
+  if (m) m.hidden = true;
 }
 
 /* ── Projects ── */
@@ -403,9 +444,7 @@ async function addProjectFromModal() {
 
 async function pickFolderToModal() {
   try {
-    const dialog = window.__TAURI__?.dialog;
-    if (!dialog?.open) return toast("对话框不可用");
-    const selected = await dialog.open({ directory: true, multiple: false });
+    const selected = await openNativeDialog({ directory: true, multiple: false });
     if (selected) $("#m-project-path").value = selected;
   } catch (e) {
     toast(String(e));
@@ -667,9 +706,7 @@ async function selectPlan(planPath) {
 
 async function pickPlanFileForPicker() {
   try {
-    const dialog = window.__TAURI__?.dialog;
-    if (!dialog?.open) return toast("对话框不可用");
-    const selected = await dialog.open({
+    const selected = await openNativeDialog({
       multiple: false,
       filters: [{ name: "Plan", extensions: ["md", "yaml", "yml", "json"] }],
     });
@@ -1763,102 +1800,92 @@ function backFromSubpage() {
 }
 
 /* ── Wire ── */
-function wire() {
-  applyLogFontSize(state.logFontSize);
 
-  const on = (sel, fn) => {
-    const el = typeof sel === "string" ? $(sel) : sel;
-    if (!el) return;
-    el.onclick = fn;
-  };
-
-  on("#btn-add-plus", () => openModal());
-  on("#btn-welcome-add", () => openModal());
-  on("#btn-welcome-help", () => showPage("help"));
-
-  on("#btn-refresh", async () => {
+/* ═══════════════════════════════════════════════
+ * 全局事件委托：按钮失效的根治方案
+ * - 不依赖 wire 时序
+ * - 不依赖 Tauri 是否已就绪（先响应 UI）
+ * - 动态生成的按钮也能点（按 id / data-action）
+ * - 每次点击 try/catch，失败 toast，绝不静默
+ * ═══════════════════════════════════════════════ */
+const UI_ACTIONS = {
+  "btn-add-plus": () => openModal(),
+  "btn-welcome-add": () => openModal(),
+  "btn-welcome-add2": () => openModal(),
+  "btn-welcome-help": () => showPage("help"),
+  "btn-refresh": async () => {
+    if (state.page === "workspace" && state.selectedPath) {
+      await loadProjects();
+      await loadLive();
+      await loadPlansForPicker().catch(() => {});
+      const proj = state.projects.find((p) => p.path === state.selectedPath);
+      const raw =
+        state.live?.plan_path || proj?.default_plan || proj?.last_plan || state.selectedPlan;
+      const cand = normalizePlanPath(raw) || raw;
+      if (cand) await selectPlan(cand).catch(() => {});
+      else updateTopPlanInfo();
+    } else {
+      await loadProjects();
+    }
+    toast("已刷新");
+  },
+  "modal-close": () => closeModal(),
+  "modal-backdrop": () => closeModal(),
+  "m-pick-folder": () => pickFolderToModal(),
+  "m-confirm-project": () => addProjectFromModal(),
+  "m-cancel-project": () => closeModal(),
+  "btn-ws-stop-all": () => stopAll(),
+  "btn-ws-resume": () => resumeRun(),
+  "btn-remove-project": () => removeSelectedProject(),
+  "btn-ws-dismiss-run": () => dismissRun(),
+  "btn-stop-task": () => cancelTask(),
+  "btn-pp-scan": async () => {
+    await loadPlansForPicker();
+    renderPlanChooser();
+  },
+  "btn-pp-pick": () => pickPlanFileForPicker(),
+  "btn-pp-pick-empty": () => pickPlanFileForPicker(),
+  "btn-chooser-scan": async () => {
+    await loadPlansForPicker();
+    renderPlanChooser();
+  },
+  "btn-chooser-pick": () => pickPlanFileForPicker(),
+  "btn-chooser-close": () => openPlanChooser(false),
+  "btn-plan-choose": async () => {
+    // 先打开面板，再扫计划——避免 invoke 失败导致「按钮像死了」
+    openPlanChooser(true);
     try {
-      if (state.page === "workspace" && state.selectedPath) {
-        await loadProjects();
-        await loadLive();
-        await loadPlansForPicker();
-        // 刷新后尽量回填计划
-        const proj = state.projects.find((p) => p.path === state.selectedPath);
-        const raw =
-          state.live?.plan_path || proj?.default_plan || proj?.last_plan || state.selectedPlan;
-        const cand = normalizePlanPath(raw) || raw;
-        if (cand && cand !== state.selectedPlan) await selectPlan(cand);
-        else updateTopPlanInfo();
-      } else {
-        await loadProjects();
-      }
-      toast("已刷新");
+      await loadPlansForPicker();
+      renderPlanChooser();
     } catch (e) {
       toast(String(e));
+      renderPlanChooser();
     }
-  });
-
-  on("#modal-close", closeModal);
-  on("#modal-backdrop", closeModal);
-  on("#m-pick-folder", pickFolderToModal);
-  on("#m-confirm-project", addProjectFromModal);
-  on("#m-cancel-project", closeModal);
-
-  on("#btn-ws-stop-all", stopAll);
-  on("#btn-ws-resume", resumeRun);
-  on("#btn-remove-project", removeSelectedProject); // optional
-  on("#btn-ws-dismiss-run", dismissRun);
-  on("#btn-stop-task", cancelTask);
-
-  on("#btn-pp-scan", () => loadPlansForPicker().then(() => renderPlanChooser()).catch(() => {}));
-  on("#btn-pp-pick", pickPlanFileForPicker);
-  on("#btn-pp-pick-empty", pickPlanFileForPicker);
-  on("#btn-chooser-scan", () => loadPlansForPicker().then(() => renderPlanChooser()).catch(() => {}));
-  on("#btn-chooser-pick", pickPlanFileForPicker);
-  on("#btn-chooser-close", () => openPlanChooser(false));
-  on("#btn-plan-choose", async () => {
-    await loadPlansForPicker();
-    openPlanChooser(true);
-  });
-  on("#btn-pp-analyze", analyzePlanFromPicker);
-  on("#btn-pp-set-default", setDefaultPlan);
-  on("#btn-confirm-start", confirmAndStart);
-  on("#btn-replan", replanFromConfirm);
-  on("#btn-cancel-planning", cancelPlanning);
-  on("#btn-plan-expand", () => openPlanChooser(true));
-  on("#btn-restore-panels", () => {
+  },
+  "btn-pp-analyze": () => analyzePlanFromPicker(),
+  "btn-pp-set-default": () => setDefaultPlan(),
+  "btn-confirm-start": () => confirmAndStart(),
+  "btn-replan": () => replanFromConfirm(),
+  "btn-cancel-planning": () => cancelPlanning(),
+  "btn-plan-expand": () => openPlanChooser(true),
+  "btn-restore-panels": () => {
     state.closedPanels = {};
-    const tasks = state.live?.tasks || [];
-    renderCliBoard(tasks);
-  });
-  on("#btn-doctor-dismiss", () => {
+    renderCliBoard(state.live?.tasks || []);
+  },
+  "btn-doctor-dismiss": () => {
     const d = state.doctorCache;
     const fails = (d?.lines || []).filter((l) => !l.ok);
-    state.doctorDismissedKey = fails.map((l) => l.name + ":" + l.detail).join("|") || "dismissed";
+    state.doctorDismissedKey =
+      fails.map((l) => l.name + ":" + l.detail).join("|") || "dismissed";
     renderDoctorWarn();
     toast("已暂时忽略环境提示");
-  });
-
-  const chooser = $("#plan-chooser");
-  if (chooser) {
-    chooser.addEventListener("click", (e) => {
-      if (e.target === chooser) openPlanChooser(false);
-    });
-  }
-
-  on("#btn-advanced-toggle", () => {
+  },
+  "btn-advanced-toggle": () => {
     state.advancedOpen = !state.advancedOpen;
     localStorage.setItem(ADVANCED_KEY, state.advancedOpen ? "1" : "0");
-    const adv = $("#advanced-body");
-    if (adv) adv.hidden = !state.advancedOpen;
-    const tog = $("#btn-advanced-toggle");
-    if (tog) tog.textContent = state.advancedOpen ? "▾ 高级" : "▸ 高级";
-  });
-  $("#pp-provider")?.addEventListener("change", () => {
-    $("#pp-provider").dataset.touched = "1";
-  });
-
-  on("#btn-task-expand", () => {
+    renderPlanPicker();
+  },
+  "btn-task-expand": () => {
     state.taskStripExpanded = !state.taskStripExpanded;
     localStorage.setItem("cco.taskStripExpanded", state.taskStripExpanded ? "1" : "0");
     const tasks = state.live?.tasks || [];
@@ -1868,157 +1895,256 @@ function wire() {
       finished: !!state.live?.run_id && !isLiveStatus(state.live?.run_status),
       runStatus: state.live?.run_status,
     });
-  });
-  const hSel = $("#cli-height-select");
-  if (hSel) {
-    hSel.value = String(state.cliBodyHeight || 300);
-    hSel.onchange = () => {
-      applyCliBodyHeight(hSel.value);
-      const tasks = state.live?.tasks || [];
-      if (tasks.length) renderCliBoard(tasks);
-    };
-  }
-  // init css var
-  applyCliBodyHeight(state.cliBodyHeight || 300);
-
-  on("#btn-filter-failed", () => {
+  },
+  "btn-filter-failed": () => {
     state.filterFailedOnly = !state.filterFailedOnly;
-    const tasks = state.live?.tasks || [];
-    renderCliBoard(tasks);
-  });
-
-  on("#btn-copy-log", async () => {
+    renderCliBoard(state.live?.tasks || []);
+  },
+  "btn-copy-log": async () => {
     const t =
       (state.live?.tasks || []).find((x) => x.task_id === state.selectedTaskId) ||
       (state.live?.tasks || [])[0];
-    let text = "";
-    if (t && state.logViewMode !== "raw" && Array.isArray(t.log_events) && t.log_events.length) {
-      text = t.log_events
-        .map((e) => {
-          const head = `${e.kind}\t${e.title || ""}\t${e.summary || ""}`;
-          if (e.detail && e.kind === "stderr") {
-            return `${head}\n${String(e.detail).split("\n").slice(0, 40).join("\n")}`;
-          }
-          return head;
-        })
-        .join("\n");
-    } else {
-      text = t?.log_tail || "";
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      toast("日志已复制");
-    } catch (_) {
-      toast("复制失败");
-    }
-  });
-
-  $$("#log-view-mode button").forEach((b) => {
-    b.onclick = () => {
-      state.logViewMode = b.dataset.mode || "term";
-      localStorage.setItem("cco.logViewMode", state.logViewMode);
-      const tasks = state.live?.tasks || [];
-      if (tasks.length) renderCliBoard(tasks);
-    };
-  });
-
-  $$("#log-font-group button").forEach((b) => {
-    b.onclick = () => applyLogFontSize(Number(b.dataset.size));
-  });
-
-  on("#btn-rerun", () => {
+    const text = t?.log_tail || "";
+    await navigator.clipboard.writeText(text);
+    toast("日志已复制");
+  },
+  "btn-rerun": () => {
     state.phase = "pick";
     state.planJobId = null;
     state.planJob = null;
-    state.planCollapsed = true;
-    setPlanCollapsed(true);
-    const comp = $("#completion-panel");
-    if (comp) comp.hidden = true;
     renderPhasePanels();
     renderPlanPicker();
-    if (state.selectedPlan) analyzePlanFromPicker();
-    else {
-      openPlanChooser(true);
-      toast("请先选择计划");
-    }
-  });
-
-  on("#btn-change-plan", async () => {
-    state.phase = "pick";
-    state.planJobId = null;
-    state.planJob = null;
-    state.planCollapsed = true;
-    setPlanCollapsed(true);
-    const comp = $("#completion-panel");
-    if (comp) comp.hidden = true;
-    renderPhasePanels();
-    renderPlanPicker();
-    await loadPlansForPicker();
+    if (state.selectedPlan) return analyzePlanFromPicker();
     openPlanChooser(true);
-  });
-
-  on("#btn-doctor-recheck", async () => {
+    toast("请先选择计划");
+  },
+  "btn-change-plan": async () => {
+    state.phase = "pick";
+    state.planJobId = null;
+    state.planJob = null;
+    renderPhasePanels();
+    renderPlanPicker();
+    openPlanChooser(true);
+    try {
+      await loadPlansForPicker();
+      renderPlanChooser();
+    } catch (e) {
+      toast(String(e));
+    }
+  },
+  "btn-doctor-recheck": async () => {
     await ensureDoctor(true);
     toast(state.doctorCache?.ok ? "环境正常" : "仍有问题，请查看详情");
-  });
-  on("#btn-doctor-open", async () => {
+  },
+  "btn-doctor-open": async () => {
     showPage("doctor");
     await loadDoctor();
-  });
-  on("#btn-open-doctor", async () => {
+  },
+  "btn-open-doctor": async () => {
     showPage("doctor");
     await loadDoctor();
-  });
-  on("#btn-doctor", loadDoctor);
-  on("#btn-doctor-back", backFromSubpage);
-
-  on("#btn-open-settings", async () => {
+  },
+  "btn-doctor": () => loadDoctor(),
+  "btn-doctor-back": () => backFromSubpage(),
+  "btn-open-settings": async () => {
     showPage("settings");
     await loadSettings();
+  },
+  "btn-settings-save": () => saveSettings(),
+  "btn-settings-back": () => backFromSubpage(),
+  "btn-open-help": () => showPage("help"),
+  "btn-help-back": () => backFromSubpage(),
+  "brand-home": () => goHome(),
+};
+
+function bindGlobalUI() {
+  if (window.__ccoUiBound) return;
+  window.__ccoUiBound = true;
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      // plan chooser backdrop
+      if (e.target?.id === "plan-chooser") {
+        openPlanChooser(false);
+        return;
+      }
+
+      // 动态列表：项目 / 计划 / 任务条
+      const proj = e.target?.closest?.(".project-item[data-path]");
+      if (proj) {
+        e.preventDefault();
+        Promise.resolve(selectProject(proj.dataset.path)).catch((err) =>
+          toast(String(err?.message || err))
+        );
+        return;
+      }
+      const planItem = e.target?.closest?.(".plan-item[data-plan]");
+      if (planItem) {
+        e.preventDefault();
+        Promise.resolve(selectPlan(planItem.dataset.plan))
+          .then(() => openPlanChooser(false))
+          .catch((err) => toast(String(err?.message || err)));
+        return;
+      }
+      const taskChip = e.target?.closest?.(".task-chip[data-task]");
+      if (taskChip) {
+        e.preventDefault();
+        state.selectedTaskId = taskChip.dataset.task;
+        if (state.closedPanels[taskChip.dataset.task]) {
+          delete state.closedPanels[taskChip.dataset.task];
+        }
+        const tasks = state.live?.tasks || [];
+        renderCliBoard(tasks);
+        renderTaskStrip(state.live, tasks, {
+          hasRun: !!state.live?.run_id,
+          active: isLiveStatus(state.live?.run_status),
+          finished: !!state.live?.run_id && !isLiveStatus(state.live?.run_status),
+          runStatus: state.live?.run_status,
+        });
+        return;
+      }
+      // CLI 窗口内动态按钮
+      const closeBtn = e.target?.closest?.("[data-close]");
+      if (closeBtn?.dataset?.close) {
+        e.preventDefault();
+        e.stopPropagation();
+        state.closedPanels[closeBtn.dataset.close] = true;
+        renderCliBoard(state.live?.tasks || []);
+        return;
+      }
+      const copyBtn = e.target?.closest?.("[data-copy]");
+      if (copyBtn?.dataset?.copy) {
+        e.preventDefault();
+        e.stopPropagation();
+        const t = (state.live?.tasks || []).find((x) => x.task_id === copyBtn.dataset.copy);
+        Promise.resolve(navigator.clipboard.writeText(t?.log_tail || ""))
+          .then(() => toast("日志已复制"))
+          .catch(() => toast("复制失败"));
+        return;
+      }
+      const stopBtn = e.target?.closest?.("[data-stop]");
+      if (stopBtn?.dataset?.stop) {
+        e.preventDefault();
+        e.stopPropagation();
+        state.selectedTaskId = stopBtn.dataset.stop;
+        Promise.resolve(cancelTask()).catch((err) => toast(String(err?.message || err)));
+        return;
+      }
+
+      const el = e.target?.closest?.(
+        "button[id], [id].linkish, [id].icon-btn, [id].filter-chip, #brand-home, [data-action]"
+      );
+      if (!el) return;
+
+      // log mode / font size segments (no stable single action id on parent)
+      if (el.closest?.("#log-view-mode") && el.dataset?.mode) {
+        state.logViewMode = el.dataset.mode || "term";
+        localStorage.setItem("cco.logViewMode", state.logViewMode);
+        $$("#log-view-mode button").forEach((b) =>
+          b.classList.toggle("active", b.dataset.mode === state.logViewMode)
+        );
+        const tasks = state.live?.tasks || [];
+        if (tasks.length) renderCliBoard(tasks);
+        return;
+      }
+      if (el.closest?.("#log-font-group") && el.dataset?.size) {
+        applyLogFontSize(Number(el.dataset.size));
+        return;
+      }
+
+      const action = el.dataset?.action || el.id;
+      if (!action) return;
+      const fn = UI_ACTIONS[action];
+      if (!fn) return;
+
+      // disabled / aria-disabled
+      if (el.disabled || el.getAttribute("aria-disabled") === "true") return;
+
+      e.preventDefault();
+      Promise.resolve()
+        .then(() => fn(e))
+        .catch((err) => {
+          console.error("UI action failed", action, err);
+          toast(`${action}: ${err?.message || err}`);
+        });
+    },
+    true // capture：不被子层 stopPropagation 吃掉
+  );
+
+  document.addEventListener("change", (e) => {
+    const t = e.target;
+    if (!t) return;
+    if (t.id === "cli-height-select") {
+      applyCliBodyHeight(t.value);
+      const tasks = state.live?.tasks || [];
+      if (tasks.length) renderCliBoard(tasks);
+    }
+    if (t.id === "pp-provider") {
+      t.dataset.touched = "1";
+    }
   });
-  on("#btn-settings-save", saveSettings);
-  on("#btn-settings-back", backFromSubpage);
 
-  on("#btn-open-help", () => showPage("help"));
-  on("#btn-help-back", backFromSubpage);
+  // 初始高度
+  try {
+    applyCliBodyHeight(state.cliBodyHeight || 300);
+    const hSel = $("#cli-height-select");
+    if (hSel) hSel.value = String(state.cliBodyHeight || 300);
+  } catch (_) {}
+}
 
-  $("#brand-home")?.addEventListener("click", goHome);
+/** 兼容旧名：wire 只做委托注册，永不抛致命错 */
+function wire() {
+  try {
+    applyLogFontSize(state.logFontSize);
+  } catch (_) {}
+  bindGlobalUI();
 }
 
 async function boot() {
-  try {
-    wire();
-  } catch (e) {
-    console.error("wire failed", e);
+  bindGlobalUI();
+  // 等 invoke 就绪（最多 ~5s），期间 UI 按钮已可点
+  let ready = isTauriReady();
+  for (let i = 0; !ready && i < 100; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    ready = isTauriReady();
+  }
+  if (!ready) {
+    const cs = $("#conn-status");
+    if (cs) cs.textContent = "需要通过 CCO.app 启动";
+    // 仍不阻断本地 UI
+    return;
   }
   try {
     const meta = await invoke("meta");
     const cs = $("#conn-status");
     if (cs) cs.textContent = `桌面应用 · v${meta.version}`;
     await loadProjects();
-    // 恢复上次项目：有活动优先，否则第一个
     const active = state.projects.find(
       (p) => p.running_tasks > 0 || isLiveStatus(p.active_status)
     );
-    if (active) {
-      await selectProject(active.path);
-    } else if (state.projects.length === 1) {
-      await selectProject(state.projects[0].path);
-    } else if (state.projects.length > 0) {
-      goHome();
-    } else {
-      showPage("welcome");
-    }
+    if (active) await selectProject(active.path);
+    else if (state.projects.length === 1) await selectProject(state.projects[0].path);
+    else if (state.projects.length > 0) goHome();
+    else showPage("welcome");
     startPolling();
   } catch (e) {
-    const cs = $("#conn-status");
-    if (cs) cs.textContent = "需要通过 CCO.app 启动";
     console.error(e);
+    const cs = $("#conn-status");
+    if (cs) cs.textContent = "后端连接异常";
+    toast(String(e?.message || e));
   }
 }
 
 function waitTauri() {
-  if (getInvoke()) boot();
-  else setTimeout(waitTauri, 50);
+  bindGlobalUI();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => boot().catch(console.error));
+  } else {
+    boot().catch(console.error);
+  }
 }
+
+// 立即绑定（脚本在 body 末尾，DOM 已有按钮）
+bindGlobalUI();
 waitTauri();
