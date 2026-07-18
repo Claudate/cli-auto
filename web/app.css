@@ -2554,3 +2554,76 @@ button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip
 .md-body a { color: var(--accent, #0071e3); text-decoration: none; }
 .md-body a:hover { text-decoration: underline; }
 .md-body .md-empty { color: var(--muted); margin: 0; }
+
+
+/* ── CLI board fill remaining (mode-running / mode-done) ── */
+#page-workspace.page.active {
+  overflow: hidden;
+}
+#workspace-body.mode-running,
+#workspace-body.mode-done {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+#workspace-body.mode-running #result-card,
+#workspace-body.mode-done #result-card,
+#workspace-body.mode-running .task-dash,
+#workspace-body.mode-done .task-dash {
+  flex-shrink: 0;
+}
+#workspace-body.mode-running #monitor.board-mode,
+#workspace-body.mode-done #monitor.board-mode {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden;
+  gap: 0.4rem;
+}
+#workspace-body.mode-running .board-toolbar,
+#workspace-body.mode-done .board-toolbar {
+  flex-shrink: 0;
+}
+#workspace-body.mode-running .cli-shell,
+#workspace-body.mode-done .cli-shell {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: auto;
+}
+#workspace-body.mode-running .cli-board,
+#workspace-body.mode-done .cli-board,
+#workspace-body.mode-running #cli-board.cli-board,
+#workspace-body.mode-done #cli-board.cli-board {
+  max-height: none !important;
+  min-height: min(100%, 100%) !important;
+  align-content: start;
+}
+
+/* 默认自适应：窗口体吃掉 --cli-body-h（由 JS 按 shell 高度计算） */
+#workspace-body.mode-running .cli-window:not(.free),
+#workspace-body.mode-done .cli-window:not(.free) {
+  display: flex !important;
+  flex-direction: column;
+  max-height: none !important;
+  min-height: 0 !important;
+}
+#workspace-body.mode-running .cli-window-body,
+#workspace-body.mode-done .cli-window-body {
+  flex: 1 1 auto;
+  height: var(--cli-body-h, 360px) !important;
+  max-height: var(--cli-body-h, 360px) !important;
+  min-height: 160px !important;
+}
+
+/* 覆盖旧的 200px/52vh 收敛，仅运行态 */
+#workspace-body.mode-running .cli-board {
+  max-height: none !important;
+}
+#workspace-body.mode-running .cli-window-body {
+  /* 旧规则 max-height:200px 会被上面 var 覆盖 */
+}

@@ -53,7 +53,12 @@ const state = {
   dragSession: {}, // taskId -> true 本会话拖过才保留 free
   taskStripExpanded: localStorage.getItem("cco.taskStripExpanded") === "1",
   taskDashCollapsed: localStorage.getItem("cco.taskDashCollapsed") === "1",
-  cliBodyHeight: Number(localStorage.getItem("cco.cliBodyHeight") || 300) || 300,
+  cliBodyHeight: (() => {
+    const v = localStorage.getItem("cco.cliBodyHeight");
+    if (v === "auto" || v == null || v === "") return "auto";
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : "auto";
+  })(),
   assigning: false, // 分配计划进行中（防连点 + 按钮转圈）
   plansLoading: false,
   planPollFails: 0,
@@ -1786,6 +1791,8 @@ function renderWorkspace() {
   if (monitor) monitor.hidden = false;
   if (cliEmpty) cliEmpty.hidden = true;
   renderCliBoard(tasks);
+  // height fit handled inside renderCliBoard
+
 }
 
 function savePanelPos() {
@@ -1927,23 +1934,49 @@ function renderTaskStrip(live, tasks, ctx) {
 }
 
 function applyCliBodyHeight(h) {
-  const n = Math.max(160, Math.min(800, Number(h) || 300));
+  if (h === "auto" || h === "0" || h === 0) {
+    state.cliBodyHeight = "auto";
+    localStorage.setItem("cco.cliBodyHeight", "auto");
+    document.documentElement.setAttribute("data-cli-h", "auto");
+    fitCliBodyHeight();
+    return;
+  }
+  const n = Math.max(160, Math.min(900, Number(h) || 300));
   state.cliBodyHeight = n;
   localStorage.setItem("cco.cliBodyHeight", String(n));
+  document.documentElement.removeAttribute("data-cli-h");
   document.documentElement.style.setProperty("--cli-body-h", n + "px");
   const sel = $("#cli-height-select");
-  if (sel && String(sel.value) !== String(n)) {
-    // pick closest option or set custom
-    const opts = [...sel.options].map((o) => Number(o.value));
-    if (opts.includes(n)) sel.value = String(n);
-  }
-  // update existing bodies
-  $$(".cli-window-body").forEach((el) => {
-    el.style.height = n + "px";
-    el.style.maxHeight = n + "px";
-    el.style.minHeight = n + "px";
-  });
+  if (sel) sel.value = String(n);
 }
+
+/** 按 CLI shell 可用高度均分窗口 body，消灭下方大片空白 */
+function fitCliBodyHeight() {
+  if (state.cliBodyHeight !== "auto") return;
+  const shell = $("#cli-shell");
+  const board = $("#cli-board");
+  if (!shell) return;
+  const rect = shell.getBoundingClientRect();
+  let shellH = rect.height;
+  // shell 尚未布局时用视口估算
+  if (!shellH || shellH < 80) {
+    shellH = Math.max(240, window.innerHeight - 260);
+  }
+  const wins = board
+    ? [...board.querySelectorAll(".cli-window:not(.free)")]
+    : [];
+  const n = Math.max(1, wins.length || 1);
+  const cols = window.innerWidth < 820 ? 1 : 2;
+  const rows = Math.max(1, Math.ceil(n / cols));
+  const gap = 12;
+  const chrome = 92; // head + foot + borders
+  const rowH = (shellH - gap * Math.max(0, rows - 1) - 8) / rows;
+  const bodyH = Math.max(180, Math.floor(rowH - chrome));
+  document.documentElement.style.setProperty("--cli-body-h", bodyH + "px");
+  const sel = $("#cli-height-select");
+  if (sel) sel.value = "auto";
+}
+
 
 function isAiInteractionEvent(e) {
   if (!e) return false;
@@ -2047,6 +2080,15 @@ function panelLogHtml(t) {
 }
 
 function renderCliBoard(tasks) {
+  const __fitAfter = () => {
+    if (state.cliBodyHeight === "auto") {
+      requestAnimationFrame(() => {
+        fitCliBodyHeight();
+        requestAnimationFrame(() => fitCliBodyHeight());
+      });
+    }
+  };
+
   const board = $("#cli-board");
   if (!board) return;
 
@@ -2086,7 +2128,15 @@ function renderCliBoard(tasks) {
   board.style.gridTemplateColumns = "calc((100% - 0.75rem) / 2) calc((100% - 0.75rem) / 2)";
   board.style.gap = "0.75rem";
   board.style.overflowX = "hidden";
-  document.documentElement.style.setProperty("--cli-body-h", (state.cliBodyHeight || 300) + "px");
+  if (state.cliBodyHeight === "auto") {
+    document.documentElement.setAttribute("data-cli-h", "auto");
+  } else {
+    document.documentElement.removeAttribute("data-cli-h");
+    document.documentElement.style.setProperty(
+      "--cli-body-h",
+      (Number(state.cliBodyHeight) || 300) + "px"
+    );
+  }
   board.innerHTML = "";
 
   visible.forEach((t, idx) => {
@@ -2163,10 +2213,10 @@ function renderCliBoard(tasks) {
     board.appendChild(card);
     const body = card.querySelector(".cli-window-body");
     if (body) {
-      const h = state.cliBodyHeight || 300;
-      body.style.height = h + "px";
-      body.style.maxHeight = h + "px";
-      body.style.minHeight = h + "px";
+      // 高度交给 CSS 变量 --cli-body-h（自适应由 fitCliBodyHeight 写入）
+      body.style.height = "";
+      body.style.maxHeight = "";
+      body.style.minHeight = "";
       body.innerHTML = panelLogHtml(t);
       // 默认贴底
       body.scrollTop = body.scrollHeight;
@@ -2273,6 +2323,7 @@ function renderCliBoard(tasks) {
       } catch (_) {}
     };
   });
+  __fitAfter();
 }
 
 function renderTaskList(tasks) {
@@ -2739,6 +2790,16 @@ const UI_ACTIONS = {
 function bindGlobalUI() {
   if (window.__ccoUiBound) return;
   window.__ccoUiBound = true;
+  if (!window.__ccoCliFitBound) {
+    window.__ccoCliFitBound = true;
+    let t = null;
+    window.addEventListener("resize", () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        if (state.cliBodyHeight === "auto") fitCliBodyHeight();
+      }, 80);
+    });
+  }
 
   document.addEventListener(
     "click",
@@ -2883,9 +2944,9 @@ function bindGlobalUI() {
 
   // 初始高度
   try {
-    applyCliBodyHeight(state.cliBodyHeight || 300);
+    applyCliBodyHeight(state.cliBodyHeight === "auto" ? "auto" : state.cliBodyHeight || "auto");
     const hSel = $("#cli-height-select");
-    if (hSel) hSel.value = String(state.cliBodyHeight || 300);
+    if (hSel) hSel.value = state.cliBodyHeight === "auto" ? "auto" : String(state.cliBodyHeight || 300);
   } catch (_) {}
 }
 
