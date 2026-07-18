@@ -404,6 +404,8 @@ impl WorkerProvider for ClaudeProvider {
     async fn preflight(&self) -> Result<()> {
         let path = if std::path::Path::new(&self.bin).is_file() {
             std::path::PathBuf::from(&self.bin)
+        } else if let Some(found) = crate::runtime::provider::resolve_bin_on_disk(&self.bin) {
+            std::path::PathBuf::from(found)
         } else {
             which::which(&self.bin).with_context(|| {
                 format!(

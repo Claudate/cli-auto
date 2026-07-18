@@ -285,9 +285,15 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         ),
     );
 
-    // `ai` may call Claude and take minutes — run in background so UI can poll.
-    let async_ai = plan_mode == "ai";
+    // `ai` may call Claude CLI (print) and take minutes — background + UI poll.
+    // 若本机解析不到 claude bin，则同步跑启发式，避免 UI 空等异步轮询。
+    let async_ai = plan_mode == "ai" && planner_should_try_llm(config, &provider);
     if async_ai {
+        append_log(
+            config,
+            &job_id,
+            "async planner: will invoke Claude CLI (print / stream-json)",
+        );
         let cfg = config.clone();
         let jid = job_id.clone();
         std::thread::spawn(move || {
@@ -305,9 +311,35 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         return job_view(config, &job, 48_000);
     }
 
+    if plan_mode == "ai" {
+        append_log(
+            config,
+            &job_id,
+            "claude CLI not resolvable in this process; running heuristic splitter synchronously",
+        );
+    }
     finish_plan_job(config, &mut job);
     let job = PlanJob::load(config, &job_id)?;
     job_view(config, &job, 48_000)
+}
+
+fn planner_should_try_llm(config: &Config, provider_name: &str) -> bool {
+    if provider_name == "fake" {
+        return false;
+    }
+    if std::env::var("CCO_PLANNER_HEURISTIC")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+    {
+        return false;
+    }
+    let bin_cfg = config
+        .provider("claude")
+        .map(|p| p.bin.clone())
+        .unwrap_or_else(|| "claude".into());
+    let bin = crate::runtime::provider::resolve_provider_bin(&bin_cfg, "CCO_CLAUDE_BIN");
+    let p = std::path::Path::new(&bin);
+    p.is_file() || which::which(&bin).is_ok()
 }
 
 fn finish_plan_job(config: &Config, job: &mut PlanJob) {
@@ -465,17 +497,22 @@ fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
         source_text
     };
 
-    let bin = config
+    // GUI/.app 往往没有 shell PATH：必须走与 ProviderRegistry 相同的解析。
+    let bin_cfg = config
         .provider("claude")
         .map(|p| p.bin.clone())
-        .unwrap_or_else(|| {
-            std::env::var("CCO_CLAUDE_BIN").unwrap_or_else(|_| "claude".into())
-        });
+        .unwrap_or_else(|| "claude".into());
+    let bin = crate::runtime::provider::resolve_provider_bin(&bin_cfg, "CCO_CLAUDE_BIN");
     let extra = config
         .provider("claude")
         .map(|p| p.extra_args.clone())
         .unwrap_or_default();
-    let provider = ClaudeProvider::new(bin, extra);
+    let provider = ClaudeProvider::new(bin.clone(), extra);
+    append_log(
+        config,
+        &job.job_id,
+        &format!("planner CLI bin = {bin}"),
+    );
 
     let work = job_dir(config, &job.job_id).join("llm_work");
     let task_dir = work.join("tasks").join("__planner__");
@@ -521,10 +558,32 @@ fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
         provider.preflight().await?;
         provider.validate_task(&planner_task)?;
         let handle = provider.start(&planner_task, &ctx).await?;
+        append_log(
+            config,
+            &job.job_id,
+            "claude CLI started (print); waiting for planner JSON…",
+        );
         // Poll until done (max ~10 min already in task timeout)
+        let mut ticks = 0u32;
         loop {
             match provider.poll(&handle).await? {
                 WorkerStatus::Running => {
+                    ticks += 1;
+                    // 每 ~4s 写心跳，供桌面轮询展示，避免“假死”
+                    if ticks % 10 == 0 {
+                        let stdout_bytes = std::fs::metadata(&handle.stdout_path)
+                            .map(|m| m.len())
+                            .unwrap_or(0);
+                        append_log(
+                            config,
+                            &job.job_id,
+                            &format!(
+                                "claude still running… {}s, stdout ~{} bytes",
+                                ticks * 400 / 1000,
+                                stdout_bytes
+                            ),
+                        );
+                    }
                     tokio::time::sleep(Duration::from_millis(400)).await;
                 }
                 WorkerStatus::Done | WorkerStatus::Failed | WorkerStatus::Stopped | WorkerStatus::Timeout => {

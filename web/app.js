@@ -56,6 +56,8 @@ const state = {
   cliBodyHeight: Number(localStorage.getItem("cco.cliBodyHeight") || 300) || 300,
   assigning: false, // 分配计划进行中（防连点 + 按钮转圈）
   plansLoading: false,
+  planPollFails: 0,
+  planStartedAt: 0,
 };
 
 /* ── Status labels (人话) ── */
@@ -435,14 +437,15 @@ function renderPhasePanels() {
 
   if (ph === "planning") {
     const log = $("#planner-log");
-    if (log && state.planJob?.planner_log_tail) {
-      log.textContent = state.planJob.planner_log_tail;
+    const tail =
+      state.planJob?.planner_log_tail ||
+      state.planJob?.plannerLogTail ||
+      "";
+    if (log && tail) {
+      log.textContent = tail;
+      log.scrollTop = log.scrollHeight;
     } else if (log && !log.textContent) {
       log.textContent = "正在分析…";
-    }
-    const sub = $("#planning-sub");
-    if (sub && state.selectedPlan) {
-      sub.textContent = `正在分析 ${planDisplayName(state.selectedPlan)}…`;
     }
   }
   if (ph === "confirm") {
@@ -915,26 +918,17 @@ async function analyzePlanFromPicker() {
       },
     });
     state.planJob = view;
-    state.planJobId = view.job_id;
+    // Tauri/serde 字段兼容
+    state.planJobId = view.job_id || view.jobId || null;
+    state.planStartedAt = Date.now();
+    state.planPollFails = 0;
     const logEl = $("#planner-log");
-    if (logEl) logEl.textContent = view.planner_log_tail || "规划中…";
+    if (logEl) logEl.textContent = view.planner_log_tail || view.plannerLogTail || "规划中…";
 
-    if (view.status === "planned") {
-      if (state.autoStartAfterPlan) {
-        toast(`已拆分 ${view.task_count || 0} 个任务，正在启动…`);
-        state.phase = "confirm";
-        state.confirmTaskId = view.tasks?.[0]?.id || null;
-        renderPhasePanels();
-        await confirmAndStart();
-      } else {
-        state.phase = "confirm";
-        state.confirmTaskId = view.tasks?.[0]?.id || null;
-        toast(`已拆分 ${view.task_count || 0} 个任务，请确认后开始`);
-        renderPhasePanels();
-        renderPlanPicker();
-      }
-      setAssignBusy(false);
-    } else if (view.status === "plan_failed") {
+    const status = String(view.status || "").toLowerCase();
+    if (status === "planned") {
+      await advancePlannedJob(view);
+    } else if (status === "plan_failed") {
       state.phase = "pick";
       if (err) {
         err.textContent = view.error || "规划失败";
@@ -949,6 +943,8 @@ async function analyzePlanFromPicker() {
       state.phase = "planning";
       renderPhasePanels();
       startPlanJobPoll();
+      // 立即拉一次，避免只显示 started 第一行就干等
+      await refreshPlanJob();
     }
   } catch (e) {
     state.phase = "pick";
@@ -973,32 +969,59 @@ function stopPlanJobPoll() {
 function startPlanJobPoll() {
   stopPlanJobPoll();
   state.planJobPollTimer = setInterval(() => {
-    refreshPlanJob().catch(() => {});
-  }, 800);
+    refreshPlanJob().catch((e) => console.warn("plan poll", e));
+  }, 600);
+}
+
+async function advancePlannedJob(view) {
+  stopPlanJobPoll();
+  state.planJob = view;
+  if (!state.confirmTaskId && view.tasks?.length) {
+    state.confirmTaskId = view.tasks[0].id;
+  }
+  const n = view.task_count || view.tasks?.length || 0;
+  const adapter = view.adapter || "";
+  const how =
+    adapter.includes("heuristic")
+      ? "本地启发式拆分"
+      : adapter.includes("llm")
+        ? "Claude CLI 规划"
+        : "规划完成";
+  if (state.autoStartAfterPlan) {
+    toast(`${how}：${n} 个任务，正在启动…`);
+    state.phase = "confirm";
+    renderPhasePanels();
+    setAssignBusy(false);
+    await confirmAndStart();
+  } else {
+    toast(`${how}：${n} 个任务，请确认后开始`);
+    state.phase = "confirm";
+    renderPhasePanels();
+    renderPlanPicker();
+    setAssignBusy(false);
+  }
 }
 
 async function refreshPlanJob() {
   if (!state.planJobId) return;
   try {
-    const view = await invoke("get_plan_job_cmd", { job_id: state.planJobId });
+    const view = await invoke("get_plan_job_cmd", {
+      job_id: state.planJobId,
+      jobId: state.planJobId,
+    });
+    state.planPollFails = 0;
     state.planJob = view;
-    if (view.status === "planned") {
-      stopPlanJobPoll();
-      if (!state.confirmTaskId && view.tasks?.length) {
-        state.confirmTaskId = view.tasks[0].id;
-      }
-      if (state.autoStartAfterPlan) {
-        toast(`已拆分 ${view.task_count || 0} 个任务，正在启动…`);
-        state.phase = "confirm";
-        renderPhasePanels();
-        await confirmAndStart();
-      } else {
-        state.phase = "confirm";
-        toast(`已拆分 ${view.task_count || 0} 个任务，请确认后开始`);
-        renderPhasePanels();
-      }
-      setAssignBusy(false);
-    } else if (view.status === "plan_failed") {
+    const status = String(view.status || "").toLowerCase();
+    const logTail = view.planner_log_tail || view.plannerLogTail || "";
+    const logEl = $("#planner-log");
+    if (logEl && logTail) {
+      logEl.textContent = logTail;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    if (status === "planned") {
+      await advancePlannedJob(view);
+    } else if (status === "plan_failed") {
       stopPlanJobPoll();
       setAssignBusy(false);
       state.phase = "pick";
@@ -1010,15 +1033,27 @@ async function refreshPlanJob() {
       toast(view.error || "规划失败");
       renderPhasePanels();
       renderPlanPicker();
-    } else if (view.status === "planning") {
+    } else if (status === "planning") {
       state.phase = "planning";
-      const logEl = $("#planner-log");
-      if (logEl) {
-        logEl.textContent = view.planner_log_tail || "规划中…";
-        logEl.scrollTop = logEl.scrollHeight;
+      // 超时保护：超过 12 分钟仍 planning
+      if (state.planStartedAt && Date.now() - state.planStartedAt > 12 * 60 * 1000) {
+        stopPlanJobPoll();
+        setAssignBusy(false);
+        state.phase = "pick";
+        toast("规划超时：Claude CLI 可能卡住。请检查 claude 是否在 PATH，或高级选项改用模拟。");
+        renderPhasePanels();
+        renderPlanPicker();
+        return;
+      }
+      const sub = $("#planning-sub");
+      if (sub) {
+        const elapsed = state.planStartedAt
+          ? Math.round((Date.now() - state.planStartedAt) / 1000)
+          : 0;
+        sub.textContent = `正在调用 Claude CLI 拆分（已等待 ${elapsed}s）…`;
       }
       renderPhasePanels();
-    } else if (view.status === "confirmed" && view.run_id) {
+    } else if (status === "confirmed" && (view.run_id || view.runId)) {
       stopPlanJobPoll();
       setAssignBusy(false);
       state.phase = "running";
@@ -1027,7 +1062,20 @@ async function refreshPlanJob() {
       renderPhasePanels();
     }
   } catch (e) {
-    console.warn(e);
+    state.planPollFails = (state.planPollFails || 0) + 1;
+    console.warn("refreshPlanJob", e);
+    if (state.planPollFails === 1 || state.planPollFails % 5 === 0) {
+      toast(`规划状态刷新失败：${e}`);
+    }
+    // 5 次失败后尝试读本地日志提示
+    if (state.planPollFails >= 8) {
+      stopPlanJobPoll();
+      setAssignBusy(false);
+      state.phase = "pick";
+      toast("无法轮询规划任务。请点刷新重试，或用 CLI：cco plan --project ...");
+      renderPhasePanels();
+      renderPlanPicker();
+    }
   }
 }
 
@@ -1157,6 +1205,10 @@ async function loadLive() {
     return;
   }
   state.now = Date.now();
+  // 规划中时顺带刷新 plan job，防止 setInterval 被卡住时永远转圈
+  if (state.phase === "planning" && state.planJobId) {
+    await refreshPlanJob().catch(() => {});
+  }
   state.live = await invoke("get_project_live", {
     project: state.selectedPath,
     log_max_bytes: 96000,

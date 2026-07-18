@@ -126,7 +126,7 @@ impl ProviderRegistry {
 
         if let Some(pc) = config.provider("claude") {
             if pc.enabled {
-                let bin = resolve_bin_override(&pc.bin, "CCO_CLAUDE_BIN");
+                let bin = resolve_provider_bin(&pc.bin, "CCO_CLAUDE_BIN");
                 providers.push(Arc::new(claude::ClaudeProvider::new(bin, pc.extra_args.clone())));
             }
         }
@@ -141,7 +141,7 @@ impl ProviderRegistry {
         }
         if let Some(pc) = config.provider("codex") {
             if pc.enabled {
-                let bin = resolve_bin_override(&pc.bin, "CCO_CODEX_BIN");
+                let bin = resolve_provider_bin(&pc.bin, "CCO_CODEX_BIN");
                 providers.push(Arc::new(codex::CodexProvider::new(bin, pc.extra_args.clone())));
             }
         }
@@ -149,7 +149,7 @@ impl ProviderRegistry {
         if providers.is_empty() {
             // fallback: claude default
             providers.push(Arc::new(claude::ClaudeProvider::new(
-                resolve_bin_override("claude", "CCO_CLAUDE_BIN"),
+                resolve_provider_bin("claude", "CCO_CLAUDE_BIN"),
                 vec![],
             )));
         }
@@ -178,7 +178,7 @@ impl ProviderRegistry {
     }
 }
 
-fn resolve_bin_override(default: &str, env_key: &str) -> String {
+pub fn resolve_provider_bin(default: &str, env_key: &str) -> String {
     if let Ok(v) = std::env::var(env_key) {
         if !v.trim().is_empty() {
             return v;
@@ -193,7 +193,7 @@ fn resolve_bin_override(default: &str, env_key: &str) -> String {
 }
 
 /// Look up a binary in PATH, then common user/Homebrew locations.
-fn resolve_bin_on_disk(name_or_path: &str) -> Option<String> {
+pub fn resolve_bin_on_disk(name_or_path: &str) -> Option<String> {
     let p = std::path::Path::new(name_or_path);
     if p.is_absolute() && p.is_file() {
         return Some(name_or_path.to_string());
