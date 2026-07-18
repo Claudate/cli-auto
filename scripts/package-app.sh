@@ -54,4 +54,4 @@ echo "WEB_MACOS: $APP/Contents/MacOS/web"
 echo "WEB_CONTENTS: $APP/Contents/web"
 echo "ZIP: $DIST/CCO-macos-arm64.zip"
 # sanity: new UI markers must exist in packaged web
-rg -n "top-plan-info|分配计划|action-block|2-col FINAL" "$APP/Contents/MacOS/web/index.html" "$APP/Contents/MacOS/web/app.css" "$APP/Contents/MacOS/web/app.js" | head -20
+rg -n "btn-chooser-assign|btn-task-dash-toggle|cli-rerun-btn|分配计划|plan-chooser-foot|taskDashCollapsed" "$APP/Contents/MacOS/web/index.html" "$APP/Contents/MacOS/web/app.css" "$APP/Contents/MacOS/web/app.js" | head -30
