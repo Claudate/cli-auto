@@ -1144,6 +1144,8 @@ function renderCliBoard(tasks) {
   // 自动布局：网格，若用户拖过则用绝对坐标
   const cols = Math.max(1, Math.min(2, visible.length));
   board.classList.toggle("single", visible.length === 1);
+  board.classList.add("cols-2");
+  board.dataset.cols = "2";
   board.innerHTML = "";
 
   visible.forEach((t, idx) => {
@@ -1162,10 +1164,15 @@ function renderCliBoard(tasks) {
       card.classList.add("free");
       card.style.left = pos.x + "px";
       card.style.top = pos.y + "px";
-      if (pos.w) card.style.width = pos.w + "px";
+      // 自由窗默认半列宽；有记忆宽度则用记忆值，但禁止撑满整板
+      const half = Math.max(260, Math.floor((board.clientWidth - 12) / 2));
+      const w = pos.w ? Math.min(pos.w, board.clientWidth - 8) : half;
+      card.style.width = Math.min(w, half * 1.15) + "px";
     } else {
-      // flow grid index hint
+      // flow：始终走 2 列网格，单窗只占一列
       card.dataset.slot = String(idx);
+      card.style.width = "";
+      card.style.maxWidth = "";
     }
     card.innerHTML = `
       <div class="cli-window-head" data-drag="${esc(t.task_id)}">
@@ -1263,9 +1270,11 @@ function renderCliBoard(tasks) {
       card.classList.add("free");
       const x = rect.left - boardRect.left + board.scrollLeft;
       const y = rect.top - boardRect.top + board.scrollTop;
+      const half = Math.max(260, Math.floor((board.clientWidth - 12) / 2));
       card.style.left = x + "px";
       card.style.top = y + "px";
-      card.style.width = rect.width + "px";
+      // 拖出后保持半列宽，避免变成全宽条
+      card.style.width = Math.min(rect.width || half, half * 1.15) + "px";
       card.style.zIndex = String(Date.now() % 100000);
       state.drag = {
         id,
