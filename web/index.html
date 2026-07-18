@@ -39,12 +39,10 @@
           <h1 id="page-title">欢迎</h1>
           <div id="page-sub" class="muted sub"></div>
         </div>
-        <div id="top-plan-info" class="top-plan-info" hidden>
-          <span class="top-plan-label">计划</span>
-          <strong id="top-plan-name">—</strong>
-          <span class="muted" id="top-plan-path"></span>
-        </div>
-        <div class="top-actions">
+        <div class="top-actions" id="top-actions">
+          <button class="btn ghost sm" id="btn-plan-choose" type="button" hidden>选择计划</button>
+          <button class="btn primary sm" id="btn-pp-analyze" type="button" hidden disabled>分配计划</button>
+          <button type="button" class="linkish" id="btn-advanced-toggle" hidden>高级</button>
           <button id="btn-refresh" class="btn ghost" type="button">刷新</button>
         </div>
       </header>
@@ -74,54 +72,41 @@
             </div>
           </div>
 
-          <!-- Active plan bar (compact only) -->
-          <div id="plan-picker" class="plan-picker compact" hidden>
-            <div class="plan-active-bar" id="plan-active-bar">
-              <div class="plan-active-main">
-                <span class="plan-active-label">当前计划</span>
-                <div class="plan-active-meta">
-                  <strong id="plan-active-name">尚未选择</strong>
-                  <span class="muted" id="plan-active-path"></span>
-                </div>
-              </div>
-              <div class="plan-active-actions">
-                <button class="btn ghost sm" id="btn-plan-choose" type="button">选择计划</button>
-                <button class="btn primary sm" id="btn-pp-analyze" type="button" disabled>分配计划</button>
-              </div>
-            </div>
-            <div class="plan-active-foot" id="plan-active-foot">
-              <span id="pp-error" class="err-text" hidden></span>
-              <button type="button" class="linkish" id="btn-advanced-toggle">▸ 高级</button>
-              <div id="advanced-body" class="advanced-body" hidden>
-                <div class="grid-2">
-                  <label class="field">
-                    <span>规划方式</span>
-                    <select id="pp-plan-mode">
-                      <option value="ai" selected>AI 智能拆分</option>
-                      <option value="parse">直接解析</option>
-                      <option value="fake">模拟拆分</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span>Provider</span>
-                    <select id="pp-provider">
-                      <option value="claude" selected>Claude</option>
-                      <option value="codex">Codex</option>
-                      <option value="fake">模拟运行</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span>执行方式</span>
-                    <select id="pp-mode">
-                      <option value="print">前台运行（推荐）</option>
-                      <option value="bg">后台运行</option>
-                      <option value="auto">自动选择</option>
-                    </select>
-                  </label>
-                </div>
+          <!-- Plan controls (no "当前计划" bar; buttons live in topbar) -->
+          <div id="plan-picker" class="plan-picker compact headless" hidden>
+            <div id="pp-error" class="err-text" hidden></div>
+            <div id="advanced-body" class="advanced-body top-advanced" hidden>
+              <div class="grid-2">
+                <label class="field">
+                  <span>规划方式</span>
+                  <select id="pp-plan-mode">
+                    <option value="ai" selected>AI 智能拆分</option>
+                    <option value="parse">直接解析</option>
+                    <option value="fake">模拟拆分</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Provider</span>
+                  <select id="pp-provider">
+                    <option value="claude" selected>Claude</option>
+                    <option value="codex">Codex</option>
+                    <option value="fake">模拟运行</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>执行方式</span>
+                  <select id="pp-mode">
+                    <option value="print">前台运行（推荐）</option>
+                    <option value="bg">后台运行</option>
+                    <option value="auto">自动选择</option>
+                  </select>
+                </label>
               </div>
             </div>
-            <!-- legacy hooks kept for JS compat (hidden) -->
+            <!-- legacy hidden hooks -->
+            <div id="plan-active-bar" hidden></div>
+            <strong id="plan-active-name" hidden>—</strong>
+            <span id="plan-active-path" hidden></span>
             <div id="plan-collapsed-summary" hidden></div>
             <strong id="plan-collapsed-name" hidden>—</strong>
             <span id="plan-picker-label" hidden></span>
@@ -141,6 +126,11 @@
                 <div id="pp-task-list"></div>
               </div>
               <div id="pp-controls" hidden></div>
+            </div>
+            <!-- aliases removed: top-plan-info now optional via title only -->
+            <div id="top-plan-info" hidden>
+              <strong id="top-plan-name"></strong>
+              <span id="top-plan-path"></span>
             </div>
           </div>
 

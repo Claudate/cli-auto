@@ -534,59 +534,53 @@ function renderPlanChooser() {
 
 function renderPlanPicker() {
   const pp = $("#plan-picker");
-  if (!pp) return;
-  if (!state.selectedPath) {
-    pp.hidden = true;
-    openPlanChooser(false);
-    return;
-  }
-  // planning 时隐藏分配条，避免抢戏
-  if (state.phase === "planning") {
-    pp.hidden = true;
-    return;
-  }
-  // confirm 且自动开跑时不展示；手动确认时也隐藏分配条
-  if (state.phase === "confirm") {
-    pp.hidden = true;
-    return;
-  }
-  pp.hidden = false;
-  pp.classList.add("compact", "collapsed");
-
-  const nameEl = $("#plan-active-name");
-  const pathEl = $("#plan-active-path");
+  const btnChoose = $("#btn-plan-choose");
   const btnAssign = $("#btn-pp-analyze");
-  const live = state.live;
-  const active = isLiveStatus(live?.run_status);
+  const btnAdv = $("#btn-advanced-toggle");
 
-  if (state.selectedPlan) {
-    const title =
-      state.planPreview?.name ||
-      planDisplayName(state.selectedPlan) ||
-      "已选计划";
-    if (nameEl) nameEl.textContent = title;
-    if (pathEl) pathEl.textContent = state.selectedPlan;
-    if (btnAssign) {
-      btnAssign.disabled = !!active;
-      btnAssign.textContent = active ? "运行中…" : "分配计划";
-    }
-  } else {
-    if (nameEl) nameEl.textContent = "尚未选择";
-    if (pathEl) pathEl.textContent = "点「选择计划」挑一份 .md";
-    if (btnAssign) {
-      btnAssign.disabled = true;
-      btnAssign.textContent = "分配计划";
+  const inWorkspace = !!state.selectedPath && state.page === "workspace";
+  const hideForPhase = state.phase === "planning" || state.phase === "confirm";
+
+  // 顶栏按钮：刷新左侧
+  if (btnChoose) btnChoose.hidden = !inWorkspace || hideForPhase;
+  if (btnAssign) btnAssign.hidden = !inWorkspace || hideForPhase;
+  if (btnAdv) btnAdv.hidden = !inWorkspace || hideForPhase;
+
+  // 高级面板容器：仅在展开时显示
+  if (pp) {
+    if (!inWorkspace || hideForPhase) {
+      pp.hidden = true;
+    } else {
+      // 无「当前计划」条；仅 advanced / error 需要时露头
+      const showAdv = !!state.advancedOpen;
+      const err = $("#pp-error");
+      const hasErr = err && !err.hidden && err.textContent;
+      pp.hidden = !(showAdv || hasErr);
+      pp.classList.add("headless", "compact");
     }
   }
 
-  // advanced
+  if (!inWorkspace) {
+    openPlanChooser(false);
+    updateTopPlanInfo();
+    return;
+  }
+
+  const active = isLiveStatus(state.live?.run_status);
+  if (btnAssign) {
+    btnAssign.disabled = !state.selectedPlan || !!active;
+    btnAssign.textContent = active ? "运行中…" : "分配计划";
+  }
+
   const adv = $("#advanced-body");
   if (adv) adv.hidden = !state.advancedOpen;
-  const tog = $("#btn-advanced-toggle");
-  if (tog) tog.textContent = state.advancedOpen ? "▾ 高级" : "▸ 高级";
+  if (btnAdv) btnAdv.textContent = state.advancedOpen ? "收起高级" : "高级";
+
   try {
     const defP = $("#s-default-provider")?.value;
-    if (defP && !$("#pp-provider").dataset.touched) $("#pp-provider").value = defP;
+    if (defP && $("#pp-provider") && !$("#pp-provider").dataset.touched) {
+      $("#pp-provider").value = defP;
+    }
   } catch (_) {}
 
   if (state.planChooserOpen) renderPlanChooser();
@@ -594,14 +588,8 @@ function renderPlanPicker() {
 }
 
 function updateTopPlanInfo() {
-  const box = $("#top-plan-info");
-  if (!box) return;
-  const onWorkspace = state.page === "workspace" && !!state.selectedPath;
-  if (!onWorkspace) {
-    box.hidden = true;
-    return;
-  }
-  // 多源回填：selected → live → project default/last
+  // 「当前计划」UI 已移除；仅更新 page-sub 轻量提示 + 按钮态
+  const sub = $("#page-sub");
   const proj = (state.projects || []).find((p) => p.path === state.selectedPath);
   let plan =
     state.selectedPlan ||
@@ -610,27 +598,37 @@ function updateTopPlanInfo() {
     normalizePlanPath(proj?.last_plan) ||
     null;
   if (plan && !state.selectedPlan) state.selectedPlan = plan;
-  const name =
-    (state.planPreview && state.selectedPlan === plan && state.planPreview.name) ||
-    (plan ? planDisplayName(plan) : "尚未选择");
-  const nameEl = $("#top-plan-name");
-  const pathEl = $("#top-plan-path");
-  if (nameEl) nameEl.textContent = name;
-  if (pathEl) pathEl.textContent = plan || "点下方「选择计划」";
-  box.hidden = false;
-  box.removeAttribute("hidden");
-  // 同步紧凑条
-  const barName = $("#plan-active-name");
-  const barPath = $("#plan-active-path");
-  if (barName) barName.textContent = plan ? name : "尚未选择";
-  if (barPath) barPath.textContent = plan || "点「选择计划」挑一份 .md";
+
+  if (sub && state.page === "workspace" && state.selectedPath) {
+    const base = state.selectedPath;
+    if (plan) {
+      const name =
+        (state.planPreview && state.planPreview.name) || planDisplayName(plan);
+      // 路径仍在标题下，计划名附带，不单独开「当前计划」大块
+      if (!sub.dataset.rawPath) sub.dataset.rawPath = base;
+      sub.textContent = `${shortPath(base)} · ${name}`;
+      sub.title = `${base}\n计划: ${plan}`;
+    } else {
+      sub.textContent = shortPath(base);
+      sub.title = base;
+    }
+  }
+
   const btnAssign = $("#btn-pp-analyze");
-  if (btnAssign) {
+  if (btnAssign && state.page === "workspace") {
     const active = isLiveStatus(state.live?.run_status);
     btnAssign.disabled = !plan || !!active;
-    btnAssign.textContent = active ? "运行中…" : "分配计划";
   }
+
+  // legacy nodes if present
+  const nameEl = $("#top-plan-name");
+  const pathEl = $("#top-plan-path");
+  const box = $("#top-plan-info");
+  if (box) box.hidden = true;
+  if (nameEl) nameEl.textContent = plan ? planDisplayName(plan) : "";
+  if (pathEl) pathEl.textContent = plan || "";
 }
+
 
 function renderPlanPreview() {
   // 紧凑模式不再展示大预览；保留函数避免旧调用报错
