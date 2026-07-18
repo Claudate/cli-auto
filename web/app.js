@@ -58,6 +58,8 @@ const state = {
   plansLoading: false,
   planPollFails: 0,
   planStartedAt: 0,
+  /** 按项目缓存规划会话，切页/切项目不丢 */
+  planSessions: {}, // path -> session snapshot
 };
 
 /* ── Status labels (人话) ── */
@@ -258,6 +260,11 @@ function applyLogFontSize(px) {
 function showPage(name) {
   state.page = name;
   try { updateTopPlanInfo(); } catch (_) {}
+  try { updateBgPlanBanner(); } catch (_) {}
+  // 切走工作区时先缓存当前规划，保证后台可续
+  if (name !== "workspace" && state.selectedPath && isPlanSessionActive()) {
+    try { stashPlanSession(state.selectedPath); } catch (_) {}
+  }
   $$(".page").forEach((p) => p.classList.toggle("active", p.id === `page-${name}`));
   const sub = $("#page-sub");
   if (name === "welcome") {
@@ -295,10 +302,17 @@ function updateWorkspaceTitle() {
 }
 
 function goHome() {
+  // 规划/确认在后端继续；先缓存会话，回项目可接上
+  if (state.selectedPath && isPlanSessionActive()) {
+    stashPlanSession(state.selectedPath);
+    state.lastWorkspacePath = state.selectedPath;
+  }
   state.selectedPath = null;
   state.live = null;
   state.selectedTaskId = null;
+  // 不清 planJobId/phase：全局 poll 继续；悬浮条可点回
   renderProjectList();
+  try { updateBgPlanBanner(); } catch (_) {}
   if (state.projects.length === 0) {
     showPage("welcome");
   } else {
@@ -378,22 +392,137 @@ function renderProjectList() {
   });
 }
 
+function isPlanSessionActive(phase = state.phase) {
+  return phase === "planning" || phase === "confirm";
+}
+
+function stashPlanSession(projectPath = state.selectedPath) {
+  if (!projectPath) return;
+  if (!isPlanSessionActive() && !state.planJobId) {
+    if (!state.planJobId) delete state.planSessions[projectPath];
+    return;
+  }
+  state.planSessions[projectPath] = {
+    phase: state.phase,
+    planJobId: state.planJobId,
+    planJob: state.planJob,
+    selectedPlan: state.selectedPlan,
+    confirmTaskId: state.confirmTaskId,
+    planStartedAt: state.planStartedAt,
+    assigning: !!state.assigning,
+  };
+}
+
+function restorePlanSession(projectPath) {
+  const s = state.planSessions[projectPath];
+  if (!s) return false;
+  state.phase = s.phase || "pick";
+  state.planJobId = s.planJobId || null;
+  state.planJob = s.planJob || null;
+  state.selectedPlan = s.selectedPlan || state.selectedPlan;
+  state.confirmTaskId = s.confirmTaskId || null;
+  state.planStartedAt = s.planStartedAt || 0;
+  if (s.assigning) setAssignBusy(true);
+  if (state.phase === "planning" && state.planJobId) startPlanJobPoll();
+  return true;
+}
+
+function clearPlanSession(projectPath = state.selectedPath) {
+  if (projectPath) delete state.planSessions[projectPath];
+}
+
+function updateBgPlanBanner() {
+  let bar = document.getElementById("bg-plan-banner");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "bg-plan-banner";
+    bar.className = "bg-plan-banner";
+    bar.hidden = true;
+    bar.innerHTML =
+      '<span class="spinner sm" aria-hidden="true"></span>' +
+      '<span id="bg-plan-banner-text">规划在后台进行中</span>' +
+      '<button type="button" class="btn primary sm" id="btn-bg-plan-back">返回查看</button>';
+    document.body.appendChild(bar);
+    bar.querySelector("#btn-bg-plan-back")?.addEventListener("click", () => {
+      const path = state.selectedPath || state.lastWorkspacePath;
+      if (path) {
+        // selectProject 同路径会保留会话
+        Promise.resolve(selectProject(path)).catch((e) => toast(String(e)));
+      }
+      updateBgPlanBanner();
+    });
+  }
+  const away = state.page !== "workspace" || !state.selectedPath;
+  const active = isPlanSessionActive() && !!state.planJobId;
+  if (active && away) {
+    const name = planDisplayName(state.selectedPlan || "") || "当前计划";
+    const txt = document.getElementById("bg-plan-banner-text");
+    if (txt) {
+      txt.textContent =
+        state.phase === "planning"
+          ? `正在后台拆分「${name}」…`
+          : `「${name}」待确认，点此返回`;
+    }
+    bar.hidden = false;
+  } else {
+    bar.hidden = true;
+  }
+}
+
 async function selectProject(path) {
+  // 同项目再点：只回工作区，保留规划
+  if (path && path === state.selectedPath) {
+    showPage("workspace");
+    renderProjectList();
+    renderPhasePanels();
+    renderPlanPicker();
+    renderWorkspace();
+    updateTopPlanInfo();
+    updateBgPlanBanner();
+    if (state.phase === "planning" && state.planJobId) {
+      startPlanJobPoll();
+      refreshPlanJob().catch(() => {});
+    }
+    return;
+  }
+
+  // 离开旧项目：缓存规划会话（后台 CLI 仍在跑）
+  stashPlanSession(state.selectedPath);
+  stopPlanJobPoll();
+  setAssignBusy(false);
+
   state.selectedPath = path;
   state.logStick = true;
-  state.selectedPlan = null;
   state.planPreview = null;
   state.selectedTaskId = null;
   state.planCollapsed = false;
   state.filterFailedOnly = false;
+  state.closedPanels = {};
+  state.selectedPlan = null;
   state.planJobId = null;
   state.planJob = null;
   state.confirmTaskId = null;
   state.phase = "pick";
+
+  const restored = restorePlanSession(path);
+
   showPage("workspace");
   renderProjectList();
   await Promise.all([loadLive(), loadPlansForPicker(), ensureDoctor()]);
-  // 进入已有活动运行时默认折叠计划区，并同步 phase
+
+  if (restored) {
+    renderPhasePanels();
+    renderPlanPicker();
+    renderWorkspace();
+    updateTopPlanInfo();
+    updateBgPlanBanner();
+    if (state.phase === "planning" && state.planJobId) {
+      await refreshPlanJob().catch(() => {});
+    }
+    toast(state.phase === "planning" ? "已回到后台规划" : "已恢复待确认计划");
+    return;
+  }
+
   if (state.live?.run_id && isLiveStatus(state.live?.run_status)) {
     state.planCollapsed = true;
     state.phase = "running";
@@ -409,10 +538,9 @@ async function selectProject(path) {
   const rawCandidate =
     state.live?.plan_path || proj?.default_plan || proj?.last_plan || state.plans[0] || null;
   const candidate = normalizePlanPath(rawCandidate, path) || rawCandidate;
-  // 完成/运行中也要回填「当前计划」，避免顶栏空白
   if (candidate) {
     try {
-      await selectPlan(candidate);
+      await selectPlan(candidate, { keepSession: true });
     } catch (e) {
       console.warn("restore plan failed", e);
       state.selectedPlan = candidate;
@@ -424,6 +552,7 @@ async function selectProject(path) {
   updateTopPlanInfo();
   renderPhasePanels();
   renderWorkspace();
+  updateBgPlanBanner();
 }
 
 function renderPhasePanels() {
@@ -451,6 +580,7 @@ function renderPhasePanels() {
   if (ph === "confirm") {
     renderConfirmPanel();
   }
+  try { updateBgPlanBanner(); } catch (_) {}
 }
 
 async function addProjectFromModal() {
@@ -480,8 +610,15 @@ async function pickFolderToModal() {
 async function removeSelectedProject() {
   if (!state.selectedPath) return;
   try {
-    await invoke("remove_project_cmd", { path: state.selectedPath });
+    const path = state.selectedPath;
+    await invoke("remove_project_cmd", { path });
     toast("已移除项目");
+    clearPlanSession(path);
+    stopPlanJobPoll();
+    setAssignBusy(false);
+    state.planJobId = null;
+    state.planJob = null;
+    state.phase = "pick";
     state.selectedPath = null;
     state.live = null;
     await loadProjects();
@@ -493,11 +630,15 @@ async function removeSelectedProject() {
 
 /* 隐藏当前运行视图（不清除运行记录，不删除项目） */
 async function dismissRun() {
+  // 只收起运行视图；若在规划/确认则保留
   state.live = null;
   state.selectedTaskId = null;
-  state.phase = "pick";
+  if (!isPlanSessionActive()) {
+    state.phase = "pick";
+  }
   state.planCollapsed = false;
   renderWorkspace();
+  updateBgPlanBanner();
 }
 
 /* ── Doctor gate ── */
@@ -792,14 +933,27 @@ function renderPlanPreview() {
   return;
 }
 
-async function selectPlan(planPath) {
-  state.selectedPlan = normalizePlanPath(planPath) || planPath || null;
-  state.planPreview = null;
-  if (state.phase === "confirm" || state.phase === "planning") {
-    state.phase = "pick";
-    state.planJobId = null;
-    state.planJob = null;
+async function selectPlan(planPath, opts = {}) {
+  const keepSession = !!opts.keepSession;
+  const next = normalizePlanPath(planPath) || planPath || null;
+  const samePlan = next && state.selectedPlan && next === state.selectedPlan;
+
+  // 规划/确认进行中：默认不销毁会话（后台继续）
+  if (isPlanSessionActive() && !opts.force) {
+    if (samePlan || keepSession) {
+      state.selectedPlan = next || state.selectedPlan;
+      renderPlanPicker();
+      updateTopPlanInfo();
+      if (state.planChooserOpen) updateChooserAssignState();
+      return;
+    }
+    // 换了另一份计划：提示并拒绝静默清空
+    toast("规划进行中：请先「返回选计划/重新规划」，或等待完成");
+    return;
   }
+
+  state.selectedPlan = next;
+  state.planPreview = null;
   renderPhasePanels();
   renderPlanPicker();
   if (!planPath) return;
@@ -897,6 +1051,7 @@ async function analyzePlanFromPicker() {
   state.phase = "planning";
   state.planJob = null;
   state.planJobId = null;
+  clearPlanSession(state.selectedPath);
   stopPlanJobPoll();
   openPlanChooser(false);
   renderPhasePanels();
@@ -922,6 +1077,7 @@ async function analyzePlanFromPicker() {
     state.planJobId = view.job_id || view.jobId || null;
     state.planStartedAt = Date.now();
     state.planPollFails = 0;
+    stashPlanSession(state.selectedPath);
     const logEl = $("#planner-log");
     if (logEl) logEl.textContent = view.planner_log_tail || view.plannerLogTail || "规划中…";
 
@@ -978,6 +1134,17 @@ async function advancePlannedJob(view) {
   state.planJob = view;
   if (!state.confirmTaskId && view.tasks?.length) {
     state.confirmTaskId = view.tasks[0].id;
+  }
+  stashPlanSession(state.selectedPath);
+  updateBgPlanBanner();
+  // 人不在工作区时不自动开跑，避免后台误启 worker；提示返回确认
+  if (state.page !== "workspace") {
+    state.phase = "confirm";
+    setAssignBusy(false);
+    stashPlanSession(state.selectedPath);
+    toast(`拆分完成（${view.task_count || view.tasks?.length || 0} 任务），请返回确认`);
+    updateBgPlanBanner();
+    return;
   }
   const n = view.task_count || view.tasks?.length || 0;
   const adapter = view.adapter || "";
@@ -1187,12 +1354,17 @@ async function confirmAndStart() {
   try {
     const res = await invoke("confirm_start_cmd", { job_id: state.planJobId });
     toast("已开始运行");
+    clearPlanSession(state.selectedPath);
     state.phase = "running";
+    state.planJobId = null;
+    state.planJob = null;
     state.selectedTaskId = null;
     state.planCollapsed = true;
     state.closedPanels = {};
+    setAssignBusy(false);
     renderPhasePanels();
     renderPlanPicker();
+    updateBgPlanBanner();
     await loadLive();
     await loadProjects();
   } catch (e) {
@@ -1205,20 +1377,25 @@ async function confirmAndStart() {
 function cancelPlanning() {
   stopPlanJobPoll();
   setAssignBusy(false);
+  clearPlanSession(state.selectedPath);
   state.phase = "pick";
   state.planJobId = null;
   state.planJob = null;
   renderPhasePanels();
   renderPlanPicker();
+  updateBgPlanBanner();
 }
 
 function replanFromConfirm() {
+  stopPlanJobPoll();
+  setAssignBusy(false);
+  clearPlanSession(state.selectedPath);
   state.phase = "pick";
-  // keep selected plan; clear job
   state.planJobId = null;
   state.planJob = null;
   renderPhasePanels();
   renderPlanPicker();
+  updateBgPlanBanner();
   toast("可调整高级选项后再次「分析并拆分任务」");
 }
 
@@ -2019,12 +2196,17 @@ function startPolling(intervalMs = 2000) {
   clearInterval(state.pollTimer);
   state.pollTimer = setInterval(() => {
     state.now = Date.now();
+    // 规划轮询不绑死 workspace：切到设置/帮助/环境检查也继续
+    if (state.planJobId && state.phase === "planning") {
+      refreshPlanJob().catch(() => {});
+    }
     if (state.page === "workspace" && state.selectedPath) {
       loadProjects().catch(() => {});
       loadLive().catch(() => {});
     } else if (state.page === "welcome") {
       loadProjects().catch(() => {});
     }
+    updateBgPlanBanner();
   }, intervalMs);
 }
 
@@ -2085,7 +2267,18 @@ async function saveSettings() {
 function backFromSubpage() {
   if (state.selectedPath) {
     showPage("workspace");
+    // 从设置/帮助/环境检查返回：恢复规划面板
+    if (isPlanSessionActive()) {
+      renderPhasePanels();
+      renderPlanPicker();
+      if (state.phase === "planning" && state.planJobId) {
+        startPlanJobPoll();
+        refreshPlanJob().catch(() => {});
+      }
+    }
     renderWorkspace();
+    updateTopPlanInfo();
+    updateBgPlanBanner();
   } else {
     goHome();
   }
@@ -2108,15 +2301,26 @@ const UI_ACTIONS = {
   "btn-refresh": async () => {
     if (state.page === "workspace" && state.selectedPath) {
       await loadProjects();
+      if (state.phase === "planning" && state.planJobId) {
+        await refreshPlanJob().catch(() => {});
+      }
       await loadLive();
       await loadPlansForPicker().catch(() => {});
-      const proj = state.projects.find((p) => p.path === state.selectedPath);
-      const raw =
-        state.live?.plan_path || proj?.default_plan || proj?.last_plan || state.selectedPlan;
-      const cand = normalizePlanPath(raw) || raw;
-      if (cand) await selectPlan(cand).catch(() => {});
-      else updateTopPlanInfo();
+      if (!isPlanSessionActive()) {
+        const proj = state.projects.find((p) => p.path === state.selectedPath);
+        const raw =
+          state.live?.plan_path || proj?.default_plan || proj?.last_plan || state.selectedPlan;
+        const cand = normalizePlanPath(raw) || raw;
+        if (cand) await selectPlan(cand, { keepSession: true }).catch(() => {});
+        else updateTopPlanInfo();
+      } else {
+        renderPhasePanels();
+        updateTopPlanInfo();
+      }
     } else {
+      if (state.planJobId && state.phase === "planning") {
+        await refreshPlanJob().catch(() => {});
+      }
       await loadProjects();
     }
     toast("已刷新");

@@ -1045,9 +1045,9 @@ th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
   font-weight: 650;
 }
 .planner-log {
-  flex: 1;
-  min-height: 160px;
-  max-height: 40vh;
+  flex: 1 1 auto;
+  min-height: 200px;
+  max-height: none;
   margin: 0;
   overflow: auto;
   font-family: var(--mono);
@@ -1655,13 +1655,9 @@ th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
   padding: 0.35rem 0.5rem 0.5rem;
 }
 
-/* 旧大日志高度收敛 */
+/* 监视大日志高度收敛；规划日志由 mode-plan 自适应铺满 */
 .detail-log.log-console {
   max-height: min(42vh, 420px);
-}
-.planner-log {
-  max-height: 180px !important;
-  min-height: 80px !important;
 }
 .completion-panel.compact {
   padding: 0.75rem 0.9rem;
@@ -2404,4 +2400,88 @@ button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip
 .btn.is-busy .spinner {
   border-color: rgba(255, 255, 255, 0.35);
   border-top-color: #fff;
+}
+
+
+/* ── 规划相位：日志区吃满剩余高度 ── */
+#page-workspace.page.active {
+  overflow: hidden; /* 规划/监视内部滚动，避免整页滚导致高度算不准 */
+}
+#workspace-body.mode-plan {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+#workspace-body.mode-plan .plan-phase {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0 !important;
+}
+#workspace-body.mode-plan .plan-phase-head,
+#workspace-body.mode-plan .planning-progress,
+#workspace-body.mode-plan .plan-actions {
+  flex-shrink: 0;
+}
+#workspace-body.mode-plan .planner-log {
+  flex: 1 1 auto;
+  min-height: 240px;
+  max-height: none !important;
+  height: 100%;
+}
+#workspace-body.mode-plan .task-dash,
+#workspace-body.mode-plan #monitor,
+#workspace-body.mode-plan #cli-empty,
+#workspace-body.mode-plan #result-card {
+  display: none !important;
+}
+
+/* 确认相位同样铺满 */
+#workspace-body.mode-plan #plan-phase-confirm {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+#workspace-body.mode-plan .confirm-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 后台规划悬浮条 */
+.bg-plan-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.9rem;
+  background: #1d1d1f;
+  color: #f5f5f7;
+  border-radius: 999px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.22);
+  font-size: 0.88rem;
+  max-width: min(92vw, 560px);
+}
+.bg-plan-banner[hidden] { display: none !important; }
+.bg-plan-banner .spinner {
+  border-color: rgba(255,255,255,.25);
+  border-top-color: #fff;
+}
+.bg-plan-banner #bg-plan-banner-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bg-plan-banner .btn.primary {
+  background: #0a84ff;
+  border-color: #0a84ff;
+  color: #fff;
+  flex-shrink: 0;
 }
