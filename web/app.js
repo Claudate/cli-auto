@@ -1125,20 +1125,44 @@ function renderConfirmPanel() {
   });
 
   const cur = byId[state.confirmTaskId] || tasks[0];
+  const metaEl = $("#confirm-task-meta");
   if (cur) {
     state.confirmTaskId = cur.id;
     $("#confirm-task-title").textContent = `${cur.title}（${cur.id}）`;
     $("#confirm-task-title").classList.remove("muted");
-    $("#confirm-task-deps").textContent =
-      cur.depends_on?.length > 0
-        ? `依赖：${cur.depends_on.join(", ")}`
-        : "无依赖，属于首波";
-    $("#confirm-task-prompt").textContent = cur.prompt_preview || "（无预览）";
+    // 依赖显示标题，不只是裸 id
+    if (cur.depends_on?.length > 0) {
+      const depLabels = cur.depends_on.map((id) => {
+        const d = byId[id];
+        return d ? `${d.title}（${id}）` : id;
+      });
+      $("#confirm-task-deps").textContent = `依赖：${depLabels.join(" · ")}`;
+    } else {
+      $("#confirm-task-deps").textContent = "无依赖，属于首波";
+    }
+    // 完整 prompt（兼容旧字段 prompt_preview）
+    const full =
+      cur.prompt ||
+      cur.prompt_preview ||
+      cur.promptPreview ||
+      "（无任务说明）";
+    const promptEl = $("#confirm-task-prompt");
+    promptEl.textContent = full;
+    promptEl.scrollTop = 0;
+    if (metaEl) {
+      const chars = [...full].length;
+      metaEl.hidden = false;
+      metaEl.textContent = `说明长度 ${chars} 字 · 点左侧可切换任务`;
+    }
   } else {
     $("#confirm-task-title").textContent = "选择左侧任务查看说明";
     $("#confirm-task-title").classList.add("muted");
     $("#confirm-task-deps").textContent = "";
     $("#confirm-task-prompt").textContent = "";
+    if (metaEl) {
+      metaEl.hidden = true;
+      metaEl.textContent = "";
+    }
   }
   $("#confirm-error").hidden = true;
 }

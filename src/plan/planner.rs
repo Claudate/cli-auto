@@ -67,6 +67,9 @@ pub struct PlanTaskView {
     pub title: String,
     pub depends_on: Vec<String>,
     pub group: Option<String>,
+    /// Full worker prompt (confirm screen needs complete text).
+    pub prompt: String,
+    /// Short one-line summary for lists / tooltips.
     pub prompt_preview: String,
 }
 
@@ -166,17 +169,19 @@ fn read_log_tail(config: &Config, job_id: &str, max_bytes: usize) -> String {
 }
 
 fn task_view(t: &TaskIR) -> PlanTaskView {
-    let preview: String = t.prompt.chars().take(280).collect();
+    let preview: String = t.prompt.chars().take(120).collect();
+    let preview = if t.prompt.chars().count() > 120 {
+        format!("{preview}…")
+    } else {
+        preview
+    };
     PlanTaskView {
         id: t.id.clone(),
         title: t.title.clone(),
         depends_on: t.depends_on.clone(),
         group: t.group.clone(),
-        prompt_preview: if t.prompt.chars().count() > 280 {
-            format!("{preview}…")
-        } else {
-            preview
-        },
+        prompt: t.prompt.clone(),
+        prompt_preview: preview,
     }
 }
 
