@@ -583,9 +583,11 @@ function renderPlanChooser() {
   if (!state.plans.length) {
     if (empty) empty.hidden = false;
     list.innerHTML = "";
+    updateChooserAssignState();
     return;
   }
   if (empty) empty.hidden = true;
+  // 仅渲染列表；点选走全局委托，避免 onclick + capture 双触发
   list.innerHTML = state.plans
     .map((p) => {
       const selected = p === state.selectedPlan;
@@ -596,14 +598,6 @@ function renderPlanChooser() {
       </button>`;
     })
     .join("");
-  $$(".plan-item", list).forEach((b) => {
-    b.onclick = async () => {
-      // 合并弹窗：点选只高亮，不关闭；底部「分配计划」才执行
-      await selectPlan(b.dataset.plan);
-      renderPlanChooser();
-      updateChooserAssignState();
-    };
-  });
   updateChooserAssignState();
 }
 
@@ -643,7 +637,8 @@ function renderPlanPicker() {
 
   const active = isLiveStatus(state.live?.run_status);
   if (btnAssign) {
-    btnAssign.disabled = !state.selectedPlan || !!active;
+    // 弹窗化后无计划也可点开选计划；仅运行中禁用
+    btnAssign.disabled = !!active;
     btnAssign.textContent = active ? "运行中…" : "分配计划";
   }
 
@@ -695,7 +690,7 @@ function updateTopPlanInfo() {
   const btnAssign = $("#btn-pp-analyze");
   if (btnAssign && state.page === "workspace") {
     const active = isLiveStatus(state.live?.run_status);
-    btnAssign.disabled = !plan || !!active;
+    btnAssign.disabled = !!active;
   }
 
   const nameEl = $("#top-plan-name");
@@ -1362,7 +1357,9 @@ function isNoiseText(s) {
 }
 
 function aiLogPlainText(t) {
-  const events = (Array.isArray(t?.log_events) ? t.log_events : []).filter(isAiInteractionEvent);
+  const events = (Array.isArray(t?.log_events) ? t.log_events : [])
+    .filter(isAiInteractionEvent)
+    .filter((ev) => String(ev.kind || "").toLowerCase() !== "result");
   if (events.length) {
     return events
       .map((ev) => {
@@ -1396,25 +1393,35 @@ function panelLogHtml(t) {
         const err = t.error && !isNoiseText(t.error) ? esc(String(t.error).slice(0, 240)) : "";
         return err
           ? `<div class="cli-empty-ai muted">任务失败<br/>${err}</div>`
-          : '<div class="cli-empty-ai muted">任务失败，无 AI 交互日志</div>';
+          : '<div class="cli-empty-ai muted">任务失败，无执行输出</div>';
       }
-      return '<div class="cli-empty-ai muted">暂无 AI 交互内容</div>';
+      // 完成且仅有 result 摘要：黑区留空，成功由窗外徽章表达
+      return "";
     }
     if (mode === "pretty") {
-      const html = viewEvents.slice(-40).map((e) => renderLogEvent(e)).join("");
-      return html || '<div class="cli-empty-ai muted">暂无 AI 交互内容</div>';
+      return viewEvents.slice(-40).map((e) => renderLogEvent(e)).join("") || "";
     }
-    const html = viewEvents
-      .slice(-50)
-      .map((e) => renderTranscriptLine(e))
-      .filter(Boolean)
-      .join("");
-    return html || '<div class="cli-empty-ai muted">暂无 AI 交互内容</div>';
+    return (
+      viewEvents
+        .slice(-50)
+        .map((e) => renderTranscriptLine(e))
+        .filter(Boolean)
+        .join("") || ""
+    );
   }
 
-  // raw 模式：仍只展示 AI 事件文本；没有事件则给占位，不 dump 系统输出
+  // raw 模式：执行交互文本；result 摘要已在 aiLogPlainText 过滤
   const plain = aiLogPlainText(t);
-  if (!plain) return '<div class="cli-empty-ai muted">暂无 AI 交互内容</div>';
+  if (!plain) {
+    if (isLiveStatus(st)) return '<div class="cli-empty-ai muted">AI 运行中，等待交互输出…</div>';
+    if (isFailedStatus(st)) {
+      const err = t.error && !isNoiseText(t.error) ? esc(String(t.error).slice(0, 240)) : "";
+      return err
+        ? `<div class="cli-empty-ai muted">任务失败<br/>${err}</div>`
+        : '<div class="cli-empty-ai muted">任务失败，无执行输出</div>';
+    }
+    return "";
+  }
   return '<pre class="panel-log-pre">' + esc(plain) + "</pre>";
 }
 
@@ -1975,9 +1982,11 @@ const UI_ACTIONS = {
     try {
       await loadPlansForPicker();
       renderPlanChooser();
+      updateChooserAssignState();
     } catch (e) {
       toast(String(e));
       renderPlanChooser();
+      updateChooserAssignState();
     }
   },
   "btn-pp-analyze": async () => {
@@ -2042,6 +2051,9 @@ const UI_ACTIONS = {
     state.phase = "pick";
     state.planJobId = null;
     state.planJob = null;
+    state.closedPanels = {};
+    state.taskDashCollapsed = false;
+    localStorage.setItem("cco.taskDashCollapsed", "0");
     renderPhasePanels();
     renderPlanPicker();
     if (state.selectedPlan) return analyzePlanFromPicker();

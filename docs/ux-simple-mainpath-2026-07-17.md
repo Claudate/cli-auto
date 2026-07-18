@@ -84,3 +84,13 @@
 5. 黑区 `cli-window-body` 过滤 `kind=result`（success/$cost 由窗外徽章表达）
 
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+
+## 2026-07-18 动作区修复补丁
+
+- 顶栏「分配计划」仅在运行中禁用（无计划也可开弹窗选计划）
+- 计划列表去掉 inline onclick，只走全局委托
+- 空计划列表仍刷新底部「分配计划」态
+- 完成态黑区空输出不再显示误导性「暂无 AI 交互内容」
+- 再跑一次前重置 closedPanels 与 task-dash 展开
+
+[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md

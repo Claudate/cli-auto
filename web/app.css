@@ -2282,11 +2282,33 @@ button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip
   display: flex;
   align-items: center;
   gap: 0.3rem;
+  flex-shrink: 0;
 }
 .cli-window-actions .cli-rerun-btn {
   margin-right: 0.15rem;
   white-space: nowrap;
+  padding: 0.18rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.2;
 }
 .cli-window-head {
   gap: 0.4rem;
+}
+.cli-window-title {
+  min-width: 0;
+  flex: 1;
+}
+.cli-window-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 12rem;
+}
+/* legacy hidden action hooks must never affect flex layout */
+#result-actions > button[hidden] {
+  display: none !important;
+}
+.task-dash.collapsed .task-dash-kpis .kpi-card {
+  transform: scale(0.92);
+  transform-origin: left center;
 }
