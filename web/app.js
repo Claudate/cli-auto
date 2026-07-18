@@ -117,6 +117,22 @@ function shortPath(p) {
   return parts.length > 3 ? "…/" + parts.slice(-3).join("/") : p;
 }
 
+
+/** 把绝对路径收成项目相对路径，便于列表匹配与预览 */
+function normalizePlanPath(planPath, projectRoot = state.selectedPath) {
+  if (!planPath) return null;
+  let p = String(planPath).trim();
+  if (!p) return null;
+  if (projectRoot) {
+    const root = String(projectRoot).replace(/\/+$/, "");
+    if (p === root) return null;
+    if (p.startsWith(root + "/")) p = p.slice(root.length + 1);
+  }
+  // 兼容 file:// 与重复项目前缀
+  p = p.replace(/^file:\/\//, "");
+  return p;
+}
+
 function planDisplayName(path) {
   if (!path) return "—";
   const parts = String(path).split("/").filter(Boolean);
@@ -196,6 +212,7 @@ function applyLogFontSize(px) {
 /* ── Pages ── */
 function showPage(name) {
   state.page = name;
+  try { updateTopPlanInfo(); } catch (_) {}
   $$(".page").forEach((p) => p.classList.toggle("active", p.id === `page-${name}`));
   if (name === "welcome") {
     $("#page-title").textContent = "欢迎";
@@ -328,14 +345,22 @@ async function selectProject(path) {
     state.phase = "done";
   }
   const proj = state.projects.find((p) => p.path === path);
-  const candidate =
+  const rawCandidate =
     state.live?.plan_path || proj?.default_plan || proj?.last_plan || state.plans[0] || null;
+  const candidate = normalizePlanPath(rawCandidate, path) || rawCandidate;
   // 完成/运行中也要回填「当前计划」，避免顶栏空白
   if (candidate) {
-    await selectPlan(candidate);
+    try {
+      await selectPlan(candidate);
+    } catch (e) {
+      console.warn("restore plan failed", e);
+      state.selectedPlan = candidate;
+      renderPlanPicker();
+    }
   } else {
     renderPlanPicker();
   }
+  updateTopPlanInfo();
   renderPhasePanels();
   renderWorkspace();
 }
@@ -564,6 +589,39 @@ function renderPlanPicker() {
   } catch (_) {}
 
   if (state.planChooserOpen) renderPlanChooser();
+  updateTopPlanInfo();
+}
+
+function updateTopPlanInfo() {
+  const box = $("#top-plan-info");
+  if (!box) return;
+  const onWorkspace = state.page === "workspace" && !!state.selectedPath;
+  if (!onWorkspace) {
+    box.hidden = true;
+    return;
+  }
+  const plan =
+    state.selectedPlan ||
+    normalizePlanPath(state.live?.plan_path) ||
+    null;
+  const name =
+    state.planPreview?.name ||
+    (plan ? planDisplayName(plan) : "尚未选择");
+  const nameEl = $("#top-plan-name");
+  const pathEl = $("#top-plan-path");
+  if (nameEl) nameEl.textContent = name;
+  if (pathEl) pathEl.textContent = plan || "点下方选择计划";
+  box.hidden = false;
+  // 同步紧凑条，避免顶栏有计划、条里还「尚未选择」
+  const barName = $("#plan-active-name");
+  const barPath = $("#plan-active-path");
+  if (barName) barName.textContent = plan ? name : "尚未选择";
+  if (barPath) barPath.textContent = plan || "点「选择计划」挑一份 .md";
+  const btnAssign = $("#btn-pp-analyze");
+  if (btnAssign) {
+    const active = isLiveStatus(state.live?.run_status);
+    btnAssign.disabled = !plan || !!active;
+  }
 }
 
 function renderPlanPreview() {
@@ -572,7 +630,7 @@ function renderPlanPreview() {
 }
 
 async function selectPlan(planPath) {
-  state.selectedPlan = planPath;
+  state.selectedPlan = normalizePlanPath(planPath) || planPath || null;
   state.planPreview = null;
   if (state.phase === "confirm" || state.phase === "planning") {
     state.phase = "pick";
@@ -589,9 +647,14 @@ async function selectPlan(planPath) {
     });
   } catch (e) {
     console.warn("preview failed", e);
-    state.planPreview = { name: planDisplayName(planPath), task_count: "?", max_parallel: "?" };
+    state.planPreview = {
+      name: planDisplayName(state.selectedPlan || planPath),
+      task_count: "?",
+      max_parallel: "?",
+    };
   }
   renderPlanPicker();
+  updateTopPlanInfo();
 }
 
 async function pickPlanFileForPicker() {
@@ -981,8 +1044,13 @@ function renderWorkspace() {
   renderDoctorWarn();
   renderPhasePanels();
   if (state.phase === "pick" || state.phase === "done" || state.phase === "running") {
+    // 运行态若计划空，从 live 回填
+    if (!state.selectedPlan && state.live?.plan_path) {
+      state.selectedPlan = normalizePlanPath(state.live.plan_path) || state.live.plan_path;
+    }
     renderPlanPicker();
   }
+  updateTopPlanInfo();
 
   // 统一结果卡：替代 run-banner + 空失败条 + 完成面板叠层
   const card = $("#result-card");
@@ -1571,16 +1639,29 @@ function backFromSubpage() {
 function wire() {
   applyLogFontSize(state.logFontSize);
 
-  $("#btn-add-plus").onclick = () => openModal();
-  $("#btn-welcome-add").onclick = () => openModal();
-  $("#btn-welcome-help").onclick = () => showPage("help");
+  const on = (sel, fn) => {
+    const el = typeof sel === "string" ? $(sel) : sel;
+    if (!el) return;
+    el.onclick = fn;
+  };
 
-  $("#btn-refresh").onclick = async () => {
+  on("#btn-add-plus", () => openModal());
+  on("#btn-welcome-add", () => openModal());
+  on("#btn-welcome-help", () => showPage("help"));
+
+  on("#btn-refresh", async () => {
     try {
       if (state.page === "workspace" && state.selectedPath) {
         await loadProjects();
         await loadLive();
         await loadPlansForPicker();
+        // 刷新后尽量回填计划
+        const proj = state.projects.find((p) => p.path === state.selectedPath);
+        const raw =
+          state.live?.plan_path || proj?.default_plan || proj?.last_plan || state.selectedPlan;
+        const cand = normalizePlanPath(raw) || raw;
+        if (cand && cand !== state.selectedPlan) await selectPlan(cand);
+        else updateTopPlanInfo();
       } else {
         await loadProjects();
       }
@@ -1588,54 +1669,49 @@ function wire() {
     } catch (e) {
       toast(String(e));
     }
-  };
+  });
 
-  $("#modal-close").onclick = closeModal;
-  $("#modal-backdrop").onclick = closeModal;
-  $("#m-pick-folder").onclick = pickFolderToModal;
-  $("#m-confirm-project").onclick = addProjectFromModal;
-  $("#m-cancel-project").onclick = closeModal;
+  on("#modal-close", closeModal);
+  on("#modal-backdrop", closeModal);
+  on("#m-pick-folder", pickFolderToModal);
+  on("#m-confirm-project", addProjectFromModal);
+  on("#m-cancel-project", closeModal);
 
-  $("#btn-ws-stop-all").onclick = stopAll;
-  $("#btn-ws-resume").onclick = resumeRun;
-  $("#btn-remove-project").onclick = removeSelectedProject;
-  $("#btn-ws-dismiss-run").onclick = dismissRun;
-  $("#btn-stop-task").onclick = cancelTask;
+  on("#btn-ws-stop-all", stopAll);
+  on("#btn-ws-resume", resumeRun);
+  on("#btn-remove-project", removeSelectedProject); // optional
+  on("#btn-ws-dismiss-run", dismissRun);
+  on("#btn-stop-task", cancelTask);
 
-  // 计划：紧凑条 + 选择器
-  const bind = (id, fn) => {
-    const el = $(id);
-    if (el) el.onclick = fn;
-  };
-  bind("#btn-pp-scan", () => loadPlansForPicker().then(() => renderPlanChooser()).catch(() => {}));
-  bind("#btn-pp-pick", pickPlanFileForPicker);
-  bind("#btn-pp-pick-empty", pickPlanFileForPicker);
-  bind("#btn-chooser-scan", () => loadPlansForPicker().then(() => renderPlanChooser()).catch(() => {}));
-  bind("#btn-chooser-pick", pickPlanFileForPicker);
-  bind("#btn-chooser-close", () => openPlanChooser(false));
-  bind("#btn-plan-choose", async () => {
+  on("#btn-pp-scan", () => loadPlansForPicker().then(() => renderPlanChooser()).catch(() => {}));
+  on("#btn-pp-pick", pickPlanFileForPicker);
+  on("#btn-pp-pick-empty", pickPlanFileForPicker);
+  on("#btn-chooser-scan", () => loadPlansForPicker().then(() => renderPlanChooser()).catch(() => {}));
+  on("#btn-chooser-pick", pickPlanFileForPicker);
+  on("#btn-chooser-close", () => openPlanChooser(false));
+  on("#btn-plan-choose", async () => {
     await loadPlansForPicker();
     openPlanChooser(true);
   });
-  bind("#btn-pp-analyze", analyzePlanFromPicker);
-  bind("#btn-pp-set-default", setDefaultPlan);
-  bind("#btn-confirm-start", confirmAndStart);
-  bind("#btn-replan", replanFromConfirm);
-  bind("#btn-cancel-planning", cancelPlanning);
-  bind("#btn-plan-expand", () => openPlanChooser(true));
-  bind("#btn-restore-panels", () => {
+  on("#btn-pp-analyze", analyzePlanFromPicker);
+  on("#btn-pp-set-default", setDefaultPlan);
+  on("#btn-confirm-start", confirmAndStart);
+  on("#btn-replan", replanFromConfirm);
+  on("#btn-cancel-planning", cancelPlanning);
+  on("#btn-plan-expand", () => openPlanChooser(true));
+  on("#btn-restore-panels", () => {
     state.closedPanels = {};
     const tasks = state.live?.tasks || [];
     renderCliBoard(tasks);
   });
-  bind("#btn-doctor-dismiss", () => {
+  on("#btn-doctor-dismiss", () => {
     const d = state.doctorCache;
     const fails = (d?.lines || []).filter((l) => !l.ok);
     state.doctorDismissedKey = fails.map((l) => l.name + ":" + l.detail).join("|") || "dismissed";
     renderDoctorWarn();
     toast("已暂时忽略环境提示");
   });
-  // 点遮罩关闭选择器
+
   const chooser = $("#plan-chooser");
   if (chooser) {
     chooser.addEventListener("click", (e) => {
@@ -1643,7 +1719,7 @@ function wire() {
     });
   }
 
-  bind("#btn-advanced-toggle", () => {
+  on("#btn-advanced-toggle", () => {
     state.advancedOpen = !state.advancedOpen;
     localStorage.setItem(ADVANCED_KEY, state.advancedOpen ? "1" : "0");
     const adv = $("#advanced-body");
@@ -1655,15 +1731,16 @@ function wire() {
     $("#pp-provider").dataset.touched = "1";
   });
 
-  bind("#btn-filter-failed", () => {
+  on("#btn-filter-failed", () => {
     state.filterFailedOnly = !state.filterFailedOnly;
     const tasks = state.live?.tasks || [];
     renderCliBoard(tasks);
   });
 
-  $("#btn-copy-log").onclick = async () => {
-    const t = (state.live?.tasks || []).find((x) => x.task_id === state.selectedTaskId)
-      || (state.live?.tasks || [])[0];
+  on("#btn-copy-log", async () => {
+    const t =
+      (state.live?.tasks || []).find((x) => x.task_id === state.selectedTaskId) ||
+      (state.live?.tasks || [])[0];
     let text = "";
     if (t && state.logViewMode !== "raw" && Array.isArray(t.log_events) && t.log_events.length) {
       text = t.log_events
@@ -1676,7 +1753,7 @@ function wire() {
         })
         .join("\n");
     } else {
-      text = $("#cli-detail-log")?.textContent || t?.log_tail || "";
+      text = t?.log_tail || "";
     }
     try {
       await navigator.clipboard.writeText(text);
@@ -1684,7 +1761,7 @@ function wire() {
     } catch (_) {
       toast("复制失败");
     }
-  };
+  });
 
   $$("#log-view-mode button").forEach((b) => {
     b.onclick = () => {
@@ -1692,7 +1769,6 @@ function wire() {
       localStorage.setItem("cco.logViewMode", state.logViewMode);
       const tasks = state.live?.tasks || [];
       if (tasks.length) renderCliBoard(tasks);
-      else renderDetailLog(tasks);
     };
   });
 
@@ -1700,18 +1776,14 @@ function wire() {
     b.onclick = () => applyLogFontSize(Number(b.dataset.size));
   });
 
-  const logEl = $("#cli-detail-log");
-  logEl?.addEventListener("scroll", () => {
-    state.logStick = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
-  });
-
-  $("#btn-rerun").onclick = () => {
+  on("#btn-rerun", () => {
     state.phase = "pick";
     state.planJobId = null;
     state.planJob = null;
     state.planCollapsed = true;
     setPlanCollapsed(true);
-    $("#completion-panel").hidden = true;
+    const comp = $("#completion-panel");
+    if (comp) comp.hidden = true;
     renderPhasePanels();
     renderPlanPicker();
     if (state.selectedPlan) analyzePlanFromPicker();
@@ -1719,54 +1791,60 @@ function wire() {
       openPlanChooser(true);
       toast("请先选择计划");
     }
-  };
-  $("#btn-change-plan").onclick = async () => {
+  });
+
+  on("#btn-change-plan", async () => {
     state.phase = "pick";
     state.planJobId = null;
     state.planJob = null;
     state.planCollapsed = true;
     setPlanCollapsed(true);
-    $("#completion-panel").hidden = true;
+    const comp = $("#completion-panel");
+    if (comp) comp.hidden = true;
     renderPhasePanels();
     renderPlanPicker();
     await loadPlansForPicker();
     openPlanChooser(true);
-  };
+  });
 
-  $("#btn-doctor-recheck").onclick = async () => {
+  on("#btn-doctor-recheck", async () => {
     await ensureDoctor(true);
     toast(state.doctorCache?.ok ? "环境正常" : "仍有问题，请查看详情");
-  };
-  $("#btn-doctor-open").onclick = async () => {
+  });
+  on("#btn-doctor-open", async () => {
     showPage("doctor");
     await loadDoctor();
-  };
-
-  $("#btn-open-doctor").onclick = async () => {
+  });
+  on("#btn-open-doctor", async () => {
     showPage("doctor");
     await loadDoctor();
-  };
-  $("#btn-doctor").onclick = loadDoctor;
-  $("#btn-doctor-back").onclick = backFromSubpage;
+  });
+  on("#btn-doctor", loadDoctor);
+  on("#btn-doctor-back", backFromSubpage);
 
-  $("#btn-open-settings").onclick = async () => {
+  on("#btn-open-settings", async () => {
     showPage("settings");
     await loadSettings();
-  };
-  $("#btn-settings-save").onclick = saveSettings;
-  $("#btn-settings-back").onclick = backFromSubpage;
+  });
+  on("#btn-settings-save", saveSettings);
+  on("#btn-settings-back", backFromSubpage);
 
-  $("#btn-open-help").onclick = () => showPage("help");
-  $("#btn-help-back").onclick = backFromSubpage;
+  on("#btn-open-help", () => showPage("help"));
+  on("#btn-help-back", backFromSubpage);
 
   $("#brand-home")?.addEventListener("click", goHome);
 }
 
 async function boot() {
-  wire();
+  try {
+    wire();
+  } catch (e) {
+    console.error("wire failed", e);
+  }
   try {
     const meta = await invoke("meta");
-    $("#conn-status").textContent = `桌面应用 · v${meta.version}`;
+    const cs = $("#conn-status");
+    if (cs) cs.textContent = `桌面应用 · v${meta.version}`;
     await loadProjects();
     // 恢复上次项目：有活动优先，否则第一个
     const active = state.projects.find(
@@ -1783,7 +1861,9 @@ async function boot() {
     }
     startPolling();
   } catch (e) {
-    $("#conn-status").textContent = "需要通过 CCO.app 启动";
+    const cs = $("#conn-status");
+    if (cs) cs.textContent = "需要通过 CCO.app 启动";
+    console.error(e);
   }
 }
 

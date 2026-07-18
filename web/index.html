@@ -24,7 +24,7 @@
       </div>
 
       <div class="sidebar-foot">
-        <div id="conn-status">启动中…</div>
+        <div id="conn-status">就绪中…</div>
         <div class="foot-links">
           <button type="button" class="linkish" id="btn-open-doctor">环境检查</button>
           <button type="button" class="linkish" id="btn-open-settings">设置</button>
@@ -38,6 +38,11 @@
         <div class="top-title">
           <h1 id="page-title">欢迎</h1>
           <div id="page-sub" class="muted sub"></div>
+        </div>
+        <div id="top-plan-info" class="top-plan-info" hidden>
+          <span class="top-plan-label">计划</span>
+          <strong id="top-plan-name">—</strong>
+          <span class="muted" id="top-plan-path"></span>
         </div>
         <div class="top-actions">
           <button id="btn-refresh" class="btn ghost" type="button">刷新</button>
@@ -197,16 +202,16 @@
           </div>
 
           <!-- Unified run/result card (replaces banner + empty fail + completion stack) -->
-          <div id="result-card" class="result-card" hidden>
+          <div id="result-card" class="result-card action-block" hidden>
             <div class="result-main">
               <div class="result-title">
                 <span id="run-status-badge"></span>
                 <span id="result-title-text">运行状态</span>
               </div>
               <div class="result-meta" id="result-meta-text"></div>
-              <div class="result-meta" id="error-summary-text" hidden></div>
+              <div class="result-meta err" id="error-summary-text" hidden></div>
             </div>
-            <div class="result-actions">
+            <div class="result-actions" id="result-actions">
               <button class="btn primary sm" id="btn-ws-resume" type="button" hidden>继续</button>
               <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
               <button class="btn primary sm" id="btn-rerun" type="button" hidden>再跑一次</button>
