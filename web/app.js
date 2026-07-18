@@ -27,7 +27,8 @@ const state = {
   selectedPlan: null,
   planPreview: null,
   selectedTaskId: null,
-  filterFailedOnly: false,
+  filterFailedOnly: false, // legacy, mapped to cliStatusFilter=fail
+  cliStatusFilter: "all", // all | run | wait | done | fail
   planCollapsed: true, // 默认只显示当前计划条
   planChooserOpen: false,
   advancedOpen: localStorage.getItem(ADVANCED_KEY) === "1",
@@ -737,6 +738,7 @@ async function selectProject(path) {
   state.selectedTaskId = null;
   state.planCollapsed = false;
   state.filterFailedOnly = false;
+  state.cliStatusFilter = "all";
   state.closedPanels = {};
   state.selectedPlan = null;
   state.planJobId = null;
@@ -1810,6 +1812,22 @@ function taskBucket(st) {
   return "wait"; // pending / unknown
 }
 
+/** CLI / 看板排序：运行中 → 未运行 → 已完成 → 失败 */
+function cliStatusRank(st) {
+  const b = taskBucket(st);
+  if (b === "run") return 0;
+  if (b === "wait") return 1;
+  if (b === "done") return 2;
+  return 3; // fail
+}
+
+function sortTasksByStatus(tasks) {
+  return tasks
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => cliStatusRank(a.t.status) - cliStatusRank(b.t.status) || a.i - b.i)
+    .map((x) => x.t);
+}
+
 function renderTaskStrip(live, tasks, ctx) {
   const card = $("#result-card");
   if (!card) return;
@@ -1909,7 +1927,8 @@ function renderTaskStrip(live, tasks, ctx) {
     return;
   }
 
-  list.innerHTML = tasks
+  // 与 CLI 窗口同序：运行中 → 未启动 → 已完成 → 失败
+  list.innerHTML = sortTasksByStatus(tasks)
     .map((t) => {
       const b = taskBucket(t.status);
       const label =
@@ -1946,8 +1965,49 @@ function applyCliBodyHeight(h) {
   localStorage.setItem("cco.cliBodyHeight", String(n));
   document.documentElement.removeAttribute("data-cli-h");
   document.documentElement.style.setProperty("--cli-body-h", n + "px");
-  const sel = $("#cli-height-select");
-  if (sel) sel.value = String(n);
+}
+
+function currentCliBodyPx() {
+  if (state.cliBodyHeight !== "auto" && Number(state.cliBodyHeight) > 0) {
+    return Number(state.cliBodyHeight);
+  }
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue("--cli-body-h")
+    .trim();
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 300;
+}
+
+function bindCliHeightGrip() {
+  const grip = $("#cli-h-grip");
+  if (!grip || grip.dataset.bound === "1") return;
+  grip.dataset.bound = "1";
+  grip.addEventListener("pointerdown", (e) => {
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = currentCliBodyPx();
+    grip.classList.add("dragging");
+    try {
+      grip.setPointerCapture(e.pointerId);
+    } catch (_) {}
+    const onMove = (ev) => {
+      const next = Math.max(160, Math.min(900, startH + (ev.clientY - startY)));
+      applyCliBodyHeight(next);
+    };
+    const onUp = (ev) => {
+      grip.classList.remove("dragging");
+      grip.removeEventListener("pointermove", onMove);
+      grip.removeEventListener("pointerup", onUp);
+      grip.removeEventListener("pointercancel", onUp);
+      try {
+        grip.releasePointerCapture(ev.pointerId);
+      } catch (_) {}
+    };
+    grip.addEventListener("pointermove", onMove);
+    grip.addEventListener("pointerup", onUp);
+    grip.addEventListener("pointercancel", onUp);
+  });
 }
 
 /** 按 CLI shell 可用高度均分窗口 body，消灭下方大片空白 */
@@ -1973,8 +2033,6 @@ function fitCliBodyHeight() {
   const rowH = (shellH - gap * Math.max(0, rows - 1) - 8) / rows;
   const bodyH = Math.max(180, Math.floor(rowH - chrome));
   document.documentElement.style.setProperty("--cli-body-h", bodyH + "px");
-  const sel = $("#cli-height-select");
-  if (sel) sel.value = "auto";
 }
 
 
@@ -2093,17 +2151,20 @@ function renderCliBoard(tasks) {
   if (!board) return;
 
   let shown = tasks;
-  if (state.filterFailedOnly) {
-    shown = tasks.filter((t) => isFailedStatus(t.status));
-    if (!shown.length) shown = tasks;
+  // 兼容旧 filterFailedOnly
+  let filter = state.cliStatusFilter || "all";
+  if (state.filterFailedOnly && filter === "all") filter = "fail";
+  if (filter && filter !== "all") {
+    const filtered = tasks.filter((t) => taskBucket(t.status) === filter);
+    // 无匹配时不回退，展示空板 + 过滤态更清晰
+    shown = filtered;
   }
-  const filt = $("#btn-filter-failed");
-  if (filt) {
-    filt.classList.toggle("active", state.filterFailedOnly);
-    // 单任务完成态：过滤器噪音低，仍保留
-    filt.hidden = tasks.length <= 1;
-  }
-  // 单任务时工具条更安静
+  // 同步过滤 chip 高亮
+  $$("#cli-status-filters [data-cli-filter]").forEach((btn) => {
+    const f = btn.getAttribute("data-cli-filter") || "all";
+    btn.classList.toggle("active", f === filter);
+  });
+  // 单任务时工具条更安静（字号/视图保留）
   const toolbar = document.querySelector(".board-toolbar");
   if (toolbar) toolbar.classList.toggle("quiet", tasks.length <= 1);
 
@@ -2116,8 +2177,10 @@ function renderCliBoard(tasks) {
     restoreBtn.textContent = `恢复已关闭 (${closedCount})`;
   }
 
-  // 可见面板
-  const visible = shown.filter((t) => !state.closedPanels[t.task_id]);
+  // 可见面板：运行中最上，未运行居中，已完成/失败最底
+  const visible = sortTasksByStatus(
+    shown.filter((t) => !state.closedPanels[t.task_id])
+  );
   // 自动布局：网格，若用户拖过则用绝对坐标
   const cols = Math.max(1, Math.min(2, visible.length));
   board.classList.toggle("single", visible.length === 1);
@@ -2138,6 +2201,24 @@ function renderCliBoard(tasks) {
     );
   }
   board.innerHTML = "";
+
+  if (!visible.length) {
+    const empty = document.createElement("div");
+    empty.className = "cli-board-empty muted";
+    empty.style.gridColumn = "1 / -1";
+    empty.style.padding = "1.2rem";
+    empty.style.textAlign = "center";
+    const f = state.cliStatusFilter || "all";
+    empty.textContent =
+      f === "all"
+        ? "暂无 CLI 窗口"
+        : `当前过滤（${
+            { run: "运行中", wait: "待运行", done: "已完成", fail: "失败" }[f] || f
+          }）无匹配任务`;
+    board.appendChild(empty);
+    __fitAfter();
+    return;
+  }
 
   visible.forEach((t, idx) => {
     const st = String(t.status || "").toLowerCase();
@@ -2734,9 +2815,11 @@ const UI_ACTIONS = {
       runStatus: state.live?.run_status,
     });
   },
-  "btn-filter-failed": () => {
-    state.filterFailedOnly = !state.filterFailedOnly;
-    renderCliBoard(state.live?.tasks || []);
+  "btn-cli-h-auto": () => {
+    applyCliBodyHeight("auto");
+    const tasks = state.live?.tasks || [];
+    if (tasks.length) renderCliBoard(tasks);
+    toast("CLI 高度已恢复自适应");
   },
   "btn-copy-log": async () => {
     const t =
@@ -2932,21 +3015,30 @@ function bindGlobalUI() {
   document.addEventListener("change", (e) => {
     const t = e.target;
     if (!t) return;
-    if (t.id === "cli-height-select") {
-      applyCliBodyHeight(t.value);
-      const tasks = state.live?.tasks || [];
-      if (tasks.length) renderCliBoard(tasks);
-    }
     if (t.id === "pp-provider") {
       t.dataset.touched = "1";
     }
   });
 
-  // 初始高度
+  // CLI 状态过滤 chips
+  document.addEventListener(
+    "click",
+    (e) => {
+      const chip = e.target?.closest?.("#cli-status-filters [data-cli-filter]");
+      if (!chip) return;
+      e.preventDefault();
+      const f = chip.getAttribute("data-cli-filter") || "all";
+      state.cliStatusFilter = f;
+      state.filterFailedOnly = f === "fail";
+      renderCliBoard(state.live?.tasks || []);
+    },
+    true
+  );
+
+  // 初始高度 + 拖动手柄
   try {
     applyCliBodyHeight(state.cliBodyHeight === "auto" ? "auto" : state.cliBodyHeight || "auto");
-    const hSel = $("#cli-height-select");
-    if (hSel) hSel.value = state.cliBodyHeight === "auto" ? "auto" : String(state.cliBodyHeight || 300);
+    bindCliHeightGrip();
   } catch (_) {}
 }
 

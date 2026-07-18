@@ -257,18 +257,16 @@
             <div class="board-toolbar">
               <div class="row gap">
                 <span class="section-label">CLI 窗口</span>
-                <button type="button" class="filter-chip" id="btn-filter-failed" title="仅看失败">仅失败</button>
+                <div class="cli-status-filters" id="cli-status-filters" role="group" aria-label="按状态过滤">
+                  <button type="button" class="filter-chip active" data-cli-filter="all" title="显示全部">全部</button>
+                  <button type="button" class="filter-chip" data-cli-filter="run" title="仅运行中">运行中</button>
+                  <button type="button" class="filter-chip" data-cli-filter="wait" title="仅待运行">待运行</button>
+                  <button type="button" class="filter-chip" data-cli-filter="done" title="仅已完成">已完成</button>
+                  <button type="button" class="filter-chip" data-cli-filter="fail" title="仅失败">失败</button>
+                </div>
                 <button type="button" class="btn ghost sm" id="btn-restore-panels" hidden>恢复已关闭</button>
-                <label class="cli-h-label muted" title="单个 CLI 内容高度">
-                  高度
-                  <select id="cli-height-select">
-                    <option value="auto" selected>自适应</option>
-                    <option value="220">矮</option>
-                    <option value="300">中</option>
-                    <option value="420">高</option>
-                    <option value="560">更高</option>
-                  </select>
-                </label>
+                <button type="button" class="btn ghost sm" id="btn-cli-h-auto" title="恢复自适应高度">自适应</button>
+                <button type="button" class="cli-h-grip" id="cli-h-grip" title="按住上下拖动调整 CLI 高度">⇅ 高度</button>
               </div>
               <div class="detail-tools">
                 <div class="seg" id="log-view-mode" title="日志视图">

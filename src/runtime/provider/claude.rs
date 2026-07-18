@@ -69,6 +69,7 @@ impl ClaudeProvider {
         cmd: &mut Command,
         opts: &serde_json::Value,
         for_print: bool,
+        work_dir: &Path,
     ) {
         let max_turns = Self::opt_u32(opts, "max_turns").unwrap_or(40);
         let max_budget = Self::opt_f64(opts, "max_budget_usd").unwrap_or(10.0);
@@ -101,6 +102,22 @@ impl ClaudeProvider {
                 cmd.arg("--model").arg(m);
             }
         }
+        // 项目范围锁：子进程挂在 CCO.app 身份下，home 扫描会触发 macOS
+        // 对 Desktop/Documents/Downloads/Photos/Music 的 TCC 授权弹窗。
+        // 用 append-system-prompt 约束 agent 只在 work_dir 内活动。
+        let scope = format!(
+            "CCO scope lock: work ONLY inside `{dir}`. Never read, list, search, or write outside this project directory. FORBIDDEN: home (~), Desktop, Documents, Downloads, Pictures, Movies, Music, Photos, and any absolute path not under `{dir}`. Do NOT run `find ~`, `ls ~`, `find /Users`, or any home-wide scan. Prefer relative paths from cwd.",
+            dir = work_dir.display()
+        );
+        let extra_sys = Self::opt_str(opts, "append_system_prompt").unwrap_or_default();
+        let sys = if extra_sys.trim().is_empty() {
+            scope
+        } else {
+            format!("{scope}
+
+{extra_sys}")
+        };
+        cmd.arg("--append-system-prompt").arg(sys);
         for a in &self.extra_args {
             cmd.arg(a);
         }
@@ -142,7 +159,7 @@ impl ClaudeProvider {
         );
 
         let mut cmd = Command::new(&self.bin);
-        self.apply_common_flags(&mut cmd, &task.provider_opts, true);
+        self.apply_common_flags(&mut cmd, &task.provider_opts, true, &ctx.work_dir);
         // Also pass as positional for CLIs that prefer argv; stdin is the primary path.
         cmd.arg(&prompt);
         cmd.current_dir(&ctx.work_dir);
@@ -245,7 +262,7 @@ impl ClaudeProvider {
         meta_path: PathBuf,
     ) -> Result<WorkerHandle> {
         let mut cmd = Command::new(&self.bin);
-        self.apply_common_flags(&mut cmd, &task.provider_opts, false);
+        self.apply_common_flags(&mut cmd, &task.provider_opts, false, &ctx.work_dir);
         // name-like identity via prompt prefix is not a flag; pass prompt as arg
         cmd.arg(&task.prompt);
         cmd.current_dir(&ctx.work_dir);
