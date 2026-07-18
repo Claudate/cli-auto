@@ -50,6 +50,7 @@ const state = {
   confirmTaskId: null,
   planJobPollTimer: null,
   drag: null, // { id, ox, oy }
+  dragSession: {}, // taskId -> true 本会话拖过才保留 free
 };
 
 /* ── Status labels (人话) ── */
@@ -1214,6 +1215,11 @@ function renderCliBoard(tasks) {
   board.classList.toggle("single", visible.length === 1);
   board.classList.add("cols-2");
   board.dataset.cols = "2";
+  // 强制布局属性，防止旧 inline / 缓存样式
+  board.style.display = "grid";
+  board.style.gridTemplateColumns = "calc((100% - 0.75rem) / 2) calc((100% - 0.75rem) / 2)";
+  board.style.gap = "0.75rem";
+  board.style.overflowX = "hidden";
   board.innerHTML = "";
 
   visible.forEach((t, idx) => {
@@ -1228,19 +1234,30 @@ function renderCliBoard(tasks) {
       t.task_id === state.selectedTaskId ? " selected" : ""
     }`;
     card.dataset.task = t.task_id;
-    if (pos && typeof pos.x === "number" && typeof pos.y === "number") {
+    // 默认一律走 2 列网格，不用 free 绝对定位（避免记忆宽度把窗拉满）
+    // 仅当用户本会话拖过且宽度明显是半列时才恢复 free
+    const half = Math.max(200, Math.floor((board.clientWidth - 12) / 2));
+    const usableFree =
+      pos &&
+      typeof pos.x === "number" &&
+      typeof pos.y === "number" &&
+      state.dragSession &&
+      state.dragSession[t.task_id];
+    if (usableFree) {
       card.classList.add("free");
       card.style.left = pos.x + "px";
       card.style.top = pos.y + "px";
-      // 自由窗默认半列宽；有记忆宽度则用记忆值，但禁止撑满整板
-      const half = Math.max(260, Math.floor((board.clientWidth - 12) / 2));
-      const w = pos.w ? Math.min(pos.w, board.clientWidth - 8) : half;
-      card.style.width = Math.min(w, half * 1.15) + "px";
+      card.style.width = half + "px";
+      card.style.maxWidth = half + "px";
     } else {
-      // flow：始终走 2 列网格，单窗只占一列
+      card.classList.remove("free");
       card.dataset.slot = String(idx);
+      card.style.left = "";
+      card.style.top = "";
       card.style.width = "";
       card.style.maxWidth = "";
+      // 双保险：非 free 时清掉可能的全宽 inline
+      card.style.gridColumn = "";
     }
     card.innerHTML = `
       <div class="cli-window-head" data-drag="${esc(t.task_id)}">
@@ -1367,11 +1384,16 @@ function renderCliBoard(tasks) {
       const card = head.closest(".cli-window");
       const id = state.drag.id;
       state.drag = null;
+      const halfW = Math.max(200, Math.floor((board.clientWidth - 12) / 2));
       state.panelPos[id] = {
         x: parseFloat(card.style.left) || 0,
         y: parseFloat(card.style.top) || 0,
-        w: card.offsetWidth,
+        w: halfW,
       };
+      state.dragSession = state.dragSession || {};
+      state.dragSession[id] = true;
+      card.style.width = halfW + "px";
+      card.style.maxWidth = halfW + "px";
       savePanelPos();
       try {
         head.releasePointerCapture(ev.pointerId);
