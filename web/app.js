@@ -51,6 +51,8 @@ const state = {
   planJobPollTimer: null,
   drag: null, // { id, ox, oy }
   dragSession: {}, // taskId -> true 本会话拖过才保留 free
+  taskStripExpanded: localStorage.getItem("cco.taskStripExpanded") === "1",
+  cliBodyHeight: Number(localStorage.getItem("cco.cliBodyHeight") || 300) || 300,
 };
 
 /* ── Status labels (人话) ── */
@@ -1058,15 +1060,6 @@ function renderWorkspace() {
   }
   updateTopPlanInfo();
 
-  // 统一结果卡：替代 run-banner + 空失败条 + 完成面板叠层
-  const card = $("#result-card");
-  const failedTasks = tasks.filter((t) => isFailedStatus(t.status));
-  const okN = tasks.filter((t) => isDoneStatus(t.status)).length;
-  const failN = failedTasks.length;
-  const runEnd = finished
-    ? tasks.map((t) => t.finished_at).filter(Boolean).sort().slice(-1)[0] || null
-    : null;
-  const planName = live?.plan_path ? planDisplayName(live.plan_path) : "";
 
   // legacy hide
   const runBanner = $("#run-banner");
@@ -1076,67 +1069,12 @@ function renderWorkspace() {
   const comp = $("#completion-panel");
   if (comp) comp.hidden = true;
 
-  if (card) {
-    const showCard =
-      hasRun && state.phase !== "planning" && state.phase !== "confirm";
-    card.hidden = !showCard;
-    card.classList.toggle("ok", finished && failN === 0);
-    card.classList.toggle("bad", finished && failN > 0);
-
-    const badgeHost = $("#run-status-badge");
-    if (badgeHost) badgeHost.innerHTML = badge(runStatus || "idle");
-
-    const title = $("#result-title-text");
-    if (title) {
-      if (active) title.textContent = "正在运行";
-      else if (finished && failN === 0) title.textContent = "全部完成";
-      else if (finished && String(runStatus).toLowerCase() === "paused") title.textContent = "已暂停";
-      else if (finished) title.textContent = "运行结束";
-      else title.textContent = "运行状态";
-    }
-
-    const meta = $("#result-meta-text");
-    if (meta) {
-      const bits = [];
-      if (tasks.length) bits.push(`成功 ${okN} · 失败 ${failN} · 共 ${tasks.length}`);
-      if (live?.started_at) bits.push(`用时 ${formatElapsed(live.started_at, runEnd)}`);
-      if (planName) bits.push(planName);
-      if (live?.current_wave && (live?.layers || []).length) {
-        bits.push(`第 ${live.current_wave}/${live.layers.length} 波`);
-      }
-      meta.textContent = bits.join(" · ");
-    }
-
-    const errText = $("#error-summary-text");
-    if (errText) {
-      if (failN > 0) {
-        const first = failedTasks[0];
-        const sum = taskErrorSummary(first);
-        errText.hidden = false;
-        errText.textContent = sum
-          ? `${first.task_id}：${sum}`
-          : `${failN} 个任务失败`;
-      } else {
-        errText.hidden = true;
-        errText.textContent = "";
-      }
-    }
-
-    const stop = $("#btn-ws-stop-all");
-    if (stop) stop.hidden = !active;
-    const resume = $("#btn-ws-resume");
-    if (resume) {
-      resume.hidden = !["paused", "failed", "aborted"].includes(
-        String(runStatus || "").toLowerCase()
-      );
-    }
-    const rerun = $("#btn-rerun");
-    if (rerun) rerun.hidden = !finished;
-    const change = $("#btn-change-plan");
-    if (change) change.hidden = !finished;
-    const dismiss = $("#btn-ws-dismiss-run");
-    if (dismiss) dismiss.hidden = !hasRun || state.phase === "planning" || state.phase === "confirm";
-  }
+  renderTaskStrip(live, tasks, {
+    hasRun,
+    active,
+    finished,
+    runStatus,
+  });
 
   // Multi-window CLI board
   const monitor = $("#monitor");
@@ -1160,6 +1098,163 @@ function savePanelPos() {
   try {
     localStorage.setItem("cco.panelPos", JSON.stringify(state.panelPos || {}));
   } catch (_) {}
+}
+
+
+function taskBucket(st) {
+  const s = String(st || "").toLowerCase();
+  if (isFailedStatus(s)) return "fail";
+  if (isDoneStatus(s)) return "done";
+  if (isLiveStatus(s) || ["starting", "queued", "running"].includes(s)) return "run";
+  return "wait"; // pending / unknown
+}
+
+function renderTaskStrip(live, tasks, ctx) {
+  const card = $("#result-card");
+  if (!card) return;
+  const { hasRun, active, finished, runStatus } = ctx;
+  const show =
+    hasRun && state.phase !== "planning" && state.phase !== "confirm" && tasks.length >= 0;
+  // 有 run 就显示任务条（即使 tasks 暂空）
+  card.hidden = !(hasRun && state.phase !== "planning" && state.phase !== "confirm");
+  if (card.hidden) return;
+
+  let done = 0, run = 0, wait = 0, fail = 0;
+  tasks.forEach((t) => {
+    const b = taskBucket(t.status);
+    if (b === "done") done++;
+    else if (b === "run") run++;
+    else if (b === "fail") fail++;
+    else wait++;
+  });
+
+  card.classList.toggle("ok", finished && fail === 0 && done > 0);
+  card.classList.toggle("bad", fail > 0);
+  card.classList.toggle("expanded", !!state.taskStripExpanded);
+
+  const badgeHost = $("#run-status-badge");
+  if (badgeHost) badgeHost.innerHTML = badge(runStatus || "idle");
+
+  const title = $("#result-title-text");
+  if (title) {
+    if (active) title.textContent = "任务进行中";
+    else if (finished && fail === 0) title.textContent = "全部完成";
+    else if (finished) title.textContent = "运行结束";
+    else title.textContent = "拆分任务";
+  }
+
+  const setStat = (id, label, n, hideZero = false) => {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = `${label} ${n}`;
+    if (hideZero) el.hidden = n === 0;
+  };
+  setStat("#stat-done", "完成", done);
+  setStat("#stat-run", "进行中", run);
+  setStat("#stat-wait", "未启动", wait);
+  setStat("#stat-fail", "失败", fail, true);
+
+  const runEnd = finished
+    ? tasks.map((t) => t.finished_at).filter(Boolean).sort().slice(-1)[0] || null
+    : null;
+  const planName = live?.plan_path ? planDisplayName(live.plan_path) : "";
+  const meta = $("#result-meta-text");
+  if (meta) {
+    const bits = [];
+    if (tasks.length) bits.push(`共 ${tasks.length}`);
+    if (live?.started_at) bits.push(`用时 ${formatElapsed(live.started_at, runEnd)}`);
+    if (planName) bits.push(planName);
+    meta.textContent = bits.join(" · ");
+  }
+
+  const errText = $("#error-summary-text");
+  if (errText) {
+    if (fail > 0) {
+      const first = tasks.find((t) => isFailedStatus(t.status));
+      const sum = first ? taskErrorSummary(first) : "";
+      errText.hidden = false;
+      errText.textContent = sum
+        ? `${first.task_id}：${sum}`
+        : `${fail} 个任务失败`;
+    } else {
+      errText.hidden = true;
+      errText.textContent = "";
+    }
+  }
+
+  const stop = $("#btn-ws-stop-all");
+  if (stop) stop.hidden = !active;
+  const resume = $("#btn-ws-resume");
+  if (resume) {
+    resume.hidden = !["paused", "failed", "aborted"].includes(
+      String(runStatus || "").toLowerCase()
+    );
+  }
+  const rerun = $("#btn-rerun");
+  if (rerun) rerun.hidden = !finished;
+  const change = $("#btn-change-plan");
+  if (change) change.hidden = !finished;
+  const dismiss = $("#btn-ws-dismiss-run");
+  if (dismiss) dismiss.hidden = !hasRun;
+
+  const expBtn = $("#btn-task-expand");
+  if (expBtn) {
+    expBtn.textContent = state.taskStripExpanded ? "收起列表" : `展开列表${tasks.length ? ` (${tasks.length})` : ""}`;
+  }
+  const body = $("#task-strip-body");
+  if (body) body.hidden = !state.taskStripExpanded;
+
+  const list = $("#task-strip-list");
+  if (list && state.taskStripExpanded) {
+    if (!tasks.length) {
+      list.innerHTML = `<div class="task-strip-empty muted">暂无任务</div>`;
+    } else {
+      list.innerHTML = tasks
+        .map((t) => {
+          const b = taskBucket(t.status);
+          const label =
+            b === "done" ? "已完成" : b === "run" ? "进行中" : b === "fail" ? "失败" : "未启动";
+          const title = t.title || t.task_id;
+          const sel = t.task_id === state.selectedTaskId ? " selected" : "";
+          return `<button type="button" class="task-chip ${b}${sel}" data-task="${esc(t.task_id)}">
+            <span class="dot ${statusDot(t.status)}"></span>
+            <span class="task-chip-name" title="${esc(title)}">${esc(title)}</span>
+            <span class="task-chip-st">${esc(label)}</span>
+          </button>`;
+        })
+        .join("");
+      $$(".task-chip", list).forEach((b) => {
+        b.onclick = () => {
+          state.selectedTaskId = b.dataset.task;
+          // 展开对应 CLI：取消关闭
+          if (state.closedPanels[b.dataset.task]) {
+            delete state.closedPanels[b.dataset.task];
+          }
+          renderCliBoard(tasks);
+          renderTaskStrip(live, tasks, ctx);
+        };
+      });
+    }
+  }
+}
+
+function applyCliBodyHeight(h) {
+  const n = Math.max(160, Math.min(800, Number(h) || 300));
+  state.cliBodyHeight = n;
+  localStorage.setItem("cco.cliBodyHeight", String(n));
+  document.documentElement.style.setProperty("--cli-body-h", n + "px");
+  const sel = $("#cli-height-select");
+  if (sel && String(sel.value) !== String(n)) {
+    // pick closest option or set custom
+    const opts = [...sel.options].map((o) => Number(o.value));
+    if (opts.includes(n)) sel.value = String(n);
+  }
+  // update existing bodies
+  $$(".cli-window-body").forEach((el) => {
+    el.style.height = n + "px";
+    el.style.maxHeight = n + "px";
+    el.style.minHeight = n + "px";
+  });
 }
 
 function panelLogHtml(t) {
@@ -1225,6 +1320,7 @@ function renderCliBoard(tasks) {
   board.style.gridTemplateColumns = "calc((100% - 0.75rem) / 2) calc((100% - 0.75rem) / 2)";
   board.style.gap = "0.75rem";
   board.style.overflowX = "hidden";
+  document.documentElement.style.setProperty("--cli-body-h", (state.cliBodyHeight || 300) + "px");
   board.innerHTML = "";
 
   visible.forEach((t, idx) => {
@@ -1296,6 +1392,10 @@ function renderCliBoard(tasks) {
     board.appendChild(card);
     const body = card.querySelector(".cli-window-body");
     if (body) {
+      const h = state.cliBodyHeight || 300;
+      body.style.height = h + "px";
+      body.style.maxHeight = h + "px";
+      body.style.minHeight = h + "px";
       body.innerHTML = panelLogHtml(t);
       // 默认贴底
       body.scrollTop = body.scrollHeight;
@@ -1757,6 +1857,29 @@ function wire() {
   $("#pp-provider")?.addEventListener("change", () => {
     $("#pp-provider").dataset.touched = "1";
   });
+
+  on("#btn-task-expand", () => {
+    state.taskStripExpanded = !state.taskStripExpanded;
+    localStorage.setItem("cco.taskStripExpanded", state.taskStripExpanded ? "1" : "0");
+    const tasks = state.live?.tasks || [];
+    renderTaskStrip(state.live, tasks, {
+      hasRun: !!state.live?.run_id,
+      active: isLiveStatus(state.live?.run_status),
+      finished: !!state.live?.run_id && !isLiveStatus(state.live?.run_status),
+      runStatus: state.live?.run_status,
+    });
+  });
+  const hSel = $("#cli-height-select");
+  if (hSel) {
+    hSel.value = String(state.cliBodyHeight || 300);
+    hSel.onchange = () => {
+      applyCliBodyHeight(hSel.value);
+      const tasks = state.live?.tasks || [];
+      if (tasks.length) renderCliBoard(tasks);
+    };
+  }
+  // init css var
+  applyCliBodyHeight(state.cliBodyHeight || 300);
 
   on("#btn-filter-failed", () => {
     state.filterFailedOnly = !state.filterFailedOnly;

@@ -192,21 +192,30 @@
           </div>
 
           <!-- Unified run/result card (replaces banner + empty fail + completion stack) -->
-          <div id="result-card" class="result-card action-block" hidden>
-            <div class="result-main">
-              <div class="result-title">
+          <!-- Fixed task strip: 拆分任务总览（不影响 CLI 高度） -->
+          <div id="result-card" class="task-strip" hidden>
+            <div class="task-strip-head">
+              <div class="task-strip-summary">
                 <span id="run-status-badge"></span>
-                <span id="result-title-text">运行状态</span>
+                <strong id="result-title-text">任务</strong>
+                <span class="task-stat ok" id="stat-done">完成 0</span>
+                <span class="task-stat run" id="stat-run">进行中 0</span>
+                <span class="task-stat wait" id="stat-wait">未启动 0</span>
+                <span class="task-stat fail" id="stat-fail" hidden>失败 0</span>
+                <span class="muted" id="result-meta-text"></span>
               </div>
-              <div class="result-meta" id="result-meta-text"></div>
-              <div class="result-meta err" id="error-summary-text" hidden></div>
+              <div class="task-strip-actions" id="result-actions">
+                <button class="btn ghost sm" id="btn-task-expand" type="button">展开</button>
+                <button class="btn primary sm" id="btn-ws-resume" type="button" hidden>继续</button>
+                <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
+                <button class="btn primary sm" id="btn-rerun" type="button" hidden>再跑一次</button>
+                <button class="btn ghost sm" id="btn-change-plan" type="button" hidden>换计划</button>
+                <button class="btn ghost sm" id="btn-ws-dismiss-run" type="button" hidden>收起运行</button>
+              </div>
             </div>
-            <div class="result-actions" id="result-actions">
-              <button class="btn primary sm" id="btn-ws-resume" type="button" hidden>继续</button>
-              <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
-              <button class="btn primary sm" id="btn-rerun" type="button" hidden>再跑一次</button>
-              <button class="btn ghost sm" id="btn-change-plan" type="button" hidden>换计划</button>
-              <button class="btn ghost sm" id="btn-ws-dismiss-run" type="button" hidden>收起</button>
+            <div id="error-summary-text" class="task-strip-err" hidden></div>
+            <div id="task-strip-body" class="task-strip-body" hidden>
+              <div id="task-strip-list" class="task-strip-list"></div>
             </div>
           </div>
 
@@ -229,6 +238,15 @@
                 <span class="section-label">CLI 窗口</span>
                 <button type="button" class="filter-chip" id="btn-filter-failed" title="仅看失败">仅失败</button>
                 <button type="button" class="btn ghost sm" id="btn-restore-panels" hidden>恢复已关闭</button>
+                <label class="cli-h-label muted" title="单个 CLI 内容高度">
+                  高度
+                  <select id="cli-height-select">
+                    <option value="220">矮</option>
+                    <option value="300" selected>300</option>
+                    <option value="420">高</option>
+                    <option value="560">更高</option>
+                  </select>
+                </label>
               </div>
               <div class="detail-tools">
                 <div class="seg" id="log-view-mode" title="日志视图">
@@ -243,7 +261,10 @@
                 </div>
               </div>
             </div>
-            <div id="cli-board" class="cli-board" aria-live="polite"></div>
+            <!-- 外部可滚动区域：多 CLI 超出时在此下拉，不挤任务条 -->
+            <div id="cli-shell" class="cli-shell">
+              <div id="cli-board" class="cli-board" aria-live="polite"></div>
+            </div>
             <!-- offscreen legacy hooks for optional copy/stop APIs -->
             <div id="task-list-pane" hidden></div>
             <div id="task-list" hidden></div>

@@ -1939,3 +1939,156 @@ th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
 /* 隐藏旧「当前计划」条相关样式干扰 */
 .plan-active-bar { display: none !important; }
 .top-plan-info { display: none !important; }
+
+
+/* ── Fixed task strip (拆分任务总览) ── */
+.task-strip {
+  flex-shrink: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.55rem 0.75rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 42vh; /* 展开时内部滚，不抢 CLI */
+}
+.task-strip.ok { border-color: #b7ebc6; background: linear-gradient(180deg, #f3fff6 0%, #fff 70%); }
+.task-strip.bad { border-color: #ffc9c7; background: linear-gradient(180deg, #fff5f5 0%, #fff 70%); }
+.task-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.task-strip-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.55rem;
+  min-width: 0;
+  font-size: 0.86rem;
+}
+.task-strip-summary strong {
+  font-size: 0.95rem;
+  margin-right: 0.15rem;
+}
+.task-stat {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: var(--bg3);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.task-stat.ok { background: #e8f8ee; color: #1a7f37; }
+.task-stat.run { background: #e8f1fc; color: #0b57d0; }
+.task-stat.wait { background: #f0f0f2; color: #5c5c62; }
+.task-stat.fail { background: #ffecec; color: #b42318; }
+.task-strip-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.task-strip-err {
+  font-size: 0.78rem;
+  color: var(--danger);
+}
+.task-strip-body {
+  border-top: 1px solid var(--border);
+  padding-top: 0.45rem;
+  max-height: 28vh;
+  overflow: auto;
+}
+.task-strip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.task-chip {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.45rem;
+  text-align: left;
+  width: 100%;
+  border: 1px solid transparent;
+  background: #f7f8fa;
+  border-radius: 10px;
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 0.82rem;
+}
+.task-chip:hover { border-color: #c9d7ea; background: #f0f6ff; }
+.task-chip.selected { border-color: #7aa2ff; background: #eaf2ff; }
+.task-chip.fail { background: #fff5f5; }
+.task-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.task-chip-st {
+  font-size: 0.72rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.task-strip-empty { padding: 0.4rem; font-size: 0.82rem; }
+
+/* ── CLI outer shell: scroll more without moving task strip ── */
+.monitor.board-mode {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  gap: 0.45rem;
+}
+.cli-shell {
+  flex: 1;
+  min-height: 0;
+  max-height: min(62vh, 720px);
+  overflow: auto; /* 下拉显示更多 CLI */
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fafafb;
+  padding: 0.45rem;
+}
+.cli-h-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+}
+.cli-h-label select {
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.15rem 0.3rem;
+  background: #fff;
+}
+
+/* CLI body default height 300, adjustable via --cli-body-h */
+.cli-window {
+  max-height: none !important;
+  min-height: 0 !important;
+}
+.cli-window-body {
+  height: var(--cli-body-h, 300px) !important;
+  max-height: var(--cli-body-h, 300px) !important;
+  min-height: var(--cli-body-h, 300px) !important;
+  overflow: auto !important;
+}
+.cli-board {
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+.workspace-body.mode-done .cli-window-body,
+.workspace-body.mode-done .cli-board {
+  max-height: none !important;
+}
