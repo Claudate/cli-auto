@@ -601,19 +601,25 @@ function updateTopPlanInfo() {
     box.hidden = true;
     return;
   }
-  const plan =
+  // 多源回填：selected → live → project default/last
+  const proj = (state.projects || []).find((p) => p.path === state.selectedPath);
+  let plan =
     state.selectedPlan ||
     normalizePlanPath(state.live?.plan_path) ||
+    normalizePlanPath(proj?.default_plan) ||
+    normalizePlanPath(proj?.last_plan) ||
     null;
+  if (plan && !state.selectedPlan) state.selectedPlan = plan;
   const name =
-    state.planPreview?.name ||
+    (state.planPreview && state.selectedPlan === plan && state.planPreview.name) ||
     (plan ? planDisplayName(plan) : "尚未选择");
   const nameEl = $("#top-plan-name");
   const pathEl = $("#top-plan-path");
   if (nameEl) nameEl.textContent = name;
-  if (pathEl) pathEl.textContent = plan || "点下方选择计划";
+  if (pathEl) pathEl.textContent = plan || "点下方「选择计划」";
   box.hidden = false;
-  // 同步紧凑条，避免顶栏有计划、条里还「尚未选择」
+  box.removeAttribute("hidden");
+  // 同步紧凑条
   const barName = $("#plan-active-name");
   const barPath = $("#plan-active-path");
   if (barName) barName.textContent = plan ? name : "尚未选择";
@@ -622,6 +628,7 @@ function updateTopPlanInfo() {
   if (btnAssign) {
     const active = isLiveStatus(state.live?.run_status);
     btnAssign.disabled = !plan || !!active;
+    btnAssign.textContent = active ? "运行中…" : "分配计划";
   }
 }
 

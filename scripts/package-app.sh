@@ -4,7 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+echo "[1/3] build cco + cco-desktop (embeds web/ via tauri frontendDist)"
 cargo build -p cco --release
+# touch web so tauri rebuilds asset embed
+touch web/index.html web/app.js web/app.css
 cargo build -p cco-desktop --release
 
 DIST="$ROOT/dist"
@@ -15,10 +18,13 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/CCO"
 chmod +x "$APP/Contents/MacOS/CCO"
-cp -f "$ROOT/target/release/cco" "$DIST/cco"
+cp -f "$ROOT/target/release/cco" "$DIST/cco" 2>/dev/null || true
 
-# 复制 web/ 进 bundle（Tauri custom-protocol 在 release 模式下从 binary 同级 web/ 加载）
+# Place web next to binary (Contents/MacOS/web) AND Contents/web for compatibility
+rm -rf "$APP/Contents/MacOS/web" "$APP/Contents/web"
+cp -R "$ROOT/web" "$APP/Contents/MacOS/web"
 cp -R "$ROOT/web" "$APP/Contents/web"
+
 cp -f "$ROOT/src-tauri/icons/icon.icns" "$APP/Contents/Resources/AppIcon.icns" 2>/dev/null || true
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -44,5 +50,8 @@ cd "$DIST"
 rm -f CCO-macos-arm64.zip
 zip -r CCO-macos-arm64.zip CCO.app >/dev/null
 echo "OK: $APP"
+echo "WEB_MACOS: $APP/Contents/MacOS/web"
+echo "WEB_CONTENTS: $APP/Contents/web"
 echo "ZIP: $DIST/CCO-macos-arm64.zip"
-echo "CLI: $DIST/cco"
+# sanity: new UI markers must exist in packaged web
+rg -n "top-plan-info|分配计划|action-block|2-col FINAL" "$APP/Contents/MacOS/web/index.html" "$APP/Contents/MacOS/web/app.css" "$APP/Contents/MacOS/web/app.js" | head -20
