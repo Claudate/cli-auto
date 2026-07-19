@@ -1,5 +1,11 @@
-//! Optional git worktree isolation per task.
+//! git worktree isolation helpers.
+//!
+//! [INPUT]: project_root · task id · worktree 开关 · 失败策略（混跑 fail-closed）
+//! [OUTPUT]: 工作目录 PathBuf · WorktreeInfo 可选 · 清理
+//! [POS]: scheduler 启动任务前可选隔离
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/CLAUDE.md
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -11,6 +17,25 @@ pub struct WorktreeInfo {
     pub path: PathBuf,
     pub branch: String,
     pub created: bool,
+}
+
+/// What to do when `ensure_worktree` fails while the task wants a worktree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WorktreeOnFail {
+    /// Single-provider legacy: warn and use `project_root`.
+    #[default]
+    FallbackProjectRoot,
+    /// Multi-provider mix-run: surface error so the task is Failed (no silent shared cwd).
+    FailClosed,
+}
+
+/// True when the plan actually uses more than one distinct `task.provider`.
+pub fn is_multi_provider<'a, I>(providers: I) -> bool
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let set: HashSet<&str> = providers.into_iter().collect();
+    set.len() > 1
 }
 
 /// Whether `project_root` looks like a git work tree.
@@ -116,21 +141,31 @@ pub fn ensure_worktree(
 }
 
 /// Resolve work dir for a task: worktree path or project_root.
+///
+/// When `want_worktree` is true and creation fails:
+/// - [`WorktreeOnFail::FallbackProjectRoot`] (single-provider legacy): warn + use project_root
+/// - [`WorktreeOnFail::FailClosed`] (multi-provider mix-run): return Err — caller marks task Failed
 pub fn resolve_work_dir(
     project_root: &Path,
     run_id: &str,
     task_id: &str,
     want_worktree: bool,
+    on_fail: WorktreeOnFail,
 ) -> Result<(PathBuf, Option<WorktreeInfo>)> {
     if !want_worktree {
         return Ok((project_root.to_path_buf(), None));
     }
     match ensure_worktree(project_root, run_id, task_id) {
         Ok(info) => Ok((info.path.clone(), Some(info))),
-        Err(e) => {
-            warn!(error = %e, "worktree unavailable; using project_root");
-            Ok((project_root.to_path_buf(), None))
-        }
+        Err(e) => match on_fail {
+            WorktreeOnFail::FailClosed => {
+                bail!("worktree required (multi-provider fail-closed): {e:#}");
+            }
+            WorktreeOnFail::FallbackProjectRoot => {
+                warn!(error = %e, "worktree unavailable; using project_root");
+                Ok((project_root.to_path_buf(), None))
+            }
+        },
     }
 }
 

@@ -1,3 +1,10 @@
+//! cco binary entry.
+//!
+//! [INPUT]: argv via clap · env RUST_LOG
+//! [OUTPUT]: process exit code from cli::execute
+//! [POS]: CLI 入口；逻辑在 cli/ 与 services
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md
+
 use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::EnvFilter;

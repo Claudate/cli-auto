@@ -6,8 +6,9 @@ cd "$ROOT"
 
 echo "[1/3] build cco + cco-desktop (embeds web/ via tauri frontendDist)"
 cargo build -p cco --release
-# touch web so tauri rebuilds asset embed
+# touch web so tauri rebuilds asset embed (D4: include js/ css/ tree)
 touch web/index.html web/app.js web/app.css
+find web/js web/css -type f \( -name '*.js' -o -name '*.css' \) -exec touch {} +
 cargo build -p cco-desktop --release
 
 DIST="$ROOT/dist"
@@ -54,4 +55,17 @@ echo "WEB_MACOS: $APP/Contents/MacOS/web"
 echo "WEB_CONTENTS: $APP/Contents/web"
 echo "ZIP: $DIST/CCO-macos-arm64.zip"
 # sanity: new UI markers must exist in packaged web
-rg -n "btn-chooser-assign|btn-task-dash-toggle|cli-rerun-btn|分配计划|plan-chooser-foot|taskDashCollapsed" "$APP/Contents/MacOS/web/index.html" "$APP/Contents/MacOS/web/app.css" "$APP/Contents/MacOS/web/app.js" | head -30
+SEARCH_BIN="$(command -v rg || true)"
+if [[ -z "$SEARCH_BIN" && -x /opt/homebrew/bin/rg ]]; then SEARCH_BIN=/opt/homebrew/bin/rg; fi
+if [[ -z "$SEARCH_BIN" && -x "$HOME/.cargo/bin/rg" ]]; then SEARCH_BIN=$HOME/.cargo/bin/rg; fi
+# D4: logic/styles live under web/js/* and web/css/*; app.js/app.css are thin entry
+WEB_ROOT="$APP/Contents/MacOS/web"
+if [[ -n "$SEARCH_BIN" ]]; then
+  "$SEARCH_BIN" -n "btn-chooser-assign|btn-task-dash-toggle|cli-rerun-btn|分配计划|plan-chooser-foot|taskDashCollapsed|budget-chip|updateBudgetChip|btn-open-chat|page-chat|btn-chat-assign|assignFromChat" \
+    "$WEB_ROOT/index.html" "$WEB_ROOT/app.css" "$WEB_ROOT/app.js" \
+    "$WEB_ROOT/js" "$WEB_ROOT/css" 2>/dev/null | head -40
+else
+  grep -rnE "btn-chooser-assign|btn-task-dash-toggle|cli-rerun-btn|分配计划|plan-chooser-foot|taskDashCollapsed|budget-chip|updateBudgetChip|btn-open-chat|page-chat|btn-chat-assign|assignFromChat" \
+    "$WEB_ROOT/index.html" "$WEB_ROOT/app.css" "$WEB_ROOT/app.js" \
+    "$WEB_ROOT/js" "$WEB_ROOT/css" 2>/dev/null | head -40
+fi

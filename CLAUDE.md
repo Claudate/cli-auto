@@ -30,6 +30,11 @@ Cargo.toml — workspace（cco + cco-desktop）
 [`docs/product-mode-b-ai-planner.md`](./docs/product-mode-b-ai-planner.md) — Mode B（plan job / confirm_start；**B0–B3 已闭环** D1/D3）
 [`docs/terminal-console-plan.md`](./docs/terminal-console-plan.md) — 监视日志（log_events A 路径 P0 + P1-1/2/3 **D2 已接**）
 [`docs/ux-simple-mainpath-2026-07-17.md`](./docs/ux-simple-mainpath-2026-07-17.md) — 易用性主路径简化（已落地）
+[`docs/chat-plan-builder-2026-07-18.md`](./docs/chat-plan-builder-2026-07-18.md) — 聊天共建计划 → 落盘 → 分配（**已落地** C0–C2 ✅ · 五指标全绿 · **§9 验证清单 t11 七绿** · **§10 t12 文档/GEB**；C3→D5/P2-9 不排期则不碰）
+[`docs/chat-ux-focus-2026-07-19.md`](./docs/chat-ux-focus-2026-07-19.md) — 聊天页注意力收敛（后台降噪 · fake/故障可信 · CTA · **方案已定稿 · 未实施** U0–U2 → D5/P2-10；**不**回灌 P-chat）
+[`docs/chat-utf8-fence-panic-2026-07-19.md`](./docs/chat-utf8-fence-panic-2026-07-19.md) — 聊天 plan fence UTF-8 panic 热修（**F0+F1 已闭环** · F2 可选不排期 · **P-chat-utf8**；**不**并入 P2-10）
+[`docs/plan-execute-inspect-rework-2026-07-19.md`](./docs/plan-execute-inspect-rework-2026-07-19.md) — 计划驱动执行闭环（拆分·巡检·回补 · **L0–L2 已落地** · **P-loop / P2-11**）
+[`docs/multi-cli-collaboration-2026-07-18.md`](./docs/multi-cli-collaboration-2026-07-18.md) — 多 CLI 协作（Claude+Codex · 声明/越界/检验员/handoff · **方案已定稿 · 未实施** · P0–P2 → D5）
 </config>
 
 能力要点: Mode B 规划相位 · providers claude/codex/fake · log_events 可读监视 · 预算分栏 · 上限 validate · 桌面 planSessions/auto-start

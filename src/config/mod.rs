@@ -1,4 +1,9 @@
 //! Global config: ~/.cco/config.toml + env overrides.
+//!
+//! [INPUT]: 磁盘 config · 环境变量
+//! [OUTPUT]: Config · AllowedProject · load/save · runs_dir
+//! [POS]: 全局配置真源；桌面项目白名单存此
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/config/CLAUDE.md
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -70,6 +75,21 @@ pub struct DefaultSection {
     pub run_max_budget_usd: Option<f64>,
     pub permission_mode: String,
     pub allowed_tools: Vec<String>,
+    /// Auto-retries after fail / timeout / stall (in addition to the first try).
+    /// 0 = never retry. Effective policy is max(plan.retry_max, this). Cap 10.
+    #[serde(default = "default_retry_max")]
+    pub retry_max: u32,
+    /// No stdout growth for this many seconds → treat as stall, stop + retry.
+    /// Floor 30s, default 600 (10 min).
+    #[serde(default = "default_stall_secs")]
+    pub stall_secs: u64,
+}
+
+fn default_retry_max() -> u32 {
+    2
+}
+fn default_stall_secs() -> u64 {
+    600
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,6 +143,8 @@ impl Default for DefaultSection {
                 "Grep".into(),
                 "Write".into(),
             ],
+            retry_max: default_retry_max(),
+            stall_secs: default_stall_secs(),
         }
     }
 }
@@ -281,6 +303,10 @@ mirror_state = false
 max_turns = 40
 max_budget_usd = 10.0
 # run_max_budget_usd = 25.0
+# Auto-retry failed/stalled CLI workers (extra attempts after the first).
+retry_max = 2
+# No log growth for this many seconds → stall → stop + retry (then pause if exhausted).
+stall_secs = 600
 permission_mode = "dontAsk"
 allowed_tools = ["Read", "Edit", "Bash", "Glob", "Grep", "Write"]
 

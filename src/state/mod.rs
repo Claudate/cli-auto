@@ -1,4 +1,9 @@
 //! Run state on disk: run.json, events.jsonl, per-task files.
+//!
+//! [INPUT]: runs_root · PlanIR（初始化）
+//! [OUTPUT]: RunState/TaskState · save/load · event append
+//! [POS]: 运行状态落盘；scheduler 与 services 读写
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/state/CLAUDE.md
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -49,6 +54,12 @@ pub struct TaskState {
     pub pid: Option<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub terminals: Vec<String>,
+    /// How many times this task has been started (1 = first try). Used for auto-retry.
+    #[serde(default)]
+    pub attempt: u32,
+    /// Last stall/fail reason short code for UI (stall / fail / timeout).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_retry_reason: Option<String>,
 }
 
 impl TaskState {
@@ -68,6 +79,8 @@ impl TaskState {
             worktree_branch: None,
             pid: None,
             terminals: vec![],
+            attempt: 0,
+            last_retry_reason: None,
         }
     }
 }
@@ -216,6 +229,7 @@ pub fn resolve_run_dir(runs_root: &Path, run_id: Option<&str>) -> Result<PathBuf
 
 impl RunState {
     /// Reset non-success tasks so scheduler can continue from this run dir.
+    /// Manual resume clears attempt counters so the user gets a fresh retry budget.
     pub fn prepare_for_resume(&mut self) -> usize {
         let mut n = 0;
         for ts in self.tasks.values_mut() {
@@ -230,6 +244,8 @@ impl RunState {
             ts.finished_at = None;
             ts.started_at = None;
             ts.pid = None;
+            ts.attempt = 0;
+            ts.last_retry_reason = None;
             n += 1;
         }
         self.status = RunStatus::Init;

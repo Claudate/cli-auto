@@ -1,0 +1,10 @@
+{"type":"system","subtype":"init","session_id":"sess-fixture-1","tools":["Read","Edit","Bash"]}
+{"type":"assistant","message":{"id":"msg_01","role":"assistant","content":[{"type":"text","text":"I'll inspect the project layout first."}]},"session_id":"sess-fixture-1"}
+{"type":"assistant","message":{"id":"msg_02","role":"assistant","content":[{"type":"tool_use","id":"toolu_01","name":"Read","input":{"path":"src/main.rs"}}]},"session_id":"sess-fixture-1"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":"fn main() {\n    println!(\"hello\");\n}\n"}]},"session_id":"sess-fixture-1"}
+{"type":"assistant","message":{"id":"msg_03","role":"assistant","content":[{"type":"tool_use","id":"toolu_02","name":"Bash","input":{"command":"cargo test -q"}}]},"session_id":"sess-fixture-1"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_02","is_error":true,"content":"error: no tests to run"}]},"session_id":"sess-fixture-1"}
+{"type":"assistant","message":{"id":"msg_04","role":"assistant","content":[{"type":"text","text":"Tests are missing; I'll add a smoke test and finish."}]},"session_id":"sess-fixture-1"}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":4200,"duration_api_ms":3900,"num_turns":3,"result":"Added smoke test and verified compile.","session_id":"sess-fixture-1","total_cost_usd":0.0421,"usage":{"input_tokens":1200,"output_tokens":340}}
+not-json-plain-line that should become raw_line
+{"type":"unknown_kind","payload":{"x":1}}

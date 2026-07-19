@@ -1,4 +1,9 @@
-//! Host-side acceptance commands (provider-agnostic).
+//! Soft acceptance command after task done.
+//!
+//! [INPUT]: work_dir · shell 命令 · timeout
+//! [OUTPUT]: ok/exit/stdout 结构
+//! [POS]: scheduler 在 TaskStatus::Done 后可选门禁
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/CLAUDE.md
 
 use std::path::Path;
 use std::process::Stdio;

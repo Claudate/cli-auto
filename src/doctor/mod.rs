@@ -3,7 +3,7 @@
 //! [INPUT]: 依赖 config::Config 与 runtime::provider::ProviderRegistry
 //! [OUTPUT]: 对外提供 DoctorReport / CheckLine / run_doctor / print_report
 //! [POS]: doctor 模块入口，桌面与 CLI 共用的环境门禁
-//! [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/doctor/CLAUDE.md
 
 use std::path::Path;
 
@@ -137,6 +137,14 @@ pub async fn run_doctor(config: &Config, project_root: Option<&Path>) -> Result<
             detail: "git not in PATH (worktree disabled until available)".into(),
         }),
     }
+
+    // P1-7: mixed-plan tip (info only; never fails doctor)
+    lines.push(CheckLine {
+        name: "run_provider_flags".into(),
+        ok: true,
+        detail: "cco run --provider fills defaults only; --force-provider wipes all tasks"
+            .into(),
+    });
 
     Ok(DoctorReport { lines, ok })
 }

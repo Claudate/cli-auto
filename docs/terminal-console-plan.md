@@ -1,9 +1,10 @@
 # cco 监视终端 / 日志控制台改版计划
 
-> 状态：A 路径 P0+观感修复（默认终端 transcript · stderr 折叠 · 完成条压缩）  
-> 日期：2026-07-17  
+> 状态：**A 路径 P0 已落地**；**P1 主项已闭环**（外置终端 · Planner LogConsole · 行边界/减负 · stream-json fixture）；**P2 → D5 池（P2-3，不排期）**  
+> 日期：2026-07-17（P1 闭环 2026-07-18；D5 池 t15）  
 > 范围：桌面监视日志（主）+ Tauri/服务层日志 API + Claude stream-json 呈现；不重写 scheduler  
-> 关联：[`desktop-ux-redesign-plan.md`](./desktop-ux-redesign-plan.md)、[`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)、`web/`、`src/services.rs`、`src/runtime/provider/claude.rs`、`src/terminal/`
+> 关联：[`desktop-ux-redesign-plan.md`](./desktop-ux-redesign-plan.md)、[`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) §1.3 / §4 D5、`web/`、`src/services.rs`、`src/runtime/log_events.rs`、`src/terminal/`  
+> **勿再当缺口**：worker 监视 A 路径 P0（总账 §1.3）；「Planner 日志复用 LogConsole」属 **P1 / 总账 P1-3**，不是 P0 未完成；P2 打磨不阻塞 ship
 
 [PROTOCOL]: 变更时更新此头部与阶段勾选，然后检查相关 CLAUDE.md / 本目录索引。
 
@@ -137,30 +138,34 @@ cco 的定位是工头看板，更应如此——别把自己做成伪 Terminal.
 
 ## 6. 落地阶段（可勾选）
 
-### P0 — 可读优先（1–2 天）
+### P0 — 可读优先（1–2 天）✅ 已完成（A 路径 / worker 监视）
 
 - [x] Rust：行边界 tail + `LogEvent` 解析（覆盖 assistant/tool/result/error/杂行）  
 - [x] `project_live_view` / `get_task_logs` 返回 `events`  
 - [x] 前端 `LogConsole` 可读视图 + 原始切换  
 - [x] 错误摘要条；复制「可读文本」  
-- [ ] Planner 日志复用同一组件  
+- [x] 默认终端 transcript 观感 · stderr 折叠 · 完成条压缩（观感修复）  
 
-**完成定义**：默认监视不再出现满屏原始 JSON；工具调用一眼可扫。
+**完成定义**：默认监视不再出现满屏原始 JSON；工具调用一眼可扫。  
+**说明**：Planner 阶段 `#planner-log` 复用同一组件 **不计入 P0 完成**，已下沉 P1 / 总账 P1-3。
 
 ### P1 — 稳与顺（+1 天）
 
-- [ ] 增量渲染 / 贴底手感  
-- [ ] `since_byte` 或减小 live payload  
-- [ ] 外置终端按钮接 `TerminalManager`  
+- [x] Planner 日志复用同一 LogConsole 组件（总账 P1-3）  
+- [x] 增量渲染 / 贴底手感  
+- [x] 行边界 tail + live 有事件时压缩 raw payload（P1-1 减负）  
+- [x] 外置终端按钮接 `TerminalManager`（总账 P1-2）  
 - [ ] stderr 分色分区  
-- [ ] fixtures：一段真实 stream-json 样例 + 解析单测  
+- [x] fixtures：一段真实 stream-json 样例 + 解析单测 
 
-### P2 — 打磨（可选）
+### P2 — 打磨（可选）→ 总账 **D5 / P2-3**（不排期则不碰）
 
-- [ ] 虚拟列表（超长 run）  
-- [ ] 事件过滤（仅工具 / 仅错误）  
-- [ ] 轻量 ANSI（仅 raw）  
-- [ ] 导出 HTML/MD 报告片段  
+> t15：进 backlog 池；出池门槛 = 超长 run 真卡顿或要导出报告。本文件只记账，不实现。
+
+- [ ] 虚拟列表（超长 run） → **P2-3**  
+- [ ] 事件过滤（仅工具 / 仅错误） → **P2-3**  
+- [ ] 轻量 ANSI（仅 raw） → **P2-3**  
+- [ ] 导出 HTML/MD 报告片段 → **P2-3**  
 
 ---
 
@@ -206,13 +211,14 @@ tests/…                           ← NDJSON fixtures
 
 ---
 
-## 11. 开放确认（开工前只需答一次）
+## 11. 开放确认（已按默认落地；P0 勿再开）
 
 1. 默认可读视图是否接受 **非真终端**（推荐：是）？  
 2. P0 是否必须含 **外置终端**，还是可放到 P1？  
 3. 解析优先放 **Rust 后端**（推荐，单一真相）还是前端先 hack？
 
-默认假设：**1=是，2=P1，3=Rust 后端**。若无异议，下一任务按 P0 开工。
+默认假设已采纳：**1=是，2=P1，3=Rust 后端**。  
+**A 路径 P0 已闭环**（总账 §1.3）；残差见上方 **P1**（Planner LogConsole / 增量 / 外置终端），勿再当「P0 未开工」。
 
 
 ---

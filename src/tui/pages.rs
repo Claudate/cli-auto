@@ -1,4 +1,9 @@
-//! Page renderers.
+//! TUI page renderers: Dashboard / Graph / Task / Logs / Terminals / Help.
+//!
+//! [INPUT]: RunState 快照 · 选中 task
+//! [OUTPUT]: ratatui Frame 绘制
+//! [POS]: tui 页面层
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/tui/CLAUDE.md
 
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Cell, List, ListItem, Paragraph, Row, Table, Wrap};

@@ -1,0 +1,225 @@
+# mixed-claude-codex-inspect.cco.yaml
+# P0 可复制样例：双 implement（claude ‖ codex）+ integrate + inspect 形状。
+#
+# 运行注意（混跑红线）：
+# - 禁止依赖 `cco run --provider` / `--force-provider` 全覆盖抹掉 per-task 引擎。
+#   混跑计划每任务已写死 provider；`--provider` 仅软覆盖 default/未声明任务，
+#   `--force-provider` 会硬抹全部 —— 混跑请勿使用。
+# - 必须 worktree=true（本文件 defaults.worktree: true）；并行 implement 不得共写同一业务路径。
+# - 产物统一落 .cco-out/<task_id>/；worker 只写自己的 fragment。
+# - inspect 为检验员终闸（只读业务、写 VERDICT/ISSUES），非第二套 Scheduler。
+# - P2-1 load/normalize：role=inspect 自动物化默认 opts
+#     · 去掉 Edit/MultiEdit（业务只读；Write 仅报告）
+#     · scope.paths 缺省 → [.cco-out/inspect/**]
+#     · append_system_prompt 注入 CCO role=inspect 段
+#     · 显式 provider_opts / scope.paths 优先；allow_business_write:true 可逃逸（慎用）
+# - P2-3 host：读 .cco-out/inspect/VERDICT.md；若为 FAIL → 任务 Failed
+#     · on_failure: pause 与现网一致（本文件已设 pause）
+#     · handoff Open risks 写入 ISSUES[<task>] 摘要 + REWORK_HOOK 占位
+#     · 不自动 3-way merge / 不自动开 PR；rework 波由人/下一轮计划消费 ISSUES
+# - 真源协议：docs/multi-cli-collaboration-2026-07-18.md（§3 契约 · §5.3 运行 · §6 P2-1/P2-3）
+#
+# 推荐命令：
+#   cco doctor
+#   cco parse --project <repo> --plan examples/plans/mixed-claude-codex-inspect.cco.yaml
+#   cco run --project <repo> --plan examples/plans/mixed-claude-codex-inspect.cco.yaml --yes
+#   # 混跑时不要：cco run --force-provider claude ...
+#
+# --- handoff 章节样板（P0 约定；P1 起由 host 归并 run_dir/handoff.md）---
+# # CCO Handoff · run_id=<id>
+# updated: <rfc3339>
+# project: <path>
+# plan: examples/plans/mixed-claude-codex-inspect.cco.yaml
+# status: running|completed|failed
+#
+# ## Board
+# | id | provider | role | status | scope | outputs | cost | notes |
+# |----|----------|------|--------|-------|---------|------|-------|
+# | inventory | claude | scout | … | readonly | .cco-out/inventory/… | | |
+# | feat-a | claude | implement | … | examples/demo_a/** | .cco-out/feat-a/… | | |
+# | feat-b | codex | implement | … | examples/demo_b/** | .cco-out/feat-b/… | | |
+# | integrate | claude | integrate | … | demo_a+b | .cco-out/integrate/… | | |
+# | inspect | claude | inspect | … | .cco-out/inspect/** | VERDICT/ISSUES | | |
+#
+# ## Timeline
+# - …
+#
+# ## Fragments
+# ### <task_id>
+# - status / provider / work_dir / branch
+# - summary → .cco-out/<task_id>/SUMMARY.md
+# - artifacts / risks / followups
+#
+# ## Open risks
+# - …
+#
+# ## Instructions for next worker
+# - 必读 depends_on 的 Fragments；遵守 scope.paths；禁止 scope.forbid
+# - 只写约定 outputs；末行 CCO_DONE ok
+# ---------------------------------------------------------------------------
+
+schema: cco-plan/v1
+name: mixed-claude-codex-inspect
+require_inspect: true
+defaults:
+  mode: print
+  worktree: true
+  providers:
+    claude:
+      max_turns: 40
+      max_budget_usd: 8
+      permission_mode: dontAsk
+      allowed_tools: [Read, Edit, Bash, Glob, Grep, Write]
+    codex:
+      full_auto: true
+      json: true
+max_parallel: 4
+on_failure: pause
+retry_max: 1
+
+tasks:
+  - id: inventory
+    title: 只读摸底
+    provider: claude
+    role: scout
+    scope:
+      paths: []
+      readonly: ["**"]
+      forbid: ["~/**", "/Users/**"]
+    outputs:
+      - .cco-out/inventory/SUMMARY.md
+    prompt: |
+      你是 scout（只读摸底），不是 implement。
+      范围：可读全库；禁止修改业务源码与配置。
+      任务：梳理仓库顶层结构、主要模块与构建入口。
+      产物（必须落盘）：
+      - .cco-out/inventory/SUMMARY.md（结构摘要 ≤80 行）
+      写完后最后一行输出：CCO_DONE ok
+
+  - id: feat-a
+    title: 模块 A（Claude implement）
+    provider: claude
+    role: implement
+    scope:
+      paths:
+        - examples/demo_a/**
+        - .cco-out/feat-a/**
+      forbid:
+        - examples/demo_b/**
+        - .cco-out/feat-b/**
+        - .cco-out/integrate/**
+        - .cco-out/inspect/**
+    outputs:
+      - .cco-out/feat-a/SUMMARY.md
+      - .cco-out/feat-a/CHANGED.md
+    depends_on: [inventory]
+    prompt: |
+      你是 implement（Claude）。
+      必读：.cco-out/inventory/SUMMARY.md（若存在）。
+      范围约定（scope）：
+      - 可写：examples/demo_a/** 、 .cco-out/feat-a/**
+      - 禁止：examples/demo_b/** 、他人 .cco-out/<other>/ 、直接合 main
+      任务：在 examples/demo_a/ 下实现一个最小可运行的模块 A 示例
+      （可用 README + 一个小脚本或源文件；若目录不存在请创建）。
+      产物（必须落盘）：
+      - .cco-out/feat-a/SUMMARY.md（做了什么、入口路径）
+      - .cco-out/feat-a/CHANGED.md（变更文件列表）
+      最后一行输出：CCO_DONE ok
+
+  - id: feat-b
+    title: 模块 B（Codex implement）
+    provider: codex
+    role: implement
+    scope:
+      paths:
+        - examples/demo_b/**
+        - .cco-out/feat-b/**
+      forbid:
+        - examples/demo_a/**
+        - .cco-out/feat-a/**
+        - .cco-out/integrate/**
+        - .cco-out/inspect/**
+    outputs:
+      - .cco-out/feat-b/SUMMARY.md
+      - .cco-out/feat-b/CHANGED.md
+    depends_on: [inventory]
+    prompt: |
+      你是 implement（Codex）。
+      必读：.cco-out/inventory/SUMMARY.md（若存在）。
+      范围约定（scope）：
+      - 可写：examples/demo_b/** 、 .cco-out/feat-b/**
+      - 禁止：examples/demo_a/** 、他人 .cco-out/<other>/ 、直接合 main
+      任务：在 examples/demo_b/ 下实现一个最小可运行的模块 B 示例
+      （可用 README + 一个小脚本或源文件；若目录不存在请创建）。
+      产物（必须落盘）：
+      - .cco-out/feat-b/SUMMARY.md（做了什么、入口路径）
+      - .cco-out/feat-b/CHANGED.md（变更文件列表）
+      最后一行输出：CCO_DONE ok
+
+  - id: integrate
+    title: 汇合 integrate
+    provider: claude
+    role: integrate
+    scope:
+      paths:
+        - examples/demo_a/**
+        - examples/demo_b/**
+        - .cco-out/integrate/**
+      forbid:
+        - .cco-out/inspect/**
+    outputs:
+      - .cco-out/integrate/MERGE.md
+    depends_on: [feat-a, feat-b]
+    prompt: |
+      你是 integrate（非新功能实现者）。
+      必读：
+      - .cco-out/feat-a/SUMMARY.md 、 CHANGED.md
+      - .cco-out/feat-b/SUMMARY.md 、 CHANGED.md
+      范围约定：
+      - 可写：examples/demo_a/** 、 examples/demo_b/** 、 .cco-out/integrate/**
+      - 禁止：新开大功能；勿静默删除他人产物
+      任务：检查 A/B 接口与文档一致性，消解明显冲突；必要时在
+      .cco-out/integrate/ 下补 INTEGRATION 说明。
+      产物（必须落盘）：
+      - .cco-out/integrate/MERGE.md（合流说明、冲突与处理、后续风险）
+      最后一行输出：CCO_DONE ok
+
+  # P2-1：role=inspect 时 load_plan 会 materialize 默认 opts——
+  # - 从 plan defaults 剥掉 Edit/MultiEdit（业务只读）
+  # - scope.paths 缺省 → [.cco-out/inspect/**]
+  # - 注入 append_system_prompt「CCO role=inspect: …」
+  # 下方显式写出仅为文档可读；省略 provider_opts.allowed_tools / scope.paths 也安全。
+  - id: inspect
+    title: 代码检验员 inspect
+    provider: claude
+    role: inspect
+    scope:
+      paths:
+        - .cco-out/inspect/**
+      readonly:
+        - examples/**
+        - .cco-out/**
+      forbid:
+        - examples/demo_a/**
+        - examples/demo_b/**
+    outputs:
+      - .cco-out/inspect/VERDICT.md
+      - .cco-out/inspect/ISSUES.md
+    depends_on: [integrate]
+    provider_opts:
+      # no Edit — business tree read-only; Write only for VERDICT/ISSUES
+      allowed_tools: [Read, Glob, Grep, Bash, Write]
+      max_budget_usd: 4
+    # host 客观门禁示例（演示可先检查 integrate 产物；真实仓库可换成 cargo test）
+    acceptance: "test -f .cco-out/integrate/MERGE.md"
+    prompt: |
+      你是代码检验员（inspect），不是实现者。
+      职责：
+      1. 读各任务产物：.cco-out/inventory|feat-a|feat-b|integrate/ 下 SUMMARY/CHANGED/MERGE
+      2. 核对声明 scope 与实际变更是否越界（feat-a 不得写 demo_b，反之亦然）
+      3. 检查整合一致性与 acceptance 相关事实
+      4. 默认不改业务代码；只写检验产物
+      产物（必须落盘）：
+      - .cco-out/inspect/VERDICT.md（首行必须是 PASS 或 FAIL，附简短理由）
+      - .cco-out/inspect/ISSUES.md（无问题写「无」；有问题写 文件+症状+建议）
+      最后一行输出：CCO_DONE ok

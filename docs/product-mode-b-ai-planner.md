@@ -1,17 +1,18 @@
 # 产品模式 B：AI 规划拆分 → 定序 → 按图执行
 
-> 状态：实施中（B0 壳 + B1 parse/fake/LLM+heuristic + CLI `cco plan` + B2 监视波次/等待）  
-> 日期：2026-07-17  
+> 状态：**B0/B1 主线已落地**；B2 主项已落地；**B3 已闭环**（D1/D3）；可选编辑进 **D5 池（P2-1/P2-2，不排期）**  
+> 日期：2026-07-17（状态校正 2026-07-18；**D1 决议 · D3 边界 · D5 池 t15**）  
 > 决议：用户明确选择 **B**（真·AI 规划定序），不是 A（仅解析计划里已有任务图）  
-> 关联：[`desktop-ux-redesign-plan.md`](./desktop-ux-redesign-plan.md)、[`claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md)、监视日志 → [`terminal-console-plan.md`](./terminal-console-plan.md)
+> 关联：[`desktop-ux-redesign-plan.md`](./desktop-ux-redesign-plan.md)、[`claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md)、监视日志 → [`terminal-console-plan.md`](./terminal-console-plan.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) §1.3 / §4 D5、执行闭环 → [`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md)（拆分·巡检·回补 · D5/P2-11；**不**改 confirm_start）  
+> **勿再当缺口**：B0–B3 主线见总账 §1.3 / D3；残差仅 B2 可选编辑 → **P2-1/P2-2 D5 池**
 
-[PROTOCOL]: 变更本文件时更新状态与阶段勾选；与 UX 计划冲突时以本文件的「主流程」为准。
+[PROTOCOL]: 变更本文件时更新状态与阶段勾选；与 UX 计划冲突时以本文件的「主流程」与 §4 默认规则为准。
 
 ---
 
 ## 0. 一句话
 
-用户只选一份**计划文档**（可以是人话需求/大纲），cco **先用 AI 自动拆成带依赖的任务图并展示执行顺序**，用户确认后点开始，再按顺序/并行拉起多个 worker CLI；界面上能看到**全部已分配的 CLI**，含排队、运行中、**已完成**、失败。
+用户只选一份**计划文档**（可以是人话需求/大纲），cco **先用 AI 自动拆成带依赖的任务图并展示执行顺序**，桌面默认**分配后自动开跑**（高级可「规划后暂停确认」再点开始），再按顺序/并行拉起多个 worker CLI；界面上能看到**全部已分配的 CLI**，含排队、运行中、**已完成**、失败。
 
 ---
 
@@ -22,28 +23,39 @@
 | 计划内容 | 作者写好 tasks + depends_on | 可以是散文、大纲、不完整列表 |
 | 谁拆任务 | 解析器 / 人 | **Planner AI（一次或可重试）** |
 | 谁定先后 | 文件里的 depends_on | **Planner 产出 depends_on / 波次** |
-| 点开始前 | 预览已有图 | **必须先看到拆分结果 + 顺序，再确认** |
-| 现有能力 | ✅ 基本具备 | ❌ 缺口：无独立 Planner 阶段 |
+| 点开始前 | 预览已有图 | 桌面默认 **分配后 auto-start**；高级可「规划后暂停确认」 |
+| 现有能力 | ✅ 适配器 + 直接 exec / skip-plan | ✅ **B0/B1 主线已落地**（见总账 §1.3）；D1 产品规则已收口 |
 
-**模式 A 不废弃**：若文件已是合法 `cco-plan/v1` / `serial-prompts/v0` 且用户跳过规划，可走「已结构化 → 直接确认执行」。  
-**默认主路径是 B**：选计划 → 规划 → 确认 → 执行 → 监视。
+**模式 A 不废弃**：若文件已是合法 `cco-plan/v1` / `serial-prompts/v0`，**自动 skip-plan**（或显式 `--skip-plan` / 桌面 `plan_mode=parse`），可走「已结构化 → 直接确认/执行」。  
+**默认主路径是 B**：选计划 → 规划 →（默认 auto-start / 或确认屏）→ 执行 → 监视。
 
 ---
 
+## 1.1 计划从哪来
+
+| 来源 | 说明 |
+|------|------|
+| 已有文件 | 用户「选择计划」/ 指定 `.md`（主路径） |
+| 聊天落盘 | 桌面「聊天」共建散文计划 → 保存 `plans/chat-*.md` 后再「分配计划」（见 [`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)） |
+
+聊天**只写计划文档**，不 spawn worker；分配之后仍走本节 Planner → `confirm_start`。
+
 ## 2. 目标用户流程（主路径）
+
+> 计划来源：① 已有 `.md` 文件；② 桌面「聊天」共建后落盘（见 [`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)）。二者分配后同一 Mode B 链。
 
 ```text
 ① 添加/选择项目
-② 选择计划文档（.md 为主，不要求已写满 task 表）
+② 选择计划文档（.md 为主，不要求已写满 task 表；可无则先聊天生成）
 ③ 【规划阶段】启动 Planner AI（或自动）
       · 读计划全文 + 可选项目上下文（目录结构摘要等）
       · 输出：任务列表 + 依赖/波次 + 每任务 prompt
-④ 【确认阶段】界面展示
+④ 【确认阶段】界面展示（默认短暂停留后 auto-start；高级「规划后暂停确认」时停此屏）
       · 全部任务（标题、摘要）
       · 执行顺序：波次 1 → 波次 2 … 或依赖关系
       · 可并行标注
       · （v1 可选）用户微调：删任务 / 改依赖 / 重规划
-⑤ 用户点「开始运行」
+⑤ **开始运行**：默认 UI 自动 `confirm_start`；或用户点「开始运行」
 ⑥ 【执行阶段】Scheduler 按 PlanIR + depends_on + max_parallel 跑 worker CLI
 ⑦ 【监视阶段】看见每个 CLI：
       · 排队（依赖未满足）
@@ -55,24 +67,24 @@
 ### 2.1 用户心智（三句话）
 
 1. 我丢给 cco 一份「要干什么」的文档。  
-2. AI 帮我拆成步骤并排好谁先谁后，我看一眼觉得对。  
-3. 点开始后，多个 Claude 按顺序干活，做完的、正在做的我都看得见。
+2. AI 帮我拆成步骤并排好谁先谁后（默认自动开跑；高级可先看一眼再确认）。  
+3. 多个 Claude 按顺序干活，做完的、正在做的我都看得见。
 
 ---
 
 ## 3. 与现状能力对照
 
-| 环节 | 现状 | B 需要 |
-|------|------|--------|
+| 环节 | 现状（2026-07-18） | 备注 |
+|------|-------------------|------|
 | 选项目 / 选计划 | ✅ 桌面 + CLI | 保留 |
-| 解析结构化 plan → PlanIR | ✅ adapters | 保留作「已结构化」快路径 & Planner 输出落盘格式 |
-| **Planner AI 拆分** | ❌ 无 | **新建** |
-| **启动前定序确认 UI** | ❌ 预览只有任务名列表 | **新建「编排确认」页** |
-| DAG 调度执行 | ✅ `depends_on` + `ready_tasks` + `max_parallel` | 复用，几乎不动核心算法 |
-| 多 CLI 监视 | ✅ / UX 主从布局 | 强化：排队/完成分区、波次高亮 |
-| 已完成可理解 | 部分 | 明确完成区 + 摘要 |
+| 解析结构化 plan → PlanIR | ✅ adapters | 「已结构化」快路径 & Planner 输出落盘格式 |
+| **Planner AI 拆分** | ✅ plan job + LLM / heuristic / fake | B1 主线；见 `src/plan/planner.rs` |
+| **启动前定序确认 UI** | ✅ phase confirm + 波次列表 | B0；桌面默认 `autoStartAfterPlan`；高级「规划后暂停确认」（D1 / P1-7 已收口） |
+| DAG 调度执行 | ✅ `depends_on` + `ready_tasks` + `max_parallel` | 复用 |
+| 多 CLI 监视 | ✅ 主从 + waiting_on / current_wave | B2 主项已落地 |
+| 已完成可理解 | ✅ 常驻列表 + 日志回看 | B2 主项已落地 |
 
-**关键结论**：执行引擎大体够用；缺的是 **Planner 管道 + 确认 UX**，不是再做一个调度器。
+**关键结论（校正）**：B0/B1 主线与 B2 监视主项 **已闭环**（总账 §1.3）。**D1 已收口**：桌面 auto-start 默认、CLI `run` 结构化 skip / 散文 plan job、`--skip-plan` 入口。**B3 已闭环**（上限 · 预算分栏 · 金样 · skip-plan · 真源；D3 / P1-4/5/6）。残差仅 B2 可选编辑 → **D5 / P2-1·P2-2**（不排期则不碰），**不是**「再做一个调度器」或「从零建 Planner」。
 
 ---
 
@@ -91,11 +103,23 @@
 | 状态（人话） | 含义 |
 |--------------|------|
 | 规划中 | Planner CLI/API 正在跑 |
-| 待确认 | 已有任务图，尚未开始 worker |
+| 待确认 | 已有任务图，尚未开始 worker（高级「规划后暂停确认」时停此屏） |
 | 运行中 | 已按图启动 workers |
 | 已完成 / 失败 / 已暂停 | 与现网 run 状态对齐 |
 
-**硬规则**：未到「待确认」并经用户点「开始运行」前，**不得**启动业务 worker（planner 自身除外）。
+### 4.1 产品默认规则（D1 决议，2026-07-18）
+
+| 项 | 决议 | 实现 |
+|----|------|------|
+| **桌面默认** | **分配后自动开跑**（auto-start） | `web/app.js` `autoStartAfterPlan` 默认 true；高级 `#pp-pause-confirm` 可暂停 |
+| **业务 worker 入口** | **唯一** `confirm_start` → `start_run_from_plan` | 自动开跑 = UI 自动调用 `confirm_start`，**不是**第二套 start API |
+| **CLI `run`** | 可 parse 的**结构化** → 直接 exec（auto skip-plan）；**散文/未知** → plan job 后需 `--yes` 或交互确认 | `src/cli/mod.rs`；`--skip-plan` 强制跳过 |
+| **结构化** | `cco-plan/v1` / `serial-prompts/v0` **自动 skip-plan**；亦可显式 `--skip-plan` / 桌面 `plan_mode=parse` | `plan::is_structured_adapter` |
+
+**硬规则（修订）**：业务 worker **只**经 `confirm_start`（或 CLI 等价：打印 DAG + 确认/`--yes` 后进 Scheduler）启动。  
+- 桌面默认：规划完成后 **UI 自动** `confirm_start`（用户仍可开高级「规划后暂停确认」人工点「开始运行」）。  
+- CLI：散文路径必须见 DAG 并确认；结构化路径见 DAG 后同样需确认/`--yes`（与旧 `run` 一致）。  
+- **禁止**绕过 `confirm_start`/CLI 确认直接 spawn worker（planner 自身除外）。
 
 ---
 
@@ -105,14 +129,15 @@
 
 ```text
 选中计划后
-  [分析并拆分任务]     ← 主按钮（B 默认）
-  高级 ▾ 模拟规划 / 若已是结构化计划可「跳过规划，直接确认」
+  [分配计划]     ← 主按钮（B 默认：规划 → 默认 auto-start）
+  高级 ▾ 规划方式 ai|parse|fake · 「规划后暂停确认」· 并发数
 ```
 
 - 规划中：进度区「AI 正在拆分任务…」+ planner 日志（大字，复用主日志组件）  
-- 失败：错误摘要 + [重新规划]
+- 失败：错误摘要 + [重新规划]  
+- `plan_mode=parse`：文案「跳过规划（直接解析）」→ 结构化/可 parse 快路径
 
-### 5.2 待确认：编排结果（B 核心屏）
+### 5.2 待确认：编排结果（B 核心屏；默认 auto-start 时可能一闪而过）
 
 ```text
 ┌─────────────────────────────────────────────────────────┐
@@ -131,11 +156,11 @@
 └──────────────┴──────────────────────────────────────────┘
 ```
 
-**必须展示**
+**必须展示**（暂停确认时必见；auto-start 时仍经同一 phase/API）
 
 - 每个任务：标题、是否可与谁并行、依赖谁  
 - 全局：波次顺序（由 `depends_on` 拓扑层推导，已有 `topo_layers`）  
-- 主 CTA：**开始运行**（唯一启动入口）
+- 主 CTA：**开始运行**（业务 worker **唯一**启动入口 = `confirm_start`；默认 UI 自动调用）
 
 **不要展示（默认）**
 
@@ -156,10 +181,10 @@
 | UX 计划已做 | 对 B 的价值 |
 |-------------|-------------|
 | 浅色、主路径、主从日志 | **直接复用**为规划日志 + 执行监视 |
-| 选计划 + 开始运行 | 中间必须 **插入「规划 → 确认」**，不能选完直接 start workers |
-| 预览任务名 | 升级为 **编排确认屏**（波次 + 依赖） |
+| 选计划 + 分配 | 中间必须 **插入「规划 →（确认/auto-start）」**，不能选完直接旁路 spawn workers |
+| 预览任务名 | 升级为 **编排确认屏**（波次 + 依赖；默认 auto-start） |
 
-UX 计划状态若为「前端 0–4 已落地」，视为 **壳与监视底座**；B 的产品完成度以本文件阶段为准。
+UX 计划状态若为「前端 0–4 已落地」，视为 **壳与监视底座**；B 的产品完成度以本文件阶段为准。**D1 后**与 `ux-simple-mainpath` 同一默认句：分配后 auto-start。
 
 ---
 
@@ -190,10 +215,11 @@ Planner **最终产物**必须是 host 能 `validate()` 的任务图，建议落
 **每条任务至少包含**
 
 - `id`（稳定、唯一、适合文件名）  
-- `title`（人话短标题）  
+- `title`（人话短标题；**可选项**标题须带「（可选）」）  
 - `depends_on[]`  
 - `prompt`（给 worker 的完整说明，含完成约定如 `CCO_DONE`）  
-- 可选：`group` / 波次提示（可由依赖推导，非必须）
+- 可选：`group` / 波次提示（可由依赖推导，非必须）  
+- **可选项**：`optional: true` + `include`（默认 false；确认屏勾选后才进 `confirm_start` 的执行图）
 
 ### 6.3 Planner 实现策略（推荐分档）
 
@@ -244,10 +270,11 @@ Planner **最终产物**必须是 host 能 `validate()` 的任务图，建议落
 ### 7.3 CLI 对齐（可选同期）
 
 ```text
-cco plan  --project P --plan docs/x.md    # 只规划，打印 DAG，写 proposed
-cco run   --project P --plan ... --yes    # 默认：先 plan 再 exec；或
-cco run   --skip-plan                     # 仅当文件已是结构化
-cco run   --from-resolved path.json       # 用已确认图
+cco plan  --project P --plan docs/x.md       # 只规划，打印 DAG，写 proposed
+cco run   --project P --plan prose.md --yes  # 散文：plan job → 打印 DAG → exec
+cco run   --project P --plan hello.cco.yaml  # 结构化 cco-plan/v1：自动 skip-plan → exec
+cco run   --skip-plan --plan any.md          # 强制 parse 跳过 AI 规划
+cco run   --plan-mode fake --yes …           # 规划用 fake DAG（调试）
 ```
 
 ---
@@ -331,11 +358,12 @@ cco run   --from-resolved path.json       # 用已确认图
 | 并行策略采纳（B0∥B1 主并行） | ✅ 2026-07-17 |
 | 前端 `phase`：pick → planning → confirm → running | ✅ 2026-07-17 |
 | 确认屏：波次列表（parse/fake/ai 结果） | ✅ 2026-07-17 |
-| 「开始运行」仅从 confirm 进入 exec | ✅ 2026-07-17 |
+| 「开始运行」仅经 `confirm_start` 进入 exec | ✅ 2026-07-17 |
 | 更新 desktop UX 计划「主路径插入规划确认」 | ✅ 2026-07-17 |
 | 与 B1 对齐：plan job API 形状（见 §8.0 契约） | ✅ 2026-07-17 |
+| D1：默认 auto-start + 高级「规划后暂停确认」 | ✅ 2026-07-18 |
 
-**验收**：即使 Planner 仍是「本地 parse」，用户也必须经过确认屏才开跑。
+**验收**：业务 worker **只**经 `confirm_start`（默认 UI 自动调用；高级暂停时人工点「开始运行」）。
 
 **并行**：与 B1、B2 前半、B3 文档轨同时进行。
 
@@ -353,9 +381,9 @@ cco run   --from-resolved path.json       # 用已确认图
 | 桌面：规划中看 planner 日志（接 B0 planning 相） | ✅ 2026-07-17（含异步 poll） |
 | `ai` 启发式标题/段落拆分（fallback） | ✅ 2026-07-17 |
 | CLI：`cco plan` | ✅ 2026-07-17 |
-| CLI：`run` 默认先规划 | ☐ 仍直接 load_plan（可用 `cco plan` 再 confirm） |
+| CLI：`run` 默认先规划（散文）/ 结构化 skip-plan | ✅ 2026-07-18（D1 / P0-1·P0-2） |
 
-**验收**：一篇无 task 表的 md → 得到合法多任务 DAG → 确认后按依赖执行。  
+**验收**：一篇无 task 表的 md → 得到合法多任务 DAG → 经 `confirm_start`（桌面默认 auto；CLI 确认/`--yes`）后按依赖执行。  
 `plan_mode=ai`：优先 Claude LLM，失败/fake 时启发式。
 
 **并行**：与 B0 同时开工；桌面接日志在 B0 planning UI 就绪后汇合（M-join）。
@@ -370,8 +398,8 @@ cco run   --from-resolved path.json       # 用已确认图
 | 排队中任务显示「等待：…」 | ✅ 2026-07-17（TaskLiveView.waiting_on） |
 | 已完成任务常驻列表 + 可回看日志 | ✅ 已有主从监视（不消失） |
 | 顶栏当前波次 | ✅ 2026-07-17（current_wave） |
-| （可选）确认屏删任务 / 改依赖 | ☐ |
-| （可选）重新规划保留人工修改策略 | ☐ |
+| （可选）确认屏删任务 / 改依赖 | ☐ **D5 / P2-1**（不排期则不碰） |
+| （可选）重新规划保留人工修改策略 | ☐ **D5 / P2-2**（不排期则不碰；策略未定） |
 
 **验收**：用户能不查文档回答「谁先跑、谁跑完了、谁在等谁」。
 
@@ -383,11 +411,11 @@ cco run   --from-resolved path.json       # 用已确认图
 
 | 任务 | 完成 |
 |------|------|
-| 任务数上限、prompt 长度、超时 | ☐ |
-| 规划预算与 worker 预算分离展示 | ☐ |
-| 结构化计划「跳过规划」入口 | ☐ |
-| 黄金用例：散文 plan / 半结构化 / 已是 v1 | ☐ |
-| 设计真源 `claude-cli-orchestrator-plan.md` 同步 B 流程 | ☐ |
+| 任务数上限、prompt 长度、超时 | ✅ 2026-07-18（`MAX_TASKS=20` · `MAX_PROMPT_CHARS` · `MAX_TIMEOUT_SECS` · validate） |
+| 规划预算与 worker 预算分离展示 | ✅ 2026-07-18（report Budget · live planner/exec · 顶栏 budget-chip） |
+| 结构化计划「跳过规划」入口 | ✅ 2026-07-18（CLI `--skip-plan` + 自动结构化；桌面 `plan_mode=parse` 文案） |
+| 黄金用例：散文 plan / 半结构化 / 已是 v1 | ✅ 2026-07-18（`tests/mode_b_golden.rs`） |
+| 设计真源 `claude-cli-orchestrator-plan.md` 同步 B 流程 | ✅ 2026-07-18（P0-3 / D1） |
 
 **并行**：上限常量 + 真源文档 + skip-plan 产品文案可与 B0/B1 同步；**黄金 E2E 等 B1 稳定**。
 
@@ -397,12 +425,12 @@ cco run   --from-resolved path.json       # 用已确认图
 
 | 指标 | 目标 |
 |------|------|
-| 主路径 | 选计划 → 见拆分与顺序 → 确认 → 见多 CLI（含完成） |
+| 主路径 | 选计划 → 规划 →（默认 auto-start 或确认）→ 见多 CLI（含完成） |
 | 无结构 md | 不靠用户手写 depends_on 也能跑通 B1 |
-| 定序可见 | 确认屏与执行中都能看出波次/依赖 |
+| 定序可见 | 确认屏（暂停时）与执行中都能看出波次/依赖 |
 | 已完成 | 不从列表消失，可回看 |
-| 误启动 | 规划未确认前 0 个业务 worker |
-| 与 A 兼容 | 合法结构化 plan 可跳过规划 |
+| 误启动 | 业务 worker 只经 `confirm_start` / CLI 确认；禁止旁路 spawn |
+| 与 A 兼容 | 合法结构化 plan 自动/显式 skip-plan |
 
 ---
 
@@ -432,9 +460,11 @@ cco run   --from-resolved path.json       # 用已确认图
 | 项 | 决议 | 日期 |
 |----|------|------|
 | 产品模式 | **B：AI 规划拆分 + 定序确认 + 按图执行** | 2026-07-17 |
-| 默认是否跳过规划 | 否；结构化 plan 可显式跳过 | 2026-07-17 |
+| 默认是否跳过规划 | 散文否；**结构化自动 skip-plan**；亦可显式 `--skip-plan` | 2026-07-17；D1 修订 2026-07-18 |
+| 桌面确认默认 | **分配后 auto-start**；高级「规划后暂停确认」 | **D1 2026-07-18** |
+| CLI `run` | 结构化直接 exec；散文 plan job + 确认/`--yes` | **D1 2026-07-18** |
 | 执行引擎 | 复用现有 DAG Scheduler | 2026-07-17 |
-| UX 底座 | 复用浅色主从；主路径插入规划/确认 | 2026-07-17 |
+| UX 底座 | 复用浅色主从；主路径插入规划（默认 auto-start） | 2026-07-17；D1 对齐 |
 | 实现优先 | B0 状态机与确认屏 → B1 Planner → B2 监视强化 | 2026-07-17 |
 
 ---
@@ -446,3 +476,6 @@ cco run   --from-resolved path.json       # 用已确认图
 | 2026-07-17 | 初稿：用户确认 B；流程、与 A/现状偏差、B0–B3 阶段 |
 | 2026-07-17 | 开工：B0 前端 phase+确认屏；B1 plan job API（parse/fake/ai 启发式）；confirm 才 start；单测通过 |
 | 2026-07-17 | 续：LLM planner（异步+回落）；`cco plan`；监视 waiting_on/波次；live 拉 resolved 计划 |
+| 2026-07-18 | t5：冻结 B0/B1 主线为已完成；校正 §1/§3 叙事，避免再当缺口；残差指向总账 P0/B3 |
+| 2026-07-18 | **D1 决议收口**：§4.1 默认规则（auto-start · CLI run 路由 · 结构化 skip-plan）；消灭与 UX auto-start 双真相；B1/B3 勾选 |
+| 2026-07-18 | t11：§0/§2/§5 叙事与 §4.1 对齐（一句话与主路径不再写「必须手点确认」）；B0 验收改为 confirm_start 唯一入口 |

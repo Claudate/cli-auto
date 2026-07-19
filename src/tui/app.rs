@@ -1,4 +1,9 @@
-//! TUI application loop.
+//! TUI app loop and keybindings.
+//!
+//! [INPUT]: run_dir · Config 派生选项 · 终端 events
+//! [OUTPUT]: 多页切换 · stop/term 操作（不杀 detached run）
+//! [POS]: tui 主循环
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/tui/CLAUDE.md
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

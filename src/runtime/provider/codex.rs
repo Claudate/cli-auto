@@ -1,9 +1,10 @@
-//! [INPUT]: 依赖本机 `codex` CLI、tokio process、WorkerProvider 契约
-//! [OUTPUT]: 对外提供 CodexProvider（print/exec 非交互）
-//! [POS]: runtime/provider 的 Codex 后端，与 ClaudeProvider 并列
-//! [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-
-//! Codex CLI provider: non-interactive `codex exec` (print-equivalent).
+//! Codex CLI WorkerProvider (second real provider).
+//!
+//! [INPUT]: StartCtx · TaskIR · config bin
+//! [OUTPUT]: spawn/poll/collect
+//! [POS]: 已实现；勿再写「尚无第二 provider」；P1-6 start 注入 cwd/scope 前缀
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/provider/CLAUDE.md
+//! note: Codex 无 tool allowlist / --append-system-prompt → 前缀拼进 prompt
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -18,7 +19,52 @@ use super::{
     ensure_done_marker, parse_claude_result_json, Capabilities, StartCtx, TaskResult, TaskStatus,
     WorkerHandle, WorkerProvider, WorkerStatus,
 };
-use crate::plan::TaskIR;
+use crate::plan::{TaskIR, TaskScope};
+
+/// Build cwd/scope lock text prepended to the Codex prompt (P1-6).
+///
+/// Codex has no tool allowlist and no `--append-system-prompt`, so the host
+/// injects the same class of constraints Claude gets via system prompt as a
+/// **prompt prefix**. Pure function — unit-testable without spawning codex.
+pub fn build_scope_prefix(work_dir: &Path, scope: Option<&TaskScope>) -> String {
+    let dir = work_dir.display();
+    let mut parts = vec![format!(
+        "CCO scope lock: work ONLY inside `{dir}`. Never read, list, search, or write outside this project directory. FORBIDDEN: home (~), Desktop, Documents, Downloads, Pictures, Movies, Music, Photos, and any absolute path not under `{dir}`. Do NOT run `find ~`, `ls ~`, `find /Users`, or any home-wide scan. Prefer relative paths from cwd."
+    )];
+
+    if let Some(s) = scope {
+        if !s.paths.is_empty() {
+            parts.push(format!(
+                "Writable whitelist (scope.paths): {}. Do not write outside these globs (relative to project root).",
+                s.paths.join(", ")
+            ));
+        }
+        if !s.readonly.is_empty() {
+            parts.push(format!(
+                "Extra readonly ranges (scope.readonly): {}.",
+                s.readonly.join(", ")
+            ));
+        }
+        if !s.forbid.is_empty() {
+            parts.push(format!(
+                "Hard forbid (scope.forbid): {}. Never read, list, search, or write these paths.",
+                s.forbid.join(", ")
+            ));
+        }
+    }
+
+    parts.join("\n")
+}
+
+/// Prepend scope lock to the user prompt for Codex exec.
+pub fn with_scope_prefix(prompt: &str, work_dir: &Path, scope: Option<&TaskScope>) -> String {
+    let prefix = build_scope_prefix(work_dir, scope);
+    if prompt.trim().is_empty() {
+        prefix
+    } else {
+        format!("{prefix}\n\n{prompt}")
+    }
+}
 
 pub struct CodexProvider {
     bin: String,
@@ -87,7 +133,9 @@ impl CodexProvider {
         stderr_path: PathBuf,
         meta_path: PathBuf,
     ) -> Result<WorkerHandle> {
-        let prompt = task.prompt.clone();
+        // P1-6: Codex has no tool allowlist / append-system-prompt — inject
+        // cwd/scope constraints as a prompt prefix (same class as Claude).
+        let prompt = with_scope_prefix(&task.prompt, &ctx.work_dir, task.scope.as_ref());
         let _ = std::fs::write(&stdout_path, "");
         let _ = std::fs::write(
             &stderr_path,
@@ -259,6 +307,9 @@ impl WorkerProvider for CodexProvider {
     }
 
     async fn start(&self, task: &TaskIR, ctx: &StartCtx) -> Result<WorkerHandle> {
+        std::fs::create_dir_all(&ctx.task_dir)?;
+        // Same as Claude: reused task_dir must not keep a prior completion marker.
+        let _ = std::fs::remove_file(ctx.task_dir.join(".done"));
         let stdout_path = ctx.task_dir.join("stdout.json");
         let stderr_path = ctx.task_dir.join("stderr.log");
         let meta_path = ctx.task_dir.join("meta.json");
@@ -530,4 +581,122 @@ unsafe fn libc_kill(pid: i32, sig: i32) -> i32 {
         fn kill(pid: i32, sig: i32) -> i32;
     }
     kill(pid, sig)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn scope_prefix_locks_cwd_and_forbids_home() {
+        let work = PathBuf::from("/tmp/proj");
+        let prefix = build_scope_prefix(&work, None);
+        assert!(
+            prefix.contains("CCO scope lock: work ONLY inside `/tmp/proj`"),
+            "missing cwd lock: {prefix}"
+        );
+        assert!(prefix.contains("FORBIDDEN: home (~)"));
+        assert!(prefix.contains("Desktop"));
+        assert!(prefix.contains("Do NOT run `find ~`"));
+        assert!(
+            !prefix.contains("scope.paths") && !prefix.contains("Writable whitelist"),
+            "no paths → no whitelist line"
+        );
+        assert!(!prefix.contains("scope.forbid") && !prefix.contains("Hard forbid"));
+    }
+
+    #[test]
+    fn scope_prefix_includes_paths_whitelist_and_forbid() {
+        let work = PathBuf::from("/Users/me/project");
+        let scope = TaskScope {
+            paths: vec!["src/module_a/**".into(), ".cco-out/feat-a/**".into()],
+            readonly: vec!["docs/**".into()],
+            forbid: vec!["src/module_b/**".into(), "~".into()],
+        };
+        let prefix = build_scope_prefix(&work, Some(&scope));
+        assert!(prefix.contains("CCO scope lock: work ONLY inside `/Users/me/project`"));
+        assert!(
+            prefix.contains(
+                "Writable whitelist (scope.paths): src/module_a/**, .cco-out/feat-a/**"
+            ),
+            "missing paths whitelist: {prefix}"
+        );
+        assert!(
+            prefix.contains("Extra readonly ranges (scope.readonly): docs/**"),
+            "missing readonly: {prefix}"
+        );
+        assert!(
+            prefix.contains("Hard forbid (scope.forbid): src/module_b/**, ~"),
+            "missing forbid: {prefix}"
+        );
+        assert!(prefix.contains("Never read, list, search, or write these paths"));
+    }
+
+    #[test]
+    fn with_scope_prefix_prepends_lock_before_user_prompt() {
+        let work = PathBuf::from("/tmp/app");
+        let scope = TaskScope {
+            paths: vec!["src/**".into()],
+            readonly: vec![],
+            forbid: vec!["secrets/**".into()],
+        };
+        let out = with_scope_prefix("implement feature X\nCCO_DONE ok", &work, Some(&scope));
+        assert!(
+            out.starts_with("CCO scope lock:"),
+            "prefix must lead: {}",
+            &out[..out.len().min(80)]
+        );
+        assert!(out.contains("Writable whitelist (scope.paths): src/**"));
+        assert!(out.contains("Hard forbid (scope.forbid): secrets/**"));
+        assert!(
+            out.contains("\n\nimplement feature X\nCCO_DONE ok"),
+            "user prompt must follow blank line"
+        );
+        let lock_at = out.find("CCO scope lock:").unwrap();
+        let body_at = out.find("implement feature X").unwrap();
+        assert!(lock_at < body_at);
+    }
+
+    #[test]
+    fn with_scope_prefix_empty_prompt_is_just_lock() {
+        let work = PathBuf::from("/tmp/empty");
+        let out = with_scope_prefix("   ", &work, None);
+        assert!(out.contains("CCO scope lock: work ONLY inside `/tmp/empty`"));
+        assert!(!out.contains("\n\n"));
+    }
+
+    #[test]
+    fn validate_task_rejects_bg_does_not_fake_allowed_tools() {
+        let p = CodexProvider::new("codex", vec![]);
+        let mut task = TaskIR {
+            id: "t1".into(),
+            title: "t1".into(),
+            depends_on: vec![],
+            group: None,
+            provider: "codex".into(),
+            mode: "bg".into(),
+            prompt: "hello".into(),
+            acceptance: None,
+            timeout_secs: None,
+            worktree: None,
+            provider_opts: serde_json::json!({}),
+            optional: false,
+            include: true,
+            role: None,
+            scope: None,
+            outputs: vec![],
+        };
+        let err = p.validate_task(&task).unwrap_err().to_string();
+        assert!(
+            err.contains("does not support mode=bg") || err.contains("bg"),
+            "expected bg rejection: {err}"
+        );
+        task.mode = "print".into();
+        assert!(p.validate_task(&task).is_ok());
+        let caps = p.capabilities();
+        assert!(caps.print);
+        assert!(!caps.background, "must not fake Claude bg");
+        assert!(!caps.session_resume);
+    }
 }

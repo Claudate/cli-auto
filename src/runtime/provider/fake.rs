@@ -1,4 +1,9 @@
-//! Fake provider for tests: inline stub (+ optional delayed bg).
+//! Fake WorkerProvider for tests and demos.
+//!
+//! [INPUT]: StartCtx · TaskIR（读 prompt 中 CCO_DONE）
+//! [OUTPUT]: 立即/短延迟完成的 TaskResult
+//! [POS]: 集成测试与 smoke 默认 provider
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/provider/CLAUDE.md
 
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -16,17 +21,37 @@ use crate::plan::TaskIR;
 
 pub struct FakeProvider {
     bin: String,
+    /// Registry key / `WorkerProvider::name` (default `"fake"`).
+    /// Tests may register aliases (`claude`, `codex`) that still run the inline stub.
+    name: String,
 }
 
 impl FakeProvider {
     pub fn new(bin: String) -> Self {
-        Self { bin }
+        Self {
+            bin,
+            name: "fake".into(),
+        }
     }
 
-    fn write_success(task: &TaskIR, stdout_path: &PathBuf, meta_path: &PathBuf, mode: &str) -> Result<()> {
+    /// Register this stub under an arbitrary provider name (e.g. `"claude"` / `"codex"`).
+    pub fn with_name(bin: String, name: impl Into<String>) -> Self {
+        Self {
+            bin,
+            name: name.into(),
+        }
+    }
+
+    fn write_success(
+        &self,
+        task: &TaskIR,
+        stdout_path: &PathBuf,
+        meta_path: &PathBuf,
+        mode: &str,
+    ) -> Result<()> {
         // NDJSON stream-json shape so desktop pretty console can render without real Claude.
         let lines = vec![
-            serde_json::json!({"type":"system","subtype":"init","provider":"fake"}),
+            serde_json::json!({"type":"system","subtype":"init","provider": self.name}),
             serde_json::json!({"type":"assistant","message":{"content":[{"type":"text","text": format!("Fake working on {}", task.id)}]}}),
             serde_json::json!({"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"path":"README.md"}}]}}),
             serde_json::json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"1","content":"ok"}]}}),
@@ -49,10 +74,10 @@ impl FakeProvider {
             meta_path,
             serde_json::to_string_pretty(&serde_json::json!({
                 "exit_code": 0,
-                "provider": "fake",
+                "provider": self.name,
                 "mode": mode,
                 "inline": true,
-                "agent_id": if mode == "bg" { Some(format!("fake-bg-{}", task.id)) } else { None },
+                "agent_id": if mode == "bg" { Some(format!("{}-bg-{}", self.name, task.id)) } else { None },
             }))?,
         )?;
         Ok(())
@@ -62,7 +87,7 @@ impl FakeProvider {
 #[async_trait]
 impl WorkerProvider for FakeProvider {
     fn name(&self) -> &str {
-        "fake"
+        &self.name
     }
 
     fn capabilities(&self) -> Capabilities {
@@ -95,6 +120,8 @@ impl WorkerProvider for FakeProvider {
 
     async fn start(&self, task: &TaskIR, ctx: &StartCtx) -> Result<WorkerHandle> {
         std::fs::create_dir_all(&ctx.task_dir)?;
+        // Clear stale completion so a reused task_dir cannot short-circuit poll().
+        let _ = std::fs::remove_file(ctx.task_dir.join(".done"));
         std::fs::write(ctx.task_dir.join("prompt.md"), &task.prompt)?;
         let stdout_path = ctx.task_dir.join("stdout.json");
         let meta_path = ctx.task_dir.join("meta.json");
@@ -103,13 +130,13 @@ impl WorkerProvider for FakeProvider {
         let mode = if task.mode == "bg" { "bg" } else { "print" };
 
         let handle = WorkerHandle {
-            provider: "fake".into(),
+            provider: self.name.clone(),
             task_id: task.id.clone(),
             mode: mode.into(),
             opaque_id: if mode == "bg" {
-                format!("agent:fake-bg-{}", task.id)
+                format!("agent:{}-bg-{}", self.name, task.id)
             } else {
-                format!("fake:{}", task.id)
+                format!("{}:{}", self.name, task.id)
             },
             pid: None,
             started_at: chrono::Utc::now(),
@@ -117,13 +144,70 @@ impl WorkerProvider for FakeProvider {
             meta_path: meta_path.clone(),
         };
 
+        // Test hooks (inline / missing bin only):
+        //   CCO_FAKE_HANG     — write partial log, never finish (stall patrol test)
+        //   CCO_FAKE_FAIL_ONCE — fail first start; succeed once attempt-1.* archive exists
+        let hang = task.prompt.contains("CCO_FAKE_HANG");
+        let fail_once = task.prompt.contains("CCO_FAKE_FAIL_ONCE");
+        let prior_fail = ctx.task_dir.join("attempt-1.stdout.json").exists()
+            || ctx.task_dir.join("attempt-1.meta.json").exists();
+
+        if hang
+            && (self.bin == "inline"
+                || self.bin == "fake-inline"
+                || which::which(&self.bin).is_err())
+        {
+            // Partial log so patrol has a baseline, then freeze.
+            let body = format!(
+                "{{\"type\":\"assistant\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"fake hang {id}\"}}]}}}}\n",
+                id = task.id
+            );
+            std::fs::write(&stdout_path, body)?;
+            std::fs::write(
+                &meta_path,
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "provider": self.name,
+                    "mode": mode,
+                    "hang": true,
+                }))?,
+            )?;
+            // never write .done
+            return Ok(handle);
+        }
+
+        if fail_once
+            && !prior_fail
+            && (self.bin == "inline"
+                || self.bin == "fake-inline"
+                || which::which(&self.bin).is_err())
+        {
+            std::fs::write(
+                &stdout_path,
+                format!(
+                    "{{\"type\":\"result\",\"subtype\":\"error\",\"result\":\"fake fail once {}\"}}\n",
+                    task.id
+                ),
+            )?;
+            std::fs::write(
+                &meta_path,
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "exit_code": 1,
+                    "provider": self.name,
+                    "mode": mode,
+                    "fail_once": true,
+                }))?,
+            )?;
+            std::fs::write(&done_flag, "1")?;
+            return Ok(handle);
+        }
+
         // bg: delay completion so scheduler must poll
         if mode == "bg"
             && (self.bin == "inline"
                 || self.bin == "fake-inline"
                 || which::which(&self.bin).is_err())
         {
-            Self::write_success(task, &stdout_path, &meta_path, "bg")?;
+            self.write_success(task, &stdout_path, &meta_path, "bg")?;
             let delay_ms: u64 = std::env::var("CCO_FAKE_BG_MS")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -137,7 +221,7 @@ impl WorkerProvider for FakeProvider {
         }
 
         if self.bin == "inline" || self.bin == "fake-inline" || which::which(&self.bin).is_err() {
-            Self::write_success(task, &stdout_path, &meta_path, "print")?;
+            self.write_success(task, &stdout_path, &meta_path, "print")?;
             std::fs::write(&done_flag, "0")?;
             return Ok(handle);
         }
@@ -164,7 +248,7 @@ impl WorkerProvider for FakeProvider {
             &meta_path,
             serde_json::to_string_pretty(&serde_json::json!({
                 "exit_code": code,
-                "provider": "fake",
+                "provider": self.name,
             }))?,
         )?;
         std::fs::write(&done_flag, code.to_string())?;
@@ -234,5 +318,100 @@ impl WorkerProvider for FakeProvider {
             raw: parsed,
             error: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plan::TaskIR;
+    use tempfile::tempdir;
+
+    fn sample_task(id: &str) -> TaskIR {
+        TaskIR {
+            id: id.into(),
+            title: id.into(),
+            depends_on: vec![],
+            group: None,
+            provider: "fake".into(),
+            mode: "print".into(),
+            prompt: format!("hello {id}"),
+            acceptance: None,
+            timeout_secs: None,
+            worktree: None,
+            provider_opts: serde_json::json!({}),
+            optional: false,
+            include: true,
+            role: None,
+            scope: None,
+            outputs: vec![],
+        }
+    }
+
+    #[tokio::test]
+    async fn start_clears_stale_done_from_reused_task_dir() {
+        let dir = tempdir().unwrap();
+        let task_dir = dir.path().join("tasks").join("__chat__");
+        std::fs::create_dir_all(&task_dir).unwrap();
+        // Simulate a previous successful turn leaving completion + empty stdout
+        // (the bug path that made chat soft-fallback to the local template).
+        std::fs::write(task_dir.join(".done"), "0").unwrap();
+        std::fs::write(task_dir.join("stdout.json"), "").unwrap();
+
+        let provider = FakeProvider::new("inline".into());
+        let task = sample_task("t1");
+        let ctx = StartCtx {
+            run_id: "chat-default".into(),
+            project_root: dir.path().to_path_buf(),
+            work_dir: dir.path().to_path_buf(),
+            task_dir: task_dir.clone(),
+            env_extra: vec![],
+        };
+
+        let handle = provider.start(&task, &ctx).await.unwrap();
+        // Inline fake re-writes .done=0 after success; assert new content was written
+        // (not the empty leftover) and collect sees Done with real stdout.
+        assert!(task_dir.join(".done").is_file());
+        let stdout = std::fs::read_to_string(&handle.stdout_path).unwrap();
+        assert!(
+            stdout.contains("fake ok for t1"),
+            "expected fresh stdout, got: {stdout:?}"
+        );
+        assert!(matches!(
+            provider.poll(&handle).await.unwrap(),
+            WorkerStatus::Done
+        ));
+        let result = provider.collect(&handle).await.unwrap();
+        assert_eq!(result.status, TaskStatus::Done);
+    }
+
+    #[tokio::test]
+    async fn start_clears_stale_done_so_poll_is_not_prematurely_done() {
+        let dir = tempdir().unwrap();
+        let task_dir = dir.path().join("tasks").join("__chat__");
+        std::fs::create_dir_all(&task_dir).unwrap();
+        std::fs::write(task_dir.join(".done"), "0").unwrap();
+
+        let provider = FakeProvider::new("inline".into());
+        // Hang path never writes .done — after start, poll must be Running (stale cleared).
+        let mut task = sample_task("hang");
+        task.prompt = "CCO_FAKE_HANG freeze".into();
+        let ctx = StartCtx {
+            run_id: "chat-default".into(),
+            project_root: dir.path().to_path_buf(),
+            work_dir: dir.path().to_path_buf(),
+            task_dir: task_dir.clone(),
+            env_extra: vec![],
+        };
+
+        let handle = provider.start(&task, &ctx).await.unwrap();
+        assert!(
+            !task_dir.join(".done").exists(),
+            "stale .done must be removed when the new run has not finished"
+        );
+        assert!(matches!(
+            provider.poll(&handle).await.unwrap(),
+            WorkerStatus::Running
+        ));
     }
 }

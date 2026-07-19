@@ -1,14 +1,17 @@
 # cco 桌面主路径简化（易用性）
 
-> 状态：已落地前端 + PATH 探测  
-> 日期：2026-07-17  
-> 范围：`web/` 计划区 / CLI 看板 / 环境提示；`src/runtime/provider` bin 解析；`src/doctor`
+> 状态：**已落地**（合并选计划弹窗 · task-dash · CLI 再跑 · AI 事件过滤 · PATH 探测 · **D1 规划后暂停确认开关**）；总账 §1.3 冻结  
+> 日期：2026-07-17（状态校正 2026-07-18；**D1 2026-07-18**）  
+> 范围：`web/` 计划区 / CLI 看板 / 环境提示；`src/runtime/provider` bin 解析；`src/doctor`  
+> 关联：总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) §1.3 · Mode B 真源 → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md) §4.1  
+> **勿再当缺口**：下列主路径能力已闭环；残差仅「跨屏系统窗口」「CCO.app 重打包目视（P0-4）」  
+> **D1 对齐**：默认 **分配后 auto-start**；高级「规划后暂停确认」可选（与 Mode B §4.1 同一决议，消灭双真相）
 
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 
 ## 一句话
 
-用户只做三步：**加项目 → 选一份计划 → 点「分配计划」**。其余（AI 拆分、开跑、监视）自动完成。
+用户只做三步：**加项目 → 选一份计划 → 点「分配计划」**。其余（AI 拆分、**默认自动开跑**、监视）自动完成；高级可开「规划后暂停确认」。
 
 ## 主路径
 
@@ -16,9 +19,13 @@
 侧栏选项目
   → 顶部「当前计划」条（只显示选中的那一份）
   → 选择计划（弹层，不常驻列表）
+     可选支路：顶栏「聊天」→ 共建计划 .md 落盘 → 回「分配计划」
   → 分配计划（AI 拆分 → 自动开始）
   → CLI 窗口看板（可拖、可关、短日志）
 ```
+
+> 聊天支路真源：[`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)（C0–C2 已落地；不替代选文件）。  
+> 聊天页体验修补（后台降噪 · fake 可信 · CTA）：[`chat-ux-focus-2026-07-19.md`](./chat-ux-focus-2026-07-19.md)（U0–U2 → 总账 P2-10；不排期则不碰）。
 
 ## 相对旧版的砍法
 
@@ -32,7 +39,7 @@
 ## 关键实现
 
 - `web/index.html`：`plan-active-bar` / `plan-chooser` / `cli-board`
-- `web/app.js`：`autoStartAfterPlan`、`renderCliBoard`、`openPlanChooser`
+- `web/app.js`：`autoStartAfterPlan`（默认 true）、`#pp-pause-confirm`（高级暂停确认）、`renderCliBoard`、`openPlanChooser`
 - `web/app.css`：紧凑计划条 + 多窗口看板
 - `src/runtime/provider/mod.rs`：`resolve_bin_on_disk`
 - `src/doctor/mod.rs`：按默认 provider 判定整体失败
@@ -40,15 +47,30 @@
 ## 验证
 
 - `node --check web/app.js`
-- `cargo test --lib`（13 passed）
+- `cargo test --lib`（16 passed，含 D1 structured-adapter 路由测）
 - 桌面需重新打包 `CCO.app` 后目视确认
 
-## 未做 / 风险
+## 未做 / 风险（≠ 主路径未完成）
 
-- 未实现跨显示器的系统级多窗口（仍是应用内面板）
-- 自动开跑跳过了波次人工确认；高级用户可后续加开关
-- 未在本机完成 `CCO.app` 重打包验证（需 `cargo build -p cco-desktop --release` + package 脚本）
+> 主路径简化本身 **已完成**（总账 §1.3）。下列是独立 backlog / 验证项：
 
+- 跨显示器系统级多窗口（仍是应用内面板）→ 总账 **P2-4 / D5 池**（t15；不排期则不碰）
+- ~~自动开跑 vs 强制确认~~ → **D1 已收口（P1-7）**：默认 auto-start；高级 `#pp-pause-confirm`；真源 Mode B §4.1
+- ~~本机 `CCO.app` 重打包目视清单~~ → 总账 **P0-4 ✅ D3**（`scripts/package-app.sh` + 清单）
+
+## 2026-07-18 D1 产品规则对齐
+
+决议（与 Mode B §4.1 同一）：
+
+| 项 | 值 |
+|----|-----|
+| 桌面默认 | 分配后 **auto-start**（`autoStartAfterPlan: true`） |
+| 高级开关 | 「规划后暂停确认」`#pp-pause-confirm` → 停在确认屏，人工点「开始运行」 |
+| 业务入口 | 仍只走 `confirm_start`（auto-start = UI 自动调用） |
+
+实现：`PAUSE_CONFIRM_KEY` localStorage；勾选 ↔ `!autoStartAfterPlan`。
+
+[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 
 ## 2026-07-18 视觉二次收敛
 

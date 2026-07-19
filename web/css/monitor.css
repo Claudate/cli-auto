@@ -1,0 +1,843 @@
+/* [INPUT]: 无；被 index.html 引用
+ * [OUTPUT]: monitor.css 样式
+ * [POS]: web/css D4 自 app.css 纵切
+ * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ */
+
+/* ── Master–Detail monitor ── */
+.monitor {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 0.75rem;
+  overflow: hidden;
+}
+.monitor[hidden] { display: none !important; }
+
+.task-list-pane {
+  width: var(--task-list-w);
+  flex-shrink: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+.task-list-pane[hidden] { display: none !important; }
+.task-list-head {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.task-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.task-row {
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.55rem 0.6rem;
+  cursor: pointer;
+  color: var(--text);
+  width: 100%;
+  font-size: 0.85rem;
+}
+.task-row:hover { background: var(--bg3); }
+.task-row.selected {
+  background: #E8F2FC;
+  border-color: #B3D7F5;
+}
+.task-row-wait {
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  color: var(--warn, #FF9F0A);
+}
+.task-row.failed { border-color: rgba(255, 59, 48, 0.25); }
+.task-row.failed.selected {
+  background: #FFF0F0;
+  border-color: #FFC9C7;
+}
+.task-row .task-row-title {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.task-row .task-row-meta {
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.task-row .task-row-err {
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--danger);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+.detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.detail-title {
+  font-weight: 650;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.detail-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+.detail-log {
+  flex: 1;
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: var(--log-font-size);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--log-bg);
+  color: var(--log-text);
+  min-height: 0;
+}
+.detail-log:empty::before {
+  content: "等待输出…";
+  color: var(--muted);
+}
+.detail-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* Legacy grid (fallback / multi-col optional) — kept single column friendly */
+.cli-grid {
+  display: none; /* master-detail is default; grid unused */
+}
+
+/* ── Completion summary ── */
+.completion-panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.15rem;
+  margin-bottom: 0.75rem;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+.completion-panel.compact {
+  padding: 0.55rem 0.85rem;
+  margin-bottom: 0.5rem;
+}
+.completion-panel.compact h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  display: inline;
+}
+.completion-panel.compact .completion-stats {
+  display: inline;
+  margin: 0 0 0 0.5rem;
+  font-size: 0.8rem;
+}
+.completion-panel.compact .completion-list {
+  display: none; /* 详情在任务列表/终端里看，避免占满屏 */
+}
+.completion-panel.compact .plan-actions,
+.completion-panel.compact .row.gap {
+  margin-top: 0.45rem;
+}
+.completion-panel h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+.completion-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.completion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.85rem;
+  font-size: 0.85rem;
+}
+.completion-list .ok-item { color: var(--ok); }
+.completion-list .fail-item { color: var(--danger); }
+.completion-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+
+/* ── Multi-window CLI board ── */
+.monitor.board-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 0;
+  flex: 1;
+}
+.board-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.cli-board {
+  /* 铁律：永远 2 列轨道；单窗 = 左半列，绝不全宽 */
+  --cli-gap: 0.75rem;
+  --cli-col: calc((100% - var(--cli-gap)) / 2);
+  position: relative;
+  display: grid !important;
+  grid-template-columns: var(--cli-col) var(--cli-col) !important;
+  gap: var(--cli-gap);
+  align-content: start;
+  justify-content: start;
+  justify-items: stretch;
+  min-height: 240px;
+  max-height: min(58vh, 640px);
+  overflow-x: hidden !important; /* 正常宽度不出现横条 */
+  overflow-y: auto;
+  padding: 0.15rem;
+  box-sizing: border-box;
+  width: 100%;
+}
+.cli-board.single {
+  grid-template-columns: var(--cli-col) var(--cli-col) !important;
+  max-height: min(52vh, 560px);
+}
+.cli-board.single > .cli-window:not(.free) {
+  grid-column: 1 / span 1 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+.cli-board > .cli-window:not(.free) {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
+.cli-window {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  max-height: 360px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  overflow: hidden;
+}
+.cli-window.selected {
+  border-color: #7aa2ff;
+  box-shadow: 0 0 0 2px rgba(60,120,255,.15);
+}
+.cli-window.failed {
+  border-color: #f0b4b4;
+}
+.cli-window.free {
+  position: absolute;
+  width: var(--cli-col, 42%) !important;
+  max-width: var(--cli-col, 42%) !important;
+  z-index: 2;
+  box-shadow: 0 10px 28px rgba(0,0,0,.12);
+}
+.cli-window-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.55rem;
+  background: #f7f8fa;
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  user-select: none;
+}
+.cli-window-head:active { cursor: grabbing; }
+.cli-window-title {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  font-size: 0.86rem;
+}
+.cli-window-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 14rem;
+}
+.cli-window-actions {
+  display: flex;
+  gap: 0.15rem;
+}
+.icon-btn.sm {
+  width: 1.6rem;
+  height: 1.6rem;
+  font-size: 0.9rem;
+  border-radius: 8px;
+}
+.cli-window-meta {
+  padding: 0.25rem 0.6rem 0;
+  font-size: 0.72rem;
+}
+.cli-window-err {
+  margin: 0.25rem 0.55rem 0;
+  padding: 0.28rem 0.45rem;
+  border-radius: 8px;
+  background: #fff1f1;
+  color: #a12626;
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cli-window-body {
+  flex: 1;
+  min-height: 120px;
+  max-height: 220px;
+  overflow: auto;
+  margin: 0.4rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #e7e8ec;
+  background: #0f1419;
+  color: #e8ecf1;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  padding: 0.4rem 0.5rem;
+}
+.cli-board.single .cli-window-body {
+  max-height: 220px;
+}
+.cli-window-body .panel-log-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: inherit;
+}
+.cli-window-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem 0.5rem;
+}
+
+/* 监视大日志高度收敛；规划日志由 mode-plan 自适应铺满 */
+.detail-log.log-console {
+  max-height: min(42vh, 420px);
+}
+.completion-panel.compact {
+  padding: 0.75rem 0.9rem;
+}
+.completion-panel.compact .completion-list {
+  max-height: 120px;
+  overflow: auto;
+}
+
+
+/* ── Done-state visual cleanup (2026-07-18) ── */
+.workspace-body.mode-done .warn-bar:not(.force-show) {
+  /* 成功完成时默认不占视线；JS 会直接 hidden */
+}
+.workspace-body.mode-done .run-banner {
+  display: none !important;
+}
+.workspace-body.mode-idle .run-banner,
+.workspace-body.mode-running .completion-panel {
+  /* running 不显示完成卡 */
+}
+
+/* P-loop: inspect VERDICT / blocking strip under task dash head */
+.inspect-loop-strip {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--muted, #6b7280);
+  padding: 0.35rem 0.85rem 0.55rem;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  word-break: break-word;
+}
+.inspect-loop-strip.bad {
+  color: #b42318;
+  background: linear-gradient(180deg, #fff5f5 0%, transparent 100%);
+}
+.inspect-loop-strip.ok {
+  color: #067647;
+  background: linear-gradient(180deg, #f3fff6 0%, transparent 100%);
+}
+
+.result-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+.result-card.ok {
+  border-color: #b7ebc6;
+  background: linear-gradient(180deg, #f3fff6 0%, #fff 55%);
+}
+.result-card.bad {
+  border-color: #ffc9c7;
+  background: linear-gradient(180deg, #fff5f5 0%, #fff 55%);
+}
+.result-card .result-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.result-card .result-title {
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.result-card .result-meta {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.result-card .result-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+/* 完成态：CLI 看板更克制 */
+.workspace-body.mode-done .board-toolbar {
+  margin-bottom: 0.15rem;
+}
+.workspace-body.mode-done .cli-board {
+  max-height: min(46vh, 480px);
+  min-height: 180px;
+}
+.workspace-body.mode-done .cli-window {
+  max-height: 340px;
+  min-height: 160px;
+}
+.workspace-body.mode-done .cli-window-body {
+  max-height: 200px;
+  min-height: 96px;
+}
+
+/* 运行中：结果卡隐藏 */
+.completion-panel { display: none; } /* 用 result-card 取代叠层 */
+.completion-panel.is-legacy { display: block; }
+
+/* 计划条更扁、更像工具条 */
+.plan-picker.compact {
+  padding: 0.65rem 0.85rem;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.03);
+}
+.plan-active-bar { gap: 0.6rem; }
+.plan-active-label {
+  background: var(--bg3);
+  border-radius: 999px;
+  padding: 0.18rem 0.5rem;
+  margin-top: 0.05rem;
+}
+
+/* CLI 窗口更像真窗口 */
+.cli-window {
+  border-radius: 14px;
+  border: 1px solid #e2e3e8;
+  background: #fff;
+}
+.cli-window-head {
+  background: linear-gradient(180deg, #fbfbfc 0%, #f3f4f6 100%);
+  padding: 0.5rem 0.65rem;
+}
+.cli-window-body {
+  background: #11151c;
+  color: #d7dee8;
+  border-color: #1c222c;
+  max-height: 200px;
+  min-height: 110px;
+}
+.cli-window-body .tx-line,
+.cli-window-body .panel-log-pre {
+  font-size: 0.74rem;
+}
+.cli-board {
+  gap: 0.85rem;
+  max-height: min(52vh, 560px);
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.015), transparent 40px);
+  border-radius: 12px;
+  padding: 0.35rem;
+  /* 保持 2 列，不被后面样式改回 auto-fit 全宽 */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.board-toolbar .section-label {
+  font-size: 0.7rem;
+}
+.board-toolbar.quiet .filter-chip { display: none; }
+.board-toolbar.quiet {
+  opacity: 0.92;
+}
+/* 结果卡内错误行 */
+#result-card #error-summary-text {
+  color: var(--danger);
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
+#result-card #error-summary-text[hidden] { display: none !important; }
+
+
+/* 侧栏连接状态 */
+#conn-status {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* 错误条空内容时彻底不占位 */
+.error-bar:empty,
+.error-bar:not([data-has-error="1"]) {
+  /* JS 会 hidden；双重保险靠 [hidden] */
+}
+
+/* 去掉重复的 completion 大块间距 */
+#workspace-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  gap: 0.55rem;
+}
+#workspace-body > * {
+  margin-bottom: 0 !important;
+}
+.monitor.board-mode {
+  flex: 1;
+  min-height: 0;
+}
+
+
+
+/* ── Fixed task strip (拆分任务总览) ── */
+.task-strip {
+  flex-shrink: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.55rem 0.75rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 42vh; /* 展开时内部滚，不抢 CLI */
+}
+.task-strip.ok { border-color: #b7ebc6; background: linear-gradient(180deg, #f3fff6 0%, #fff 70%); }
+.task-strip.bad { border-color: #ffc9c7; background: linear-gradient(180deg, #fff5f5 0%, #fff 70%); }
+.task-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.task-strip-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.55rem;
+  min-width: 0;
+  font-size: 0.86rem;
+}
+.task-strip-summary strong {
+  font-size: 0.95rem;
+  margin-right: 0.15rem;
+}
+.task-stat {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: var(--bg3);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.task-stat.ok { background: #e8f8ee; color: #1a7f37; }
+.task-stat.run { background: #e8f1fc; color: #0b57d0; }
+.task-stat.wait { background: #f0f0f2; color: #5c5c62; }
+.task-stat.fail { background: #ffecec; color: #b42318; }
+.task-strip-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.task-strip-err {
+  font-size: 0.78rem;
+  color: var(--danger);
+}
+.task-strip-body {
+  border-top: 1px solid var(--border);
+  padding-top: 0.45rem;
+  max-height: 28vh;
+  overflow: auto;
+}
+.task-strip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.task-chip {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.45rem;
+  text-align: left;
+  width: 100%;
+  border: 1px solid transparent;
+  background: #f7f8fa;
+  border-radius: 10px;
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 0.82rem;
+}
+.task-chip:hover { border-color: #c9d7ea; background: #f0f6ff; }
+.task-chip.selected { border-color: #7aa2ff; background: #eaf2ff; }
+.task-chip.fail { background: #fff5f5; }
+.task-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.task-chip-st {
+  font-size: 0.72rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.task-strip-empty { padding: 0.4rem; font-size: 0.82rem; }
+
+/* ── CLI outer shell: scroll more without moving task strip ── */
+.monitor.board-mode {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  gap: 0.45rem;
+}
+.cli-shell {
+  flex: 1;
+  min-height: 0;
+  max-height: min(62vh, 720px);
+  overflow: auto; /* 下拉显示更多 CLI */
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fafafb;
+  padding: 0.45rem;
+}
+.cli-status-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+.cli-h-grip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.18rem 0.5rem;
+  background: #fff;
+  color: var(--muted, #666);
+  cursor: ns-resize;
+  user-select: none;
+  touch-action: none;
+}
+.cli-h-grip:hover,
+.cli-h-grip:active {
+  border-color: var(--accent, #3b82f6);
+  color: var(--text, #111);
+  background: #f8fafc;
+}
+.cli-h-grip.dragging {
+  border-color: var(--accent, #3b82f6);
+  background: #eff6ff;
+}
+
+/* CLI body default height 300, adjustable via --cli-body-h */
+.cli-window {
+  max-height: none !important;
+  min-height: 0 !important;
+}
+.cli-window-body {
+  height: var(--cli-body-h, 300px) !important;
+  max-height: var(--cli-body-h, 300px) !important;
+  min-height: var(--cli-body-h, 300px) !important;
+  overflow: auto !important;
+}
+.cli-board {
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+.workspace-body.mode-done .cli-window-body,
+.workspace-body.mode-done .cli-board {
+  max-height: none !important;
+}
+
+/* click-fix: 确保可点，遮罩 hidden 时绝不拦截 */
+button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.plan-chooser[hidden],
+.modal[hidden],
+#plan-chooser[hidden],
+#modal[hidden] {
+  display: none !important;
+  pointer-events: none !important;
+}
+.top-actions button[hidden] {
+  display: none !important;
+}
+.top-actions button:not([hidden]) {
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 5;
+}
+
+
+
+/* ── CLI board fill remaining (mode-running / mode-done) ── */
+#page-workspace.page.active {
+  overflow: hidden;
+}
+#workspace-body.mode-running,
+#workspace-body.mode-done {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+#workspace-body.mode-running #result-card,
+#workspace-body.mode-done #result-card,
+#workspace-body.mode-running .task-dash,
+#workspace-body.mode-done .task-dash {
+  flex-shrink: 0;
+}
+#workspace-body.mode-running #monitor.board-mode,
+#workspace-body.mode-done #monitor.board-mode {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden;
+  gap: 0.4rem;
+}
+#workspace-body.mode-running .board-toolbar,
+#workspace-body.mode-done .board-toolbar {
+  flex-shrink: 0;
+}
+#workspace-body.mode-running .cli-shell,
+#workspace-body.mode-done .cli-shell {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: auto;
+}
+#workspace-body.mode-running .cli-board,
+#workspace-body.mode-done .cli-board,
+#workspace-body.mode-running #cli-board.cli-board,
+#workspace-body.mode-done #cli-board.cli-board {
+  max-height: none !important;
+  min-height: min(100%, 100%) !important;
+  align-content: start;
+}
+
+/* 默认自适应：窗口体吃掉 --cli-body-h（由 JS 按 shell 高度计算） */
+#workspace-body.mode-running .cli-window:not(.free),
+#workspace-body.mode-done .cli-window:not(.free) {
+  display: flex !important;
+  flex-direction: column;
+  max-height: none !important;
+  min-height: 0 !important;
+}
+#workspace-body.mode-running .cli-window-body,
+#workspace-body.mode-done .cli-window-body {
+  flex: 1 1 auto;
+  height: var(--cli-body-h, 360px) !important;
+  max-height: var(--cli-body-h, 360px) !important;
+  min-height: 160px !important;
+}
+
+/* 覆盖旧的 200px/52vh 收敛，仅运行态 */
+#workspace-body.mode-running .cli-board {
+  max-height: none !important;
+}
+#workspace-body.mode-running .cli-window-body {
+  /* 旧规则 max-height:200px 会被上面 var 覆盖 */
+}

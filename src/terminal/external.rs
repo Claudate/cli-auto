@@ -1,4 +1,9 @@
-//! External terminal window launchers (macOS-first, portable fallbacks).
+//! System terminal launchers (macOS Terminal/iTerm, kitty, wezterm, …).
+//!
+//! [INPUT]: 命令行 + cwd
+//! [OUTPUT]: detect_launcher · spawn external window
+//! [POS]: TerminalManager external 路径
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/terminal/CLAUDE.md
 
 use std::path::Path;
 use std::process::{Command, Stdio};

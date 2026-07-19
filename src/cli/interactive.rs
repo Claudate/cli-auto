@@ -1,4 +1,9 @@
 //! Interactive project / plan selection helpers.
+//!
+//! [INPUT]: stdin/stderr · 可选显式 PathBuf
+//! [OUTPUT]: resolve_project/resolve_plan · confirm
+//! [POS]: CLI 交互辅助；非交互强制 --project
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/cli/CLAUDE.md
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};

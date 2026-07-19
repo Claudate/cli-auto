@@ -1,0 +1,217 @@
+/* [INPUT]: 无；被 index.html 引用
+ * [OUTPUT]: log.css 样式
+ * [POS]: web/css D4 自 app.css 纵切
+ * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ */
+
+/* ── Log console: terminal transcript (default) ── */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg2);
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.seg button.active {
+  background: #1d1d1f;
+  color: #f5f5f7;
+}
+
+.plan-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #F2F2F7;
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.45rem;
+}
+.plan-chip strong {
+  color: var(--text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 28rem;
+}
+
+.error-banner {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0.35rem 0.75rem;
+  background: #FFF1F0;
+  color: #A8071A;
+  border-bottom: 1px solid #FFCCC7;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+/* Terminal-like surface */
+.log-console {
+  flex: 1;
+  margin: 0;
+  padding: 0.45rem 0.65rem 0.7rem;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: var(--log-font-size);
+  line-height: 1.35;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  min-height: 0;
+}
+.log-console:empty::before {
+  content: "等待 CLI 输出…";
+  color: #8a8a8a;
+}
+.log-console.raw-mode {
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 0.55rem 0.7rem;
+}
+
+/* Dense transcript rows */
+.tx-line {
+  display: grid;
+  grid-template-columns: 4.2rem minmax(0, 1fr);
+  gap: 0.45rem;
+  padding: 0.08rem 0.15rem;
+  border-radius: 3px;
+}
+.tx-line:hover { background: rgba(255,255,255,.04); }
+.tx-role {
+  color: #8a8a8a;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  padding-top: 0.12rem;
+  user-select: none;
+}
+.tx-body {
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #e8e8e8;
+}
+.tx-line.role-assistant .tx-role { color: #c792ea; }
+.tx-line.role-tool .tx-role { color: #82aaff; }
+.tx-line.role-result .tx-role { color: #c3e88d; }
+.tx-line.role-result .tx-body { color: #c3e88d; }
+.tx-line.role-error .tx-role,
+.tx-line.role-error .tx-body { color: #f07178; }
+.tx-line.role-stderr .tx-role { color: #ffcb6b; }
+.tx-line.role-meta .tx-role,
+.tx-line.role-meta .tx-body { color: #6e6e6e; }
+.tx-line.role-user .tx-role { color: #89ddff; }
+
+.tx-fold {
+  margin: 0.15rem 0 0.25rem;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #252526;
+}
+.tx-fold > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.28rem 0.5rem;
+  color: #ffcb6b;
+  font-size: 0.78rem;
+  user-select: none;
+}
+.tx-fold > summary::-webkit-details-marker { display: none; }
+.tx-fold[open] > summary { border-bottom: 1px solid #333; }
+.tx-fold pre {
+  margin: 0;
+  padding: 0.4rem 0.55rem 0.55rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #d4d4d4;
+  max-height: 14rem;
+  overflow: auto;
+  font-size: 0.78em;
+  font-family: var(--mono);
+}
+
+/* Structured (secondary) denser cards */
+.log-console.pretty-mode {
+  background: var(--log-bg);
+  color: var(--log-text);
+}
+.log-event {
+  display: grid;
+  grid-template-columns: 4.2rem 1fr;
+  gap: 0.2rem 0.45rem;
+  padding: 0.22rem 0.3rem;
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+  margin-bottom: 0.1rem;
+}
+.log-event:hover { background: rgba(0,0,0,.03); }
+.log-event .kind {
+  font-size: 0.65rem;
+  font-weight: 650;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-top: 0.1rem;
+}
+.log-event .body { min-width: 0; }
+.log-event .title {
+  font-weight: 650;
+  font-size: 0.8rem;
+  color: var(--text, #1d1d1f);
+}
+.log-event .summary {
+  color: #3a3a3c;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 0.05rem;
+  font-size: 0.8rem;
+}
+.log-event details { margin-top: 0.15rem; }
+.log-event summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.72rem;
+  user-select: none;
+}
+.log-event .detail {
+  margin-top: 0.2rem;
+  padding: 0.35rem 0.45rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 10rem;
+  overflow: auto;
+  font-size: 0.76em;
+}
+.log-event.kind-tool_use { border-left-color: #1677ff; }
+.log-event.kind-tool_result { border-left-color: #52c41a; }
+.log-event.kind-message { border-left-color: #722ed1; }
+.log-event.kind-result { border-left-color: #13c2c2; }
+.log-event.kind-error,
+.log-event.level-error { border-left-color: #ff4d4f; background: #fff7f6; }
+.log-event.kind-stderr { border-left-color: #fa8c16; }
+.log-event.kind-meta { border-left-color: #d9d9d9; opacity: 0.9; }
+.log-event.level-success .title { color: #237804; }
+
+/* Keep monitor tall: detail pane fills */
+.workspace-main #monitor {
+  min-height: 18rem;
+}
+
+

@@ -1,14 +1,22 @@
 //! Tauri desktop shell for cco.
+//!
+//! [INPUT]: webview invoke · AppState(Config mutex)
+//! [OUTPUT]: tauri commands → cco::services（meta/runs/plans/plan_job/live/settings/chat…）
+//! [POS]: 桌面薄壳；禁止堆业务逻辑；P1-2 open_task_terminal 已接；chat 建计划已接
+//! note: chat_send_cmd 必须 async + spawn_blocking，禁止同步堵 UI
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src-tauri/CLAUDE.md
 
 use std::path::PathBuf;
 use std::sync::Mutex;
 
 use cco::config::Config;
 use cco::services::{
-    add_project, confirm_start, get_plan_job, get_settings, latest_plan_job_for_project, list_plans,
-    list_projects, list_runs, load_run, preview_plan, project_live_view, remove_project,
-    resume_run_async, run_doctor, set_settings, start_plan_job, start_run_async, stop_run,
-    stop_task, task_logs, PlanJobView, PlanPreview, ProjectLiveView, ProjectSummary, RunSummary,
+    accept_run_residual, add_project, chat_save_plan, chat_send, chat_session_get, confirm_start,
+    get_plan_job, get_settings, latest_plan_job_for_project, list_plans, list_projects, list_runs,
+    load_run, open_task_terminal, preview_plan, project_live_view, remove_project, resume_run_async,
+    run_doctor, set_settings, start_plan_job, start_rework_from_run, start_run_async, stop_run,
+    stop_task, task_logs, update_proposed_task, ChatSavePlanResponse, ChatSendResponse, ChatSession,
+    PlanJobView, PlanPreview, ProjectLiveView, ProjectSummary, ReworkStartResponse, RunSummary,
     SettingsUpdate, SettingsView, StartPlanJobRequest, StartRunRequest,
 };
 use serde::Serialize;
@@ -139,6 +147,21 @@ fn get_task_logs(
     serde_json::to_value(view).map_err(|e| e.to_string())
 }
 
+/// Open external terminal following task logs (P1-2).
+#[tauri::command]
+fn open_task_terminal_cmd(
+    state: tauri::State<'_, AppState>,
+    #[allow(non_snake_case)]
+    runId: String,
+    #[allow(non_snake_case)]
+    taskId: String,
+    kind: Option<String>,
+) -> Result<Value, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    let session = open_task_terminal(&config, &runId, &taskId, kind.as_deref()).map_err(map_err)?;
+    serde_json::to_value(session).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn stop_task_cmd(
     state: tauri::State<'_, AppState>,
@@ -228,6 +251,23 @@ fn latest_plan_job_cmd(
 
 
 #[tauri::command]
+fn update_plan_task_cmd(
+    state: tauri::State<'_, AppState>,
+    // Tauri 2 IPC expects camelCase keys from the webview.
+    #[allow(non_snake_case)]
+    jobId: String,
+    #[allow(non_snake_case)]
+    taskId: String,
+    title: Option<String>,
+    prompt: Option<String>,
+    // Optional-task checkbox; ignored / rejected for required tasks.
+    include: Option<bool>,
+) -> Result<PlanJobView, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    update_proposed_task(&config, &jobId, &taskId, title, prompt, include).map_err(map_err)
+}
+
+#[tauri::command]
 fn confirm_start_cmd(
     state: tauri::State<'_, AppState>,
     // Tauri 2 IPC expects camelCase keys from the webview.
@@ -268,6 +308,28 @@ fn resume_run_cmd(state: tauri::State<'_, AppState>, #[allow(non_snake_case)] ru
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
     resume_run_async(config, &runId).map_err(map_err)?;
     Ok(json!({ "ok": true, "run_id": runId, "status": "resuming" }))
+}
+
+/// P-loop L2: generate rework wave from inspect ISSUES and start a new run.
+#[tauri::command]
+fn start_rework_cmd(
+    state: tauri::State<'_, AppState>,
+    #[allow(non_snake_case)] runId: String,
+) -> Result<ReworkStartResponse, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?.clone();
+    start_rework_from_run(config, &runId).map_err(map_err)
+}
+
+/// P-loop L2: user explicitly accepts residual open risks.
+#[tauri::command]
+fn accept_residual_cmd(
+    state: tauri::State<'_, AppState>,
+    #[allow(non_snake_case)] runId: String,
+    note: Option<String>,
+) -> Result<Value, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    accept_run_residual(&config, &runId, note.as_deref()).map_err(map_err)?;
+    Ok(json!({ "ok": true, "run_id": runId, "accepted_residual": true }))
 }
 
 #[tauri::command]
@@ -311,6 +373,58 @@ fn set_settings_cmd(
     Ok(get_settings(&config))
 }
 
+#[tauri::command]
+fn chat_session_get_cmd(
+    project: String,
+    #[allow(non_snake_case)] sessionId: Option<String>,
+) -> Result<ChatSession, String> {
+    let sid = sessionId.as_deref();
+    chat_session_get(PathBuf::from(project).as_path(), sid).map_err(map_err)
+}
+
+/// Chat → Claude CLI can run for minutes. Must not block the Tauri async runtime
+/// or the webview freezes (send button stuck, whole app "dead").
+#[tauri::command]
+async fn chat_send_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    message: String,
+    #[allow(non_snake_case)] sessionId: Option<String>,
+) -> Result<ChatSendResponse, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?.clone();
+    tokio::task::spawn_blocking(move || {
+        chat_send(
+            &config,
+            PathBuf::from(project).as_path(),
+            &message,
+            sessionId.as_deref(),
+        )
+        .map_err(map_err)
+    })
+    .await
+    .map_err(|e| format!("chat_send join error: {e}"))?
+}
+
+#[tauri::command]
+async fn chat_save_plan_cmd(
+    project: String,
+    markdown: String,
+    #[allow(non_snake_case)] sessionId: Option<String>,
+    title: Option<String>,
+) -> Result<ChatSavePlanResponse, String> {
+    tokio::task::spawn_blocking(move || {
+        chat_save_plan(
+            PathBuf::from(project).as_path(),
+            sessionId.as_deref(),
+            title.as_deref(),
+            &markdown,
+        )
+        .map_err(map_err)
+    })
+    .await
+    .map_err(|e| format!("chat_save_plan join error: {e}"))?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _ = tracing_subscriber::fmt()
@@ -341,6 +455,7 @@ pub fn run() {
             remove_project_cmd,
             get_project_live,
             get_task_logs,
+            open_task_terminal_cmd,
             stop_task_cmd,
             doctor_cmd,
             start_run,
@@ -348,12 +463,18 @@ pub fn run() {
             get_plan_job_cmd,
             latest_plan_job_cmd,
             confirm_start_cmd,
+            update_plan_task_cmd,
             stop_run_cmd,
             resume_run_cmd,
+            start_rework_cmd,
+            accept_residual_cmd,
             open_path,
             get_settings_cmd,
             set_settings_cmd,
             set_project_default_plan,
+            chat_session_get_cmd,
+            chat_send_cmd,
+            chat_save_plan_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

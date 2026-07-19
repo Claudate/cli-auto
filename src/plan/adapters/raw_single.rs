@@ -1,4 +1,9 @@
-//! Single-file whole prompt → one task.
+//! raw-single adapter: whole file = one task.
+//!
+//! [INPUT]: 任意文本
+//! [OUTPUT]: 单任务 PlanIR + default_provider_opts
+//! [POS]: 未知格式兜底；Mode B 前的最小可跑路径
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/plan/adapters/CLAUDE.md
 
 use std::path::Path;
 
@@ -28,6 +33,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
         default_provider: provider.clone(),
         default_mode: config.default.default_mode.clone(),
         worktree: false,
+        require_inspect: false,
         tasks: vec![TaskIR {
             id: "t1".into(),
             title: "raw prompt".into(),
@@ -40,6 +46,11 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             timeout_secs: None,
             worktree: Some(false),
             provider_opts: opts,
+            optional: false,
+            include: true,
+            role: None,
+            scope: None,
+            outputs: vec![],
         }],
     })
 }

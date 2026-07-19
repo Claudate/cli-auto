@@ -1,12 +1,14 @@
 # cco 桌面端 UX 改版落地计划
 
-> 状态：已实施（阶段 0–4 + 2026-07-17 主路径简化；需重新打包 CCO.app 验证）\n> 追加：[`ux-simple-mainpath-2026-07-17.md`](./ux-simple-mainpath-2026-07-17.md)  
-> 日期：2026-07-17  
+> 状态：**已实施**（阶段 0–4 全 ✅ + 主路径简化；总账 §1.3 冻结）；重打包目视属验证项 P0-4  
+> 追加：[`ux-simple-mainpath-2026-07-17.md`](./ux-simple-mainpath-2026-07-17.md)  
+> 日期：2026-07-17（状态校正 2026-07-18）  
 > 范围：Tauri 桌面 UI（`web/`），原则上不改 Rust scheduler / PlanIR  
-> 关联：[`claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md) §2.4、[`web/`](../web/)、**产品主路径 B** → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)、**监视日志/终端** → [`terminal-console-plan.md`](./terminal-console-plan.md)
+> 关联：[`claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md) §2.4、[`web/`](../web/)、**产品主路径 B** → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)、**监视日志/终端** → [`terminal-console-plan.md`](./terminal-console-plan.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) §1.3  
+> **勿再当缺口**：阶段 0–4 与浅色主从/项目内开跑/大日志区已闭环
 
 [PROTOCOL]: 变更本计划时更新状态与阶段勾选；阶段完成后在此勾选并记日期。  
-**主路径冲突时以 [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md) 为准**（选计划 → AI 规划拆分 → 定序确认 → 执行 → 监视）。本文件负责壳与监视体验；B 的规划/确认阶段在 B 文档落地。
+**主路径冲突时以 [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md) §4.1 为准**（选计划 → AI 规划拆分 → **默认 auto-start** / 高级暂停确认 → 执行 → 监视）。本文件负责壳与监视体验；D1 后与 `ux-simple-mainpath` 同一默认句。
 
 ---
 
@@ -15,8 +17,8 @@
 把桌面端从「编排器调试面板」改成「项目任务控制台」：  
 **少概念、浅色、大日志、一条主路径**——用户只关心「哪个项目 / 哪份计划 / 跑得怎样」。
 
-> **2026-07-17 产品决议**：默认模式为 **B（AI 规划拆分 + 定序确认 + 按图执行）**。  
-> 完整流程见 [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)。本 UX 计划已完成的 0–4 是 **监视与壳底座**，主路径须再插入「规划中 → 待确认」两态，不能「选完计划直接开始业务 worker」。
+> **产品决议**：默认模式为 **B（AI 规划拆分 + 定序 + 按图执行）**；**D1（2026-07-18）**：桌面默认 **分配后 auto-start**，高级「规划后暂停确认」。  
+> 完整流程见 [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md) §4.1。本 UX 计划 0–4 是 **监视与壳底座**；业务 worker **只**经 `confirm_start`（默认 UI 自动调用），禁止旁路 spawn。
 
 ---
 
@@ -437,3 +439,4 @@
 | 日期 | 说明 |
 |------|------|
 | 2026-07-17 | 初稿：问题分析 + 规格 + 阶段 0–4 落地任务 |
+| 2026-07-18 | t5：状态标明阶段 0–4 已实施、勿再当缺口；链总账 §1.3 |

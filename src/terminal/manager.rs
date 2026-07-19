@@ -1,4 +1,9 @@
-//! Terminal session registry (persisted under run dir).
+//! Terminal session registry and open/close.
+//!
+//! [INPUT]: run_dir · task_id · SessionKind · ExternalLauncher
+//! [OUTPUT]: TerminalSession 列表 · open_follow_logs · close
+//! [POS]: CLI term / TUI / scheduler auto_open 共用
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/terminal/CLAUDE.md
 
 use std::path::{Path, PathBuf};
 

@@ -1,4 +1,9 @@
-//! Shared TUI widgets.
+//! Small shared TUI widgets.
+//!
+//! [INPUT]: 状态字符串 / 列表数据
+//! [OUTPUT]: 可复用 block/list 片段
+//! [POS]: tui 小组件
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/tui/CLAUDE.md
 
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Paragraph, Tabs};

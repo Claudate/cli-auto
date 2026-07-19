@@ -1,10 +1,11 @@
 # Claude CLI Orchestrator · 独立编排器完整计划
 
-> 状态：设计稿（可直接开工）  
-> 日期：2026-07-17  
-> 修订：锁定 **Rust**；多 Provider 扩展；**多页面 TUI + 终端多开**  
+> 状态：**M0–M4 已落地**（doctor/run/resume/status/stop/report/logs/term/tui + providers + 桌面壳 + Mode B 主线）；**M5 + 可选增强 → 总账 D5 池（P2-5/6/7，不排期）**  
+> 日期：2026-07-17（状态校正 2026-07-18；D5 池 t15）  
+> 修订：锁定 **Rust**；多 Provider 扩展；**多页面 TUI + 终端多开**；已实现 claude/codex/fake  
 > 定位：**与 wros / 任意业务仓库解耦** 的通用工具  
-> 目标：选项目目录 → 读计划 → 主控拆任务 → 启停多个 CLI worker（首期 Claude）→ 巡查完成 → 进入下一步；运行期可用 **TUI 多页 + 多终端** 观察/介入
+> 目标：选项目目录 → 读计划 → 主控拆任务 → 启停多个 CLI worker → 巡查完成 → 进入下一步；运行期可用 **TUI 多页 + 多终端** 观察/介入  
+> 未完善总账：[`docs/gap-and-landing-plan-2026-07-18.md`](./docs/gap-and-landing-plan-2026-07-18.md) §1.3 / §4 D5（**勿再把 M0–M4 当缺口**；M5 不排期则不碰）
 
 [PROTOCOL]: 变更时更新本文件版本与里程碑勾选。
 
@@ -68,15 +69,45 @@
    cco run --tui                    # 交互：先问项目路径，再列计划，进入 TUI
    或
    cco tui                          # 直接进入 TUI（可从 status 页 resume）
+   或桌面 App：选项目 → 选计划 → 分配计划
 
-3. 编排器：
+3. 编排器（Mode B 默认）：
    a. 校验 project_root 存在、默认 provider 可用、auth 可用
-   b. 读取并解析 plan → PlanIR
-   c. 展示任务图，确认（--yes 跳过；TUI 内确认）
-   d. 按阶段启动 worker
+   b. 读计划文档
+      · 结构化（cco-plan/v1 / serial-prompts）→ 自动 skip-plan，load_plan → PlanIR
+      · 散文/未知 → plan job（AI/heuristic）→ plan.proposed.json
+   c. 展示任务图 / 波次
+      · CLI：打印 DAG；需 --yes 或交互确认
+      · 桌面：默认 auto-start（UI 调 confirm_start）；高级可「规划后暂停确认」
+   d. confirm_start / Scheduler 按 depends_on + max_parallel 启 worker
    e. 巡查；完成则 stop/回收；失败按策略重试或暂停
    f. 全部完成 → 写报告 → exit 0/1
 ```
+
+### 2.0 Mode B 规划 → 确认 → 执行（P0-3）
+
+产品真源：[`docs/product-mode-b-ai-planner.md`](./docs/product-mode-b-ai-planner.md) §4.1（D1 决议）。
+
+```text
+┌──────────── Plan Job ────────────┐    ┌──────── Exec Run ────────┐
+│ pending → planning → planned     │ →  │ running → … → completed  │
+│              ↘ failed_plan       │    │              ↘ failed    │
+│ planned 可：replan / edit / start│    │                          │
+└──────────────────────────────────┘    └──────────────────────────┘
+         │                                         ▲
+         │  confirm_start（唯一业务 worker 入口）    │
+         └─────────────────────────────────────────┘
+```
+
+| 入口 | 规划 | 确认 | 执行 |
+|------|------|------|------|
+| 桌面「分配计划」 | `start_plan_job`（ai/parse/fake） | 默认 **auto-start**（自动 `confirm_start`）；高级暂停 | Scheduler |
+| `cco plan` | 只规划，写 `plan.proposed.json` | 不启动 worker | — |
+| `cco run` 结构化 | **自动 skip-plan** | 打印 DAG + `--yes`/交互 | Scheduler |
+| `cco run` 散文 | plan job（`--plan-mode`） | 打印 DAG + `--yes`/交互 | Scheduler |
+| `cco run --skip-plan` | 强制 parse | 同上 | Scheduler |
+
+**硬规则**：业务 worker **只**经 `confirm_start`（桌面）或 CLI 确认后进 Scheduler；禁止旁路 spawn。
 
 ### 2.1 第一步：设置项目文件夹（硬门禁）
 
@@ -165,7 +196,7 @@ project_root = "/absolute/path/to/target-repo"
 schema: cco-plan/v1
 name: example-wave
 project_hint: optional-name-only
-default_provider: claude     # 后期可 codex / gemini / ...
+default_provider: claude     # 已有 claude / codex / fake；后期可 gemini / ...
 default_mode: print          # print | bg | auto
 max_parallel: 3
 worktree: true
@@ -328,9 +359,11 @@ cco (single binary)
 │   ├── worktree.rs         # optional git worktree per task
 │   ├── acceptance.rs       # plan acceptance 命令
 │   ├── timeout.rs
+│   ├── log_events.rs       # stream-json → LogEvent（监视 A 路径 P0）
 │   └── provider/
 │       ├── mod.rs          # WorkerProvider trait + registry
 │       ├── claude.rs       # print + bg + agents poll（首个实现）
+│       ├── codex.rs        # Codex CLI（已实现）
 │       └── fake.rs         # 测试用
 ├── state/                  # run.json, events.jsonl, task states
 ├── report/                 # markdown + json summary
@@ -363,10 +396,10 @@ cco (single binary)
               │                    │
        PlanAdapter           WorkerProvider
               │                    │
-   cco-plan/v1               ClaudeProvider   (v1)
-   serial-prompts/v0         CodexProvider    (后期)
-   raw-single                GeminiProvider   (后期)
-                             FakeProvider     (测试)
+   cco-plan/v1               ClaudeProvider   (已有)
+   serial-prompts/v0         CodexProvider    (已有)
+   raw-single                FakeProvider     (测试)
+                             GeminiProvider   (M5 backlog)
 ```
 
 #### 4.2.1 WorkerProvider trait（概念签名）
@@ -943,7 +976,7 @@ cp target/release/cco ~/.local/bin/
 - [x] 快捷键：切页、stop、开/关终端  
 - [x] UI 与 scheduler 解耦（轮询 run 目录）  
 - [x] 关 TUI 不杀 run（scheduler 可继续至结束）  
-- [ ] 内嵌 PTY 真网格 zoom（后续增强；当前 embedded=会话登记 + 日志路径）
+- [ ] 内嵌 PTY 真网格 zoom → 总账 **D5 / P2-5**（当前 embedded=会话登记 + 日志路径；不排期则不碰）
 
 ### M4 · 体验与硬化
 
@@ -951,18 +984,19 @@ cp target/release/cco ~/.local/bin/
 - [x] 更强 serial-prompts 解析 + 黄金 fixture  
 - [x] 单元/集成测试完善（bg / worktree / resume / budget / serial）  
 - [x] 文档与 example  
-- [ ] （可选）Claude Code skill：`/cco-run`  
+- [ ] （可选）Claude Code skill：`/cco-run` → 总账 **D5 / P2-6**（不排期则不碰）  
 - [x] per-provider 并行上限、run 级预算  
 - [x] `cco resume` 从暂停/失败继续  
 
-### M5 · 扩展 backlog
+### M5 · 扩展 backlog → 总账 **D5 / P2-7**（t15 池；按需单独立项，勿整包）
 
-- 第二真实 CLI Provider（Codex / Gemini 等，验证扩展契约）  
-- Agent SDK 作为 `ClaudeSdkProvider`  
-- 计划可视化导出（Mermaid）  
-- 自动开 PR（gh）  
+- ~~第二真实 CLI Provider（Codex）~~ → **已有** `src/runtime/provider/codex.rs`（已出池；勿再写「尚无第二 provider」）  
+- 更多真实 Provider（Gemini 等，继续验证扩展契约） → **P2-7**  
+- Agent SDK 作为 `ClaudeSdkProvider` → **P2-7**  
+- 计划可视化导出（Mermaid） → **P2-7**  
+- 自动开 PR（gh） → **P2-7**  
 - 远程 worker — 明确不在 v1  
-- Windows 外部终端 launcher  
+- Windows 外部终端 launcher → **P2-7** 
 
 ---
 
@@ -1109,13 +1143,19 @@ cco report
 
 ---
 
-## 19. 下一步（确认后执行）
+## 19. 下一步（2026-07-18 校正）
 
-按优先级：
+> M0–M4 与桌面/Mode B 主线 **已落地**（见总账 §1.3）。下列「建仓」步骤 **作废**，勿再当待办。
 
-1. **建独立 Rust 仓库骨架** + M0（doctor / run 单任务 / FakeProvider）  
-2. 冻结 `cco-plan/v1` JSON Schema 与 `PlanIR` 结构体  
-3. M1 完成 DAG 后进入 TerminalManager → TUI 多页  
+按优先级（残差）：
+
+1. ~~产品规则收口~~ → **D1 已完成**（P0-1/2/3 · P1-7；见 §2.0 与 Mode B §4.1）  
+2. ~~监视与桌面接线~~ → **D2 已完成**（P1-1..P1-3）  
+3. ~~边界金样与重打包验证~~ → **D3 已完成**（P0-4·P1-4..P1-6）  
+4. ~~大文件纵切~~ → **D4 已完成**（t14）  
+5. M5 / 可选增强 → 总账 **D5 池（P2-5/6/7 等）**；**不排期则不碰**；按需单独立项  
+
+完整缺口与顺序真源：[`docs/gap-and-landing-plan-2026-07-18.md`](./docs/gap-and-landing-plan-2026-07-18.md) §4 D5。
 
 ---
 
@@ -1170,7 +1210,7 @@ cco report
 | worker | 一个 provider 拉起的进程或 bg agent |
 | host / cco | 编排器本身 |
 | adapter | 计划文件格式解析器 |
-| provider | WorkerProvider 实现（claude / 后期其它 CLI） |
+| provider | WorkerProvider 实现（claude / codex / fake；其它见 M5） |
 | page | TUI 内一个全局面板 |
 | terminal session | 内嵌 PTY 或外部终端窗，通常绑定某 task |
 

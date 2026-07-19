@@ -1,4 +1,9 @@
 //! DAG helpers: ready set and stage ordering.
+//!
+//! [INPUT]: PlanIR · done/started 集合
+//! [OUTPUT]: ready_tasks · topo_layers · format_graph
+//! [POS]: 调度就绪集与展示波次
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/graph/CLAUDE.md
 
 use std::collections::{HashMap, HashSet};
 

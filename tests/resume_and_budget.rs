@@ -84,6 +84,8 @@ tasks:
         terminal_manager: None,
         run_max_budget_usd: None,
         provider_max_parallel: Default::default(),
+        retry_max: 0,
+        stall_secs: 600,
     }
     .run()
     .await
@@ -151,6 +153,8 @@ tasks:
         terminal_manager: None,
         run_max_budget_usd: Some(0.005),
         provider_max_parallel: Default::default(),
+        retry_max: 0,
+        stall_secs: 600,
     }
     .run()
     .await

@@ -1,7 +1,7 @@
 //! [INPUT]: 依赖 worker stdout/stderr 文本（Claude stream-json NDJSON / 纯文本）
-//! [OUTPUT]: 对外提供 LogEvent、parse_worker_logs、events_to_plain
-//! [POS]: runtime 的日志语义层，供 services 桌面 live 视图消费
-//! [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+//! [OUTPUT]: 对外提供 LogEvent、parse_worker_logs、events_to_plain、read_text_tail
+//! [POS]: runtime 的日志语义层，供 services 桌面 live / planner 视图消费
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/CLAUDE.md
 
 use serde::{Deserialize, Serialize};
 
@@ -673,6 +673,33 @@ fn truncate(s: &str, max: usize) -> String {
     out
 }
 
+/// Floor a byte index to the nearest previous UTF-8 char boundary.
+/// Never returns past `s.len()`; `0` is always a boundary.
+pub fn floor_char_boundary(s: &str, mut i: usize) -> usize {
+    if i >= s.len() {
+        return s.len();
+    }
+    while i > 0 && !s.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
+}
+
+/// Compact a long log string for live IPC: keep a line-aligned tail under
+/// `soft_cap` **bytes**, never slicing mid-char (CJK/emoji safe).
+pub fn compact_text_tail(full: &str, soft_cap: usize, marker: &str) -> String {
+    if full.len() <= soft_cap {
+        return full.to_string();
+    }
+    let start = floor_char_boundary(full, full.len().saturating_sub(soft_cap));
+    let slice = &full[start..];
+    if let Some(pos) = slice.find('\n') {
+        format!("{marker}{}", &slice[pos + 1..])
+    } else {
+        format!("{marker}{slice}")
+    }
+}
+
 /// 行边界 tail：避免半截 JSON。
 pub fn read_text_tail(path: &std::path::Path, max_bytes: usize) -> (String, u64) {
     let meta_len = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
@@ -683,6 +710,8 @@ pub fn read_text_tail(path: &std::path::Path, max_bytes: usize) -> (String, u64)
         Ok(bytes) => {
             let start = bytes.len().saturating_sub(max_bytes);
             let slice = &bytes[start..];
+            // lossy decode already yields valid UTF-8; still floor if we drop
+            // a leading incomplete sequence from a mid-file byte cut.
             let mut text = String::from_utf8_lossy(slice).into_owned();
             if start > 0 {
                 if let Some(pos) = text.find('\n') {
@@ -699,6 +728,33 @@ pub fn read_text_tail(path: &std::path::Path, max_bytes: usize) -> (String, u64)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
+    fn fixture_stream_json() -> String {
+        // Prefer repo fixture (tests/fixtures/claude-stream-json.ndjson); fall back to inline.
+        let candidates = [
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/claude-stream-json.ndjson"),
+            PathBuf::from("tests/fixtures/claude-stream-json.ndjson"),
+        ];
+        for p in &candidates {
+            if let Ok(s) = std::fs::read_to_string(p) {
+                return s;
+            }
+        }
+        r#"
+{"type":"system","subtype":"init","session_id":"sess-fixture-1"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"I'll inspect the project layout first."}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_01","name":"Read","input":{"path":"src/main.rs"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_01","content":"fn main() {}"}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_02","name":"Bash","input":{"command":"cargo test -q"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_02","is_error":true,"content":"error: no tests"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Tests are missing; I'll add a smoke test."}]}}
+{"type":"result","subtype":"success","result":"Added smoke test.","total_cost_usd":0.0421}
+not-json-plain-line that should become raw_line
+{"type":"unknown_kind","payload":{"x":1}}
+"#
+        .to_string()
+    }
 
     #[test]
     fn parses_claude_stream_json_happy_path() {
@@ -714,6 +770,107 @@ mod tests {
         assert!(events.iter().any(|e| e.kind == "tool_use" && e.title == "Read"));
         assert!(events.iter().any(|e| e.kind == "tool_result"));
         assert!(events.iter().any(|e| e.kind == "result" && e.level == "success"));
+    }
+
+    #[test]
+    fn parses_fixture_stream_json_file() {
+        let stdout = fixture_stream_json();
+        let events = parse_worker_logs(&stdout, "stderr boom\n", 100);
+        // AI interaction kinds present
+        assert!(
+            events.iter().any(|e| e.kind == "message"),
+            "expected assistant message; got {:?}",
+            events.iter().map(|e| &e.kind).collect::<Vec<_>>()
+        );
+        assert!(events.iter().any(|e| e.kind == "tool_use" && e.title == "Read"));
+        assert!(events.iter().any(|e| e.kind == "tool_use" && e.title == "Bash"));
+        assert!(events.iter().any(|e| e.kind == "tool_result"));
+        assert!(events.iter().any(|e| e.kind == "result" && e.level == "success"));
+        // plain + unknown → raw_line (never drop lines)
+        assert!(
+            events.iter().any(|e| e.kind == "raw_line"),
+            "plain/unknown lines should become raw_line"
+        );
+        // stderr collapsed to 1
+        assert_eq!(events.iter().filter(|e| e.kind == "stderr").count(), 1);
+        // tool_use summary should mention path / command
+        let read = events
+            .iter()
+            .find(|e| e.kind == "tool_use" && e.title == "Read")
+            .expect("Read tool_use");
+        assert!(
+            read.summary.contains("main.rs") || read.detail.as_deref().unwrap_or("").contains("main.rs"),
+            "Read summary/detail should mention path: {:?}",
+            read
+        );
+    }
+
+    #[test]
+    fn read_text_tail_line_aligned() {
+        let dir = std::env::temp_dir().join(format!(
+            "cco-log-tail-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("stdout.json");
+        // Build multi-line file with known first complete line after cut.
+        let mut body = String::new();
+        body.push_str("AAAA_partial_should_drop\n");
+        for i in 0..40 {
+            body.push_str(&format!("{{\"type\":\"system\",\"subtype\":\"n{i}\"}}\n"));
+        }
+        std::fs::write(&path, &body).unwrap();
+        // max_bytes cuts into first line → must drop partial, keep complete NDJSON
+        let cut = body.len().saturating_sub(body.len() / 3);
+        let (text, total) = read_text_tail(&path, cut);
+        assert_eq!(total, body.len() as u64);
+        assert!(text.contains("(truncated"));
+        // No half-open JSON at first content line after marker
+        let after = text
+            .lines()
+            .skip_while(|l| l.starts_with('…') || l.starts_with("..."))
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("");
+        if !after.is_empty() {
+            assert!(
+                after.starts_with('{') || after.starts_with("…"),
+                "first content line should be complete: {after:?}"
+            );
+            if after.starts_with('{') {
+                assert!(serde_json::from_str::<serde_json::Value>(after).is_ok());
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn floor_char_boundary_and_compact_text_tail_cjk_safe() {
+        let s = "中文✅路径";
+        // Every byte offset must floor without panic and stay a boundary.
+        for i in 0..=s.len() {
+            let b = floor_char_boundary(s, i);
+            assert!(s.is_char_boundary(b), "i={i} → {b}");
+            assert!(b <= i.min(s.len()));
+        }
+        let long = "TOOL Edit /tmp/中文/计划.md\n已更新 ✅\n".repeat(500);
+        assert!(long.len() > 6_000);
+        for cap in [1usize, 2, 3, 7, 13, 599, 6000, long.len() - 1] {
+            let out = compact_text_tail(&long, cap, "… (compact)\n");
+            assert!(out.starts_with("… (compact)\n") || out == long);
+            // Ensure we never introduced replacement chars from a bad cut.
+            assert!(!out.contains('\u{FFFD}'));
+        }
+        assert_eq!(compact_text_tail("短", 6000, "…\n"), "短");
+    }
+
+    #[test]
+    fn events_to_plain_includes_kinds() {
+        let events = parse_worker_logs(&fixture_stream_json(), "", 50);
+        let plain = events_to_plain(&events);
+        assert!(plain.contains("tool_use") || plain.contains("Read") || plain.contains("message"));
     }
 
     #[test]
@@ -744,5 +901,13 @@ mod tests {
         }
         let events = parse_worker_logs(&s, "", 10);
         assert_eq!(events.len(), 10);
+    }
+
+    #[test]
+    fn never_drops_unrecognized_json_or_text() {
+        let stdout = "{\"type\":\"totally_new\",\"x\":1}\nplain text line\n";
+        let events = parse_worker_logs(stdout, "", 20);
+        assert_eq!(events.len(), 2);
+        assert!(events.iter().all(|e| e.kind == "raw_line" || e.kind == "meta"));
     }
 }

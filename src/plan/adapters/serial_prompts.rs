@@ -1,7 +1,9 @@
-//! Heuristic adapter for multi-window prompt markdown (serial-prompts/v0).
+//! serial-prompts/v0 Markdown adapter.
 //!
-//! M0: extract `## <id>` sections with fenced prompts; optional simple table for deps.
-//! Falls back to single task if nothing found.
+//! [INPUT]: 多段 Markdown 提示词
+//! [OUTPUT]: 串行依赖 PlanIR
+//! [POS]: 半结构化计划适配；有 golden fixture
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/plan/adapters/CLAUDE.md
 
 use std::path::Path;
 
@@ -27,19 +29,17 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
     for cap in heading_re.captures_iter(text) {
         let whole = cap.get(0).unwrap();
         let id = cap[1].to_string();
-        // skip common non-task headings
-        let id_l = id.to_ascii_lowercase();
-        if matches!(
-            id_l.as_str(),
-            "graph" | "tasks" | "overview" | "summary" | "notes" | "readme"
-        ) {
-            continue;
-        }
         let title = cap
             .get(2)
             .map(|m| m.as_str().trim().to_string())
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| id.clone());
+        // skip document chrome (Board / Timeline / P0 勾选 / 表头…) — not work packages
+        if crate::plan::title_is_meta_heading(&id)
+            || crate::plan::title_is_meta_heading(&title)
+        {
+            continue;
+        }
         heads.push((whole.start(), id, title));
     }
 
@@ -60,9 +60,11 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
 
         let depends_on = deps_map.get(id).cloned().unwrap_or_default();
 
+        let optional = crate::plan::title_looks_optional(&title);
+        let title = crate::plan::normalize_optional_title(&title, optional);
         tasks.push(TaskIR {
             id: id.clone(),
-            title: title.clone(),
+            title,
             depends_on,
             group: None,
             provider: provider.clone(),
@@ -72,6 +74,11 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             timeout_secs: None,
             worktree: Some(config.default.worktree),
             provider_opts: opts.clone(),
+            optional,
+            include: !optional,
+            role: None,
+            scope: None,
+            outputs: vec![],
         });
     }
 
@@ -96,6 +103,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
         default_provider: provider,
         default_mode: mode,
         worktree: config.default.worktree,
+        require_inspect: false,
         tasks,
     })
 }

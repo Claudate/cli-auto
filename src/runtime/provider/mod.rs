@@ -3,7 +3,7 @@
 //! [INPUT]: 依赖 config::Config、plan::TaskIR、which/dirs 解析 bin
 //! [OUTPUT]: ProviderRegistry / WorkerProvider / bin 解析
 //! [POS]: runtime/provider 总线，被 scheduler 与 doctor 消费
-//! [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/provider/CLAUDE.md
 
 pub mod claude;
 pub mod codex;
@@ -154,6 +154,14 @@ impl ProviderRegistry {
             )));
         }
 
+        Ok(Self { providers })
+    }
+
+    /// Build a registry from pre-constructed providers (integration tests / mock aliases).
+    pub fn from_providers(providers: Vec<Arc<dyn WorkerProvider>>) -> Result<Self> {
+        if providers.is_empty() {
+            bail!("ProviderRegistry::from_providers: empty provider list");
+        }
         Ok(Self { providers })
     }
 

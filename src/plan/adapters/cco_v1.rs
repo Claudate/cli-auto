@@ -1,4 +1,9 @@
-//! cco-plan/v1 YAML (and frontmatter) parser.
+//! cco-plan/v1 YAML adapter.
+//!
+//! [INPUT]: YAML/JSON 计划文本（schema: cco-plan/v1）
+//! [OUTPUT]: PlanIR（含 depends_on / max_parallel / provider_opts / role / scope / outputs / require_inspect）
+//! [POS]: 结构化计划首选适配器
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/plan/adapters/CLAUDE.md
 
 use std::path::Path;
 
@@ -7,7 +12,7 @@ use serde::Deserialize;
 
 use crate::config::Config;
 use crate::plan::adapters::raw_single::default_provider_opts;
-use crate::plan::{OnFailure, PlanIR, TaskIR};
+use crate::plan::{OnFailure, PlanIR, TaskIR, TaskRole, TaskScope};
 
 #[derive(Debug, Deserialize)]
 struct FilePlan {
@@ -33,6 +38,9 @@ struct FilePlan {
     default_mode: Option<String>,
     #[serde(default)]
     providers: Option<serde_yaml::Value>,
+    /// Plan-level flag: later validate may require a terminal inspect task.
+    #[serde(default)]
+    require_inspect: bool,
 }
 
 fn default_schema() -> String {
@@ -95,6 +103,21 @@ struct FileTask {
     worktree: Option<bool>,
     #[serde(default)]
     provider_opts: Option<serde_yaml::Value>,
+    /// Optional tasks require user opt-in on the confirm screen.
+    #[serde(default)]
+    optional: bool,
+    /// Include in run; optional defaults to false when omitted.
+    #[serde(default)]
+    include: Option<bool>,
+    /// Collaboration role (scout|implement|integrate|inspect). Absent → None.
+    #[serde(default)]
+    role: Option<TaskRole>,
+    /// Path contract; absent or empty object both OK for old plans.
+    #[serde(default)]
+    scope: Option<TaskScope>,
+    /// Required on-disk artifact paths (relative). Absent → empty.
+    #[serde(default)]
+    outputs: Vec<String>,
 }
 
 pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
@@ -213,9 +236,21 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             merge_json(&mut opts, &yaml_to_json(po)?);
         }
 
+        let raw_title = ft.title.clone().unwrap_or_else(|| ft.id.clone());
+        let optional = ft.optional || crate::plan::title_looks_optional(&raw_title);
+        let title = crate::plan::normalize_optional_title(&raw_title, optional);
+        let include = ft.include.unwrap_or(!optional);
+        // Empty scope object (all vecs empty) → treat as absent for cleaner IR.
+        let scope = ft.scope.clone().and_then(|s| {
+            if s.paths.is_empty() && s.readonly.is_empty() && s.forbid.is_empty() {
+                None
+            } else {
+                Some(s)
+            }
+        });
         tasks.push(TaskIR {
             id: ft.id.clone(),
-            title: ft.title.clone().unwrap_or_else(|| ft.id.clone()),
+            title,
             depends_on: depends,
             group,
             provider,
@@ -225,6 +260,11 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             timeout_secs: ft.timeout_secs.or(file.defaults.timeout_secs),
             worktree: ft.worktree.or(Some(worktree)),
             provider_opts: opts,
+            optional,
+            include: if optional { include } else { true },
+            role: ft.role,
+            scope,
+            outputs: ft.outputs.clone(),
         });
     }
 
@@ -239,6 +279,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
         default_provider,
         default_mode,
         worktree,
+        require_inspect: file.require_inspect,
         tasks,
     })
 }

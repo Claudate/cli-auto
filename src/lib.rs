@@ -1,5 +1,10 @@
 //! cco — CLI orchestrator host library.
 //!
+//! [INPUT]: 无；库根
+//! [OUTPUT]: re-export plan(PlanIR/TaskIR/TaskRole/TaskScope)/runtime/services/state/terminal/tui 公共类型
+//! [POS]: src 根；二进制 main 与 src-tauri 均依赖本 crate
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md
+//!
 //! Architecture: plan adapters → PlanIR → scheduler → WorkerProvider → TaskResult.
 //! Desktop shell is Tauri (`src-tauri`); CLI is `cco` binary.
 
@@ -16,17 +21,19 @@ pub mod terminal;
 pub mod tui;
 
 pub use config::Config;
-pub use plan::{PlanIR, TaskIR};
+pub use plan::{PlanIR, TaskIR, TaskRole, TaskScope};
 pub use runtime::provider::{
     Capabilities, ProviderRegistry, StartCtx, TaskResult, TaskStatus, WorkerHandle,
     WorkerProvider, WorkerStatus,
 };
 pub use services::{
-    add_project, confirm_start, get_plan_job, get_settings, list_plans, list_projects, list_runs,
-    load_run, preview_plan, project_live_view, remove_project, resume_run_async, run_doctor,
-    set_settings, start_plan_job, start_run_async, start_run_from_plan, stop_run, stop_task,
-    task_logs, TaskLogsView, PlanJobView, PlanPreview, ProjectLiveView, ProjectSummary, RunSummary,
-    SettingsUpdate, SettingsView, StartPlanJobRequest, StartRunRequest, TaskLiveView,
+    add_project, chat_save_plan, chat_send, chat_session_get, confirm_start, get_plan_job,
+    get_settings, list_plans, list_projects, list_runs, load_run, open_task_terminal, preview_plan,
+    project_live_view, remove_project, resume_run_async, run_doctor, set_settings, start_plan_job,
+    start_run_async, start_run_from_plan, stop_run, stop_task, task_logs, ChatDraftPlan, ChatMessage,
+    ChatSavePlanResponse, ChatSendResponse, ChatSession, PlanJobView, PlanPreview, ProjectLiveView,
+    ProjectSummary, RunSummary, SettingsUpdate, SettingsView, StartPlanJobRequest, StartRunRequest,
+    TaskLiveView, TaskLogsView,
 };
 pub use state::{RunState, RunStatus, TaskState};
 pub use terminal::{SessionKind, TerminalManager, TerminalSession};
