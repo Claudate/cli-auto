@@ -61,11 +61,11 @@ if [[ -z "$SEARCH_BIN" && -x "$HOME/.cargo/bin/rg" ]]; then SEARCH_BIN=$HOME/.ca
 # D4: logic/styles live under web/js/* and web/css/*; app.js/app.css are thin entry
 WEB_ROOT="$APP/Contents/MacOS/web"
 if [[ -n "$SEARCH_BIN" ]]; then
-  "$SEARCH_BIN" -n "btn-chooser-assign|btn-task-dash-toggle|cli-rerun-btn|分配计划|plan-chooser-foot|taskDashCollapsed|budget-chip|updateBudgetChip|btn-open-chat|page-chat|btn-chat-assign|assignFromChat" \
+  "$SEARCH_BIN" -n "btn-chooser-assign|btn-task-dash-toggle|cli-rerun-btn|分配计划|plan-chooser-foot|taskDashCollapsed|budget-chip|updateBudgetChip|btn-open-chat|page-chat|btn-chat-assign|assignFromChat|btn-plan-full-diff|chat_stream_partial|mountVirtualLog|plan-full-diff|log-virt" \
     "$WEB_ROOT/index.html" "$WEB_ROOT/app.css" "$WEB_ROOT/app.js" \
-    "$WEB_ROOT/js" "$WEB_ROOT/css" 2>/dev/null | head -40
+    "$WEB_ROOT/js" "$WEB_ROOT/css" 2>/dev/null | head -60
 else
-  grep -rnE "btn-chooser-assign|btn-task-dash-toggle|cli-rerun-btn|分配计划|plan-chooser-foot|taskDashCollapsed|budget-chip|updateBudgetChip|btn-open-chat|page-chat|btn-chat-assign|assignFromChat" \
+  grep -rnE "btn-chooser-assign|btn-task-dash-toggle|cli-rerun-btn|分配计划|plan-chooser-foot|taskDashCollapsed|budget-chip|updateBudgetChip|btn-open-chat|page-chat|btn-chat-assign|assignFromChat|btn-plan-full-diff|chat_stream_partial|mountVirtualLog|plan-full-diff|log-virt" \
     "$WEB_ROOT/index.html" "$WEB_ROOT/app.css" "$WEB_ROOT/app.js" \
-    "$WEB_ROOT/js" "$WEB_ROOT/css" 2>/dev/null | head -40
+    "$WEB_ROOT/js" "$WEB_ROOT/css" 2>/dev/null | head -60
 fi

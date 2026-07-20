@@ -322,6 +322,24 @@
   white-space: nowrap;
   max-width: 14rem;
 }
+.cli-window-title .cli-elapsed {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cli-window-stall {
+  margin: 0.2rem 0.55rem 0;
+  padding: 0.22rem 0.45rem;
+  border-radius: 8px;
+  background: #fff8e6;
+  color: #8a6d1d;
+  border: 1px solid #f0e0a8;
+  font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cli-window-actions {
   display: flex;
   gap: 0.15rem;
@@ -841,3 +859,65 @@ button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip
 #workspace-body.mode-running .cli-window-body {
   /* 旧规则 max-height:200px 会被上面 var 覆盖 */
 }
+
+/* multi-cli P2-6: handoff Board strip */
+.handoff-board-strip {
+  margin: 0.35rem 0 0.55rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg2, #f7f7f8);
+}
+.handoff-board-strip[hidden] {
+  display: none !important;
+}
+.handoff-board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.handoff-board-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.handoff-board-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  max-width: 100%;
+}
+.handoff-board-chip .hb-id {
+  font-weight: 650;
+}
+.handoff-board-chip .hb-meta {
+  color: var(--muted);
+}
+.handoff-board-chip.is-fail {
+  border-color: color-mix(in srgb, var(--danger, #b42318) 40%, var(--border));
+  background: color-mix(in srgb, var(--danger, #b42318) 8%, #fff);
+}
+.handoff-board-chip.is-run {
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 35%, var(--border));
+}
+.handoff-board-chip.is-done {
+  opacity: 0.85;
+}
+
+/* P2-3 light ANSI spans (raw mode) */
+.ansi-bold { font-weight: 700; }
+.ansi-dim { opacity: 0.7; }
+.ansi-red { color: #b42318; }
+.ansi-green { color: #027a48; }
+.ansi-yellow { color: #b54708; }
+.ansi-blue { color: #175cd3; }
+.ansi-magenta { color: #9f1ab1; }
+.ansi-cyan { color: #0e9384; }

@@ -156,6 +156,8 @@ pub async fn run(
         provider_max_parallel: provider_caps,
         retry_max: config.default.retry_max,
         stall_secs: config.default.stall_secs,
+        failover_enabled: config.default.failover_enabled,
+        fallback_extra_attempts: config.default.fallback_extra_attempts,
     };
 
     run_scheduler(sched, &config, &run_id, tui).await
@@ -255,6 +257,7 @@ mod tests {
             role: None,
             scope: None,
             outputs: vec![],
+        tags: vec![],
         }
     }
 

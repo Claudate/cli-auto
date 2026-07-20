@@ -1,9 +1,12 @@
 /**
  * [INPUT]: 依赖 window 全局（顺序加载）；Tauri invoke
- * [OUTPUT]: plan UI 片段 · 顶栏选择/分配可见性 · 全局 plan-chooser
+ * [OUTPUT]: plan UI 片段 · 顶栏选择/分配可见性 · 全局 plan-chooser · H0 入口路由 · H2 meta/badge
  * [POS]: web/js D4 自 app.js 纵切；无构建器，顺序 script 共享全局
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
- * 注：#plan-chooser 在 main 级（非 page-workspace）；聊天页只显示「选择计划」，分配走就绪条
+ * 注：#plan-chooser 在 main 级（非 page-workspace）；聊天/管理页走 startExecuteFromSelection
+ * H0：selectProject 经 resolveEntryRoute/applyEntryRoute（仅活动 run 或正在拆分 → workspace；待确认/历史拆分不抢主窗，落 chat + 顶栏「返回确认」）
+ * H2：get_plan_meta → planExecBadgeInfo + partitionPlanItems；chooser/rail「显示已执行」共用
+ * E0–E2：管理入口不弹层；统一 startExecuteFromSelection；拆完非 workspace 强制回跳
  */
 /* cco desktop — plan */
 
@@ -85,10 +88,13 @@ async function tryRestorePersistedPlanJob(projectPath) {
     const n = view.task_count || view.tasks?.length || 0;
     if (status === "planning") {
       toast("已接上未完成的规划任务");
-    } else if (status === "planned") {
-      toast(`已恢复上次拆分：${n} 个任务，可直接开始运行`);
-    } else if (status === "confirmed") {
-      toast(`已恢复历史拆分：${n} 个任务（可再次运行，无需重拆）`);
+    } else if (status === "planned" || status === "confirmed") {
+      // 不暗示「已进入执行页」：H0 仍落 chat；顶栏可「返回确认」
+      toast(
+        n
+          ? `已记住上次拆分（${n} 任务）· 顶栏「返回确认」可继续执行`
+          : "已记住上次拆分 · 顶栏「返回确认」可继续执行"
+      );
     }
     return true;
   } catch (e) {
@@ -105,6 +111,75 @@ function hasMonitorableActivity() {
   return false;
 }
 
+/**
+ * H0 入口路由（对齐用户主路径）：
+ * 1. 有活动 run → workspace 执行面板
+ * 2. AI 正在拆分中（planning）→ workspace 看规划进度
+ * 3. 其它一律 chat 主窗（含 planned/confirmed 待确认、done、无 live）
+ *
+ * 待确认不抢主窗：planJob 仍保留在内存，顶栏「返回确认」/ banner 可进 workspace。
+ * 不改 Mode B confirm_start。
+ */
+function resolveEntryRoute() {
+  // 1) 真的有任务在跑 → 执行面板
+  if (typeof hasActiveRun === "function" && hasActiveRun()) {
+    return { page: "workspace", phaseHint: "running" };
+  }
+  // 2) 仅 AI 拆分「进行中」→ 看规划进度；planned/confirmed/failed 不抢主窗
+  const st = String(state.planJob?.status || "").toLowerCase();
+  if (state.planJobId && (state.phase === "planning" || st === "planning") && st === "planning") {
+    return { page: "workspace", phaseHint: "planning" };
+  }
+  // 3) 默认聊天主窗（打开软件 / 选项目 / 待确认 / 已结束）
+  return { page: "chat", phaseHint: null };
+}
+
+/**
+ * 按 resolveEntryRoute 落地页面。
+ * workspace：渲染看板/规划相位；chat：走 openChatPage（主窗）。
+ */
+async function applyEntryRoute() {
+  const route = resolveEntryRoute();
+
+  if (route.page === "workspace") {
+    if (route.phaseHint === "running") {
+      // 活动 run：看板优先；confirm 会话可 stash，顶栏「返回确认」仍可回
+      state.phase = "running";
+      state.planCollapsed = true;
+    } else if (route.phaseHint === "planning") {
+      state.phase = "planning";
+    }
+    showPage("workspace");
+    renderPhasePanels();
+    renderPlanPicker();
+    renderWorkspace();
+    updateTopPlanInfo();
+    updateBgPlanBanner();
+    if (state.phase === "planning" && state.planJobId) {
+      startPlanJobPoll();
+    }
+    return route;
+  }
+
+  // 默认聊天主窗（H0）
+  // 保留 planJob 内存态（planned/confirmed），便于顶栏「返回确认」；不 showPage workspace
+  if (typeof openChatPage === "function") {
+    await openChatPage();
+  } else {
+    showPage("chat");
+  }
+  try {
+    if (typeof renderPlanPicker === "function") renderPlanPicker();
+  } catch (_) {}
+  try {
+    updateTopPlanInfo();
+  } catch (_) {}
+  try {
+    updateBgPlanBanner();
+  } catch (_) {}
+  return route;
+}
+
 /** 从聊天/设置等页回到 workspace 监视（规划相位或 CLI 看板） */
 function goToPlanMonitor() {
   const path = state.selectedPath || state.lastWorkspacePath;
@@ -116,6 +191,7 @@ function goToPlanMonitor() {
     Promise.resolve(selectProject(path)).catch((e) => toast(String(e)));
     return;
   }
+  // 用户主动点「监控」：强制进 workspace（不是 H0 默认入口）
   showPage("workspace");
   if (isPlanSessionActive()) {
     renderPhasePanels();
@@ -263,17 +339,11 @@ function updateBgPlanBanner() {
 }
 
 async function selectProject(path) {
-  // 同项目再点：只回工作区，保留规划
+  // 同项目再点：H0 按活动态路由（禁止无条件 workspace）
   if (path && path === state.selectedPath) {
-    showPage("workspace");
     renderProjectList();
-    renderPhasePanels();
-    renderPlanPicker();
-    renderWorkspace();
-    updateTopPlanInfo();
-    updateBgPlanBanner();
+    await applyEntryRoute();
     if (state.phase === "planning" && state.planJobId) {
-      startPlanJobPoll();
       refreshPlanJob().catch(() => {});
     }
     return;
@@ -321,42 +391,63 @@ async function selectProject(path) {
 
   const restoredMem = restorePlanSession(path);
 
-  showPage("workspace");
+  // H0：先拉 live / plans，再 applyEntryRoute（禁止提前 showPage("workspace")）
   renderProjectList();
   await Promise.all([loadLive(), loadPlansForPicker(), ensureDoctor()]);
 
   if (restoredMem) {
-    renderPhasePanels();
-    renderPlanPicker();
-    renderWorkspace();
-    updateTopPlanInfo();
-    updateBgPlanBanner();
+    // 活动 run 优先看板；否则保留内存 plan 会话 phase（待确认不抢 chat）
+    if (hasActiveRun()) {
+      state.phase = "running";
+      state.planCollapsed = true;
+    }
+    await applyEntryRoute();
     if (state.phase === "planning" && state.planJobId) {
       await refreshPlanJob().catch(() => {});
     }
-    toast(state.phase === "planning" ? "已回到后台规划" : "已恢复待确认计划");
+    // 仅在真的落在 workspace 规划中时提示；chat 主窗用顶栏「返回确认」即可
+    if (
+      state.page === "workspace" &&
+      state.phase === "planning" &&
+      !hasActiveRun()
+    ) {
+      toast("已回到后台规划");
+    } else if (
+      state.page === "chat" &&
+      isPlanSessionActive() &&
+      state.phase === "confirm" &&
+      !hasActiveRun()
+    ) {
+      toast("有待确认的拆分 · 点顶栏「返回确认」可继续执行");
+    }
     return;
   }
 
-  // 内存无会话 → 从磁盘接上该项目最近一次拆分（planned/confirmed/planning）
-  // 若当前有活动 run，优先显示运行；否则恢复拆分结果，避免每次重拆
-  const activeRun = !!(state.live?.run_id && isLiveStatus(state.live?.run_status));
+  // 内存无会话 → 从磁盘接上该项目最近一次拆分（避免每次重拆）
+  // 活动 run 优先；planned/confirmed 会恢复到内存，但 H0 仍落 chat
+  const activeRun = hasActiveRun();
   if (!activeRun) {
     const restoredDisk = await tryRestorePersistedPlanJob(path);
     if (restoredDisk) {
-      renderPhasePanels();
-      renderPlanPicker();
-      renderWorkspace();
-      updateTopPlanInfo();
-      updateBgPlanBanner();
+      await applyEntryRoute();
       if (state.phase === "planning" && state.planJobId) {
         await refreshPlanJob().catch(() => {});
+      }
+      if (
+        state.page === "chat" &&
+        state.phase === "confirm" &&
+        state.planJobId
+      ) {
+        const n = state.planJob?.task_count || state.planJob?.tasks?.length || 0;
+        if (n) {
+          toast(`已恢复历史拆分（${n} 任务）· 聊天主窗可改计划，顶栏「返回确认」可执行`);
+        }
       }
       return;
     }
   }
 
-  if (state.live?.run_id && isLiveStatus(state.live?.run_status)) {
+  if (hasActiveRun()) {
     state.planCollapsed = true;
     state.phase = "running";
   } else if (
@@ -377,15 +468,102 @@ async function selectProject(path) {
     } catch (e) {
       console.warn("restore plan failed", e);
       state.selectedPlan = candidate;
-      renderPlanPicker();
     }
-  } else {
-    renderPlanPicker();
   }
-  updateTopPlanInfo();
-  renderPhasePanels();
-  renderWorkspace();
-  updateBgPlanBanner();
+  // H0 最终落点：有活动 run / 拆分中 → workspace；否则 chat
+  await applyEntryRoute();
+  // 双保险：无活动 run 且不在 planning 时绝不能停在 workspace（防历史分支漏改）
+  if (
+    state.page === "workspace" &&
+    !(typeof hasActiveRun === "function" && hasActiveRun())
+  ) {
+    const st2 = String(state.planJob?.status || "").toLowerCase();
+    if (state.phase !== "planning" && st2 !== "planning") {
+      if (typeof openChatPage === "function") await openChatPage();
+      else showPage("chat");
+      try {
+        renderPlanPicker();
+      } catch (_) {}
+    }
+  }
+}
+
+function applyFlowModeBadge(rowId, badgeId, hintId, mode) {
+  const row = $(rowId);
+  const badge = $(badgeId);
+  const hint = $(hintId);
+  const label =
+    typeof flowModeLabel === "function" ? flowModeLabel(mode) : "";
+  if (!row || !badge) return;
+  if (!label) {
+    row.hidden = true;
+    return;
+  }
+  row.hidden = false;
+  badge.textContent = label;
+  badge.className = `flow-mode-badge is-${String(mode || "").toLowerCase() || "mixed"}`;
+  if (hint) {
+    hint.textContent =
+      typeof flowModeHint === "function" ? flowModeHint(mode) : "";
+  }
+}
+
+function refreshFlowStrips(phaseOverride) {
+  if (typeof flowStageStripHtml !== "function") return;
+  const ph = phaseOverride || state.phase;
+  const hostPlan = $("#flow-strip-planning");
+  const hostConfirm = $("#flow-strip-confirm");
+  const hostRun = $("#flow-strip-running");
+  if (hostPlan) {
+    if (ph === "planning") {
+      hostPlan.innerHTML = flowStageStripHtml("planning");
+      hostPlan.hidden = false;
+    } else {
+      hostPlan.hidden = true;
+    }
+  }
+  if (hostConfirm) {
+    if (ph === "confirm") {
+      hostConfirm.innerHTML = flowStageStripHtml("confirm");
+      hostConfirm.hidden = false;
+    } else {
+      hostConfirm.hidden = true;
+    }
+  }
+  if (hostRun) {
+    const runActive =
+      ph === "running" ||
+      (typeof hasActiveRun === "function" && hasActiveRun());
+    if (runActive && state.page === "workspace") {
+      const liveSt = String(state.live?.run_status || "").toLowerCase();
+      const done =
+        ["completed", "done", "success"].includes(liveSt) ||
+        (state.live && !runActive);
+      const fail = ["failed", "aborted", "error"].includes(liveSt);
+      hostRun.innerHTML = flowStageStripHtml(
+        fail ? "fail" : done ? "done" : "running"
+      );
+      hostRun.hidden = false;
+    } else {
+      hostRun.hidden = true;
+    }
+  }
+  const mode =
+    state.planJob?.digest_mode ||
+    state.planJob?.digestMode ||
+    null;
+  applyFlowModeBadge(
+    "#planning-mode-row",
+    "#planning-mode-badge",
+    "#planning-mode-hint",
+    mode
+  );
+  applyFlowModeBadge(
+    "#confirm-mode-row",
+    "#confirm-mode-badge",
+    "#confirm-mode-hint",
+    mode
+  );
 }
 
 function renderPhasePanels() {
@@ -397,13 +575,17 @@ function renderPhasePanels() {
   planning.hidden = ph !== "planning";
   confirm.hidden = ph !== "confirm";
 
+  try {
+    refreshFlowStrips(ph);
+  } catch (_) {}
+
   if (ph === "planning") {
     if (state.planJob) {
       fillPlannerLog(state.planJob);
     } else {
       const log = $("#planner-log");
       if (log && !log.dataset.sig) {
-        log.innerHTML = '<div class="cli-empty-ai muted">正在分析…</div>';
+        log.innerHTML = '<div class="cli-empty-ai muted">正在理解计划并拆分步骤…</div>';
       }
     }
   }
@@ -548,9 +730,140 @@ function isPlanUnderProject(planPath, projectRoot = state.selectedPath) {
   return true;
 }
 
+/* ══════════════════════════════════════════════
+ * H2 — shared plan exec badge + history filter
+ * chooser 与 plan-rail 共用；数据源 = list_plan_meta（非 mtime）
+ * ══════════════════════════════════════════════ */
+
+/** Badge from PlanMeta: 已执行 / 失败过 / 未执行 */
+function planExecBadgeInfo(item) {
+  if (!item) return { label: "未执行", cls: "plan-rail-badge-pending", kind: "pending" };
+  if (item.ever_completed || item.everCompleted) {
+    return { label: "已执行", cls: "plan-rail-badge-done", kind: "done" };
+  }
+  const st = String(item.last_run_status || item.lastRunStatus || "").toLowerCase();
+  if (st && ["failed", "aborted", "timeout", "stopped"].includes(st)) {
+    return { label: "失败过", cls: "plan-rail-badge-failed", kind: "failed" };
+  }
+  if (st && st !== "completed" && st !== "done" && st !== "") {
+    // had a non-success terminal/partial run
+    return { label: "失败过", cls: "plan-rail-badge-failed", kind: "failed" };
+  }
+  return { label: "未执行", cls: "plan-rail-badge-pending", kind: "pending" };
+}
+
+function planIsEverCompleted(item) {
+  if (!item) return false;
+  return !!(item.ever_completed || item.everCompleted);
+}
+
+/** Lookup meta for a path (relative preferred); empty stub if unknown. */
+function planMetaForPath(path, root = state.selectedPath) {
+  if (!path) return { path: "", title: null, ever_completed: false, last_run_status: null };
+  const norm = (typeof normalizePlanPath === "function" ? normalizePlanPath(path, root) : null) || path;
+  const by = state.planMetaByPath || {};
+  return (
+    by[norm] ||
+    by[path] || {
+      path: norm,
+      title: null,
+      ever_completed: false,
+      last_run_status: null,
+      last_run_id: null,
+      last_run_finished_at: null,
+    }
+  );
+}
+
+/**
+ * Split items into active (always shown) vs history (ever_completed, collapsible).
+ * pinPaths always stay in active even if completed (draft/selected/manual).
+ */
+function partitionPlanItems(items, { showExecuted = false, pinPaths = [] } = {}) {
+  const pins = new Set(
+    (pinPaths || []).filter(Boolean).map((p) => String(p))
+  );
+  const active = [];
+  const history = [];
+  for (const it of items || []) {
+    const path = it.path || it;
+    const meta = typeof it === "string" ? planMetaForPath(it) : it;
+    const completed = planIsEverCompleted(meta);
+    const pinned = pins.has(path) || pins.has(meta.path);
+    if (completed && !pinned) {
+      history.push(typeof it === "string" ? { ...meta, path } : it);
+    } else {
+      active.push(typeof it === "string" ? { ...meta, path } : it);
+    }
+  }
+  return {
+    active,
+    history,
+    // When toggle on, show both; when off, only active (history collapsed/hidden)
+    visible: showExecuted ? active.concat(history) : active,
+    historyHidden: !showExecuted && history.length > 0,
+    historyCount: history.length,
+  };
+}
+
+function setShowExecutedPlans(on) {
+  state.showExecutedPlans = !!on;
+  try {
+    localStorage.setItem("cco.showExecutedPlans", state.showExecutedPlans ? "1" : "0");
+  } catch (_) {}
+  syncShowExecutedToggles();
+  if (state.planChooserOpen) renderPlanChooser();
+  if (typeof renderPlanRail === "function") {
+    try {
+      renderPlanRail();
+    } catch (_) {}
+  }
+  if (state.page === "plans" && typeof renderPlansMgmtPage === "function") {
+    try {
+      renderPlansMgmtPage();
+    } catch (_) {}
+  }
+}
+
+function syncShowExecutedToggles() {
+  const on = !!state.showExecutedPlans;
+  for (const id of [
+    "chooser-show-executed",
+    "plan-rail-show-executed",
+    "plans-mgmt-show-executed",
+  ]) {
+    const el = document.getElementById(id);
+    if (el && el.type === "checkbox") el.checked = on;
+  }
+}
+
+/** Normalize get_plan_meta / fallback list into state.planMetaItems + byPath. */
+function applyPlanMetaItems(items, root = state.selectedPath) {
+  const list = (Array.isArray(items) ? items : [])
+    .map((m) => {
+      const path = normalizePlanPath(m.path || m, root) || m.path || m;
+      return {
+        path,
+        title: m.title || null,
+        ever_completed: !!(m.ever_completed || m.everCompleted),
+        last_run_status: m.last_run_status || m.lastRunStatus || null,
+        last_run_id: m.last_run_id || m.lastRunId || null,
+        last_run_finished_at: m.last_run_finished_at || m.lastRunFinishedAt || null,
+      };
+    })
+    .filter((m) => m.path && isPlanUnderProject(m.path, root));
+  state.planMetaItems = list;
+  const by = {};
+  for (const m of list) by[m.path] = m;
+  state.planMetaByPath = by;
+  return list;
+}
+
 async function loadPlansForPicker() {
   if (!state.selectedPath) {
     state.plans = [];
+    state.planMetaItems = [];
+    state.planMetaByPath = {};
     state.plansLoading = false;
     if (state.planChooserOpen) renderPlanChooser();
     updateChooserAssignState();
@@ -559,16 +872,49 @@ async function loadPlansForPicker() {
   state.plansLoading = true;
   if (state.planChooserOpen) renderPlanChooser();
   try {
-    const plans = (await invoke("get_plans", { project: state.selectedPath })) || [];
     const root = state.selectedPath;
-    // 只保留当前项目内路径；绝对路径收成相对
-    const list = (Array.isArray(plans) ? plans : [])
-      .map((p) => normalizePlanPath(p, root) || p)
-      .filter((p) => isPlanUnderProject(p, root));
+    // H2: prefer list_plan_meta (path + ever_completed / last_run_*); fall back to paths
+    let list = [];
+    let metas = null;
+    try {
+      metas = await invoke("get_plan_meta", { project: root });
+    } catch (_) {
+      metas = null;
+    }
+    if (Array.isArray(metas) && metas.length) {
+      const applied = applyPlanMetaItems(metas, root);
+      list = applied.map((m) => m.path);
+    } else {
+      const plans = (await invoke("get_plans", { project: root })) || [];
+      list = (Array.isArray(plans) ? plans : [])
+        .map((p) => normalizePlanPath(p, root) || p)
+        .filter((p) => isPlanUnderProject(p, root));
+      applyPlanMetaItems(
+        list.map((p) => ({
+          path: p,
+          title: null,
+          ever_completed: false,
+          last_run_status: null,
+        })),
+        root
+      );
+    }
     // 用户手动选的计划若不在扫描结果中，且仍属本项目，置顶保留
     const selected = normalizePlanPath(state.selectedPlan, root) || state.selectedPlan;
     if (selected && isPlanUnderProject(selected, root) && !list.includes(selected)) {
       list.unshift(selected);
+      if (!state.planMetaByPath[selected]) {
+        const stub = {
+          path: selected,
+          title: null,
+          ever_completed: false,
+          last_run_status: null,
+          last_run_id: null,
+          last_run_finished_at: null,
+        };
+        state.planMetaItems = [stub, ...(state.planMetaItems || [])];
+        state.planMetaByPath[selected] = stub;
+      }
     }
     // 若当前选中已不在本项目，清掉，避免列表/分配指向别的目录
     if (state.selectedPlan && !isPlanUnderProject(state.selectedPlan, root) && !isPlanUnderProject(selected, root)) {
@@ -586,33 +932,143 @@ async function loadPlansForPicker() {
   if (state.planChooserOpen) renderPlanChooser();
   renderPlanPicker();
   updateChooserAssignState();
+  // Keep rail in sync when chooser rescans
+  if (typeof loadPlanRail === "function" && state.page === "chat") {
+    try {
+      // meta already in state — rail can re-render without re-fetch; still refresh for safety
+      if (typeof renderPlanRail === "function") renderPlanRail();
+    } catch (_) {}
+  }
   return state.plans;
+}
+
+function defaultAssignLabel(btnId) {
+  if (btnId === "btn-chooser-assign") return "开始拆分";
+  return "执行此计划";
 }
 
 function setAssignBusy(busy) {
   state.assigning = !!busy;
-  const ids = ["btn-chooser-assign", "btn-pp-analyze"];
+  const ids = ["btn-chooser-assign", "btn-pp-analyze", "btn-plans-assign", "btn-chat-assign"];
   for (const id of ids) {
     const btn = document.getElementById(id);
     if (!btn) continue;
     if (busy) {
       btn.disabled = true;
       btn.classList.add("is-busy");
-      if (!btn.dataset.label) btn.dataset.label = btn.textContent || "分配计划";
-      btn.innerHTML = '<span class="spinner sm" aria-hidden="true"></span><span>分配中…</span>';
+      if (!btn.dataset.label) btn.dataset.label = btn.textContent || defaultAssignLabel(id);
+      btn.innerHTML = '<span class="spinner sm" aria-hidden="true"></span><span>拆分中…</span>';
     } else {
       btn.classList.remove("is-busy");
       const active = isLiveStatus(state.live?.run_status);
-      const label = btn.dataset.label || "分配计划";
+      const label = btn.dataset.label || defaultAssignLabel(id);
       btn.textContent = active ? "运行中…" : label;
       delete btn.dataset.label;
       if (btn.id === "btn-chooser-assign") {
         btn.disabled = !state.selectedPlan || !!active;
+      } else if (btn.id === "btn-chat-assign") {
+        btn.disabled = !state.chatDraftPlan || !!active;
+      } else if (btn.id === "btn-plans-assign") {
+        btn.disabled = !(state.planRailSelected || state.selectedPlan) || !!active;
       } else {
         btn.disabled = !!active;
       }
     }
   }
+  // Dynamic plan-card CTAs (chat reply footer) — same busy lock as sticky assign
+  const cardAssigns = document.querySelectorAll(".btn-chat-plan-assign");
+  for (const btn of cardAssigns) {
+    if (busy) {
+      btn.disabled = true;
+      btn.classList.add("is-busy");
+      if (!btn.dataset.label) btn.dataset.label = btn.textContent || "执行此计划";
+      btn.innerHTML = '<span class="spinner sm" aria-hidden="true"></span><span>拆分中…</span>';
+    } else {
+      btn.classList.remove("is-busy");
+      const active = isLiveStatus(state.live?.run_status);
+      const label = btn.dataset.label || "执行此计划";
+      btn.textContent = active ? "运行中…" : label;
+      delete btn.dataset.label;
+      btn.disabled = !state.chatDraftPlan || !!active;
+    }
+  }
+}
+
+/**
+ * E1 统一执行入口：带走已选计划 → workspace → 执行选项（薄层仍用 plan-chooser，列表可换文件）。
+ * 管理页 / 聊天就绪条 / 全文 modal 共用，避免「再选一遍同一文件」。
+ */
+async function startExecuteFromSelection(planPath, opts = {}) {
+  if (!state.selectedPath) {
+    toast("请先选择项目");
+    return;
+  }
+  if (hasActiveRun()) {
+    toastRunLocked("执行此计划");
+    return;
+  }
+  const path =
+    planPath ||
+    state.selectedPlan ||
+    state.chatDraftPlan ||
+    state.planRailSelected ||
+    null;
+  if (!path) {
+    toast("请先选中一份计划");
+    if (state.page !== "plans") {
+      openPlanChooser(true);
+      try {
+        await loadPlansForPicker();
+        renderPlanChooser();
+        updateChooserAssignState();
+      } catch (_) {}
+    }
+    return;
+  }
+  if (opts.fakeNote || state.chatFake) {
+    toast("注意：当前计划来自本地模板（非真实 AI），确认后仍将进入执行");
+  }
+  state.chatDraftPlan = path;
+  if (typeof selectPlanRailItem === "function") {
+    try {
+      selectPlanRailItem(path);
+    } catch (_) {}
+  }
+  try {
+    await selectPlan(path);
+  } catch (e) {
+    toast(String(e?.message || e));
+    return;
+  }
+  // C3 方案 B（可选）：跳过二次确认，沿用当前/上次并发等选项直开拆分。
+  // 仍走 analyzePlanFromPicker → start_plan_job → confirm_start；禁止 start_run 旁路。
+  const direct =
+    opts.direct === true ||
+    (opts.direct !== false &&
+      typeof chatAssignDirectEnabled === "function" &&
+      chatAssignDirectEnabled());
+  if (direct && typeof analyzePlanFromPicker === "function") {
+    if (state.page !== "workspace") showPage("workspace");
+    openPlanChooser(false);
+    renderPlanPicker();
+    const name =
+      typeof planDisplayName === "function" ? planDisplayName(path) : path;
+    toast(`将执行：${name} · 直接拆分（方案 B）`);
+    await analyzePlanFromPicker();
+    return;
+  }
+  // 方案 A：始终在 workspace 打开选项层
+  if (state.page !== "workspace") showPage("workspace");
+  openPlanChooser(true, { fromExecute: true, expandList: false });
+  try {
+    await loadPlansForPicker();
+  } catch (_) {}
+  renderPlanChooser();
+  updateChooserAssignState();
+  renderPlanPicker();
+  const name =
+    typeof planDisplayName === "function" ? planDisplayName(path) : path;
+  toast(`将执行：${name} · 确认选项后点「开始拆分」`);
 }
 
 function renderWorkspaceShell() {
@@ -632,12 +1088,22 @@ function setPlanCollapsed(collapsed) {
   if (pp) pp.classList.add("compact", "collapsed");
 }
 
-function openPlanChooser(open = true) {
+function openPlanChooser(open = true, opts = {}) {
   if (open && hasActiveRun()) {
     toastRunLocked("切换/选择计划");
     return;
   }
   state.planChooserOpen = open;
+  // E1：从「执行此计划」进来默认折叠列表；从「选择计划」进来展开
+  if (open) {
+    if (opts.expandList != null) {
+      state.chooserListExpanded = !!opts.expandList;
+    } else if (opts.fromExecute && state.selectedPlan) {
+      state.chooserListExpanded = false;
+    } else if (state.chooserListExpanded == null) {
+      state.chooserListExpanded = !state.selectedPlan;
+    }
+  }
   const sheet = $("#plan-chooser");
   if (!sheet) return;
   sheet.hidden = !open;
@@ -647,25 +1113,63 @@ function openPlanChooser(open = true) {
   }
 }
 
+function setChooserListExpanded(expanded) {
+  state.chooserListExpanded = !!expanded;
+  if (state.planChooserOpen) renderPlanChooser();
+}
+
 function updateChooserAssignState() {
   const btn = $("#btn-chooser-assign");
   const label = $("#chooser-selected-label");
   const active = isLiveStatus(state.live?.run_status);
   const plan = state.selectedPlan;
   if (label) {
-    label.textContent = plan ? `已选：${planDisplayName(plan)}` : "未选择计划";
+    label.textContent = plan ? `将执行：${planDisplayName(plan)}` : "未选择计划";
     label.title = plan || "";
   }
   if (btn && !state.assigning) {
     btn.disabled = !plan || !!active;
-    btn.textContent = active ? "运行中…" : "分配计划";
+    btn.textContent = active ? "运行中…" : "开始拆分";
   }
 }
 
 function renderPlanChooser() {
   const list = $("#chooser-list");
   const empty = $("#chooser-empty");
+  const toggle = $("#btn-chooser-toggle-list");
+  const sub = $("#chooser-sub");
   if (!list) return;
+  syncShowExecutedToggles();
+
+  const hasSelected = !!state.selectedPlan;
+  const expanded = state.chooserListExpanded != null
+    ? !!state.chooserListExpanded
+    : !hasSelected;
+
+  if (toggle) {
+    toggle.hidden = !hasSelected;
+    toggle.textContent = expanded ? "收起列表" : "换一份计划…";
+  }
+  if (sub) {
+    if (typeof flowChooserSub === "function") {
+      sub.textContent = flowChooserSub(hasSelected);
+    } else {
+      sub.textContent = hasSelected
+        ? "已选计划 · 确认同时进行几步后点「开始拆分」"
+        : "确认同时进行几步后点「开始拆分」；可换一份计划";
+    }
+  }
+
+  // E1 薄层：已有选中且未展开 → 不铺全量列表
+  if (hasSelected && !expanded) {
+    if (empty) empty.hidden = true;
+    list.innerHTML = "";
+    list.hidden = true;
+    updateChooserAssignState();
+    return;
+  }
+  list.hidden = false;
+
   if (state.plansLoading) {
     if (empty) empty.hidden = true;
     list.innerHTML =
@@ -680,17 +1184,68 @@ function renderPlanChooser() {
     return;
   }
   if (empty) empty.hidden = true;
-  // 仅渲染列表；点选走全局委托，避免 onclick + capture 双触发
-  list.innerHTML = state.plans
-    .map((p) => {
-      const selected = p === state.selectedPlan;
-      const title = planDisplayName(p);
-      return `<button type="button" class="plan-item${selected ? " selected" : ""}" data-plan="${esc(p)}">
-        <div class="plan-item-title">${esc(title)}</div>
-        <div class="plan-item-path">${esc(p)}</div>
-      </button>`;
-    })
-    .join("");
+
+  // H2: build meta-backed rows; pin selected + draft so they always show
+  const root = state.selectedPath;
+  const pinPaths = [
+    state.selectedPlan,
+    state.chatDraftPlan,
+    state.planFull?.path,
+  ]
+    .filter(Boolean)
+    .map((p) => normalizePlanPath(p, root) || p);
+
+  const items = state.plans.map((p) => {
+    const path = normalizePlanPath(p, root) || p;
+    const meta = planMetaForPath(path, root);
+    return {
+      ...meta,
+      path,
+      title: meta.title || planDisplayName(path),
+    };
+  });
+  // Ensure pin-only paths (manual pick) appear even if filtered later
+  for (const pin of pinPaths) {
+    if (pin && !items.some((it) => it.path === pin)) {
+      const meta = planMetaForPath(pin, root);
+      items.unshift({
+        ...meta,
+        path: pin,
+        title: meta.title || planDisplayName(pin),
+      });
+    }
+  }
+
+  const parts = partitionPlanItems(items, {
+    showExecuted: !!state.showExecutedPlans,
+    pinPaths,
+  });
+
+  const rows = [];
+  for (const it of parts.visible) {
+    const path = it.path;
+    const selected = path === state.selectedPlan;
+    const title = it.title || planDisplayName(path);
+    const badge = planExecBadgeInfo(it);
+    rows.push(
+      `<button type="button" class="plan-item${selected ? " selected" : ""}" data-plan="${esc(path)}">` +
+        `<div class="plan-item-title-row">` +
+        `<div class="plan-item-title">${esc(title)}</div>` +
+        `<span class="plan-rail-badge ${badge.cls}">${esc(badge.label)}</span>` +
+        `</div>` +
+        `<div class="plan-item-path">${esc(path)}</div>` +
+        `</button>`
+    );
+  }
+  if (parts.historyHidden) {
+    rows.push(
+      `<div class="plan-history-hint muted" role="note">` +
+        `已隐藏 ${parts.historyCount} 份已执行计划 · 勾选上方「显示已执行」可展开` +
+        `</div>`
+    );
+  }
+
+  list.innerHTML = rows.join("");
   updateChooserAssignState();
 }
 
@@ -701,25 +1256,50 @@ function renderPlanPicker() {
   const btnEdit = $("#btn-edit-plan");
   const btnChat = $("#btn-open-chat");
   const btnMonitor = $("#btn-monitor-plan");
+  const btnPlanMgmt = $("#btn-plan-mgmt");
 
   const inWorkspace = !!state.selectedPath && state.page === "workspace";
   const inChat = !!state.selectedPath && state.page === "chat";
-  // 选择计划：workspace + chat 都可；分配计划：仅 workspace（聊天页用就绪条 #btn-chat-assign）
+  const inPlans = !!state.selectedPath && state.page === "plans";
+  // 选择计划：workspace；执行此计划：仅 workspace（聊天/计划管理用各自 CTA）
   const hideForPhase = state.phase === "planning" || state.phase === "confirm";
   const runActive = hasActiveRun();
   const hasSplit =
     !!state.planJob &&
     ["planned", "confirmed"].includes(String(state.planJob.status || "").toLowerCase());
 
-  // 顶栏「聊天」：已选项目常驻；chat 页隐藏自指（已在聊天）
+  // 顶栏「聊天」：已选项目常驻；chat 页隐藏自指
   if (btnChat) {
     btnChat.hidden =
-      !state.selectedPath || state.page === "welcome" || state.page === "chat";
+      !state.selectedPath ||
+      state.page === "welcome" ||
+      state.page === "chat";
     btnChat.disabled = false;
     btnChat.title = "与 AI 共建计划文档";
   }
 
-  // 顶栏「监控计划」：离开 workspace 且有规划/运行可看时显示（聊天/设置/帮助等）
+  // 计划管理 = 独立页面（page=plans），不是聊天右栏
+  // E2：running/confirm 时弱化为 ghost，不与「返回执行/继续确认」抢 primary
+  if (btnPlanMgmt) {
+    const runOrConfirm =
+      runActive ||
+      state.phase === "planning" ||
+      state.phase === "confirm";
+    const showMgmt =
+      !!state.selectedPath &&
+      state.page !== "welcome" &&
+      state.page !== "plans";
+    btnPlanMgmt.hidden = !showMgmt;
+    btnPlanMgmt.disabled = false;
+    btnPlanMgmt.textContent = "计划管理";
+    btnPlanMgmt.title = "进入计划管理：选中 / 预览 / 编辑文档 / 执行";
+    const makePrimary = inChat && !runOrConfirm;
+    btnPlanMgmt.classList.toggle("primary", makePrimary);
+    btnPlanMgmt.classList.toggle("ghost", !makePrimary);
+  }
+
+  // 顶栏「返回执行/继续确认」：仅有可监视活动时；chat 页与「计划管理」分钮（≠ 计划管理）
+  // 与 banner 互斥（updateBgPlanBanner 见 topMonVisible），避免三连噪声
   if (btnMonitor) {
     const showMon =
       !!state.selectedPath &&
@@ -728,43 +1308,64 @@ function renderPlanPicker() {
       hasMonitorableActivity();
     btnMonitor.hidden = !showMon;
     if (showMon) {
+      // 活动 run / 待确认：primary 更显眼；其它 ghost（chat 有计划管理时保持 ghost 不抢）
+      const urgent =
+        (runActive || (isPlanSessionActive() && !!state.planJobId)) && !inChat;
+      btnMonitor.classList.toggle("primary", urgent);
+      btnMonitor.classList.toggle("ghost", !urgent);
       if (runActive) {
-        btnMonitor.textContent = "监控计划";
-        btnMonitor.title = "返回工作区查看运行中的 CLI";
+        btnMonitor.textContent = "返回执行";
+        btnMonitor.title =
+      typeof flowRunningMonitorTitle === "function"
+        ? flowRunningMonitorTitle()
+        : "返回工作区查看执行进度";
       } else if (isRunPaused()) {
-        btnMonitor.textContent = "监控计划";
+        btnMonitor.textContent = "返回执行";
         btnMonitor.title = "返回工作区查看已暂停的计划";
       } else if (isPlanSessionActive()) {
-        btnMonitor.textContent = state.phase === "planning" ? "查看规划" : "返回确认";
+        btnMonitor.textContent =
+          state.phase === "planning" ? "查看规划" : "继续确认";
         btnMonitor.title =
-          state.phase === "planning" ? "返回工作区查看拆分进度" : "返回工作区确认拆分结果";
+          state.phase === "planning"
+            ? "返回工作区查看拆分进度"
+            : "返回工作区确认拆分结果";
       } else {
         btnMonitor.textContent = "查看结果";
         btnMonitor.title = "返回工作区查看运行结果";
       }
+    } else {
+      btnMonitor.classList.remove("primary");
+      btnMonitor.classList.add("ghost");
     }
   }
 
-  // 顶栏「选择计划」：workspace / chat；规划/确认相位隐藏
+  // 顶栏「选择计划」：workspace；chat/plans 用各自入口，隐藏以免堆按钮
   if (btnChoose) {
-    btnChoose.hidden = !(inWorkspace || inChat) || hideForPhase;
+    btnChoose.hidden = !inWorkspace || hideForPhase;
     btnChoose.disabled = !!runActive;
     btnChoose.title = runActive ? "运行中，请先停止后再切换计划" : "选择计划";
   }
-  // 顶栏「分配计划」：仅 workspace 显示；聊天页只在保存后用就绪条分配
+  // 顶栏「执行此计划」：仅 workspace 显示；聊天/管理页用各自 CTA
   if (btnAssign) {
     btnAssign.hidden = !inWorkspace || hideForPhase;
+    if (!hideForPhase && !state.assigning) {
+      btnAssign.textContent = runActive ? "运行中…" : "执行此计划";
+      btnAssign.title = runActive
+        ? "运行中，请先停止后再执行新计划"
+        : "打开执行选项并拆分";
+    }
   }
 
-  // 「编辑计划」：仅在有拆分结果时显示；运行中禁用，暂停后可进确认页改未执行任务
+  // 「编辑任务」：仅在有拆分结果时显示；运行中禁用，暂停后可进确认页改未执行任务
   if (btnEdit) {
     const showEdit = inWorkspace && hasSplit;
     btnEdit.hidden = !showEdit;
     if (showEdit) {
+      btnEdit.textContent = "编辑任务";
       const editableNow = canEditSelectedTask(state.confirmTaskId || state.planJob?.tasks?.[0]?.id);
       btnEdit.disabled = !!runActive && !isRunPaused();
       if (runActive && !isRunPaused()) {
-        btnEdit.title = "运行中不可编辑，请先停止或待计划暂停";
+        btnEdit.title = "运行中不可编辑任务，请先停止或待计划暂停";
       } else if (isRunPaused()) {
         btnEdit.title = "计划已暂停：仅可编辑尚未执行的任务";
       } else if (state.phase === "confirm" || editableNow) {
@@ -783,11 +1384,11 @@ function renderPlanPicker() {
     pp.classList.add("headless", "compact");
   }
 
-  // 非 workspace：聊天页保留已开的 plan-chooser（全局浮层）；其它页关掉
+  // 非 workspace：chat/plans 保留已开的 plan-chooser；其它页关掉（E0 修 plans 误关）
   if (!inWorkspace) {
-    if (!inChat && state.planChooserOpen && !runActive) {
+    if (!inChat && !inPlans && state.planChooserOpen && !runActive) {
       openPlanChooser(false);
-    } else if (inChat && state.planChooserOpen) {
+    } else if ((inChat || inPlans) && state.planChooserOpen) {
       renderPlanChooser();
       updateChooserAssignState();
     }
@@ -797,11 +1398,13 @@ function renderPlanPicker() {
   }
 
   const active = runActive || isLiveStatus(state.live?.run_status);
-  if (btnAssign) {
+  if (btnAssign && !state.assigning) {
     // 弹窗化后无计划也可点开选计划；仅运行中禁用
     btnAssign.disabled = !!active;
-    btnAssign.textContent = active ? "运行中…" : "分配计划";
-    btnAssign.title = active ? "运行中，请先停止后再分配新计划" : "分配计划";
+    btnAssign.textContent = active ? "运行中…" : "执行此计划";
+    btnAssign.title = active
+      ? "运行中，请先停止后再执行新计划"
+      : "打开执行选项并拆分";
   }
   updateSplitPlanChip();
 
@@ -832,7 +1435,7 @@ function renderPlanPicker() {
   updateTopPlanInfo();
 }
 
-/** Top-bar summary of the latest split plan (right of 分配计划). */
+/** Top-bar summary of the latest split plan (right of 执行此计划). */
 function updateSplitPlanChip() {
   const chip = $("#split-plan-chip");
   if (!chip) return;
@@ -944,7 +1547,7 @@ function showSplitPlanConfirm(opts = {}) {
 /** Top-bar「编辑计划」：进确认页；仅暂停后、未执行任务可改。 */
 function openEditPlan() {
   if (!state.planJob) {
-    toast("还没有拆分结果，请先分配计划");
+    toast("还没有拆分结果，请先执行此计划");
     return;
   }
   if (hasActiveRun()) {
@@ -1146,7 +1749,7 @@ async function pickPlanFileForPicker() {
     }
     if (!state.plans.includes(rel)) state.plans = [rel, ...state.plans];
     await selectPlan(rel);
-    // 留在弹窗内，方便直接点「分配计划」
+    // 留在弹窗内，方便直接点「开始拆分」
     if (state.planChooserOpen) {
       renderPlanChooser();
       updateChooserAssignState();
@@ -1172,13 +1775,13 @@ async function setDefaultPlan() {
 }
 
 /** Mode B: analyze plan → plan job (does NOT start workers). */
-/** 分配计划：AI 拆分后进入确认（可编辑） */
+/** 开始拆分：AI 拆分后进入确认（可编辑）；入口文案统一为「执行此计划 / 开始拆分」 */
 async function analyzePlanFromPicker() {
   const err = $("#pp-error");
   if (err) err.hidden = true;
   if (state.assigning) return;
   if (hasActiveRun()) {
-    toastRunLocked("分配计划");
+    toastRunLocked("执行此计划");
     return;
   }
   if (!state.selectedPlan) {
@@ -1229,12 +1832,25 @@ async function analyzePlanFromPicker() {
   const logEl0 = $("#planner-log");
   if (logEl0) {
     logEl0.dataset.sig = "";
-    logEl0.innerHTML = '<div class="cli-empty-ai muted">正在启动规划…</div>';
+    logEl0.innerHTML =
+      '<div class="cli-empty-ai muted">正在理解计划并拆分步骤…</div>';
   }
   const sub0 = $("#planning-sub");
-  if (sub0) sub0.textContent = `正在分析 ${planDisplayName(state.selectedPlan)}…（并发 ${maxParallel}）`;
+  if (sub0) {
+    const name = planDisplayName(state.selectedPlan);
+    sub0.textContent =
+      typeof flowJoinSeriousFun === "function"
+        ? flowJoinSeriousFun(
+            `正在拆分「${name}」…（同时最多 ${maxParallel} 步）`,
+            typeof flowPickBlurb === "function" ? flowPickBlurb("planning", name) : ""
+          )
+        : `正在拆分「${name}」…（同时最多 ${maxParallel} 步）`;
+  }
 
   try {
+    const preserveFrom = state.preserveFromJobId || null;
+    // One-shot: clear so a later fresh assign doesn't accidentally inherit.
+    state.preserveFromJobId = null;
     const view = await invoke("start_plan_job_cmd", {
       req: {
         project: state.selectedPath,
@@ -1243,6 +1859,8 @@ async function analyzePlanFromPicker() {
         provider,
         mode,
         max_parallel: maxParallel,
+        // P2-2: re-apply confirm-screen edits from previous job (by title).
+        preserve_from_job_id: preserveFrom || null,
       },
     });
     state.planJob = view;
@@ -1306,9 +1924,32 @@ function planHasOptionalTasks(view) {
   return tasks.some((t) => !!t.optional);
 }
 
+function isSystemPostTask(t) {
+  if (!t) return false;
+  const id = String(t.id || "");
+  if (id === "sys-post-inspect" || id === "sys-post-git-push") return true;
+  if (id.startsWith("sys-post-")) return true;
+  return String(t.group || "") === "系统收尾";
+}
+
 function countOptionalIncluded(view) {
   const tasks = view?.tasks || [];
   return tasks.filter((t) => t.optional && t.include !== false).length;
+}
+
+/**
+ * Whether confirm screen must wait for human before auto-start.
+ * - Business optionals (非系统): always block（默认不跑，须人勾选）
+ * - System post only（设置开启、默认勾选）: 全部 include 则可 auto-start
+ */
+function planNeedsOptionalConfirm(view) {
+  const tasks = view?.tasks || [];
+  const businessOpt = tasks.filter((t) => !!t.optional && !isSystemPostTask(t));
+  if (businessOpt.length > 0) return true;
+  const sysOpt = tasks.filter((t) => !!t.optional && isSystemPostTask(t));
+  if (!sysOpt.length) return false;
+  // 系统收尾有未勾选 → 仍停一下让用户看到；全勾选则不挡 auto-start
+  return sysOpt.some((t) => t.include === false);
 }
 
 async function advancePlannedJob(view) {
@@ -1319,35 +1960,36 @@ async function advancePlannedJob(view) {
   }
   stashPlanSession(state.selectedPath);
   updateBgPlanBanner();
-  // 人不在工作区时不自动开跑，避免后台误启 worker；提示返回确认
+  // E2：拆分完成必须回到执行面，禁止只 toast「请返回确认」而人还在 chat/plans
   if (state.page !== "workspace") {
-    state.phase = "confirm";
-    setAssignBusy(false);
-    stashPlanSession(state.selectedPath);
-    toast(`拆分完成（${view.task_count || view.tasks?.length || 0} 任务），请返回确认`);
-    updateBgPlanBanner();
-    return;
+    showPage("workspace");
   }
   const n = view.task_count || view.tasks?.length || 0;
   const adapter = view.adapter || "";
   const how =
-    adapter.includes("heuristic")
-      ? "本地启发式拆分"
-      : adapter.includes("llm")
-        ? "Claude CLI 规划"
-        : "规划完成";
-  // Optional tasks need an explicit user choice — never auto-start past them.
+    typeof flowPlanHowLabel === "function"
+      ? flowPlanHowLabel(adapter)
+      : adapter.includes("heuristic")
+        ? "本地规则拆分"
+        : adapter.includes("llm")
+          ? "智能拆分"
+          : "拆分完成";
+  // 业务可选：必须人工确认。系统收尾默认勾选时可 auto-start。
+  const needsOpt = planNeedsOptionalConfirm(view);
   const hasOptional = planHasOptionalTasks(view);
-  if (state.autoStartAfterPlan && !hasOptional) {
+  if (state.autoStartAfterPlan && !needsOpt) {
     toast(`${how}：${n} 个任务，正在启动…`);
     state.phase = "confirm";
     renderPhasePanels();
+    renderPlanPicker();
     setAssignBusy(false);
     await confirmAndStart();
   } else {
-    const optHint = hasOptional
-      ? "；含可选项，请勾选后再开始"
-      : "，请确认后开始";
+    const optHint = needsOpt
+      ? "；含可选项，请确认勾选后再开始"
+      : hasOptional
+        ? "；含系统收尾（默认已勾选）"
+        : "，请确认后开始";
     toast(`${how}：${n} 个任务${optHint}`);
     state.phase = "confirm";
     renderPhasePanels();
@@ -1388,7 +2030,7 @@ async function refreshPlanJob() {
         stopPlanJobPoll();
         setAssignBusy(false);
         state.phase = "pick";
-        toast("规划超时：Claude CLI 可能卡住。请检查 claude 是否在 PATH，或高级选项改用模拟。");
+        toast("拆分超时：智能拆分可能无响应。请检查环境，或在更多选项里改用「模拟拆分」。");
         renderPhasePanels();
         renderPlanPicker();
         return;
@@ -1398,7 +2040,10 @@ async function refreshPlanJob() {
         const elapsed = state.planStartedAt
           ? Math.round((Date.now() - state.planStartedAt) / 1000)
           : 0;
-        sub.textContent = `正在调用 Claude CLI 拆分（已等待 ${elapsed}s）…`;
+        sub.textContent =
+          typeof flowPlanningSub === "function"
+            ? flowPlanningSub(elapsed)
+            : `正在拆分计划步骤（已等待 ${elapsed}s）…`;
       }
       renderPhasePanels();
     } else if (status === "confirmed" && (view.run_id || view.runId)) {
@@ -1451,31 +2096,194 @@ function renderConfirmPanel() {
       ? ` · 依赖限制下最宽波 ${widestWave}（上限 ${mpCap} 未吃满）`
       : "";
   const optTasks = tasks.filter((t) => !!t.optional);
+  const sysOpt = optTasks.filter((t) => isSystemPostTask(t));
+  const bizOpt = optTasks.filter((t) => !isSystemPostTask(t));
   const optOn = optTasks.filter((t) => t.include !== false).length;
-  const optHint =
-    optTasks.length > 0
-      ? ` · 可选 ${optOn}/${optTasks.length} 已勾选`
-      : "";
-  $("#confirm-meta").textContent = `${job.task_count || tasks.length} 个任务 · 并发上限 ${
-    mpCap
-  } · ${layers.length} 波${parallelHint}${optHint} · 规划方式 ${job.plan_mode || "—"} · ${
-    runLocked
-      ? "运行中（只读）"
-      : paused
-        ? "已暂停 · 仅未执行任务可编辑"
-        : optTasks.length > 0
-          ? "勾选可选项后开始（默认不跑可选）"
+  const sysOn = sysOpt.filter((t) => t.include !== false).length;
+  let optHint = "";
+  if (optTasks.length > 0) {
+    const bits = [`可选 ${optOn}/${optTasks.length} 已勾选`];
+    if (sysOpt.length) bits.push(`系统收尾 ${sysOn}/${sysOpt.length}`);
+    if (bizOpt.length) bits.push(`业务可选 ${bizOpt.filter((t) => t.include !== false).length}/${bizOpt.length}`);
+    optHint = ` · ${bits.join(" · ")}`;
+  }
+  const confirmHint = runLocked
+    ? "运行中（只读）"
+    : paused
+      ? "已暂停 · 仅未执行任务可编辑"
+      : bizOpt.length > 0
+        ? "业务可选项默认不跑 · 请勾选后再开始"
+        : sysOpt.length > 0
+          ? "系统收尾默认已勾选 · 可取消后开始"
           : reused
             ? "可编辑未执行任务后再次运行"
-            : "可编辑 · 确认后开始"
-  }`;
+            : "可编辑 · 确认后开始";
+  const modeRaw = job.digest_mode || job.digestMode || "";
+  const modeLabel =
+    typeof flowModeLabel === "function" ? flowModeLabel(modeRaw) : "";
+  const modeBit = modeLabel ? ` · ${modeLabel}` : "";
+  $("#confirm-meta").textContent = `${job.task_count || tasks.length} 个步骤 · 同时最多 ${
+    mpCap
+  } · ${layers.length} 波${parallelHint}${optHint}${modeBit} · ${confirmHint}`;
+  applyFlowModeBadge(
+    "#confirm-mode-row",
+    "#confirm-mode-badge",
+    "#confirm-mode-hint",
+    modeRaw
+  );
+  // Critic hygiene strip (from finish_plan_job / manual sanitize)
+  const criticEl = $("#confirm-critic-note");
+  if (criticEl) {
+    let critic =
+      job.critic_summary ||
+      job.criticSummary ||
+      "";
+    if (critic && typeof humanizePlannerLogLine === "function") {
+      critic = humanizePlannerLogLine(critic);
+    }
+    if (critic && String(critic).trim()) {
+      criticEl.hidden = false;
+      criticEl.textContent = String(critic).trim();
+      const clean =
+        /无需改动|未发现可疑|无需/.test(critic) &&
+        !/去掉|改写|钉入|手动清理 · 去掉/.test(critic);
+      criticEl.classList.toggle("is-clean", clean);
+    } else {
+      criticEl.hidden = true;
+      criticEl.textContent = "";
+      criticEl.classList.remove("is-clean");
+    }
+  }
+  // Structured critic chips
+  const chips = $("#confirm-critic-chips");
+  const nEdges = job.critic_edges_removed ?? job.criticEdgesRemoved;
+  const nTitles = job.critic_titles_rewritten ?? job.criticTitlesRewritten;
+  const nPrompts = job.critic_prompts_tagged ?? job.criticPromptsTagged;
+  const llmUsed = job.critic_llm_used ?? job.criticLlmUsed;
+  const hasStats =
+    nEdges != null || nTitles != null || nPrompts != null || llmUsed != null;
+  if (chips) {
+    if (!hasStats) {
+      chips.hidden = true;
+    } else {
+      chips.hidden = false;
+      const modeChip = $("#chip-critic-mode");
+      if (modeChip) {
+        modeChip.hidden = false;
+        if (llmUsed === true) {
+          modeChip.textContent = "智能第二跳 ✓";
+          modeChip.classList.add("is-llm");
+          modeChip.classList.remove("is-rules", "is-zero");
+          modeChip.title = "本次拆分启用了规则校对 + 智能第二跳";
+        } else {
+          modeChip.textContent = "规则校对";
+          modeChip.classList.add("is-rules");
+          modeChip.classList.remove("is-llm", "is-zero");
+          modeChip.title =
+            "仅规则校对（可在设置开启「智能第二跳校对」）";
+        }
+      }
+      const setChip = (id, label, n) => {
+        const el = $(id);
+        if (!el) return;
+        if (n == null) {
+          el.hidden = true;
+          return;
+        }
+        el.hidden = false;
+        el.textContent = `${label} ${n}`;
+        el.classList.toggle("is-zero", Number(n) === 0);
+      };
+      setChip("#chip-critic-edges", "清依赖", nEdges);
+      setChip("#chip-critic-titles", "改标题", nTitles);
+      setChip("#chip-critic-prompts", "钉提示", nPrompts);
+      // Cost / duration chips (only when LLM second pass ran)
+      const cost = job.critic_llm_cost_usd ?? job.criticLlmCostUsd;
+      const ms = job.critic_llm_ms ?? job.criticLlmMs;
+      const costChip = $("#chip-critic-cost");
+      const msChip = $("#chip-critic-ms");
+      if (costChip) {
+        if (llmUsed === true && cost != null && Number.isFinite(Number(cost))) {
+          costChip.hidden = false;
+          costChip.textContent = `$${Number(cost).toFixed(3)}`;
+          costChip.classList.add("is-llm");
+          costChip.title = "智能第二跳费用（USD）";
+        } else {
+          costChip.hidden = true;
+        }
+      }
+      if (msChip) {
+        if (llmUsed === true && ms != null && Number(ms) >= 0) {
+          msChip.hidden = false;
+          const n = Number(ms);
+          msChip.textContent =
+            n >= 1000 ? `${(n / 1000).toFixed(1)}s` : `${Math.round(n)}ms`;
+          msChip.classList.add("is-llm");
+          msChip.title = "智能第二跳耗时";
+        } else {
+          msChip.hidden = true;
+        }
+      }
+    }
+  }
+  // Critic free-form notes (e.g. missing inspect tail)
+  const notesEl = $("#confirm-critic-notes");
+  const criticActions = $("#confirm-critic-actions");
+  let showInspectCta = false;
+  if (notesEl) {
+    const notes = job.critic_notes || job.criticNotes || [];
+    const list = Array.isArray(notes) ? notes.filter((n) => String(n || "").trim()) : [];
+    if (!list.length) {
+      notesEl.hidden = true;
+      notesEl.innerHTML = "";
+    } else {
+      notesEl.hidden = false;
+      notesEl.innerHTML = list
+        .map((n) => {
+          let t = String(n);
+          if (typeof humanizePlannerLogLine === "function") t = humanizePlannerLogLine(t);
+          if (/检验|巡检|inspect/i.test(t)) showInspectCta = true;
+          // Escape via textContent path
+          const li = document.createElement("li");
+          li.textContent = t;
+          return li.outerHTML;
+        })
+        .join("");
+    }
+  }
+  // Show "enable smart critic" when this split was rules-only.
+  // Use state.confirmEditing here — `const editing` is declared later (after waves);
+  // reading it early is a TDZ ReferenceError that blanked the whole task list.
+  const showCriticCta = llmUsed === false || llmUsed == null;
+  const editingNow = !!state.confirmEditing;
+  if (criticActions) {
+    const inspectBtn = $("#btn-enable-post-inspect");
+    const criticBtn = $("#btn-enable-planner-critic");
+    const anyCta = (showInspectCta || showCriticCta) && !runLocked;
+    criticActions.hidden = !anyCta;
+    if (inspectBtn) {
+      inspectBtn.hidden = !showInspectCta;
+      inspectBtn.disabled = !!runLocked || editingNow || !state.planJobId;
+    }
+    if (criticBtn) {
+      criticBtn.hidden = !showCriticCta || !!runLocked;
+      criticBtn.disabled = !!runLocked || editingNow || !state.planJobId;
+    }
+  }
 
   const waves = $("#confirm-waves");
   waves.innerHTML = layers
     .map((layer, i) => {
       const rows = layer
         .map((id) => {
-          const t = byId[id] || { id, title: id, depends_on: [], optional: false, include: true };
+          const t = byId[id] || {
+            id,
+            title: id,
+            depends_on: [],
+            optional: false,
+            include: true,
+            provider: job.provider || "claude",
+          };
           const sel = state.confirmTaskId === id ? " selected" : "";
           const live = liveTaskById(id);
           const liveSt = live?.status || "";
@@ -1496,14 +2304,26 @@ function renderConfirmPanel() {
               ? " optional-on"
               : " optional-off"
             : "";
+          const isSys =
+            id === "sys-post-inspect" ||
+            id === "sys-post-git-push" ||
+            String(t.group || "") === "系统收尾";
+          const optBadge = isSys
+            ? `<span class="opt-badge opt-badge-sys" title="系统收尾：不参与拆解">系统</span>`
+            : `<span class="opt-badge">可选</span>`;
           const checkHtml = isOpt
-            ? `<label class="wave-task-check" title="可选：勾选后才会执行" data-check-for="${esc(id)}">
+            ? `<label class="wave-task-check" title="${
+                isSys
+                  ? "系统收尾步骤：默认勾选；取消则本次不跑"
+                  : "可选：勾选后才会执行"
+              }" data-check-for="${esc(id)}">
                 <input type="checkbox" class="wave-opt-check" data-id="${esc(id)}" ${
                   included ? "checked" : ""
                 } ${runLocked || !pending ? "disabled" : ""} />
-                <span class="opt-badge">可选</span>
+                ${optBadge}
               </label>`
-            : `<span class="wave-task-req muted" title="必选任务">必选</span>`;
+            : `<span class="wave-task-req muted" title="必选步骤">必选</span>`;
+          // Main path: no engine badge (provider stays in advanced edit only).
           return `<div class="wave-task-row${sel}${pending ? "" : " done-ish"}${optClass}" data-id="${esc(id)}">
             ${checkHtml}
             <button type="button" class="wave-task" data-id="${esc(id)}">
@@ -1573,11 +2393,19 @@ function renderConfirmPanel() {
   const promptEl = $("#confirm-task-prompt");
   const editForm = $("#confirm-edit-form");
   const editBtn = $("#btn-confirm-edit");
+  const deleteBtn = $("#btn-confirm-delete");
   const cancelBtn = $("#btn-confirm-edit-cancel");
   const saveBtn = $("#btn-confirm-edit-save");
   const promptLabel = $("#confirm-prompt-label");
+  const providerSel = $("#confirm-task-provider");
   const taskEditable = !!cur && canEditSelectedTask(cur.id);
   const editing = !!state.confirmEditing && taskEditable;
+  const curProvider = (
+    cur?.provider ||
+    job.provider ||
+    $("#pp-provider")?.value ||
+    "claude"
+  ).toLowerCase();
 
   if (cur) {
     state.confirmTaskId = cur.id;
@@ -1587,16 +2415,20 @@ function renderConfirmPanel() {
       ? cur.include !== false
         ? "可选项 · 已勾选（会执行）"
         : "可选项 · 未勾选（默认不跑）"
-      : "必选任务";
+      : "必选步骤";
+    let depTitles = [];
     if (cur.depends_on?.length > 0) {
-      const depLabels = cur.depends_on.map((id) => {
+      depTitles = cur.depends_on.map((id) => {
         const d = byId[id];
-        return d ? `${d.title}（${id}）` : id;
+        return d ? `${d.title}` : id;
       });
-      $("#confirm-task-deps").textContent = `${kind} · 依赖：${depLabels.join(" · ")}`;
-    } else {
-      $("#confirm-task-deps").textContent = `${kind} · 无依赖，属于首波`;
     }
+    $("#confirm-task-deps").textContent =
+      typeof flowConfirmDepsLine === "function"
+        ? flowConfirmDepsLine(kind, depTitles)
+        : depTitles.length
+          ? `${kind} · 等待：${depTitles.join(" · ")}`
+          : `${kind} · 无依赖，可进首波`;
     const full =
       cur.prompt ||
       cur.prompt_preview ||
@@ -1605,14 +2437,46 @@ function renderConfirmPanel() {
     if (editing) {
       if (promptEl) promptEl.hidden = true;
       if (editForm) editForm.hidden = false;
-      if (promptLabel) promptLabel.textContent = "编辑任务说明";
+      if (promptLabel) {
+        promptLabel.textContent =
+          typeof flowPromptLabel === "function"
+            ? flowPromptLabel(true)
+            : "编辑步骤说明";
+      }
       const titleInput = $("#confirm-edit-title");
       const promptInput = $("#confirm-edit-prompt");
+      const editProv = $("#confirm-edit-provider");
+      const depsBox = $("#confirm-edit-deps");
       if (titleInput && document.activeElement !== titleInput) {
         titleInput.value = cur.title || "";
       }
       if (promptInput && document.activeElement !== promptInput) {
         promptInput.value = full;
+      }
+      if (editProv && document.activeElement !== editProv) {
+        editProv.value = curProvider;
+      }
+      // P2-1: multi-select deps (other tasks only). Rebuild when task id changes.
+      if (depsBox && depsBox.dataset.forTask !== cur.id) {
+        depsBox.dataset.forTask = cur.id;
+        const others = tasks.filter((t) => t.id !== cur.id);
+        if (!others.length) {
+          depsBox.innerHTML =
+            '<span class="confirm-edit-deps-empty">没有其它步骤可依赖</span>';
+        } else {
+          const selected = new Set(cur.depends_on || []);
+          depsBox.innerHTML = others
+            .map((t) => {
+              const checked = selected.has(t.id) ? "checked" : "";
+              return (
+                `<label>` +
+                `<input type="checkbox" class="confirm-dep-check" value="${esc(t.id)}" ${checked} />` +
+                `<span>${esc(t.title || t.id)} <span class="muted">(${esc(t.id)})</span></span>` +
+                `</label>`
+              );
+            })
+            .join("");
+        }
       }
     } else {
       if (promptEl) {
@@ -1623,15 +2487,21 @@ function renderConfirmPanel() {
       }
       if (editForm) editForm.hidden = true;
       if (promptLabel) {
-        promptLabel.textContent = "完整任务说明（Markdown 渲染 · 将发给 worker CLI）";
+        promptLabel.textContent =
+          typeof flowPromptLabel === "function"
+            ? flowPromptLabel(false)
+            : "完整步骤说明（执行时按此自动进行）";
       }
     }
     if (metaEl) {
       const chars = [...full].length;
       metaEl.hidden = false;
-      metaEl.textContent = editing
-        ? `编辑中 · ${chars} 字`
-        : `说明长度 ${chars} 字 · 点左侧可切换任务`;
+      metaEl.textContent =
+        typeof flowConfirmMetaLine === "function"
+          ? flowConfirmMetaLine(chars, editing)
+          : editing
+            ? `编辑中 · 说明 ${chars} 字`
+            : `说明 ${chars} 字 · 点左侧可切换步骤`;
     }
   } else {
     $("#confirm-task-title").textContent = "选择左侧任务查看说明";
@@ -1648,6 +2518,61 @@ function renderConfirmPanel() {
     }
   }
 
+  // multi-cli P2-6 / H4: show per-task engine on confirm detail (not only hidden advanced).
+  const providerField = $("#confirm-provider-field");
+  if (providerField) {
+    // Visible whenever a task is selected and editable; keep hidden while editing form open
+    // (form has its own provider select).
+    providerField.hidden = !cur || editing;
+  }
+  if (providerSel) {
+    if (document.activeElement !== providerSel) {
+      providerSel.value = cur ? curProvider : "claude";
+    }
+    providerSel.disabled = !cur || !taskEditable || editing || !!runLocked;
+    providerSel.title = !cur
+      ? "选择左侧步骤"
+      : runLocked
+        ? "运行中不可改执行通道"
+        : !taskEditable
+          ? "仅未执行步骤可改执行通道"
+          : editing
+            ? "请在编辑表单中改执行通道"
+            : "本步骤执行通道（混跑可改）";
+    providerSel.onchange = async () => {
+      if (!cur || !taskEditable || hasActiveRun() || state.confirmEditing) {
+        providerSel.value = curProvider;
+        return;
+      }
+      const next = (providerSel.value || "claude").toLowerCase();
+      if (next === curProvider) return;
+      try {
+        const view = await invoke("update_plan_task_cmd", {
+          jobId: state.planJobId,
+          taskId: cur.id,
+          provider: next,
+        });
+        state.planJob = view;
+        state.planJobId = view.job_id || view.jobId || state.planJobId;
+        stashPlanSession(state.selectedPath);
+        const label =
+          typeof flowEngineLabel === "function"
+            ? flowEngineLabel(next)
+            : next === "codex"
+              ? "备用通道"
+              : next === "fake"
+                ? "演练"
+                : "默认通道";
+        toast(`已设「${cur.title || cur.id}」→ ${label}`);
+        renderConfirmPanel();
+        renderPlanPicker();
+      } catch (e) {
+        providerSel.value = curProvider;
+        toast(String(e));
+      }
+    };
+  }
+
   if (editBtn) {
     editBtn.hidden = !cur || editing || !taskEditable;
     editBtn.disabled = !taskEditable;
@@ -1658,8 +2583,21 @@ function renderConfirmPanel() {
           ? "该任务已执行，不可编辑"
           : "当前状态不可编辑";
     } else {
-      editBtn.title = "编辑此任务说明";
+      editBtn.title = "编辑标题 / 说明 / 依赖";
     }
+  }
+  if (deleteBtn) {
+    const canDelete =
+      !!cur && taskEditable && !editing && tasks.length > 1 && !runLocked;
+    deleteBtn.hidden = !canDelete;
+    deleteBtn.disabled = !canDelete;
+    deleteBtn.title = !cur
+      ? "选择左侧步骤"
+      : runLocked
+        ? "运行中不可删除"
+        : tasks.length <= 1
+          ? "至少保留一个步骤"
+          : "从本轮拆分中删除此步骤";
   }
   if (cancelBtn) cancelBtn.hidden = !editing;
   if (saveBtn) saveBtn.hidden = !editing;
@@ -1679,7 +2617,18 @@ function renderConfirmPanel() {
   const replanBtn = $("#btn-replan");
   if (replanBtn) {
     replanBtn.disabled = !!runLocked || editing;
-    replanBtn.title = runLocked ? "运行中，请先停止后再重新规划" : "清空本次拆分并重新分配";
+    replanBtn.title = runLocked
+      ? "运行中，请先停止后再重新拆分"
+      : "保留当前计划，立刻按最新规则再拆一轮";
+    if (!runLocked) replanBtn.textContent = "重新拆分";
+  }
+  const sanitizeBtn = $("#btn-sanitize-deps");
+  if (sanitizeBtn) {
+    sanitizeBtn.disabled = !!runLocked || editing || !state.planJobId;
+    sanitizeBtn.hidden = !!runLocked;
+    sanitizeBtn.title = runLocked
+      ? "运行中不可改依赖"
+      : "去掉说明里未写明原因的依赖，让正交步骤可并行";
   }
   const backBtn = $("#btn-confirm-back");
   if (backBtn) {
@@ -1735,6 +2684,16 @@ async function saveConfirmEdit() {
   }
   const title = ($("#confirm-edit-title")?.value || "").trim();
   const prompt = ($("#confirm-edit-prompt")?.value || "").trimEnd();
+  const provider = (
+    $("#confirm-edit-provider")?.value ||
+    $("#confirm-task-provider")?.value ||
+    state.planJob?.provider ||
+    "claude"
+  ).toLowerCase();
+  // P2-1: collect depends_on from checkbox group
+  const dependsOn = [
+    ...document.querySelectorAll("#confirm-edit-deps .confirm-dep-check:checked"),
+  ].map((el) => el.value);
   if (!title) {
     if (err) {
       err.textContent = "标题不能为空";
@@ -1755,12 +2714,17 @@ async function saveConfirmEdit() {
       taskId: state.confirmTaskId,
       title,
       prompt,
+      provider,
+      dependsOn,
     });
     state.planJob = view;
     state.planJobId = view.job_id || view.jobId || state.planJobId;
     state.confirmEditing = false;
+    // Force deps box rebuild next open
+    const depsBox = $("#confirm-edit-deps");
+    if (depsBox) delete depsBox.dataset.forTask;
     stashPlanSession(state.selectedPath);
-    toast("已保存任务修改");
+    toast("已保存任务修改（含依赖）");
     renderConfirmPanel();
     renderPlanPicker();
   } catch (e) {
@@ -1769,6 +2733,54 @@ async function saveConfirmEdit() {
       err.hidden = false;
     }
     toast(String(e));
+  }
+}
+
+/** P2-1: delete selected task from proposed plan. */
+async function deleteConfirmTask() {
+  if (hasActiveRun()) {
+    toast("运行中不可删除");
+    return;
+  }
+  if (state.confirmEditing) {
+    toast("请先保存或取消编辑");
+    return;
+  }
+  if (!state.planJobId || !state.confirmTaskId) {
+    toast("请先选择任务");
+    return;
+  }
+  if (!canEditSelectedTask(state.confirmTaskId)) {
+    toast("仅未执行的任务可删除");
+    return;
+  }
+  const tasks = state.planJob?.tasks || [];
+  if (tasks.length <= 1) {
+    toast("至少保留一个步骤");
+    return;
+  }
+  const cur = tasks.find((t) => t.id === state.confirmTaskId);
+  const label = cur?.title || state.confirmTaskId;
+  if (!window.confirm(`从本轮拆分中删除「${label}」？\n依赖它的步骤会自动去掉这条边。`)) {
+    return;
+  }
+  try {
+    const view = await invoke("remove_plan_task_cmd", {
+      jobId: state.planJobId,
+      taskId: state.confirmTaskId,
+    });
+    state.planJob = view;
+    state.planJobId = view.job_id || view.jobId || state.planJobId;
+    state.confirmTaskId = view.tasks?.[0]?.id || null;
+    state.confirmEditing = false;
+    const depsBox = $("#confirm-edit-deps");
+    if (depsBox) delete depsBox.dataset.forTask;
+    stashPlanSession(state.selectedPath);
+    toast(`已删除「${label}」`);
+    renderConfirmPanel();
+    renderPlanPicker();
+  } catch (e) {
+    toast(String(e?.message || e));
   }
 }
 
@@ -1868,30 +2880,200 @@ function cancelPlanning() {
   updateBgPlanBanner();
 }
 
-function replanFromConfirm() {
+/**
+ * Confirm-screen re-split: keep current plan path and start a fresh plan job
+ * (one click — no need to re-pick the file). Falls back to chooser if no plan.
+ * P2-2: pass preserve_from_job_id so human title/prompt/deps/deletes re-apply.
+ */
+async function replanFromConfirm() {
   if (hasActiveRun()) {
-    toastRunLocked("重新规划");
+    toastRunLocked("重新拆分");
     return;
   }
   if (state.confirmEditing) {
     toast("请先保存或取消编辑");
     return;
   }
+  const mode =
+    state.planJob?.digest_mode || state.planJob?.digestMode || "";
+  const modeHint =
+    typeof flowModeLabel === "function" && mode
+      ? `「${flowModeLabel(mode)}」`
+      : "";
+  const planPath =
+    state.selectedPlan ||
+    state.planJob?.plan_path ||
+    state.planJob?.planPath ||
+    null;
+  if (planPath && !state.selectedPlan) {
+    state.selectedPlan =
+      typeof normalizePlanPath === "function"
+        ? normalizePlanPath(planPath, state.selectedPath) || planPath
+        : planPath;
+  }
+
+  // P2-2: remember current job so the next start_plan_job can re-apply edits.
+  const preserveFrom =
+    state.planJobId ||
+    state.planJob?.job_id ||
+    state.planJob?.jobId ||
+    null;
+  state.preserveFromJobId = preserveFrom;
+
   stopPlanJobPoll();
   setAssignBusy(false);
   clearPlanSession(state.selectedPath);
-  state.phase = "pick";
   state.planJobId = null;
   state.planJob = null;
   state.confirmTaskId = null;
   state.confirmEditing = false;
   state.returnPhaseAfterConfirm = null;
+  state.phase = "pick";
   renderPhasePanels();
   renderPlanPicker();
   updateSplitPlanChip();
   updateBgPlanBanner();
-  openPlanChooser(true);
-  toast("已清空拆分，可调整并发后再次「分配计划」");
+
+  if (!state.selectedPlan || !state.selectedPath) {
+    openPlanChooser(true);
+    toast("请选择计划后再次拆分");
+    return;
+  }
+
+  toast(
+    modeHint
+      ? `按当前计划重新拆分（保留人工修改 · 上次：${modeHint}）…`
+      : preserveFrom
+        ? "按当前计划重新拆分（保留人工修改）…"
+        : "按当前计划重新拆分…"
+  );
+  // Same entry as「开始拆分」— keeps chooser options (并发 / 通道)
+  if (typeof analyzePlanFromPicker === "function") {
+    await analyzePlanFromPicker();
+  } else {
+    openPlanChooser(true);
+  }
+}
+
+/**
+ * Confirm-screen CTA when critic notes missing inspect tail:
+ * enable settings.post_inspect_enabled, then re-split current plan.
+ */
+async function enablePostInspectAndResplit() {
+  if (hasActiveRun()) {
+    toastRunLocked("开启巡检");
+    return;
+  }
+  if (state.confirmEditing) {
+    toast("请先保存或取消编辑");
+    return;
+  }
+  const btn = $("#btn-enable-post-inspect");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "开启中…";
+  }
+  try {
+    await invoke("set_settings_cmd", {
+      update: { post_inspect_enabled: true },
+    });
+    // Keep settings page in sync if open
+    if ($("#s-post-inspect")) $("#s-post-inspect").checked = true;
+    toast("已开启「拆分后附加：任务巡检」· 正在按当前计划重拆…");
+    if (typeof replanFromConfirm === "function") {
+      await replanFromConfirm();
+    }
+  } catch (e) {
+    toast(String(e?.message || e));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "开启巡检并重拆";
+    }
+  }
+}
+
+/**
+ * Confirm-screen CTA: enable settings.planner_critic_enabled, then re-split.
+ */
+async function enablePlannerCriticAndResplit() {
+  if (hasActiveRun()) {
+    toastRunLocked("开启智能校对");
+    return;
+  }
+  if (state.confirmEditing) {
+    toast("请先保存或取消编辑");
+    return;
+  }
+  const btn = $("#btn-enable-planner-critic");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "开启中…";
+  }
+  try {
+    await invoke("set_settings_cmd", {
+      update: { planner_critic_enabled: true },
+    });
+    if ($("#s-planner-critic")) $("#s-planner-critic").checked = true;
+    toast("已开启「智能第二跳校对」· 正在按当前计划重拆…");
+    if (typeof replanFromConfirm === "function") {
+      await replanFromConfirm();
+    }
+  } catch (e) {
+    toast(String(e?.message || e));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "开启智能校对并重拆";
+    }
+  }
+}
+
+/** Confirm-screen: drop unmotivated depends_on edges. */
+async function sanitizeDepsFromConfirm() {
+  if (hasActiveRun()) {
+    toastRunLocked("清理依赖");
+    return;
+  }
+  if (state.confirmEditing) {
+    toast("请先保存或取消编辑");
+    return;
+  }
+  if (!state.planJobId) {
+    toast("没有可清理的拆分结果");
+    return;
+  }
+  const btn = $("#btn-sanitize-deps");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "清理中…";
+  }
+  try {
+    const resp = await invoke("sanitize_plan_deps_cmd", {
+      jobId: state.planJobId,
+    });
+    const removed = resp?.removed ?? resp?.Removed ?? 0;
+    const view = resp?.view || resp;
+    if (view) {
+      state.planJob = view;
+      state.planJobId = view.job_id || view.jobId || state.planJobId;
+      stashPlanSession(state.selectedPath);
+    }
+    if (removed > 0) {
+      toast(`已去掉 ${removed} 条可疑依赖 · 步骤可更多并行`);
+    } else {
+      toast("没有发现可疑依赖 · 当前依赖均有说明支撑");
+    }
+    renderConfirmPanel();
+    renderPlanPicker();
+  } catch (e) {
+    toast(String(e?.message || e));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "清理可疑依赖";
+    }
+  }
 }
 
 /* ── Workspace live ── */

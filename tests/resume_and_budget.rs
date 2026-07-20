@@ -86,6 +86,8 @@ tasks:
         provider_max_parallel: Default::default(),
         retry_max: 0,
         stall_secs: 600,
+        failover_enabled: false,
+        fallback_extra_attempts: 1,
     }
     .run()
     .await
@@ -155,6 +157,8 @@ tasks:
         provider_max_parallel: Default::default(),
         retry_max: 0,
         stall_secs: 600,
+        failover_enabled: false,
+        fallback_extra_attempts: 1,
     }
     .run()
     .await

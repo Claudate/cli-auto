@@ -1,6 +1,6 @@
 # cco 监视终端 / 日志控制台改版计划
 
-> 状态：**A 路径 P0 已落地**；**P1 主项已闭环**（外置终端 · Planner LogConsole · 行边界/减负 · stream-json fixture）；**P2 → D5 池（P2-3，不排期）**  
+> 状态：**A 路径 P0 已落地**；**P1 主项已闭环**；**P2 打磨已闭环**（事件过滤 · 轻量 ANSI · 导出 MD · **虚拟列表 t34**）  
 > 日期：2026-07-17（P1 闭环 2026-07-18；D5 池 t15）  
 > 范围：桌面监视日志（主）+ Tauri/服务层日志 API + Claude stream-json 呈现；不重写 scheduler  
 > 关联：[`desktop-ux-redesign-plan.md`](./desktop-ux-redesign-plan.md)、[`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) §1.3 / §4 D5、`web/`、`src/services.rs`、`src/runtime/log_events.rs`、`src/terminal/`  
@@ -162,10 +162,12 @@ cco 的定位是工头看板，更应如此——别把自己做成伪 Terminal.
 
 > t15：进 backlog 池；出池门槛 = 超长 run 真卡顿或要导出报告。本文件只记账，不实现。
 
-- [ ] 虚拟列表（超长 run） → **P2-3**  
-- [ ] 事件过滤（仅工具 / 仅错误） → **P2-3**  
-- [ ] 轻量 ANSI（仅 raw） → **P2-3**  
-- [ ] 导出 HTML/MD 报告片段 → **P2-3**  
+- [x] 虚拟列表（超长 run） → **P2-3 t34**（`mountVirtualLog` · 阈值 80 · 过滤/模式切换重建并贴底；见 § 验收注）  
+- [x] 事件过滤（仅工具 / 仅错误） → **P2-3**（`#log-event-filter` · `logEventFilter`）  
+- [x] 轻量 ANSI（仅 raw） → **P2-3**（`ansiToHtml`）  
+- [x] 导出 MD 报告片段 → **P2-3**（`exportBoardLogsMd`）；HTML 仍不做  
+
+**虚拟列表语义（t34）**：事件 ≥80 时只挂可见窗 + spacer；过滤/视图切换会重建列表并**合理重置贴底**（不保证跨过滤保留绝对 scrollTop）。 
 
 ---
 

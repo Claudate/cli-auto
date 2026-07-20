@@ -1,10 +1,10 @@
 # 产品模式 B：AI 规划拆分 → 定序 → 按图执行
 
-> 状态：**B0/B1 主线已落地**；B2 主项已落地；**B3 已闭环**（D1/D3）；可选编辑进 **D5 池（P2-1/P2-2，不排期）**  
+> 状态：**B0/B1 主线已落地**；B2 主项已落地；**B3 已闭环**（D1/D3）；可选编辑 **P2-1/P2-2 已落地**（t30：删任务/改依赖 · replan 保人工修改）  
 > 日期：2026-07-17（状态校正 2026-07-18；**D1 决议 · D3 边界 · D5 池 t15**）  
 > 决议：用户明确选择 **B**（真·AI 规划定序），不是 A（仅解析计划里已有任务图）  
 > 关联：[`desktop-ux-redesign-plan.md`](./desktop-ux-redesign-plan.md)、[`claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md)、监视日志 → [`terminal-console-plan.md`](./terminal-console-plan.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) §1.3 / §4 D5、执行闭环 → [`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md)（拆分·巡检·回补 · D5/P2-11；**不**改 confirm_start）  
-> **勿再当缺口**：B0–B3 主线见总账 §1.3 / D3；残差仅 B2 可选编辑 → **P2-1/P2-2 D5 池**
+> **勿再当缺口**：B0–B3 主线见总账 §1.3 / D3；B2 可选编辑 **P2-1/P2-2 已落地**（t30）
 
 [PROTOCOL]: 变更本文件时更新状态与阶段勾选；与 UX 计划冲突时以本文件的「主流程」与 §4 默认规则为准。
 
@@ -84,7 +84,7 @@
 | 多 CLI 监视 | ✅ 主从 + waiting_on / current_wave | B2 主项已落地 |
 | 已完成可理解 | ✅ 常驻列表 + 日志回看 | B2 主项已落地 |
 
-**关键结论（校正）**：B0/B1 主线与 B2 监视主项 **已闭环**（总账 §1.3）。**D1 已收口**：桌面 auto-start 默认、CLI `run` 结构化 skip / 散文 plan job、`--skip-plan` 入口。**B3 已闭环**（上限 · 预算分栏 · 金样 · skip-plan · 真源；D3 / P1-4/5/6）。残差仅 B2 可选编辑 → **D5 / P2-1·P2-2**（不排期则不碰），**不是**「再做一个调度器」或「从零建 Planner」。
+**关键结论（校正）**：B0/B1 主线与 B2 监视主项 **已闭环**（总账 §1.3）。**D1 已收口**：桌面 auto-start 默认、CLI `run` 结构化 skip / 散文 plan job、`--skip-plan` 入口。**B3 已闭环**（上限 · 预算分栏 · 金样 · skip-plan · 真源；D3 / P1-4/5/6）。B2 可选编辑 **P2-1/P2-2 已落地**（删任务/改依赖 · replan 保人工；t30），**不是**「再做一个调度器」或「从零建 Planner」。
 
 ---
 
@@ -398,8 +398,8 @@ cco run   --plan-mode fake --yes …           # 规划用 fake DAG（调试）
 | 排队中任务显示「等待：…」 | ✅ 2026-07-17（TaskLiveView.waiting_on） |
 | 已完成任务常驻列表 + 可回看日志 | ✅ 已有主从监视（不消失） |
 | 顶栏当前波次 | ✅ 2026-07-17（current_wave） |
-| （可选）确认屏删任务 / 改依赖 | ☐ **D5 / P2-1**（不排期则不碰） |
-| （可选）重新规划保留人工修改策略 | ☐ **D5 / P2-2**（不排期则不碰；策略未定） |
+| （可选）确认屏删任务 / 改依赖 | ✅ **P2-1 已落地**（`remove_proposed_task` · `depends_on` 编辑 · 确认屏删除/依赖勾选） |
+| （可选）重新规划保留人工修改策略 | ✅ **P2-2 已落地**（`plan.user_edits.json` 按标题匹配 · `preserve_from_job_id` 重拆回放） |
 
 **验收**：用户能不查文档回答「谁先跑、谁跑完了、谁在等谁」。
 

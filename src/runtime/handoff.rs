@@ -2,7 +2,8 @@
 //!
 //! [INPUT]: run_dir · PlanIR · RunState · task terminal results
 //! [OUTPUT]: handoff.md / handoff.json；outputs 缺失检查；inspect VERDICT/ISSUES 分级(P-loop)；
-//!           REWORK_HOOK · build_rework_plan · accept_residual · inspect_loop_view；[CCO_HANDOFF] 前缀
+//!           REWORK_HOOK · build_rework_plan · accept_residual · inspect_loop_view；[CCO_HANDOFF] 前缀；
+//!           system_push_inspect_gate；write_task_diff（P2-2 CHANGED.md for inspect）
 //! [POS]: 事中账本；仅 host 写入，worker 只写自己 fragment
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/CLAUDE.md
 
@@ -340,6 +341,129 @@ fn status_label(s: TaskStatus) -> &'static str {
         TaskStatus::Timeout => "timeout",
         TaskStatus::Stopped => "stopped",
         TaskStatus::Skipped => "skipped",
+    }
+}
+
+/// Conventional per-task changed-files product (P2-2, relative to work_dir).
+pub const TASK_CHANGED_REL: &str = ".cco-out/{task_id}/CHANGED.md";
+
+/// Host-generated diff list for inspect (multi-cli P2-2).
+///
+/// Prefer `git status --short` / `git diff --name-status` in `work_dir` when it is a
+/// git tree; otherwise list non-empty declared `outputs` that exist on disk.
+/// Writes `.cco-out/<task_id>/CHANGED.md` under work_dir (fallback: project_root).
+/// Returns the relative path written, or `None` if nothing useful to record.
+pub fn write_task_diff(
+    task: &TaskIR,
+    work_dir: &Path,
+    project_root: &Path,
+) -> Result<Option<String>> {
+    let rel = format!(".cco-out/{}/CHANGED.md", task.id);
+    let out_path = {
+        let under_wd = work_dir.join(&rel);
+        if work_dir.exists() {
+            under_wd
+        } else {
+            project_root.join(&rel)
+        }
+    };
+    if let Some(parent) = out_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("mkdir {}", parent.display()))?;
+    }
+
+    let mut body = String::new();
+    body.push_str(&format!("# CHANGED · {}\n\n", task.id));
+    body.push_str(&format!("- provider: `{}`\n", task.provider));
+    if let Some(role) = role_str(task.role) {
+        body.push_str(&format!("- role: `{role}`\n"));
+    }
+    let scope = scope_summary(task);
+    if !scope.is_empty() {
+        body.push_str(&format!("- scope: `{scope}`\n"));
+    }
+    body.push_str(&format!("- work_dir: `{}`\n", work_dir.display()));
+    body.push_str(&format!("- generated: {}\n\n", Utc::now().to_rfc3339()));
+
+    let git_cwd = if work_dir.join(".git").exists() || is_git_worktree(work_dir) {
+        work_dir
+    } else if project_root.join(".git").exists() {
+        project_root
+    } else {
+        work_dir
+    };
+
+    let mut lines: Vec<String> = Vec::new();
+    if let Some(status) = git_capture(git_cwd, &["status", "--short"]) {
+        for line in status.lines() {
+            let t = line.trim();
+            if !t.is_empty() {
+                lines.push(t.to_string());
+            }
+        }
+    }
+    if lines.is_empty() {
+        if let Some(diff) = git_capture(git_cwd, &["diff", "--name-status", "HEAD"]) {
+            for line in diff.lines() {
+                let t = line.trim();
+                if !t.is_empty() {
+                    lines.push(t.to_string());
+                }
+            }
+        }
+    }
+    if lines.is_empty() {
+        // Fallback: declared outputs that exist (no git available).
+        for o in &task.outputs {
+            let p = resolve_output_path(o, work_dir, project_root);
+            if p.exists() {
+                lines.push(format!("OUT {o}"));
+            }
+        }
+    }
+
+    body.push_str("## Files\n\n");
+    if lines.is_empty() {
+        body.push_str("_no git changes detected; declared outputs empty or missing_\n");
+    } else {
+        // Cap for inspect readability.
+        const MAX: usize = 200;
+        for (i, line) in lines.iter().enumerate() {
+            if i >= MAX {
+                body.push_str(&format!("\n… and {} more\n", lines.len() - MAX));
+                break;
+            }
+            body.push_str(&format!("- `{line}`\n"));
+        }
+    }
+    body.push_str("\n## Notes\n\n");
+    body.push_str("- Host-generated for inspect (multi-cli P2-2). Workers should not overwrite.\n");
+    body.push_str("- Prefer matching these paths against declared `scope.paths`.\n");
+
+    std::fs::write(&out_path, body)
+        .with_context(|| format!("write {}", out_path.display()))?;
+    Ok(Some(rel))
+}
+
+fn is_git_worktree(dir: &Path) -> bool {
+    // worktree: .git is a file pointing at main repo
+    dir.join(".git").is_file()
+}
+
+fn git_capture(cwd: &Path, args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
     }
 }
 
@@ -882,6 +1006,54 @@ pub fn task_has_verdict_gate(task: &TaskIR) -> bool {
         || task.outputs.iter().any(|o| looks_like_verdict_path(o))
 }
 
+/// Host hard-gate for `sys-post-git-push`: only allow when inspect VERDICT is PASS
+/// and no blocking/map ISSUES remain.
+///
+/// Returns `Ok(())` if push may start; `Err(reason)` if it must be skipped (never spawn).
+/// If the plan has no inspect dependency for this push task, returns Ok (legacy / no gate).
+pub fn system_push_inspect_gate(plan: &PlanIR, push: &TaskIR, project_root: &Path) -> Result<(), String> {
+    use crate::plan::{is_system_post_task, SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID};
+
+    if push.id != SYS_POST_GIT_PUSH_ID && !is_system_post_task(&push.id) {
+        return Ok(());
+    }
+    // Only gate the git-push system task (not inspect itself).
+    if push.id != SYS_POST_GIT_PUSH_ID {
+        return Ok(());
+    }
+    // Require inspect in plan and as dependency (or present as role=inspect).
+    let inspect_task = plan
+        .task(SYS_POST_INSPECT_ID)
+        .or_else(|| {
+            plan.tasks
+                .iter()
+                .find(|t| t.role == Some(TaskRole::Inspect))
+        });
+    let Some(inspect) = inspect_task else {
+        return Err(
+            "CCO_PUSH_SKIPPED reason=no_inspect_task (host: push requires inspect before commit)"
+                .into(),
+        );
+    };
+    // Prefer project_root for system inspect products (no worktree for inspect by default).
+    let wd = project_root;
+    let verdict = read_inspect_verdict(inspect, wd, project_root);
+    let (blocked, blocking_n) = inspect_pass_blocked_by_issues(inspect, wd, project_root);
+    match verdict {
+        InspectVerdict::Pass if !blocked => Ok(()),
+        InspectVerdict::Pass => Err(format!(
+            "CCO_PUSH_SKIPPED reason=inspect_blocking_issues n={blocking_n} (host: VERDICT=PASS but blocking ISSUES remain)"
+        )),
+        InspectVerdict::Fail => Err(
+            "CCO_PUSH_SKIPPED reason=inspect_not_pass (host: VERDICT=FAIL — no commit/push)".into(),
+        ),
+        InspectVerdict::Unknown => Err(format!(
+            "CCO_PUSH_SKIPPED reason=inspect_unknown (host: missing or unreadable {}; no commit/push)",
+            INSPECT_VERDICT_REL
+        )),
+    }
+}
+
 /// True when PASS is invalid because blocking/map ISSUES remain (P-loop R-inspect).
 pub fn inspect_pass_blocked_by_issues(
     task: &TaskIR,
@@ -1054,6 +1226,7 @@ pub fn build_rework_plan(
             format!(".cco-out/rework/ROUND-{round}.md"),
             ".cco-out/progress/SUMMARY.md".into(),
         ],
+        tags: vec!["rework".into()],
     };
 
     let inspect_task = TaskIR {
@@ -1080,6 +1253,7 @@ pub fn build_rework_plan(
             INSPECT_VERDICT_REL.into(),
             INSPECT_ISSUES_REL.into(),
         ],
+        tags: vec!["inspect".into(), "rework".into()],
     };
 
     let mut ir = PlanIR {
@@ -1339,6 +1513,13 @@ pub fn on_task_end(
         let path = resolve_output_path(o, &wd, &state.project_root);
         if path.exists() {
             artifacts.push(o.clone());
+        }
+    }
+
+    // P2-2: host-generated per-task diff list for inspect consumption.
+    if let Ok(Some(rel)) = write_task_diff(task, &wd, &state.project_root) {
+        if !artifacts.iter().any(|a| a == &rel) {
+            artifacts.push(rel);
         }
     }
 
@@ -1670,6 +1851,7 @@ mod tests {
                     role: None,
                     scope: None,
                     outputs: outputs_a,
+                tags: vec![],
                 },
                 TaskIR {
                     id: "b".into(),
@@ -1688,6 +1870,7 @@ mod tests {
                     role: None,
                     scope: None,
                     outputs: vec![],
+                tags: vec![],
                 },
             ],
         }
@@ -2018,5 +2201,113 @@ mod tests {
             scope.paths
         );
         assert!(ir.tasks[0].title.contains("地图") || ir.tasks[0].prompt.contains("GEB"));
+    }
+
+    #[test]
+    fn system_push_gate_blocks_without_verdict() {
+        use crate::plan::{SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID};
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        let mut plan = sample_plan(vec![]);
+        // inject-like inspect + push
+        plan.tasks.push(TaskIR {
+            id: SYS_POST_INSPECT_ID.into(),
+            title: "巡检".into(),
+            depends_on: vec![plan.tasks[0].id.clone()],
+            group: Some("系统收尾".into()),
+            provider: "claude".into(),
+            mode: "print".into(),
+            prompt: "inspect".into(),
+            acceptance: None,
+            timeout_secs: None,
+            worktree: Some(false),
+            provider_opts: serde_json::json!({}),
+            optional: true,
+            include: true,
+            role: Some(TaskRole::Inspect),
+            scope: None,
+            outputs: vec![INSPECT_VERDICT_REL.into()],
+        tags: vec![],
+        });
+        plan.tasks.push(TaskIR {
+            id: SYS_POST_GIT_PUSH_ID.into(),
+            title: "push".into(),
+            depends_on: vec![SYS_POST_INSPECT_ID.into()],
+            group: Some("系统收尾".into()),
+            provider: "claude".into(),
+            mode: "print".into(),
+            prompt: "push".into(),
+            acceptance: None,
+            timeout_secs: None,
+            worktree: Some(false),
+            provider_opts: serde_json::json!({}),
+            optional: true,
+            include: true,
+            role: Some(TaskRole::Integrate),
+            scope: None,
+            outputs: vec![],
+        tags: vec![],
+        });
+        let push = plan.task(SYS_POST_GIT_PUSH_ID).unwrap();
+        let err = system_push_inspect_gate(&plan, push, root).unwrap_err();
+        assert!(err.contains("CCO_PUSH_SKIPPED"), "{err}");
+        assert!(err.contains("inspect_unknown") || err.contains("inspect_not_pass"), "{err}");
+
+        // PASS file → Ok
+        let vdir = root.join(".cco-out/inspect");
+        std::fs::create_dir_all(&vdir).unwrap();
+        std::fs::write(vdir.join("VERDICT.md"), "Result: PASS\n").unwrap();
+        std::fs::write(vdir.join("ISSUES.md"), "无\n").unwrap();
+        let push = plan.task(SYS_POST_GIT_PUSH_ID).unwrap();
+        system_push_inspect_gate(&plan, push, root).expect("PASS should allow push");
+
+        // FAIL → skip
+        std::fs::write(vdir.join("VERDICT.md"), "Result: FAIL\n").unwrap();
+        let err = system_push_inspect_gate(&plan, push, root).unwrap_err();
+        assert!(err.contains("inspect_not_pass"), "{err}");
+    }
+
+    /// P2-2: host writes CHANGED.md from declared outputs when git is unavailable.
+    #[test]
+    fn write_task_diff_lists_outputs_without_git() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        let wd = root.join("wt");
+        std::fs::create_dir_all(&wd).unwrap();
+        let out = wd.join(".cco-out/t1/SUMMARY.md");
+        std::fs::create_dir_all(out.parent().unwrap()).unwrap();
+        std::fs::write(&out, "summary\n").unwrap();
+
+        let task = TaskIR {
+            id: "t1".into(),
+            title: "impl".into(),
+            depends_on: vec![],
+            group: None,
+            provider: "fake".into(),
+            mode: "print".into(),
+            prompt: "do\nCCO_DONE ok".into(),
+            acceptance: None,
+            timeout_secs: None,
+            worktree: Some(false),
+            provider_opts: serde_json::json!({}),
+            optional: false,
+            include: true,
+            role: Some(TaskRole::Implement),
+            scope: None,
+            outputs: vec![".cco-out/t1/SUMMARY.md".into()],
+        tags: vec![],
+        };
+        let rel = write_task_diff(&task, &wd, root)
+            .unwrap()
+            .expect("should write CHANGED.md");
+        assert_eq!(rel, ".cco-out/t1/CHANGED.md");
+        let text = std::fs::read_to_string(wd.join(&rel)).unwrap();
+        assert!(text.contains("CHANGED"), "{text}");
+        assert!(
+            text.contains("SUMMARY.md") || text.contains("OUT "),
+            "expected outputs listed: {text}"
+        );
     }
 }

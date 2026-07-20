@@ -65,7 +65,7 @@ function renderWorkspace() {
     runStatus,
   });
 
-  // Multi-window CLI board
+  // Multi-window execution board
   const monitor = $("#monitor");
   const cliEmpty = $("#cli-empty");
   if (state.phase === "planning" || state.phase === "confirm") {
@@ -80,6 +80,11 @@ function renderWorkspace() {
   }
   if (monitor) monitor.hidden = false;
   if (cliEmpty) cliEmpty.hidden = true;
+  try {
+    if (typeof refreshFlowStrips === "function") {
+      refreshFlowStrips(active ? "running" : finished ? "done" : state.phase);
+    }
+  } catch (_) {}
   renderCliBoard(tasks);
   // height fit handled inside renderCliBoard
 
@@ -251,6 +256,21 @@ function renderTaskStrip(live, tasks, ctx) {
     resume.hidden = !["paused", "failed", "aborted"].includes(
       String(runStatus || "").toLowerCase()
     );
+  }
+
+  // G6: finished run → clear next-step CTA
+  const backChat = $("#btn-ws-back-chat");
+  if (backChat) {
+    const showBack = !!finished && !active;
+    backChat.hidden = !showBack;
+    if (showBack) {
+      backChat.textContent = fail > 0 ? "回聊天改计划" : "回聊天";
+      backChat.title =
+        fail > 0
+          ? "回聊天调整计划后再分配"
+          : "回聊天写下一份计划";
+      backChat.className = fail > 0 ? "btn primary sm" : "btn ghost sm";
+    }
   }
 
   // P-loop L2: inspect strip + rework / accept residual

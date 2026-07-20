@@ -1,6 +1,6 @@
 # cco 聊天构建计划（Chat → Plan → 分配）
 
-> 状态：**已落地**（C0–C2 ✅ · 五指标全绿 · **§9 验证清单 t11 已冻（七项全绿）** · **§10 文档/GEB t12 已同步** · **§11 修订历史 t13 已闭环**；**C3 不排期则不碰**）  
+> 状态：**已落地**（C0–C2 ✅ · 五指标全绿 · **§9 验证清单 t11 已冻（七项全绿）** · **§10 文档/GEB t12 已同步** · **§11 修订历史 t13 已闭环**；**C3 多会话 + 方案 B 开关 + 计划 diff + 流式 partial t14/t32–t34**）  
 > 日期：2026-07-18  
 > 范围：桌面 `web/` 聊天页 + 后端「对话写计划」服务 + 落盘 `.md` 后接入现有「分配计划」  
 > 角色：主路径**增量**子计划——补齐「无合适计划时，用 AI 先聊出一份计划」；**不**另开第二套分配/Scheduler；**不**替代「选已有计划 → 分配」  
@@ -357,7 +357,9 @@ async function assignFromChat() {
 | `chat_session_get` | `chat_session_get_cmd` | `project`, `session_id?`（默认 `"default"`） | `ChatSession`：`{ session_id, project, messages[], draft_plan?, updated_at? }` | 读盘；无文件 → 空会话 |
 | `chat_send` | `chat_send_cmd` | `project, message, session_id?` | `ChatSendResponse`：`{ session_id, reply, messages[], draft_plan?, fake }` | 同步一轮；Claude CLI print 或 fake |
 | `chat_save_plan` | `chat_save_plan_cmd` | `project, session_id?, title?, markdown` | `ChatSavePlanResponse`：`{ plan_rel, abs_path, session_id }` | 写项目下计划 `.md` 并回写会话 draft |
-| `chat_list_sessions` | — | — | — | **v1.1 / C3**；v1 **未实现**（单会话 `default`） |
+| `chat_list_sessions` | `chat_list_sessions_cmd` | `project` | `ChatSessionSummary[]` | **C3 t32 ✅**；无文件时含合成 `default` |
+| `chat_new_session` | `chat_new_session_cmd` | `project`, `title?` | `ChatSession` | **C3 t32 ✅**；id=`s-YYYYMMDD-HHMMSS` |
+| `chat_delete_session` | `chat_delete_session_cmd` | `project`, `session_id` | `()` | **C3 t32 ✅**；删 JSON + attachments 目录 |
 
 **类型要点（`src/services/chat.rs`）**：
 
@@ -365,7 +367,8 @@ async function assignFromChat() {
 |------|----------|
 | `ChatMessage` | `role` · `content` · `at?` |
 | `ChatDraftPlan` | `path`（相对 project）· `title?` · `markdown?` · `saved` |
-| `ChatSession` | `session_id` · `project` · `messages` · `draft_plan?` · `updated_at?` |
+| `ChatSession` | `session_id` · `project` · `messages` · `draft_plan?` · `updated_at?` · `title?`（C3） |
+| `ChatSessionSummary` | `session_id` · `title?` · `updated_at?` · `message_count` · `preview?` · `draft_plan_path?` · `draft_plan_title?`（C3 list） |
 
 **落盘约定（v1 · 与 §8 Q1/Q4 一致）**：
 
@@ -493,7 +496,7 @@ state.phase 仅 workspace 有效：pick | planning | confirm | running | done
 | **C0** | 产品与壳（UI 骨架；可 mock） | ✅ | `web/index.html` · `web/js/{state,chat,doctor,plan}.js` · `web/css/chat.css` |
 | **C1** | 后端一轮对话 + 落盘 | ✅ | `src/services/chat.rs` · `src/services/mod.rs` · `src-tauri/src/lib.rs` |
 | **C2** | 前端接通与分配跳转 | ✅ | `web/js/chat.js` · 帮助/空态链 · 方案 A `assignFromChat` |
-| **C3** | 打磨（流式 / 多会话 / 方案 B / diff） | ☐ **不排期则不碰** | — |
+| **C3** | 打磨（流式 / 多会话 / 方案 B / diff） | ✅ **t32–t34** 多会话 · 方案 B · 计划 diff · 流式 partial | `chat_list/new/delete` · `#s-chat-assign-direct` · `plan-full-diff` · `chat_stream_partial` |
 
 **建议实施序**：C0 → C1 → C2 同迭代闭环（**已完成**）；C3 不排期则不碰。
 
@@ -526,14 +529,14 @@ state.phase 仅 workspace 有效：pick | planning | confirm | running | done
 | [x] 运行中分配锁定与现网一致 | `hasActiveRun()` → `toastRunLocked("分配计划")`（与顶栏同源） |
 | [x] 帮助文案补一句「可先聊天生成计划」 | `#page-help` 上手 li：无计划时可用顶栏**聊天** |
 
-### C3 — 打磨（可跟 D5 池）☐ 不排期则不碰
+### C3 — 打磨（可跟 D5 池）✅ t32–t34
 
-> **禁止**在未出池 / 未单独立项时实现下列项；出池后另开任务，**勿**回灌本 § 把 C0–C2 勾掉。
+> **t32–t34 出池切片**：多会话 · 方案 B · 计划 diff · 流式 partial 已落地。**勿**回灌本 § 把 C0–C2 勾掉。
 
-- [ ] 流式输出（若 stream-json 复用成本可接受）  
-- [ ] 多会话列表  
-- [ ] 聊天内直接「分配并沿用上次并发」（方案 B 开关）  
-- [ ] 计划 diff / 二次编辑器  
+- [x] 流式输出 — `chat_stream_partial` 轮询 `__chat__` stdout 增量；失败降级 wait label；完成后仍整段 `chat_send` 落盘（**t34**；非 token 级 SSE，CLI print 路径可接受）  
+- [x] 多会话列表 — `chat_list_sessions` / `chat_new_session` / `chat_delete_session` · Tauri `*_cmd` · `#chat-session-select` · 缓存键 `project::session_id`（**t32**）  
+- [x] 聊天内直接「分配并沿用上次并发」（方案 B 开关）— 设置 `#s-chat-assign-direct` 默认关；开则 `startExecuteFromSelection` → `analyzePlanFromPicker`（**仍经 Mode B**，不跳 `confirm_start`；**t33**）  
+- [x] 计划 diff — plan-full modal「对比改动」磁盘稿 vs 当前草稿；LCS 行 diff；采用左/右写回草稿，落盘仍 `chat_save_plan`（**t34**；非第二套编辑器）  
 
 ### 5.1 边界（防与 §3 / §4 / §6 / Mode B / 总账混淆）
 
@@ -869,6 +872,9 @@ state.phase 仅 workspace 有效：pick | planning | confirm | running | done
 | 2026-07-18 | **t13 / §11**：修订历史闭环（年表按任务序整理 · 禁止改写既有行 · 追加规则 · 边界）；头部/L1/L2 指针；本计划 t1 / t3–t10 + C0–C2 年表闭环 |
 | 2026-07-18 | **t12 / §10**：文档与 GEB 同步——状态改 **已落地**；总账 §2 **P-chat ✅ C0–C2** + C3→**D5/P2-9**；L1/L2 · ux-simple 支路 · Mode B §1.1 · web/services/src-tauri 成员清单；**不触 C3、不回灌 D0–D4** |
 | 2026-07-18 | **t11 / §9**：验证清单冻结（七项全绿 · 证据明细 · 边界 · 修订条件）；重跑 `node --check web/js/*.js` ALL_JS_OK + `cargo test --lib` 34 passed；L1/L2 指针；**不写产品功能 / 不触 C3** |
+| 2026-07-20 | **t14 / C3 多会话部分落地**：`chat_list_sessions`/`chat_new_session`/`chat_delete_session` + 桌面切换器；§5 C3 多会话行 [x]；流式/方案 B/diff 仍 ☐；总账 **P2-9 ⚠ t32**；**不**改 Q2 方案 A 默认 / **不**回灌 C0–C2 |
+| 2026-07-20 | **t15 / C3 方案 B 开关**：设置页「执行时跳过二次确认」`#s-chat-assign-direct`（localStorage，默认关）；`startExecuteFromSelection` 可选 `direct` → 直调 `analyzePlanFromPicker`；Q2 默认仍为 A；流式/diff 仍 ☐；总账 t33 |
+| 2026-07-20 | **t16 / C3 计划 diff + 流式 partial**：plan-full「对比改动」磁盘稿 vs 草稿（LCS 行 diff · 采用左/右写回草稿 · 落盘仍 `chat_save_plan`）；`chat_stream_partial` + Tauri + 待发气泡轮询；失败降级 wait label；§5 C3 流式/diff [x]；总账 **P2-9 ✅ t34**；**不**改 Q2 默认 / **不**回灌 C0–C2 |
 | 2026-07-19 | **指针 / 体验修补**：关联真源增 [`chat-ux-focus-2026-07-19.md`](./chat-ux-focus-2026-07-19.md)（后台降噪 · fake 可信 · CTA · U0–U2 → 总账 **P2-10**）；**不**改 C0–C2 勾选 / 方案 A / §6–§8 |
 
 ### 11.1 边界（防与产品变更混淆）

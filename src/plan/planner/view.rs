@@ -1,15 +1,19 @@
 //! Plan job views, proposed plan IO, confirm helpers.
 //!
 //! [INPUT]: PlanJob · PlanIR · Config
-//! [OUTPUT]: PlanJobView · load_proposed · update_proposed_task · mark_confirmed · load_proposed_for_exec
+//! [OUTPUT]: PlanJobView · load_proposed · update_proposed_task · remove_proposed_task ·
+//!           sanitize_proposed_deps · user_edits(P2-1/P2-2) · mark_confirmed · load_proposed_for_exec
 //! [POS]: planner 子模块；桌面/CLI 确认屏消费
+//! note: sanitize_proposed_deps 复用 digest::sanitize_task_deps；确认屏可删任务/改依赖；
+//!       replan 经 preserve_from_job_id 应用 plan.user_edits.json
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/plan/CLAUDE.md
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::graph::topo_layers;
@@ -25,6 +29,8 @@ pub struct PlanTaskView {
     pub title: String,
     pub depends_on: Vec<String>,
     pub group: Option<String>,
+    /// Worker engine for this task (confirm screen may override; H4).
+    pub provider: String,
     /// Full worker prompt (confirm screen needs complete text).
     pub prompt: String,
     /// Short one-line summary for lists / tooltips.
@@ -53,6 +59,27 @@ pub struct PlanJobView {
     /// Planner LLM spend (USD); None for parse/fake or unknown.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub planner_cost_usd: Option<f64>,
+    /// Document mode: regression | greenfield | audit | mixed (from plan digest).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub digest_mode: Option<String>,
+    /// Critic one-liner for confirm hygiene strip.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_edges_removed: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_titles_rewritten: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_prompts_tagged: Option<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub critic_notes: Vec<String>,
+    /// Optional LLM second-pass was invoked for this split.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_llm_used: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_llm_cost_usd: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_llm_ms: Option<u64>,
     pub layers: Vec<Vec<String>>,
     pub tasks: Vec<PlanTaskView>,
     pub planner_log_tail: String,
@@ -75,6 +102,7 @@ fn task_view(t: &TaskIR) -> PlanTaskView {
         title: t.title.clone(),
         depends_on: t.depends_on.clone(),
         group: t.group.clone(),
+        provider: t.provider.clone(),
         prompt: t.prompt.clone(),
         prompt_preview: preview,
         optional: t.optional,
@@ -124,6 +152,15 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
         max_parallel: job.max_parallel,
         adapter: job.adapter.clone(),
         planner_cost_usd: job.planner_cost_usd,
+        digest_mode: job.digest_mode.clone(),
+        critic_summary: job.critic_summary.clone(),
+        critic_edges_removed: job.critic_edges_removed,
+        critic_titles_rewritten: job.critic_titles_rewritten,
+        critic_prompts_tagged: job.critic_prompts_tagged,
+        critic_notes: job.critic_notes.clone(),
+        critic_llm_used: job.critic_llm_used,
+        critic_llm_cost_usd: job.critic_llm_cost_usd,
+        critic_llm_ms: job.critic_llm_ms,
         layers,
         tasks,
         planner_log_tail,
@@ -149,7 +186,254 @@ pub(super) fn write_proposed(config: &Config, job_id: &str, ir: &PlanIR) -> Resu
     Ok(())
 }
 
-/// Patch one task in the proposed plan (title/prompt/include) while still planned/confirmed.
+/// Normalize a task title for user-edit matching across replan (id 会变).
+pub fn normalize_task_title_key(title: &str) -> String {
+    title
+        .chars()
+        .map(|c| {
+            if c.is_whitespace() {
+                ' '
+            } else {
+                c.to_ascii_lowercase()
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Per-task manual edits captured on the confirm screen (P2-1 / P2-2).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TaskUserEdit {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include: Option<bool>,
+    /// When set, deps were explicitly edited; values are normalized titles of dependencies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub depends_on_titles: Option<Vec<String>>,
+}
+
+/// Sidecar next to plan.proposed.json so replan can re-apply human patches by title.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PlanUserEdits {
+    /// Key = normalize_task_title_key of the task title *at the time of the last edit*.
+    #[serde(default)]
+    pub by_title: BTreeMap<String, TaskUserEdit>,
+    /// Titles the user deleted on the confirm screen (normalized).
+    #[serde(default)]
+    pub removed_titles: Vec<String>,
+}
+
+fn user_edits_path(config: &Config, job_id: &str) -> std::path::PathBuf {
+    job_dir(config, job_id).join("plan.user_edits.json")
+}
+
+pub fn load_user_edits(config: &Config, job_id: &str) -> PlanUserEdits {
+    let path = user_edits_path(config, job_id);
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+pub fn write_user_edits(config: &Config, job_id: &str, edits: &PlanUserEdits) -> Result<()> {
+    let path = user_edits_path(config, job_id);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, serde_json::to_string_pretty(edits)?)
+        .with_context(|| format!("write {}", path.display()))?;
+    Ok(())
+}
+
+/// Copy user-edits sidecar from an older job (replan preserve).
+pub fn copy_user_edits(config: &Config, from_job_id: &str, to_job_id: &str) -> Result<()> {
+    let edits = load_user_edits(config, from_job_id);
+    if edits.by_title.is_empty() && edits.removed_titles.is_empty() {
+        return Ok(());
+    }
+    write_user_edits(config, to_job_id, &edits)
+}
+
+/// `match_title_key` is the title key *before* this edit (planner/original title).
+/// It stays stable across renames so replan can still match the freshly split task.
+fn record_task_edit(
+    edits: &mut PlanUserEdits,
+    match_title_key: &str,
+    task: &TaskIR,
+    ir: &PlanIR,
+    patch: TaskUserEdit,
+) {
+    let key = match_title_key.to_string();
+    // Never treat a removed title as still present.
+    edits.removed_titles.retain(|t| t != &key);
+
+    // Resolve dep match-keys *before* mutably borrowing `by_title`.
+    let dep_titles = if patch.depends_on_titles.is_some() {
+        Some(
+            task.depends_on
+                .iter()
+                .filter_map(|id| ir.tasks.iter().find(|t| &t.id == id))
+                .map(|t| {
+                    let cur = normalize_task_title_key(&t.title);
+                    edits
+                        .by_title
+                        .iter()
+                        .find(|(k, e)| {
+                            e.title
+                                .as_ref()
+                                .map(|tt| normalize_task_title_key(tt) == cur)
+                                .unwrap_or(false)
+                                || *k == &cur
+                        })
+                        .map(|(k, _)| k.clone())
+                        .unwrap_or(cur)
+                })
+                .collect::<Vec<_>>(),
+        )
+    } else {
+        None
+    };
+
+    let entry = edits.by_title.entry(key).or_default();
+    if patch.title.is_some() {
+        // Store the *new* display title; map key remains the original match key.
+        entry.title = Some(task.title.clone());
+    }
+    if patch.prompt.is_some() {
+        entry.prompt = Some(task.prompt.clone());
+    }
+    if patch.provider.is_some() {
+        entry.provider = Some(task.provider.clone());
+    }
+    if patch.include.is_some() {
+        entry.include = Some(if task.optional { task.include } else { true });
+    }
+    if let Some(deps) = dep_titles {
+        entry.depends_on_titles = Some(deps);
+    }
+}
+
+/// Apply preserved user edits onto a freshly planned IR (P2-2).
+/// Matches by normalized title; rebuilds depends_on from dep titles → new ids.
+/// Returns (applied_field_count, removed_task_count).
+pub fn apply_user_edits_to_ir(ir: &mut PlanIR, edits: &PlanUserEdits) -> (usize, usize) {
+    if edits.by_title.is_empty() && edits.removed_titles.is_empty() {
+        return (0, 0);
+    }
+    let removed: std::collections::HashSet<String> = edits.removed_titles.iter().cloned().collect();
+    let before_len = ir.tasks.len();
+    // Collect ids of tasks we are about to drop so remaining edges can be rewritten.
+    let removed_ids: std::collections::HashSet<String> = ir
+        .tasks
+        .iter()
+        .filter(|t| removed.contains(&normalize_task_title_key(&t.title)))
+        .map(|t| t.id.clone())
+        .collect();
+    ir.tasks
+        .retain(|t| !removed.contains(&normalize_task_title_key(&t.title)));
+    let removed_n = before_len.saturating_sub(ir.tasks.len());
+    if !removed_ids.is_empty() {
+        for t in ir.tasks.iter_mut() {
+            t.depends_on.retain(|d| !removed_ids.contains(d));
+        }
+    }
+
+    // Build title-key → id map after removals.
+    let mut title_to_id: BTreeMap<String, String> = BTreeMap::new();
+    for t in &ir.tasks {
+        title_to_id.insert(normalize_task_title_key(&t.title), t.id.clone());
+    }
+
+    let mut applied = 0usize;
+    for t in ir.tasks.iter_mut() {
+        let key = normalize_task_title_key(&t.title);
+        let Some(edit) = edits.by_title.get(&key) else {
+            continue;
+        };
+        if let Some(ref title) = edit.title {
+            let title = title.trim();
+            if !title.is_empty() && title != t.title {
+                t.title = if t.optional {
+                    crate::plan::normalize_optional_title(title, true)
+                } else {
+                    title.to_string()
+                };
+                applied += 1;
+            }
+        }
+        if let Some(ref prompt) = edit.prompt {
+            if !prompt.trim().is_empty() && prompt != &t.prompt {
+                t.prompt = prompt.clone();
+                applied += 1;
+            }
+        }
+        if let Some(ref provider) = edit.provider {
+            let p = provider.trim().to_ascii_lowercase();
+            if !p.is_empty() && p != t.provider {
+                t.provider = p;
+                applied += 1;
+            }
+        }
+        if let Some(inc) = edit.include {
+            if t.optional && t.include != inc {
+                t.include = inc;
+                applied += 1;
+            }
+        }
+        if let Some(ref dep_titles) = edit.depends_on_titles {
+            let mut deps: Vec<String> = Vec::new();
+            for dt in dep_titles {
+                if let Some(id) = title_to_id.get(dt) {
+                    if id != &t.id && !deps.contains(id) {
+                        deps.push(id.clone());
+                    }
+                }
+            }
+            if deps != t.depends_on {
+                t.depends_on = deps;
+                applied += 1;
+            }
+        }
+    }
+
+    // After title renames, refresh title_to_id and re-apply deps that might have missed.
+    // (deps already applied against pre-rename titles of *this* task's deps; dep targets use
+    // their planned titles which is correct — user edit stores dep titles as they were.)
+    let _ = title_to_id;
+    (applied, removed_n)
+}
+
+fn load_proposed_or_resolved(config: &Config, job_id: &str) -> Result<PlanIR> {
+    load_proposed(config, job_id).or_else(|_| {
+        let path = job_dir(config, job_id).join("plan.resolved.json");
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("read {}", path.display()))?;
+        let ir: PlanIR = serde_json::from_str(&text)
+            .with_context(|| format!("parse {}", path.display()))?;
+        Ok::<PlanIR, anyhow::Error>(ir)
+    })
+}
+
+fn touch_job_after_edit(job: &mut PlanJob, ir: &PlanIR) {
+    job.plan_name = Some(ir.name.clone());
+    job.task_count = Some(ir.tasks.len());
+    job.max_parallel = Some(ir.max_parallel);
+    job.updated_at = Utc::now();
+    if matches!(job.status, PlanJobStatus::Confirmed) {
+        job.status = PlanJobStatus::Planned;
+        job.run_id = None;
+    }
+}
+
+/// Patch one task in the proposed plan (title/prompt/include/provider/depends_on)
+/// while still planned/confirmed. P2-1: depends_on is optional explicit edge list.
 pub fn update_proposed_task(
     config: &Config,
     job_id: &str,
@@ -157,6 +441,8 @@ pub fn update_proposed_task(
     title: Option<String>,
     prompt: Option<String>,
     include: Option<bool>,
+    provider: Option<String>,
+    depends_on: Option<Vec<String>>,
 ) -> Result<PlanJobView> {
     let mut job = PlanJob::load(config, job_id)?;
     if !matches!(
@@ -168,37 +454,36 @@ pub fn update_proposed_task(
             job.status.as_str()
         );
     }
-    let mut ir = load_proposed(config, job_id).or_else(|_| {
-        let path = job_dir(config, job_id).join("plan.resolved.json");
-        let text = std::fs::read_to_string(&path)
-            .with_context(|| format!("read {}", path.display()))?;
-        let ir: PlanIR = serde_json::from_str(&text)
-            .with_context(|| format!("parse {}", path.display()))?;
-        Ok::<PlanIR, anyhow::Error>(ir)
-    })?;
-    let Some(task) = ir.tasks.iter_mut().find(|t| t.id == task_id) else {
+    let mut ir = load_proposed_or_resolved(config, job_id)?;
+    let Some(task_idx) = ir.tasks.iter().position(|t| t.id == task_id) else {
         bail!("任务不存在: {task_id}");
     };
+    let prev_title_key = normalize_task_title_key(&ir.tasks[task_idx].title);
+    let mut patch = TaskUserEdit::default();
+
     if let Some(t) = title {
         let t = t.trim().to_string();
         if t.is_empty() {
             bail!("标题不能为空");
         }
-        // Keep optional marker visible if the task is optional.
+        let task = &mut ir.tasks[task_idx];
         task.title = if task.optional {
             crate::plan::normalize_optional_title(&t, true)
         } else {
             t
         };
+        patch.title = Some(task.title.clone());
     }
     if let Some(p) = prompt {
         let p = p.trim_end().to_string();
         if p.trim().is_empty() {
             bail!("任务说明不能为空");
         }
-        task.prompt = p;
+        ir.tasks[task_idx].prompt = p;
+        patch.prompt = Some(ir.tasks[task_idx].prompt.clone());
     }
     if let Some(inc) = include {
+        let task = &mut ir.tasks[task_idx];
         if !task.optional {
             if !inc {
                 bail!("必选任务不能取消勾选");
@@ -207,14 +492,187 @@ pub fn update_proposed_task(
         } else {
             task.include = inc;
         }
+        patch.include = Some(task.include);
     }
+    if let Some(p) = provider {
+        let p = p.trim().to_string();
+        if p.is_empty() {
+            bail!("provider 不能为空");
+        }
+        let ok = matches!(
+            p.to_ascii_lowercase().as_str(),
+            "claude" | "codex" | "fake"
+        );
+        if !ok {
+            bail!("不支持的 provider: {p}（可选 claude / codex / fake）");
+        }
+        ir.tasks[task_idx].provider = p.to_ascii_lowercase();
+        patch.provider = Some(ir.tasks[task_idx].provider.clone());
+    }
+    if let Some(deps) = depends_on {
+        let ids: std::collections::HashSet<_> =
+            ir.tasks.iter().map(|t| t.id.as_str()).collect();
+        let mut clean: Vec<String> = Vec::new();
+        for d in deps {
+            let d = d.trim().to_string();
+            if d.is_empty() {
+                continue;
+            }
+            if d == task_id {
+                bail!("任务不能依赖自己: {task_id}");
+            }
+            if !ids.contains(d.as_str()) {
+                bail!("依赖不存在: {d}");
+            }
+            if !clean.contains(&d) {
+                clean.push(d);
+            }
+        }
+        ir.tasks[task_idx].depends_on = clean;
+        // Marker so record_task_edit stores depends_on_titles.
+        patch.depends_on_titles = Some(Vec::new());
+    }
+
+    ir.validate()?;
+    write_proposed(config, job_id, &ir)?;
+
+    // Record human patch for replan preserve (P2-2).
+    // Key stays the title *before this edit* so renames still match on next split.
+    let mut edits = load_user_edits(config, job_id);
+    // If this task was already edited under an older key, keep that key.
+    let match_key = {
+        let cur = normalize_task_title_key(&ir.tasks[task_idx].title);
+        edits
+            .by_title
+            .iter()
+            .find(|(k, e)| {
+                **k == prev_title_key
+                    || e.title
+                        .as_ref()
+                        .map(|tt| normalize_task_title_key(tt) == prev_title_key)
+                        .unwrap_or(false)
+                    || **k == cur
+            })
+            .map(|(k, _)| k.clone())
+            .unwrap_or(prev_title_key.clone())
+    };
+    record_task_edit(
+        &mut edits,
+        &match_key,
+        &ir.tasks[task_idx],
+        &ir,
+        patch,
+    );
+    let _ = write_user_edits(config, job_id, &edits);
+
+    touch_job_after_edit(&mut job, &ir);
+    job.save(config)?;
+    let provider_note = ir.tasks[task_idx].provider.as_str();
+    let deps_n = ir.tasks[task_idx].depends_on.len();
+    append_log(
+        config,
+        job_id,
+        &format!(
+            "updated task {task_id} (title/prompt/include/provider={provider_note}/deps={deps_n})",
+        ),
+    );
+    job_view(config, &job, 48_000)
+}
+
+/// Remove a task from the proposed plan (P2-1). Rewrites other tasks' depends_on.
+/// Refuses if it would leave the plan empty.
+pub fn remove_proposed_task(
+    config: &Config,
+    job_id: &str,
+    task_id: &str,
+) -> Result<PlanJobView> {
+    let mut job = PlanJob::load(config, job_id)?;
+    if !matches!(
+        job.status,
+        PlanJobStatus::Planned | PlanJobStatus::Confirmed
+    ) {
+        bail!(
+            "计划任务状态为 {}，仅 planned/confirmed 可删任务",
+            job.status.as_str()
+        );
+    }
+    let mut ir = load_proposed_or_resolved(config, job_id)?;
+    let Some(pos) = ir.tasks.iter().position(|t| t.id == task_id) else {
+        bail!("任务不存在: {task_id}");
+    };
+    if ir.tasks.len() <= 1 {
+        bail!("至少保留一个任务，不能删光");
+    }
+    let removed_title = ir.tasks[pos].title.clone();
+    let removed_key = normalize_task_title_key(&removed_title);
+    ir.tasks.remove(pos);
+    for t in ir.tasks.iter_mut() {
+        t.depends_on.retain(|d| d != task_id);
+    }
+    ir.validate()?;
+    write_proposed(config, job_id, &ir)?;
+
+    let mut edits = load_user_edits(config, job_id);
+    edits.by_title.remove(&removed_key);
+    if !edits.removed_titles.iter().any(|t| t == &removed_key) {
+        edits.removed_titles.push(removed_key);
+    }
+    let _ = write_user_edits(config, job_id, &edits);
+
+    touch_job_after_edit(&mut job, &ir);
+    job.save(config)?;
+    append_log(
+        config,
+        job_id,
+        &format!("removed task {task_id} ({removed_title})"),
+    );
+    job_view(config, &job, 48_000)
+}
+
+/// Drop unmotivated depends_on edges on the proposed plan (confirm-screen action).
+/// Same rules as planner post-process: edge kept only if the dependent prompt
+/// mentions the dep id/title or an explicit depend-reason line.
+pub fn sanitize_proposed_deps(config: &Config, job_id: &str) -> Result<SanitizeDepsResult> {
+    let mut job = PlanJob::load(config, job_id)?;
+    if !matches!(
+        job.status,
+        PlanJobStatus::Planned | PlanJobStatus::Confirmed
+    ) {
+        bail!(
+            "计划任务状态为 {}，仅 planned/confirmed 可清理依赖",
+            job.status.as_str()
+        );
+    }
+    let mut ir = load_proposed(config, job_id).or_else(|_| {
+        let path = job_dir(config, job_id).join("plan.resolved.json");
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("read {}", path.display()))?;
+        let ir: PlanIR = serde_json::from_str(&text)
+            .with_context(|| format!("parse {}", path.display()))?;
+        Ok::<PlanIR, anyhow::Error>(ir)
+    })?;
+
+    let before: usize = ir.tasks.iter().map(|t| t.depends_on.len()).sum();
+    super::digest::sanitize_task_deps(&mut ir.tasks);
+    let after: usize = ir.tasks.iter().map(|t| t.depends_on.len()).sum();
+    let removed = before.saturating_sub(after);
+
     ir.validate()?;
     write_proposed(config, job_id, &ir)?;
     job.plan_name = Some(ir.name.clone());
     job.task_count = Some(ir.tasks.len());
     job.max_parallel = Some(ir.max_parallel);
+    // Refresh hygiene strip so confirm UI shows latest cleanup result.
+    job.critic_summary = Some(if removed > 0 {
+        format!("拆分校对：手动清理 · 去掉 {removed} 条可疑依赖")
+    } else {
+        "拆分校对：手动清理 · 未发现可疑依赖".into()
+    });
+    job.critic_edges_removed = Some(removed);
+    // Manual sanitize does not rewrite titles/prompts.
+    job.critic_titles_rewritten = job.critic_titles_rewritten.or(Some(0));
+    job.critic_prompts_tagged = job.critic_prompts_tagged.or(Some(0));
     job.updated_at = Utc::now();
-    // Editing a confirmed job returns it to planned so re-run uses the patch.
     if matches!(job.status, PlanJobStatus::Confirmed) {
         job.status = PlanJobStatus::Planned;
         job.run_id = None;
@@ -223,16 +681,17 @@ pub fn update_proposed_task(
     append_log(
         config,
         job_id,
-        &format!(
-            "updated task {task_id} (title/prompt/include={})",
-            ir.tasks
-                .iter()
-                .find(|t| t.id == task_id)
-                .map(|t| t.include.to_string())
-                .unwrap_or_else(|| "?".into())
-        ),
+        &format!("sanitize deps: removed {removed} edge(s) (before={before} after={after})"),
     );
-    job_view(config, &job, 48_000)
+    let view = job_view(config, &job, 48_000)?;
+    Ok(SanitizeDepsResult { removed, view })
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SanitizeDepsResult {
+    /// Number of depends_on edges dropped.
+    pub removed: usize,
+    pub view: PlanJobView,
 }
 
 /// Mark job confirmed after exec run was spawned (called from services).

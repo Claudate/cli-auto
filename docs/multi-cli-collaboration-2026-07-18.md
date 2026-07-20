@@ -1,6 +1,6 @@
 # cco 多 CLI 协作（Claude + Codex 并跑）
 
-> 状态：**方案已定稿 · 未实施**（P0–P2 待排期；**不阻塞** D0–D4 已闭环项）  
+> 状态：**P0–P1 全绿 · P2 主线已落地**（P2-1/2/3/4/5/6 ✅ · **t33** tags 路由 + planner provider/role/scope；**不阻塞** D0–D4）  
 > 日期：2026-07-18  
 > 范围：同 run 内多 `WorkerProvider` 混部 · 任务级 provider/role/scope · 越界约束 · 终闸检验员 · 事中 handoff 账本  
 > 角色：编排主路径**增强**子计划——在已有 claude/codex/fake 总线上把「能混跑」收成「可控协作」；**不**另开第二套 Scheduler；**不**替代 Mode B / 分配主路径  
@@ -446,11 +446,11 @@ cco run --project /path/to/repo \
 | # | 项 | 状态 |
 |---|----|------|
 | P2-1 | `role: inspect` 默认 opts（只读业务 tools + 仅写 inspect 目录） | ✅ `materialize_role_defaults` · load_plan |
-| P2-2 | host 预生成 per-task diff 列表供 inspect 消费 | ☐ |
+| P2-2 | host 预生成 per-task diff 列表供 inspect 消费 | ✅ `write_task_diff` → `.cco-out/<id>/CHANGED.md` · on_task_end · unit |
 | P2-3 | VERDICT=FAIL → pause + Open risks 写 ISSUES 摘要；轻量 REWORK_HOOK（不自动 merge/PR） | ✅ `enforce_inspect_verdict` · handoff `ISSUES[task]` / `REWORK_HOOK` · tests |
-| P2-4 | 任务 `tags` + 简单 routing 表（L1 分配） | ☐ |
-| P2-5 | Mode B planner / 聊天结构化输出带 provider+role+scope | ☐ |
-| P2-6 | 桌面确认屏任务表可改引擎；Board = handoff 总览 | ☐ |
+| P2-4 | 任务 `tags` + 简单 routing 表（L1 分配） | ✅ **已落地**（t33）：`TaskIR.tags` · cco_v1 解析 · `apply_tag_routing`（codex/claude/fake 标签软路由，不覆盖显式 provider） |
+| P2-5 | Mode B planner / 聊天结构化输出带 provider+role+scope | ✅ **已落地**（t33）：LLM schema + `LlmTask` 解析 provider/role/scope/outputs/tags；标题/tag 可推断 inspect |
+| P2-6 | 桌面确认屏任务表可改引擎；Board = handoff 总览 | ✅ 确认屏 provider 可见 + `handoff_board` strip · 打开 handoff.md |
 
 **P2 成功标准**：默认混跑模板含 inspect 终闸；FAIL 可暂停并留下可消费 ISSUES。
 
@@ -560,6 +560,7 @@ cco run --project /path/to/repo \
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | t1 | 2026-07-18 | 初稿定稿：可行性结论 + 四条契约（声明/越界/检验员/账本）+ P0–P2 + 非目标 + 示例计划骨架 |
+| t33 | 2026-07-20 | P2-4/P2-5 落地：`TaskIR.tags` + `apply_tag_routing`；LLM planner 解析 provider/role/scope/outputs/tags；cco_v1 解析 tags；确认屏引擎列仍可手改 |
 
 > **修订规则**：既有行语义禁止改写；后续变更 **另起行追加**。阶段勾选只改 §6 状态列。
 
@@ -582,8 +583,9 @@ cco run --project /path/to/repo \
 | Codex | `src/runtime/provider/codex.rs` |
 | Scheduler / provider slot | `src/runtime/scheduler.rs` |
 | Worktree | `src/runtime/worktree.rs` |
-| PlanIR / TaskIR | `src/plan/mod.rs` |
-| cco-plan/v1 | `src/plan/adapters/cco_v1.rs` |
+| PlanIR / TaskIR / tags 路由 | `src/plan/mod.rs`（`apply_tag_routing`） |
+| cco-plan/v1（role/scope/tags） | `src/plan/adapters/cco_v1.rs` |
+| Mode B LLM collab 字段 | `src/plan/planner/llm.rs`（`LlmTask` provider/role/scope/tags） |
 | run --provider 覆盖 | `src/cli/commands/run.rs` |
 | acceptance | `src/runtime/acceptance.rs` |
 | report | `src/report/mod.rs` |

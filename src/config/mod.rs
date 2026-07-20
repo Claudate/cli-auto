@@ -1,7 +1,7 @@
 //! Global config: ~/.cco/config.toml + env overrides.
 //!
 //! [INPUT]: 磁盘 config · 环境变量
-//! [OUTPUT]: Config · AllowedProject · load/save · runs_dir
+//! [OUTPUT]: Config · AllowedProject · load/save · runs_dir · failover · post_inspect/post_git_push
 //! [POS]: 全局配置真源；桌面项目白名单存此
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/config/CLAUDE.md
 
@@ -77,19 +77,52 @@ pub struct DefaultSection {
     pub allowed_tools: Vec<String>,
     /// Auto-retries after fail / timeout / stall (in addition to the first try).
     /// 0 = never retry. Effective policy is max(plan.retry_max, this). Cap 10.
+    /// UI 文案：「同 CLI 最多再试几次」。
     #[serde(default = "default_retry_max")]
     pub retry_max: u32,
     /// No stdout growth for this many seconds → treat as stall, stop + retry.
-    /// Floor 30s, default 600 (10 min).
+    /// Floor 30s (UI clamp), default 180 (3 min; was 600 — too dull for UX).
+    /// UI 文案：「多久没新日志算卡死」。User-overridden config.toml is never rewritten.
     #[serde(default = "default_stall_secs")]
     pub stall_secs: u64,
+    /// After same-provider retries exhaust, switch to the other production CLI
+    /// (claude↔codex) and retry once more (H4). Default true; set false to disable.
+    #[serde(default = "default_failover_enabled")]
+    pub failover_enabled: bool,
+    /// Extra attempts allowed on the fallback provider after a switch (default 1).
+    /// Same semantics as retry_max: 1 ⇒ first try + 1 re-try on the new CLI.
+    #[serde(default = "default_fallback_extra_attempts")]
+    pub fallback_extra_attempts: u32,
+    /// When true, each Mode B split appends a system optional task「任务巡检」
+    /// (not produced by the planner). Confirm screen defaults it **checked**.
+    /// Master switch off → never inject. Default **false**.
+    #[serde(default = "default_post_feature_off")]
+    pub post_inspect_enabled: bool,
+    /// When true, each Mode B split appends a system optional task「代码提交 Push」
+    /// after business (+ inspect if present). Confirm defaults **checked**.
+    /// Master switch off → never inject. Default **false**.
+    #[serde(default = "default_post_feature_off")]
+    pub post_git_push_enabled: bool,
+    /// Optional second-pass LLM critic after rule critic (drop bad edges + notes).
+    /// Also enabled when env `CCO_PLANNER_CRITIC=1`. Default **false** (cost/latency).
+    #[serde(default = "default_post_feature_off")]
+    pub planner_critic_enabled: bool,
 }
 
 fn default_retry_max() -> u32 {
     2
 }
 fn default_stall_secs() -> u64 {
-    600
+    180
+}
+fn default_failover_enabled() -> bool {
+    true
+}
+fn default_fallback_extra_attempts() -> u32 {
+    1
+}
+fn default_post_feature_off() -> bool {
+    false
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,6 +178,11 @@ impl Default for DefaultSection {
             ],
             retry_max: default_retry_max(),
             stall_secs: default_stall_secs(),
+            failover_enabled: default_failover_enabled(),
+            fallback_extra_attempts: default_fallback_extra_attempts(),
+            post_inspect_enabled: default_post_feature_off(),
+            post_git_push_enabled: default_post_feature_off(),
+            planner_critic_enabled: default_post_feature_off(),
         }
     }
 }
@@ -303,10 +341,20 @@ mirror_state = false
 max_turns = 40
 max_budget_usd = 10.0
 # run_max_budget_usd = 25.0
-# Auto-retry failed/stalled CLI workers (extra attempts after the first).
+# 同 CLI 最多再试几次（不含首次；0 = 不重试）。
 retry_max = 2
-# No log growth for this many seconds → stall → stop + retry (then pause if exhausted).
-stall_secs = 600
+# 多久没新日志算卡死（秒）→ stop + 重试（用尽则 pause）。默认 180；旧默认 600 偏钝。
+stall_secs = 180
+# After same-CLI retries exhaust, switch claude↔codex and try again (H4).
+failover_enabled = true
+# Extra attempts allowed on the fallback CLI after a switch (default 1).
+fallback_extra_attempts = 1
+# System post-tasks (not from planner): optional tail after every split.
+# Off by default; when on, injected as optional + default-checked on confirm.
+post_inspect_enabled = false
+post_git_push_enabled = false
+# Optional second-pass LLM critic after rule critic (also CCO_PLANNER_CRITIC=1).
+planner_critic_enabled = false
 permission_mode = "dontAsk"
 allowed_tools = ["Read", "Edit", "Bash", "Glob", "Grep", "Write"]
 

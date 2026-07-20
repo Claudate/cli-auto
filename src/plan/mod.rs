@@ -1,12 +1,17 @@
 //! Plan loading, adapters, and PlanIR.
 //!
 //! [INPUT]: 计划文件路径 · config 默认 provider/mode
-//! [OUTPUT]: PlanIR/TaskIR(role/scope/outputs/require_inspect) · load_plan · list_plans · materialize_role_defaults(P2-1 inspect) · validate(含 P1-2 混部硬规则) · is_structured_adapter · MAX_TASKS/MAX_PROMPT_CHARS/MAX_TIMEOUT_SECS
+//! [OUTPUT]: PlanIR/TaskIR(role/scope/outputs/require_inspect) · load_plan · list_plans · materialize_role_defaults(P2-1 inspect) · inject_system_post_tasks · validate · MAX_TASKS/MAX_PROMPT_CHARS/MAX_TIMEOUT_SECS
 //! [POS]: plan 模块入口；adapters 解析，planner 为 Mode B 侧路
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/plan/CLAUDE.md
 
 pub mod adapters;
 pub mod planner;
+pub mod system_post;
+
+pub use system_post::{
+    inject_system_post_tasks, is_system_post_task, SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID,
+};
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -18,7 +23,10 @@ use crate::config::Config;
 
 // ── Product hard limits (P1-4 / B3) ───────────────────────────────────
 /// Max tasks in one plan (planner + validate).
-pub const MAX_TASKS: usize = 20;
+/// Planner still targets ≤18 work tasks so two system post-tasks can fit.
+pub const MAX_TASKS: usize = 22;
+/// Soft cap for planner-produced tasks (system post-tasks use the remainder).
+pub const PLANNER_MAX_TASKS: usize = 20;
 /// Max characters per task prompt.
 pub const MAX_PROMPT_CHARS: usize = 32_000;
 /// Max per-task timeout (24h).
@@ -119,6 +127,10 @@ pub struct TaskIR {
     /// Required on-disk artifact paths after the task completes (relative to project).
     #[serde(default)]
     pub outputs: Vec<String>,
+    /// Free-form tags for L1 routing (P2-4): e.g. `codex`, `inspect`, `frontend`.
+    /// Absent in old plans → empty (serde default).
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// Ensure optional tasks have a clear title marker; required tasks stay as-is.
@@ -671,10 +683,12 @@ impl PlanIR {
         for insp_id in &inspect_ids {
             if let Some(succs) = successors.get(insp_id) {
                 for s in succs {
-                    // inspect may only be followed by another inspect (chain);
-                    // any business / unscoped role downstream = non-terminal.
+                    // inspect may be followed by: another inspect, or host system
+                    // post-tasks (git push 等 · 非业务回补). Business roles = fail.
+                    if s.role == Some(TaskRole::Inspect) || is_system_post_task(&s.id) {
+                        continue;
+                    }
                     match s.role {
-                        Some(TaskRole::Inspect) => {}
                         Some(other) => {
                             bail!(
                                 "inspect task {insp_id} is not a terminal gate: \
@@ -698,17 +712,23 @@ impl PlanIR {
             if inspect_ids.is_empty() {
                 bail!("require_inspect=true but plan has no role=inspect task");
             }
-            // At least one inspect must be a sink (no successors) — reachable end-gate.
+            // At least one inspect must be a sink for *business* work.
+            // System post successors (sys-post-*) do not count as business.
             let has_sink = inspect_ids.iter().any(|id| {
                 successors
                     .get(id)
-                    .map(|s| s.is_empty())
+                    .map(|s| {
+                        s.iter()
+                            .all(|t| is_system_post_task(&t.id) || t.role == Some(TaskRole::Inspect))
+                    })
                     .unwrap_or(true)
             });
-            if !has_sink {
+            // Prefer a true sink (no successors) OR only system-post after inspect.
+            let has_true_or_sys_sink = has_sink;
+            if !has_true_or_sys_sink {
                 bail!(
                     "require_inspect=true but no terminal inspect sink \
-                     (every inspect has successors)"
+                     (every inspect has business successors)"
                 );
             }
         }
@@ -865,10 +885,56 @@ pub fn load_plan(
     };
     plan.adapter = adapter;
     plan.source_path = abs;
+    // P2-4: tags → soft provider hints (never overrides explicit non-default provider).
+    apply_tag_routing(&mut plan);
     // P2-1: role=inspect default opts/scope before validate (require_inspect gate).
     materialize_role_defaults(&mut plan);
     plan.validate()?;
     Ok(plan)
+}
+
+/// P2-4 L1 routing: map free-form `tags` (and inspect role) to provider when the
+/// task still carries the plan default / empty / `"default"`.
+///
+/// Rules (first match wins, case-insensitive tags):
+/// - tag `codex` | `gpt` | `openai` → `codex`
+/// - tag `claude` | `anthropic` → `claude`
+/// - tag `fake` | `mock` → `fake`
+/// - tag `inspect` or `role: inspect` → keep current provider (inspect defaults
+///   handle tools/scope; do not force codex)
+///
+/// Does **not** rewrite tasks that already declare a concrete non-default engine.
+pub fn apply_tag_routing(plan: &mut PlanIR) {
+    let default = plan.default_provider.clone();
+    for t in &mut plan.tasks {
+        let p = t.provider.trim();
+        let still_default = p.is_empty()
+            || p.eq_ignore_ascii_case("default")
+            || (!default.is_empty() && p.eq_ignore_ascii_case(&default));
+        if !still_default {
+            continue;
+        }
+        let tags_lower: Vec<String> = t
+            .tags
+            .iter()
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if tags_lower.iter().any(|x| x == "codex" || x == "gpt" || x == "openai") {
+            t.provider = "codex".into();
+            continue;
+        }
+        if tags_lower.iter().any(|x| x == "claude" || x == "anthropic") {
+            t.provider = "claude".into();
+            continue;
+        }
+        if tags_lower.iter().any(|x| x == "fake" || x == "mock") {
+            t.provider = "fake".into();
+            continue;
+        }
+        // Title/tag soft hint for inspect does not change provider here.
+        let _ = t.role;
+    }
 }
 
 pub fn resolve_plan_path(project_root: &Path, plan_path: &Path) -> Result<PathBuf> {
@@ -1062,6 +1128,7 @@ mod tests {
                     role: None,
                     scope: None,
                     outputs: vec![],
+                tags: vec![],
                 },
                 TaskIR {
                     id: "b".into(),
@@ -1080,6 +1147,7 @@ mod tests {
                     role: None,
                     scope: None,
                     outputs: vec![],
+                tags: vec![],
                 },
             ],
         };
@@ -1154,6 +1222,7 @@ mod tests {
             role: None,
             scope: None,
             outputs: vec![],
+        tags: vec![],
         }
     }
 
@@ -1548,6 +1617,7 @@ tasks:
                 forbid: vec![],
             }),
             outputs: vec![],
+        tags: vec![],
         }
     }
 
@@ -2152,5 +2222,57 @@ tasks:
             assert!(tools.iter().any(|v| v.as_str() == Some("Edit")));
             assert!(t.provider_opts.get("append_system_prompt").is_none());
         }
+    }
+
+    #[test]
+    fn apply_tag_routing_codex_on_default_only() {
+        let mut plan = base_plan(
+            vec![
+                {
+                    let mut t = task("a", "claude", "print", None, &[], None);
+                    t.tags = vec!["codex".into()];
+                    t
+                },
+                {
+                    // Already explicit codex — keep
+                    let mut t = task("b", "codex", "print", None, &[], None);
+                    t.tags = vec!["claude".into()];
+                    t
+                },
+            ],
+            false,
+            false,
+        );
+        plan.default_provider = "claude".into();
+        apply_tag_routing(&mut plan);
+        assert_eq!(plan.tasks[0].provider, "codex");
+        assert_eq!(plan.tasks[1].provider, "codex"); // not rewritten by claude tag
+    }
+
+    #[test]
+    fn cco_v1_parses_tags_field() {
+        let cfg = Config::default();
+        let dir = tempfile::tempdir().unwrap();
+        let plan = dir.path().join("t.cco.yaml");
+        std::fs::write(
+            &plan,
+            r#"
+schema: cco-plan/v1
+name: tagged
+tasks:
+  - id: t1
+    title: 用 Codex 做后端
+    provider: claude
+    tags: [codex, backend]
+    prompt: |
+      do it
+      CCO_DONE ok
+"#,
+        )
+        .unwrap();
+        let ir = load_plan(dir.path(), &plan, Some("cco-plan/v1"), &cfg).unwrap();
+        assert_eq!(ir.tasks[0].tags, vec!["codex".to_string(), "backend".to_string()]);
+        // default_provider is claude; task provider was claude (= default) → tag routes to codex
+        assert_eq!(ir.tasks[0].provider, "codex");
     }
 }

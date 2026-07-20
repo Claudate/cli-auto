@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 window 全局（顺序加载）；Tauri invoke
- * [OUTPUT]: doctor UI 片段
+ * [OUTPUT]: doctor UI 片段 · settings 读写（含 H3 stall/retry · H4 failover_enabled）
  * [POS]: web/js D4 自 app.js 纵切；无构建器，顺序 script 共享全局
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -33,8 +33,36 @@ async function loadSettings() {
     $("#s-default-mode").value = modeIdx[s.default_mode] ?? 0;
     $("#s-default-provider").value = s.default_provider;
     $("#s-max-parallel").value = s.max_parallel;
+    // H3/H4: stall/retry 人话字段 + failover 开关（与 scheduler 读取同源）
     if ($("#s-retry-max")) $("#s-retry-max").value = s.retry_max ?? 2;
-    if ($("#s-stall-secs")) $("#s-stall-secs").value = s.stall_secs ?? 600;
+    if ($("#s-stall-secs")) $("#s-stall-secs").value = s.stall_secs ?? 180;
+    if ($("#s-failover-enabled")) {
+      // 缺省 true；仅当后端明确 false 时关（不覆盖用户 config 显式值由后端 serde 负责）
+      $("#s-failover-enabled").checked = s.failover_enabled !== false;
+    }
+    if ($("#s-failover-order-note") && s.failover_order_note) {
+      $("#s-failover-order-note").textContent = s.failover_order_note;
+    }
+    if ($("#s-post-inspect")) {
+      $("#s-post-inspect").checked = !!s.post_inspect_enabled;
+    }
+    if ($("#s-post-git-push")) {
+      $("#s-post-git-push").checked = !!s.post_git_push_enabled;
+    }
+    if ($("#s-planner-critic")) {
+      $("#s-planner-critic").checked = !!s.planner_critic_enabled;
+    }
+    if ($("#s-post-tasks-note") && s.post_tasks_note) {
+      $("#s-post-tasks-note").textContent = s.post_tasks_note;
+    }
+    // Flow fun blurbs: local only (not backend config)
+    if ($("#s-flow-fun") && typeof flowFunEnabled === "function") {
+      $("#s-flow-fun").checked = flowFunEnabled();
+    }
+    // C3 方案 B: local only
+    if ($("#s-chat-assign-direct") && typeof chatAssignDirectEnabled === "function") {
+      $("#s-chat-assign-direct").checked = chatAssignDirectEnabled();
+    }
     $("#s-log-font").value = String(state.logFontSize);
     // Seed split-time concurrency from settings when user hasn't touched it.
     if ($("#pp-max-parallel") && !$("#pp-max-parallel").dataset.touched) {
@@ -49,12 +77,30 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
+  // Local UI preference (no backend field)
+  if ($("#s-flow-fun") && typeof setFlowFunEnabled === "function") {
+    setFlowFunEnabled(!!$("#s-flow-fun").checked);
+  }
+  if ($("#s-chat-assign-direct") && typeof setChatAssignDirectEnabled === "function") {
+    setChatAssignDirectEnabled(!!$("#s-chat-assign-direct").checked);
+  }
   const pollVal = parseInt($("#s-poll-interval").value, 10);
   const modeVal = parseInt($("#s-default-mode").value, 10);
   const providerVal = $("#s-default-provider").value.trim();
   const maxParallelVal = parseInt($("#s-max-parallel").value, 10);
   const retryMaxVal = parseInt($("#s-retry-max")?.value, 10);
   const stallSecsVal = parseInt($("#s-stall-secs")?.value, 10);
+  const failoverEl = $("#s-failover-enabled");
+  // 有控件则读写；无控件不传，避免误写回默认
+  const failoverEnabled = failoverEl ? !!failoverEl.checked : undefined;
+  const postInspectEl = $("#s-post-inspect");
+  const postGitPushEl = $("#s-post-git-push");
+  const postInspectEnabled = postInspectEl ? !!postInspectEl.checked : undefined;
+  const postGitPushEnabled = postGitPushEl ? !!postGitPushEl.checked : undefined;
+  const plannerCriticEl = $("#s-planner-critic");
+  const plannerCriticEnabled = plannerCriticEl
+    ? !!plannerCriticEl.checked
+    : undefined;
   const fontVal = parseInt($("#s-log-font").value, 10) || 14;
   const status = $("#s-save-status");
   if (!pollVal || pollVal < 1 || pollVal > 60) {
@@ -65,27 +111,38 @@ async function saveSettings() {
   }
   if (Number.isFinite(retryMaxVal) && (retryMaxVal < 0 || retryMaxVal > 10)) {
     status.className = "save-status err";
-    status.textContent = "自动重试次数需在 0–10 之间";
+    status.textContent = "同 CLI 再试次数需在 0–10 之间";
     status.hidden = false;
     return;
   }
   if (Number.isFinite(stallSecsVal) && (stallSecsVal < 30 || stallSecsVal > 7200)) {
     status.className = "save-status err";
-    status.textContent = "卡死判定需在 30–7200 秒之间";
+    status.textContent = "卡死秒数需在 30–7200 之间（多久没新日志算卡死）";
     status.hidden = false;
     return;
   }
   try {
-    const updated = await invoke("set_settings_cmd", {
-      update: {
-        poll_interval_secs: pollVal,
-        default_mode: modeVal,
-        default_provider: providerVal,
-        max_parallel: maxParallelVal || 2,
-        retry_max: Number.isFinite(retryMaxVal) ? retryMaxVal : 2,
-        stall_secs: Number.isFinite(stallSecsVal) ? stallSecsVal : 600,
-      },
-    });
+    const update = {
+      poll_interval_secs: pollVal,
+      default_mode: modeVal,
+      default_provider: providerVal,
+      max_parallel: maxParallelVal || 2,
+      retry_max: Number.isFinite(retryMaxVal) ? retryMaxVal : 2,
+      stall_secs: Number.isFinite(stallSecsVal) ? stallSecsVal : 180,
+    };
+    if (failoverEnabled !== undefined) {
+      update.failover_enabled = failoverEnabled;
+    }
+    if (postInspectEnabled !== undefined) {
+      update.post_inspect_enabled = postInspectEnabled;
+    }
+    if (postGitPushEnabled !== undefined) {
+      update.post_git_push_enabled = postGitPushEnabled;
+    }
+    if (plannerCriticEnabled !== undefined) {
+      update.planner_critic_enabled = plannerCriticEnabled;
+    }
+    const updated = await invoke("set_settings_cmd", { update });
     applyLogFontSize(fontVal);
     // sync picker defaults
     if ($("#pp-provider")) $("#pp-provider").value = providerVal;
@@ -94,6 +151,25 @@ async function saveSettings() {
     }
     if ($("#chooser-max-parallel") && !$("#chooser-max-parallel").dataset.touched) {
       $("#chooser-max-parallel").value = String(maxParallelVal || 2);
+    }
+    // 回填后端只读说明（若服务端文案有变）
+    if ($("#s-failover-order-note") && updated.failover_order_note) {
+      $("#s-failover-order-note").textContent = updated.failover_order_note;
+    }
+    if ($("#s-failover-enabled") && typeof updated.failover_enabled === "boolean") {
+      $("#s-failover-enabled").checked = updated.failover_enabled;
+    }
+    if ($("#s-post-inspect") && typeof updated.post_inspect_enabled === "boolean") {
+      $("#s-post-inspect").checked = updated.post_inspect_enabled;
+    }
+    if ($("#s-planner-critic") && typeof updated.planner_critic_enabled === "boolean") {
+      $("#s-planner-critic").checked = updated.planner_critic_enabled;
+    }
+    if ($("#s-post-git-push") && typeof updated.post_git_push_enabled === "boolean") {
+      $("#s-post-git-push").checked = updated.post_git_push_enabled;
+    }
+    if ($("#s-post-tasks-note") && updated.post_tasks_note) {
+      $("#s-post-tasks-note").textContent = updated.post_tasks_note;
     }
     status.className = "save-status ok";
     status.textContent = "已保存";
@@ -168,6 +244,16 @@ const UI_ACTIONS = {
   "btn-ws-resume": () => resumeRun(),
   "btn-ws-rework": () => startReworkWave(),
   "btn-ws-accept-residual": () => acceptRunResidual(),
+  "btn-export-log-md": () =>
+    typeof exportBoardLogsMd === "function"
+      ? exportBoardLogsMd()
+      : toast("导出不可用"),
+  "btn-open-handoff": () =>
+    typeof openHandoffLedger === "function"
+      ? openHandoffLedger()
+      : toast("打开账本不可用"),
+  "btn-ws-back-chat": () =>
+    typeof openChatPage === "function" ? openChatPage() : showPage("chat"),
   "btn-remove-project": () => removeSelectedProject(),
   "btn-ws-dismiss-run": () => dismissRun(),
   "btn-task-dash-toggle": () => {
@@ -196,8 +282,8 @@ const UI_ACTIONS = {
   "btn-chooser-pick": () => pickPlanFileForPicker(),
   "btn-chooser-close": () => openPlanChooser(false),
   "btn-plan-choose": async () => {
-    // 先打开面板，再扫计划——避免 invoke 失败导致「按钮像死了」
-    openPlanChooser(true);
+    // 先打开面板（展开列表换文件），再扫计划——避免 invoke 失败导致「按钮像死了」
+    openPlanChooser(true, { expandList: true });
     try {
       await loadPlansForPicker();
       renderPlanChooser();
@@ -209,8 +295,11 @@ const UI_ACTIONS = {
     }
   },
   "btn-pp-analyze": async () => {
-    // 弹窗化：顶栏「分配计划」打开合并弹窗，底部确认才执行
-    openPlanChooser(true);
+    // 顶栏「执行此计划」：有选中则统一入口；无选中再打开选项层选文件
+    if (state.selectedPlan && typeof startExecuteFromSelection === "function") {
+      return startExecuteFromSelection(state.selectedPlan, { source: "topbar" });
+    }
+    openPlanChooser(true, { expandList: true });
     try {
       await loadPlansForPicker();
       renderPlanChooser();
@@ -221,11 +310,35 @@ const UI_ACTIONS = {
       updateChooserAssignState();
     }
   },
+  "btn-chooser-toggle-list": () => {
+    if (typeof setChooserListExpanded === "function") {
+      setChooserListExpanded(!state.chooserListExpanded);
+    } else {
+      state.chooserListExpanded = !state.chooserListExpanded;
+      if (typeof renderPlanChooser === "function") renderPlanChooser();
+    }
+  },
   "btn-pp-set-default": () => setDefaultPlan(),
   "btn-confirm-start": () => confirmAndStart(),
+  "btn-sanitize-deps": () =>
+    typeof sanitizeDepsFromConfirm === "function"
+      ? sanitizeDepsFromConfirm()
+      : null,
+  "btn-enable-post-inspect": () =>
+    typeof enablePostInspectAndResplit === "function"
+      ? enablePostInspectAndResplit()
+      : null,
+  "btn-enable-planner-critic": () =>
+    typeof enablePlannerCriticAndResplit === "function"
+      ? enablePlannerCriticAndResplit()
+      : null,
   "btn-replan": () => replanFromConfirm(),
   "btn-confirm-back": () => backFromConfirmToMonitor(),
   "btn-confirm-edit": () => beginConfirmEdit(),
+  "btn-confirm-delete": () =>
+    typeof deleteConfirmTask === "function"
+      ? deleteConfirmTask()
+      : toast("删除不可用"),
   "btn-confirm-edit-cancel": () => cancelConfirmEdit(),
   "btn-confirm-edit-save": () => saveConfirmEdit(),
   "split-plan-chip": () => showSplitPlanConfirm(),
@@ -310,6 +423,50 @@ const UI_ACTIONS = {
   "brand-home": () => goHome(),
   "btn-open-chat": () => openChatPage(),
   "btn-monitor-plan": () => goToPlanMonitor(),
+  // 计划管理 = 独立 page-plans（选中后管理）；聊天右栏用 icon 展开
+  "btn-plan-mgmt": () =>
+    typeof openPlanManagement === "function" ? openPlanManagement() : showPage("plans"),
+  "btn-chat-rail-toggle": () =>
+    typeof toggleChatPlanRail === "function" ? toggleChatPlanRail() : null,
+  "btn-plans-refresh": () =>
+    typeof loadPlanRail === "function" ? loadPlanRail() : null,
+  "btn-plans-to-chat": () =>
+    typeof openChatPage === "function" ? openChatPage() : showPage("chat"),
+  "btn-plans-set-dir": () =>
+    typeof promptPlansDir === "function" ? promptPlansDir() : null,
+  "btn-plans-open-dir": () =>
+    typeof openPlansDirInFinder === "function" ? openPlansDirInFinder() : null,
+  "btn-plans-pick-file": () =>
+    typeof pickPlanFileForMgmt === "function" ? pickPlanFileForMgmt() : null,
+  // 空态 / 提示条按钮（与 list 内动态 id 共用）
+  "btn-plans-empty-show-other": () =>
+    typeof showOtherPlansLocations === "function"
+      ? showOtherPlansLocations()
+      : null,
+  "btn-plans-hint-show-other": () =>
+    typeof showOtherPlansLocations === "function"
+      ? showOtherPlansLocations()
+      : null,
+  "btn-plans-empty-pick": () =>
+    typeof pickPlanFileForMgmt === "function" ? pickPlanFileForMgmt() : null,
+  "btn-plans-empty-open-dir": () =>
+    typeof openPlansDirInFinder === "function" ? openPlansDirInFinder() : null,
+  "btn-plans-empty-to-chat": () =>
+    typeof openChatPage === "function" ? openChatPage() : showPage("chat"),
+  "btn-plans-preview": () => {
+    const p =
+      $("#btn-plans-preview")?.dataset?.plan ||
+      state.planRailSelected ||
+      state.selectedPlan;
+    if (!p) return toast("请先选中计划");
+    return typeof openPlansMgmtItem === "function"
+      ? openPlansMgmtItem(p)
+      : openPlanFullView(p);
+  },
+  "btn-plans-assign": () =>
+    typeof assignFromPlansMgmt === "function"
+      ? assignFromPlansMgmt()
+      : null,
   "btn-empty-to-chat": () => openChatPage(),
   "btn-chooser-to-chat": () => {
     openPlanChooser(false);
@@ -317,10 +474,53 @@ const UI_ACTIONS = {
   },
   "btn-chat-send": () => sendChatMessage(),
   "btn-chat-save": () => saveChatPlan(),
-  "btn-chat-assign": () => assignFromChat(),
-  "btn-chat-preview": () => previewChatPlan(),
+  "btn-chat-assign": () =>
+    typeof assignFromChat === "function" ? assignFromChat() : null,
+  "btn-chat-attach": () =>
+    typeof pickChatAttachments === "function" ? pickChatAttachments() : null,
   "btn-chat-env-doctor": () => openChatEnvDoctor(),
   "btn-chat-env-dismiss": () => dismissChatEnvBar(),
+  // C3 multi-session
+  "btn-chat-session-new": () =>
+    typeof newChatSession === "function" ? newChatSession() : null,
+  "btn-chat-session-del": () =>
+    typeof deleteChatSession === "function" ? deleteChatSession() : null,
+  "btn-img-lightbox-close": () =>
+    typeof closeImageLightbox === "function" ? closeImageLightbox() : null,
+  "img-lightbox-backdrop": () =>
+    typeof closeImageLightbox === "function" ? closeImageLightbox() : null,
+  // H1 plan-rail + full-view modal
+  "btn-plan-rail-refresh": () => loadPlanRail(),
+  "btn-plan-rail-close": () => {
+    if (typeof setPlanRailOpen === "function") {
+      setPlanRailOpen(false);
+      if (typeof renderPlanRail === "function") renderPlanRail();
+    }
+  },
+  "btn-chooser-options-toggle": () => {
+    const grid = $("#chooser-options-grid");
+    const btn = $("#btn-chooser-options-toggle");
+    if (!grid) return;
+    const open = grid.hasAttribute("hidden");
+    if (open) grid.removeAttribute("hidden");
+    else grid.setAttribute("hidden", "");
+    if (btn) {
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn.textContent = open ? "更多选项 ▾" : "更多选项 ▸";
+    }
+  },
+  "btn-plan-full-close": () => closePlanFullView(),
+  "btn-plan-full-close2": () => closePlanFullView(),
+  "plan-full-backdrop": () => closePlanFullView(),
+  "btn-plan-full-edit": () => beginPlanFullEdit(),
+  "btn-plan-full-diff": () => openPlanFullDiff(),
+  "btn-plan-full-diff-close": () => closePlanFullDiff(),
+  "btn-plan-full-diff-left": () => adoptPlanDiffSide("left"),
+  "btn-plan-full-diff-right": () => adoptPlanDiffSide("right"),
+  "btn-plan-full-save": () => savePlanFullView({ asCopy: false }),
+  "btn-plan-full-save-as": () => savePlanFullView({ asCopy: true }),
+  "btn-plan-full-cancel-edit": () => cancelPlanFullEdit(),
+  "btn-plan-full-assign": () => assignFromPlanFullView(),
 };
 
 function bindGlobalUI() {
@@ -337,13 +537,128 @@ function bindGlobalUI() {
     });
   }
 
-  // chat: Enter 发送（Shift+Enter 换行）
+  // chat: Enter 发送（Shift+Enter 换行）；Esc 关图片灯箱
   document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && typeof closeImageLightbox === "function") {
+      const lb = document.getElementById("img-lightbox");
+      if (lb && !lb.hidden) {
+        e.preventDefault();
+        closeImageLightbox();
+        return;
+      }
+    }
     if (e.target?.id === "chat-input" && e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (!state.chatBusy) sendChatMessage();
     }
   });
+
+  // Ctrl/Cmd+V 粘贴图片 → 聊天附件（捕获阶段，避免被 textarea 吃掉）
+  document.addEventListener(
+    "paste",
+    (e) => {
+      if (state.page !== "chat") return;
+      // allow paste into any chat surface (input / messages / composer)
+      const t = e.target;
+      const inChat =
+        t?.id === "chat-input" ||
+        t?.closest?.("#page-chat") ||
+        t?.closest?.(".chat-composer");
+      if (!inChat) return;
+      if (typeof handleChatPaste === "function") {
+        Promise.resolve(handleChatPaste(e)).catch((err) =>
+          toast(String(err?.message || err))
+        );
+      }
+    },
+    true
+  );
+
+  // 双击：右栏 / 计划管理 → 全文编辑
+  document.addEventListener("dblclick", (e) => {
+    const railItem = e.target?.closest?.(".plan-rail-item[data-plan-rail]");
+    if (railItem) {
+      e.preventDefault();
+      const p = railItem.dataset.planRail;
+      if (typeof openPlanRailItem === "function") {
+        Promise.resolve(openPlanRailItem(p)).catch((err) =>
+          toast(String(err?.message || err))
+        );
+      } else {
+        Promise.resolve(openPlanFullView(p)).catch((err) =>
+          toast(String(err?.message || err))
+        );
+      }
+      return;
+    }
+    const mgmtItem = e.target?.closest?.(".plans-mgmt-item[data-plans-mgmt]");
+    if (mgmtItem) {
+      e.preventDefault();
+      const p = mgmtItem.dataset.plansMgmt;
+      if (typeof openPlansMgmtItem === "function") {
+        Promise.resolve(openPlansMgmtItem(p)).catch((err) =>
+          toast(String(err?.message || err))
+        );
+      } else {
+        Promise.resolve(openPlanFullView(p)).catch((err) =>
+          toast(String(err?.message || err))
+        );
+      }
+    }
+  });
+
+  // C3: session select change
+  const sessionSel = document.getElementById("chat-session-select");
+  if (sessionSel && !sessionSel.dataset.bound) {
+    sessionSel.dataset.bound = "1";
+    sessionSel.addEventListener("change", () => {
+      const sid = sessionSel.value || "default";
+      if (typeof switchChatSession === "function") {
+        Promise.resolve(switchChatSession(sid)).catch((err) =>
+          toast(String(err?.message || err))
+        );
+      }
+    });
+  }
+
+  // G4: file input change + drag-drop on composer
+  const fileInput = document.getElementById("chat-file-input");
+  if (fileInput && !fileInput.dataset.bound) {
+    fileInput.dataset.bound = "1";
+    fileInput.addEventListener("change", () => {
+      if (typeof addChatAttachments === "function") {
+        Promise.resolve(addChatAttachments(fileInput.files)).catch((err) =>
+          toast(String(err?.message || err))
+        );
+      }
+    });
+  }
+  // 拖放附图：composer + 整个聊天页消息区
+  const dropZones = [
+    document.querySelector(".chat-composer"),
+    document.querySelector("#page-chat .chat-shell"),
+    document.getElementById("chat-messages"),
+  ].filter(Boolean);
+  for (const zone of dropZones) {
+    if (zone.dataset.dropBound) continue;
+    zone.dataset.dropBound = "1";
+    zone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      zone.classList.add("is-drop");
+    });
+    zone.addEventListener("dragleave", () => {
+      zone.classList.remove("is-drop");
+    });
+    zone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      zone.classList.remove("is-drop");
+      if (e.dataTransfer?.files?.length && typeof addChatAttachments === "function") {
+        Promise.resolve(addChatAttachments(e.dataTransfer.files)).catch((err) =>
+          toast(String(err?.message || err))
+        );
+      }
+    });
+  }
 
   document.addEventListener(
     "click",
@@ -351,6 +666,44 @@ function bindGlobalUI() {
       // plan chooser backdrop
       if (e.target?.id === "plan-chooser") {
         openPlanChooser(false);
+        return;
+      }
+      // H1 plan full-view backdrop
+      if (e.target?.id === "plan-full-backdrop") {
+        closePlanFullView();
+        return;
+      }
+
+      // G5: 空聊示例 chip → 填入输入框
+      const exampleChip = e.target?.closest?.(".chat-example-chip[data-chat-example]");
+      if (exampleChip) {
+        e.preventDefault();
+        if (typeof fillChatExample === "function") {
+          fillChatExample(exampleChip.dataset.chatExample || exampleChip.textContent);
+        }
+        return;
+      }
+
+      // G4: remove pending attachment thumb
+      const attRm = e.target?.closest?.("[data-att-remove]");
+      if (attRm) {
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = Number(attRm.getAttribute("data-att-remove"));
+        if (typeof removeChatAttachment === "function") removeChatAttachment(idx);
+        return;
+      }
+
+      // 点击图片放大
+      const zoomImg = e.target?.closest?.(".chat-img-zoomable[data-img-src]");
+      if (zoomImg) {
+        e.preventDefault();
+        if (typeof openImageLightbox === "function") {
+          openImageLightbox(
+            zoomImg.getAttribute("data-img-src") || zoomImg.src,
+            zoomImg.getAttribute("data-img-name") || zoomImg.alt || ""
+          );
+        }
         return;
       }
 
@@ -367,6 +720,61 @@ function bindGlobalUI() {
         Promise.resolve(adoptChatPlanFromCard(planAdopt)).catch((err) =>
           toast(String(err?.message || err))
         );
+        return;
+      }
+      const planAssign = e.target?.closest?.(".btn-chat-plan-assign");
+      if (planAssign) {
+        e.preventDefault();
+        // Seed draft path from card if needed, then same entry as sticky assign.
+        const card = planAssign.closest?.(".chat-plan-card");
+        const full = card?.querySelector?.(".chat-plan-full");
+        const md = full?.textContent?.trim();
+        if (md && typeof ensureChatState === "function") {
+          ensureChatState();
+          if (state.chatSession) {
+            if (!state.chatSession.draft_plan) {
+              state.chatSession.draft_plan = {
+                path: state.chatDraftPlan || "",
+                saved: !!state.chatDraftPlan,
+                markdown: md,
+                title: null,
+              };
+            } else if (!state.chatSession.draft_plan.markdown) {
+              state.chatSession.draft_plan.markdown = md;
+            }
+          }
+        }
+        Promise.resolve(
+          typeof assignFromChat === "function" ? assignFromChat() : null
+        ).catch((err) => toast(String(err?.message || err)));
+        return;
+      }
+
+      // 聊天右栏单击 = 选中
+      const railItem = e.target?.closest?.(".plan-rail-item[data-plan-rail]");
+      if (railItem) {
+        e.preventDefault();
+        const p = railItem.dataset.planRail;
+        if (typeof selectPlanRailItem === "function") {
+          selectPlanRailItem(p);
+        } else {
+          Promise.resolve(openPlanFullView(p)).catch((err) =>
+            toast(String(err?.message || err))
+          );
+        }
+        return;
+      }
+
+      // 计划管理页单击 = 选中 + 详情
+      const mgmtItem = e.target?.closest?.(".plans-mgmt-item[data-plans-mgmt]");
+      if (mgmtItem) {
+        e.preventDefault();
+        const p = mgmtItem.dataset.plansMgmt;
+        if (typeof selectPlansMgmtItem === "function") {
+          selectPlansMgmtItem(p);
+        } else if (typeof selectPlanRailItem === "function") {
+          selectPlanRailItem(p);
+        }
         return;
       }
 
@@ -483,6 +891,23 @@ function bindGlobalUI() {
         }
         return;
       }
+      // P2-3: event type filter chips
+      if (el.closest?.("#log-event-filter") && el.dataset?.evFilter) {
+        state.logEventFilter = el.dataset.evFilter || "all";
+        localStorage.setItem("cco.logEventFilter", state.logEventFilter);
+        $$("#log-event-filter [data-ev-filter]").forEach((b) =>
+          b.classList.toggle(
+            "active",
+            (b.dataset.evFilter || "all") === state.logEventFilter
+          )
+        );
+        state.logPanelSig = {};
+        const board = $("#cli-board");
+        if (board) delete board.dataset.visKey;
+        const tasks = state.live?.tasks || [];
+        if (tasks.length) renderCliBoard(tasks);
+        return;
+      }
       if (el.closest?.("#log-font-group") && el.dataset?.size) {
         applyLogFontSize(Number(el.dataset.size));
         return;
@@ -523,8 +948,34 @@ function bindGlobalUI() {
       toast(
         t.checked
           ? "已开启：规划后停在确认屏"
-          : "已关闭：分配后自动开跑"
+          : "已关闭：执行后自动开跑"
       );
+    }
+    // H2：显示已执行 — chooser / plan-rail / 计划管理 共用
+    if (
+      t.id === "chooser-show-executed" ||
+      t.id === "plan-rail-show-executed" ||
+      t.id === "plans-mgmt-show-executed"
+    ) {
+      if (typeof setShowExecutedPlans === "function") {
+        setShowExecutedPlans(!!t.checked);
+      } else {
+        state.showExecutedPlans = !!t.checked;
+        try {
+          localStorage.setItem("cco.showExecutedPlans", t.checked ? "1" : "0");
+        } catch (_) {}
+        if (state.planChooserOpen && typeof renderPlanChooser === "function") {
+          renderPlanChooser();
+        }
+        if (typeof renderPlanRail === "function") renderPlanRail();
+        if (state.page === "plans" && typeof renderPlansMgmtPage === "function") {
+          renderPlansMgmtPage();
+        }
+      }
+    }
+    // E4：计划管理「显示其它位置」（非 plans_dir）
+    if (t.id === "plans-mgmt-show-other") {
+      if (typeof renderPlansMgmtPage === "function") renderPlansMgmtPage();
     }
   });
 
@@ -544,6 +995,11 @@ function bindGlobalUI() {
   });
   document.addEventListener("input", (e) => {
     const t = e.target;
+    // H1: plan full-view editor dirty tracking
+    if (t?.id === "plan-full-editor") {
+      if (typeof onPlanFullEditorInput === "function") onPlanFullEditorInput();
+      return;
+    }
     if (t?.id !== "chooser-max-parallel" && t?.id !== "pp-max-parallel") return;
     t.dataset.touched = "1";
     t.dataset.editing = "1";
@@ -604,6 +1060,8 @@ async function boot() {
     const cs = $("#conn-status");
     if (cs) cs.textContent = `桌面应用 · v${meta.version}`;
     await loadProjects();
+    // H0 冷启动：仅「有活动 run」的项目自动进执行；
+    // 单项目无跑 → selectProject → chat 主窗（不再因历史 planJob 进计划页）
     const active = state.projects.find(
       (p) => p.running_tasks > 0 || isLiveStatus(p.active_status)
     );
@@ -611,6 +1069,19 @@ async function boot() {
     else if (state.projects.length === 1) await selectProject(state.projects[0].path);
     else if (state.projects.length > 0) goHome();
     else showPage("welcome");
+    // 冷启动双保险：无活动 run 却落在 workspace → 强制 chat
+    if (
+      state.selectedPath &&
+      state.page === "workspace" &&
+      typeof hasActiveRun === "function" &&
+      !hasActiveRun()
+    ) {
+      const st = String(state.planJob?.status || "").toLowerCase();
+      if (state.phase !== "planning" && st !== "planning") {
+        if (typeof openChatPage === "function") await openChatPage();
+        else showPage("chat");
+      }
+    }
     startPolling();
   } catch (e) {
     console.error(e);

@@ -1,6 +1,6 @@
 # cco 聊天页注意力收敛（Chat UX Focus）
 
-> 状态：**方案已定稿 · 未实施**（U0–U2 待排期；**不阻塞** D0–D4 / P-chat C0–C2 已闭环项）  
+> 状态：**U0–U2 已落地**（终检：后台单入口 + soft-fallback 无 fence + 计划卡 CTA + env_note；**不阻塞** D0–D4 / P-chat C0–C2 已闭环项）  
 > 日期：2026-07-19  
 > 范围：桌面 `#page-chat` 信息架构与噪声降级 · 假模板/CLI 故障呈现 · 就绪条 CTA 层级 · 后台 Mode B 态在聊天页的展示  
 > 角色：主路径**体验修补**子计划——在 **P-chat C0–C2 已落地** 之上消灭「一页三态叠放」；**不**替代选文件分配；**不**扩 C3（流式/多会话/方案 B/diff）；**不**改 Mode B `confirm_start` 契约  
@@ -257,31 +257,31 @@ ChatSendResponse.fake 已有
 
 | 阶段 | 目标 | 状态 | 主要触点 |
 |------|------|------|----------|
-| **U0** | 注意力与 CTA（纯前端可完） | ☐ | `web/js/*` · `web/css/*` · `index.html` |
-| **U1** | 故障/fake 可信度（后端回复组装） | ☐ | `src/services/chat.rs` + 前端系统条 |
-| **U2** | 文案/卡片/顶栏抛光 | ☐ | 卡片折叠 · 标题收敛 · 预算显隐 |
+| **U0** | 注意力与 CTA（纯前端可完） | ✅ | `web/js/*` · `web/css/*` · `index.html` |
+| **U1** | 故障/fake 可信度（后端回复组装） | ✅ | `src/services/chat.rs` + 前端系统条 |
+| **U2** | 文案/卡片/顶栏抛光 | ✅ | 卡片折叠 · 标题收敛 · 计划卡 CTA |
 
-### U0 — 注意力与 CTA ☐
+### U0 — 注意力与 CTA ✅
 
-- [ ] 后台态：副标题不再复读「待确认」；banner 钮改 ghost；可关  
-- [ ] 顶栏 chat 页隐藏自指「聊天」  
-- [ ] 就绪条：未保存 **隐藏**分配、**primary** 保存；已保存 primary 分配  
-- [ ] `resp.fake`：toast 保留 + 就绪条标注「本地模板」；分配前强提示  
-- [ ] `node --check` 相关 js 通过  
+- [x] 后台态：副标题不再复读「待确认」；banner 钮改 ghost；可关  
+- [x] 顶栏 chat 页隐藏自指「聊天」  
+- [x] 就绪条：未保存 **隐藏**分配、**primary** 保存；已保存 primary 分配（演进：CTA 迁计划卡脚，sticky 就绪条默认隐藏）  
+- [x] `resp.fake`：toast 保留 + 环境条/模板标注；分配前强提示  
+- [x] `node --check` 相关 js 通过  
 
-### U1 — 故障呈现与 draft 策略 ☐
+### U1 — 故障呈现与 draft 策略 ✅
 
-- [ ] soft-fallback 的 diagnostic **不**写入 assistant 正文（或极短）  
-- [ ] 生产 fallback **默认不**产出可提取的 ` ```plan `（或提取后前端拒绝当就绪）  
-- [ ] 可选 `env_note` + `#chat-env-bar`（环境检查 CTA）  
-- [ ] `cargo test --lib` chat 相关绿  
+- [x] soft-fallback 的 diagnostic **不**写入 assistant 正文（或极短）  
+- [x] 生产 fallback **默认不**产出可提取的 ` ```plan `（或提取后前端拒绝当就绪）  
+- [x] 可选 `env_note` + `#chat-env-bar`（环境检查 CTA）  
+- [x] `cargo test --lib` chat 相关绿  
 
-### U2 — 抛光 ☐
+### U2 — 抛光 ✅
 
-- [ ] 计划卡：标题 + ≤4 大纲 + 展开 +「采用并保存」  
-- [ ] 页头/hint 文案单源  
-- [ ] 纯聊天态弱化预算 chip（可选）  
-- [ ] 目视清单 §9 全绿  
+- [x] 计划卡：标题 + ≤4 大纲 + 展开 +「采用并保存」/「执行此计划」  
+- [x] 页头/hint 文案单源  
+- [x] 纯聊天态弱化预算 chip（可选；顶栏与后台互斥）  
+- [x] 目视清单 §9 全绿  
 
 ### 5.1 边界
 
@@ -363,7 +363,7 @@ ChatSendResponse.fake 已有
 | 时点 | 内容 |
 |------|------|
 | **t1 · 2026-07-19** | 初稿定稿：§0–§11；问题来自桌面共建计划截图分析；阶段 U0–U2；总账 **P2-10**；与 P-chat C0–C2 / P2-9 边界钉死 |
-| 后续 | **另起行追加**；既有行语义禁止改写 |
+| **t2 · 2026-07-20** | 只读终检：U0–U2 代码已齐（banner ghost/可关、chat 自指隐藏、计划卡 CTA、`env_note` soft-fallback 无 fence、`chatFormatPlanCard`）；勾满 §5；总账 t29 |
 
 ---
 

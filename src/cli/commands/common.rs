@@ -38,6 +38,7 @@ pub(crate) fn plan_then_load_ir(
             provider,
             mode,
             max_parallel,
+            preserve_from_job_id: None,
         },
     )?;
     let mut view = view;

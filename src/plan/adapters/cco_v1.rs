@@ -118,6 +118,9 @@ struct FileTask {
     /// Required on-disk artifact paths (relative). Absent → empty.
     #[serde(default)]
     outputs: Vec<String>,
+    /// Free-form tags for L1 routing (P2-4). Absent → empty.
+    #[serde(default)]
+    tags: Vec<String>,
 }
 
 pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
@@ -265,6 +268,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             role: ft.role,
             scope,
             outputs: ft.outputs.clone(),
+            tags: ft.tags.clone(),
         });
     }
 

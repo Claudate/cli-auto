@@ -54,6 +54,21 @@
   font-weight: 600;
   font-size: 0.92rem;
 }
+.plan-item .plan-item-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.45rem;
+  width: 100%;
+}
+.plan-item .plan-item-title-row .plan-item-title {
+  flex: 1;
+  min-width: 0;
+}
+.plan-item .plan-item-title-row .plan-rail-badge {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
 .plan-item .plan-item-meta {
   margin-top: 0.2rem;
   font-size: 0.78rem;
@@ -207,6 +222,200 @@
   font-size: 1.05rem;
   font-weight: 650;
 }
+
+/* ── Flow stage strip (main path, no engine brand) ── */
+.flow-strip-host {
+  flex-shrink: 0;
+}
+.flow-stage-strip {
+  background: linear-gradient(180deg, #f7f8fb 0%, #eef1f6 100%);
+  border: 1px solid #dfe3ea;
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem 0.5rem;
+  margin-bottom: 0.15rem;
+}
+.flow-stage-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+.flow-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  background: transparent;
+}
+.flow-stage.is-done {
+  color: #1a7a3a;
+  background: #e5f6ea;
+}
+.flow-stage.is-active {
+  color: #1d4ed8;
+  background: #e0eaff;
+  box-shadow: 0 0 0 1px #bfd0ff;
+}
+.flow-stage-mark {
+  font-size: 0.7rem;
+  opacity: 0.9;
+}
+.flow-stage-sep {
+  color: #c0c5ce;
+  font-weight: 500;
+  user-select: none;
+}
+.flow-stage-line {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: #4b5563;
+}
+.flow-mode-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.55rem;
+  margin: 0.35rem 0 0;
+}
+.flow-mode-badge-row[hidden] {
+  display: none !important;
+}
+.flow-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  background: #e8eefc;
+  color: #1e3a8a;
+  border: 1px solid #c7d6f5;
+}
+.flow-mode-badge.is-regression {
+  background: #e7f6ee;
+  color: #14532d;
+  border-color: #b7e0c5;
+}
+.flow-mode-badge.is-greenfield {
+  background: #eef2ff;
+  color: #312e81;
+  border-color: #c7d2fe;
+}
+.flow-mode-badge.is-audit {
+  background: #f5f3ff;
+  color: #5b21b6;
+  border-color: #ddd6fe;
+}
+.flow-mode-badge.is-mixed {
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: #fed7aa;
+}
+.flow-mode-hint {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.flow-critic-note {
+  margin: 0.4rem 0 0;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: #1e3a5f;
+  background: #eef4ff;
+  border: 1px solid #c9daf8;
+  border-radius: 8px;
+  max-width: 42rem;
+}
+.flow-critic-note[hidden] {
+  display: none !important;
+}
+.flow-critic-note.is-clean {
+  color: #14532d;
+  background: #eef8f1;
+  border-color: #c5e6d0;
+}
+.flow-critic-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+.flow-critic-chips[hidden] {
+  display: none !important;
+}
+.flow-critic-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  background: #e8eefc;
+  color: #1e3a8a;
+  border: 1px solid #c7d6f5;
+}
+.flow-critic-chip[hidden] {
+  display: none !important;
+}
+.flow-critic-chip.is-zero {
+  background: #f3f4f6;
+  color: #6b7280;
+  border-color: #e5e7eb;
+  font-weight: 500;
+}
+.flow-critic-chip.is-llm {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+.flow-critic-chip.is-rules {
+  background: #f3f4f6;
+  color: #4b5563;
+  border-color: #e5e7eb;
+  font-weight: 500;
+}
+.flow-critic-notes {
+  margin: 0.4rem 0 0;
+  padding: 0.35rem 0.6rem 0.35rem 1.2rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #7c2d12;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  max-width: 42rem;
+}
+.flow-critic-notes[hidden] {
+  display: none !important;
+}
+.flow-critic-notes li {
+  margin: 0.15rem 0;
+}
+.flow-critic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+.flow-critic-actions[hidden] {
+  display: none !important;
+}
+
+/* Exec window: logs collapsed by default */
+.cli-window.is-log-collapsed .cli-window-body {
+  display: none !important;
+}
+.cli-window .cli-log-toggle {
+  font-size: 0.72rem;
+}
 /* P1-3：Planner 与 worker 共用 LogConsole 观感（深底 transcript） */
 .planner-log {
   flex: 1 1 auto;
@@ -334,6 +543,9 @@
   letter-spacing: 0.04em;
   text-transform: none;
 }
+.opt-badge-sys {
+  color: #3b5bdb;
+}
 .wave-task {
   display: block;
   flex: 1;
@@ -373,8 +585,57 @@
 }
 .confirm-detail-actions {
   display: flex;
+  align-items: center;
   gap: 0.35rem;
   flex-shrink: 0;
+}
+/* H4: per-task provider on confirm screen (header quick + edit form) */
+.confirm-task-provider-field {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.confirm-task-provider-field select,
+#confirm-task-provider {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--text, #111);
+  max-width: 7.5rem;
+  cursor: pointer;
+}
+.confirm-task-provider-field select:disabled,
+#confirm-task-provider:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.wave-task-provider {
+  display: inline-block;
+  margin-left: 0.2rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  background: var(--bg3, #eef1f5);
+  color: var(--muted, #5a6570);
+  vertical-align: middle;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 .confirm-edit-form {
   display: flex;
@@ -406,11 +667,44 @@
   color: var(--text, #111);
 }
 .confirm-edit-form textarea {
-  min-height: 220px;
+  min-height: 180px;
   resize: vertical;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.85rem;
   line-height: 1.45;
+}
+.confirm-edit-deps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 140px;
+  overflow: auto;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg2, #f7f7f8);
+}
+.confirm-edit-deps label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.confirm-edit-deps label input {
+  margin-top: 0.15rem;
+  flex: 0 0 auto;
+}
+.confirm-edit-deps-empty {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.btn.danger {
+  color: var(--danger, #b42318);
+}
+.btn.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger, #b42318) 10%, transparent);
 }
 .split-plan-chip {
   display: inline-flex;
@@ -673,12 +967,28 @@
 }
 .plan-chooser-tools {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 0.4rem;
   margin-bottom: 0.65rem;
+}
+.plan-chooser-tools .plan-show-executed {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text);
 }
 .chooser-list {
   max-height: 42vh;
   overflow: auto;
+}
+.chooser-list .plan-history-hint {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  padding: 0.5rem 0.55rem;
+  border-radius: 8px;
+  background: #f3f5f8;
+  text-align: center;
+  margin-top: 0.15rem;
 }
 
 
@@ -1021,6 +1331,24 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 12rem;
+}
+.cli-window-title .cli-elapsed {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cli-window-stall {
+  margin: 0.2rem 0.55rem 0;
+  padding: 0.22rem 0.45rem;
+  border-radius: 8px;
+  background: #fff8e6;
+  color: #8a6d1d;
+  border: 1px solid #f0e0a8;
+  font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* legacy hidden action hooks must never affect flex layout */
 #result-actions > button[hidden] {

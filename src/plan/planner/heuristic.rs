@@ -11,7 +11,7 @@ use anyhow::{bail, Context, Result};
 
 use crate::config::Config;
 use crate::plan::adapters::raw_single::default_provider_opts;
-use crate::plan::{OnFailure, PlanIR, TaskIR, TaskRole, MAX_TASKS};
+use crate::plan::{OnFailure, PlanIR, TaskIR, TaskRole, PLANNER_MAX_TASKS};
 
 use super::job::{append_log, PlanJob};
 
@@ -27,6 +27,14 @@ pub(super) fn build_fake_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
 
     let mk = |id: &str, title: &str, deps: Vec<&str>, group: &str, body: &str, optional: bool| {
         let title = crate::plan::normalize_optional_title(title, optional);
+        let dep_note = if deps.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n依赖原因：等待产物来自 {}\n",
+                deps.join("、")
+            )
+        };
         TaskIR {
             id: id.into(),
             title: title.clone(),
@@ -35,7 +43,7 @@ pub(super) fn build_fake_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
             provider: job.provider.clone(),
             mode: job.exec_mode.clone(),
             prompt: format!(
-                "【模拟任务 {id}】{title}\n来源计划: {src_hint}\n\n{body}\n\n完成后输出一行: CCO_DONE ok\n"
+                "【模拟任务 {id}】{title}\n来源计划: {src_hint}\n{dep_note}\n{body}\n\n完成后输出一行: CCO_DONE ok\n"
             ),
             acceptance: None,
             timeout_secs: Some(120),
@@ -46,6 +54,7 @@ pub(super) fn build_fake_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
             role: None,
             scope: None,
             outputs: vec![],
+        tags: vec![],
         }
     };
 
@@ -133,14 +142,14 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
     );
 
     // Prefer ##-only boundaries when ### made the graph too fine-grained.
-    if sections.len() > MAX_TASKS {
+    if sections.len() > PLANNER_MAX_TASKS {
         let coarse = split_sections_level(&text, /*include_h3=*/ false);
-        if coarse.len() > 1 && coarse.len() <= MAX_TASKS {
+        if coarse.len() > 1 && coarse.len() <= PLANNER_MAX_TASKS {
             append_log(
                 config,
                 &job.job_id,
                 &format!(
-                    "heuristic coarsened to {} ## section(s) (was {}, max {MAX_TASKS})",
+                    "heuristic coarsened to {} ## section(s) (was {}, max {PLANNER_MAX_TASKS})",
                     coarse.len(),
                     sections.len()
                 ),
@@ -186,13 +195,13 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
         sections
     };
 
-    let sections = if sections.len() > MAX_TASKS {
-        let merged = merge_sections(sections, MAX_TASKS);
+    let sections = if sections.len() > PLANNER_MAX_TASKS {
+        let merged = merge_sections(sections, PLANNER_MAX_TASKS);
         append_log(
             config,
             &job.job_id,
             &format!(
-                "heuristic merged into {} task(s) to satisfy max {MAX_TASKS}",
+                "heuristic merged into {} task(s) to satisfy max {PLANNER_MAX_TASKS}",
                 merged.len()
             ),
         );
@@ -260,10 +269,19 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
         } else {
             (None, vec![], None)
         };
+        let dep_note = if depends_on.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n## 依赖原因\n等待前置步骤产物：{}\n",
+                depends_on.join("、")
+            )
+        };
         let prompt = format!(
             "你是执行任务 `{id}`（{title}）的 worker。\n\
              项目根目录即当前工作目录。\n\
-             依据下列说明完成工作；不要做范围外改动。\n\n\
+             依据下列说明完成工作；不要做范围外改动。\n\
+             {dep_note}\n\
              ## 任务说明\n{body}\n\n\
              全部完成后在最后一行输出：CCO_DONE ok\n"
         );
@@ -284,6 +302,7 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
             role,
             scope,
             outputs,
+            tags: vec![],
         });
     }
 
@@ -305,6 +324,7 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
         require_inspect,
         tasks,
     };
+    crate::plan::apply_tag_routing(&mut ir);
     crate::plan::materialize_role_defaults(&mut ir);
     ir.validate()?;
     Ok(ir)

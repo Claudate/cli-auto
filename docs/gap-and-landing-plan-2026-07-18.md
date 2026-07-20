@@ -10,10 +10,11 @@
 > - [`desktop-ux-redesign-plan.md`](./desktop-ux-redesign-plan.md)（桌面壳 UX）
 > - [`terminal-console-plan.md`](./terminal-console-plan.md)（监视日志）
 > - [`ux-simple-mainpath-2026-07-17.md`](./ux-simple-mainpath-2026-07-17.md)（主路径简化）
-> - [`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)（聊天共建计划 → 落盘 → 分配；**已落地** C0–C2 ✅ · **P-chat** · C3→**D5/P2-9**；**勿**回灌 D0–D4）
-> - [`chat-ux-focus-2026-07-19.md`](./chat-ux-focus-2026-07-19.md)（聊天页注意力收敛 · **方案已定稿 · 未实施** U0–U2 → **D5/P2-10**；**不**回灌 P-chat C0–C2）
+> - [`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)（聊天共建计划 → 落盘 → 分配；**已落地** C0–C2 ✅ · **P-chat** · C3 t32–t34 → **P2-9 ✅**；**勿**回灌 D0–D4）
+> - [`chat-ux-focus-2026-07-19.md`](./chat-ux-focus-2026-07-19.md)（聊天页注意力收敛 · **U0–U2 已落地** → **D5/P2-10 · P-chat-ux ✅**；**不**回灌 P-chat C0–C2）
 > - [`chat-utf8-fence-panic-2026-07-19.md`](./chat-utf8-fence-panic-2026-07-19.md)（聊天 plan fence UTF-8 panic 热修 · **F0+F1 已闭环** · F2 可选 · **P-chat-utf8**；**不**并入 P2-9/P2-10 · **不**回灌 P-chat）
 > - [`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md)（计划驱动执行闭环 · 拆分/巡检/回补 · **L0–L2 已落地** · **P-loop / P2-11**；**不**回灌 D0–D4）
+> - [`chat-home-plan-cli-2026-07-19.md`](./chat-home-plan-cli-2026-07-19.md)（聊天主窗 · 未执行可改 · stall/换 CLI · **H0–H4 已落地** → **D5/P2-12 · P-chat-home ✅**；**不**回灌 P-chat/P-loop）
 > GEB 入口：[`/CLAUDE.md`](../CLAUDE.md)（L1）· [`./CLAUDE.md`](./CLAUDE.md)（L2 docs）
 
 [PROTOCOL]: 变更时更新此头部与阶段勾选，然后检查 /CLAUDE.md 与 docs/CLAUDE.md
@@ -123,10 +124,11 @@
 | ID | 项 | 状态 | 证据锚点 | 备注 |
 |----|----|------|----------|------|
 | **P-chat** | 聊天共建计划 → 落盘 `.md` → 方案 A 进「分配计划」 | ✅ **C0–C2 闭环** | `src/services/chat.rs` · `chat_*_cmd` · `web/js/chat.js` · `#page-chat` · `assignFromChat` | 不替代选文件；分配同源 `analyzePlanFromPicker` |
-| **C3** | 流式 / 多会话 / 方案 B / 计划 diff | ☐ **D5/P2-9** | chat-plan-builder §5 C3 | **不排期则不碰**；出池单独立项 |
-| **P-chat-ux** | 聊天页注意力收敛（后台降噪 · fake 可信 · CTA） | ☐ **D5/P2-10** | [`chat-ux-focus-2026-07-19.md`](./chat-ux-focus-2026-07-19.md) U0–U2 | **不**回灌 P-chat 为未完成；与 P2-9 分列 |
+| **C3** | 流式 / 多会话 / 方案 B / 计划 diff | ✅ **t32–t34 闭环** | chat-plan-builder §5 C3 · **t32–t34** | 多会话 · 方案 B · 计划 diff · 流式 partial |
+| **P-chat-ux** | 聊天页注意力收敛（后台降噪 · fake 可信 · CTA） | ✅ **U0–U2 已落地** | [`chat-ux-focus-2026-07-19.md`](./chat-ux-focus-2026-07-19.md) U0–U2 · banner/env_note/计划卡 | **t29 勾满**；**不**回灌 P-chat；与 P2-9 分列 |
 | **P-chat-utf8** | 聊天 `extract_plan_fence` / 历史截断 UTF-8 panic 热修 | ✅ **F0+F1 闭环** · F2 可选不排期 | [`chat-utf8-fence-panic-2026-07-19.md`](./chat-utf8-fence-panic-2026-07-19.md) F0–F2 · `services::chat` 15 测 · `f1_verify` | **不**回灌 P-chat；**不**并入 P2-10；中文+plain ``` 曾 join panic |
 | **P-loop** | 计划驱动执行闭环：清晰拆分 · 专门巡检对照勾选 · 遗漏回补 | ✅ **P2-11 已落地** | [`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md) L0–L2 ✅ | 反例 P-chat-utf8 四波 residual；扩 multi-cli inspect，不另开 Scheduler |
+| **P-chat-home** | 聊天主窗 · 未执行计划可改 · 已执行标识 · 入口按 run 路由 · stall 可见 · 重试尽换 CLI | ✅ **H0–H4 已落地** | [`chat-home-plan-cli-2026-07-19.md`](./chat-home-plan-cli-2026-07-19.md) H0–H4 · `resolveEntryRoute` · `list_plan_meta` · failover | **t28 勾满**；**不**回灌 P-chat/P-loop；与 P2-9/P2-10/multi-cli 分列 |
 
 #### P2 — 增强 / backlog（可延后，不阻塞 ship 叙事）→ **D5 池（t15）**
 
@@ -136,17 +138,18 @@
 
 | ID | 缺口 | 状态 | 来源 / 锚点 | 备注 |
 |----|------|------|-------------|------|
-| P2-1 | 确认屏删任务 / 改依赖 | ☐ **D5 池** | Mode B2 可选 ☐ | 依赖高级 pause 确认屏是否常显 |
-| P2-2 | replan 保留人工修改 | ☐ **D5 池** | Mode B2 可选 ☐ | 策略未定；先策略后码 |
-| P2-3 | 虚拟列表 / 事件过滤 / ANSI / 导出报告 | ☐ **D5 池** | terminal P2 | P1-1 已闭环；超长 run 真卡再做 |
-| P2-4 | 跨显示器系统级多窗口 | ☐ **D5 池** | ux-simple「未做」 | 现为应用内面板 |
+| P2-1 | 确认屏删任务 / 改依赖 | ✅ **已落地** | Mode B2 · `remove_proposed_task` / `depends_on` | **t30**；确认屏删除钮 + 依赖勾选 |
+| P2-2 | replan 保留人工修改 | ✅ **已落地** | Mode B2 · `plan.user_edits.json` / `preserve_from_job_id` | **t30**；按标题匹配回放 title/prompt/provider/deps/删除 |
+| P2-3 | 虚拟列表 / 事件过滤 / ANSI / 导出报告 | ✅ **t31+t34 闭环** | terminal P2 | **t31** 过滤/ANSI/导出 MD；**t34** 虚拟列表 |
+| P2-4 | 跨显示器系统级多窗口 | ☐ **D5 池** | ux-simple「未做」 | 现为应用内面板；未做系统级多窗口 |
 | P2-5 | TUI 内嵌真 PTY 网格 | ☐ **D5 池** | orchestrator M3 未勾增强项 | 当前 embedded=会话登记+日志路径 |
 | P2-6 | Claude Code skill `/cco-run` | ☐ **D5 池** | M4 可选 ☐ | |
 | P2-7 | M5：SDK provider / Mermaid / 自动开 PR / Windows launcher | ☐ **D5 池** | orchestrator M5 列表 | 按需拆单独立项；Codex 已出池 |
-| P2-8 | M5「第二 provider」文档债 | ⚠ **主文已改** | M5 已划掉 Codex 并指向 `codex.rs`（t5）；残差：其它段落若再出现「尚无第二 provider」则删 | 不占池；发现即改 |
-| P2-9 | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | ☐ **D5 池** | chat-plan-builder §5 C3 | **C0–C2 已落地**；打磨不排期则不碰 |
-| P2-10 | 聊天页注意力收敛：后台态降噪 · fake/故障可信 · CTA 序 · 卡片 | ☐ **D5 池** | chat-ux-focus U0–U2 | **P-chat 功能已闭环**；体验修补；与 P2-9 分列；不排期则不碰 |
+| P2-8 | M5「第二 provider」文档债 | ✅ **t35 扫尾** | M5 已划掉 Codex 并指向 `codex.rs`；全树无「尚无第二 provider」 | 发现即改 |
+| P2-9 | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | ✅ **t32–t34 闭环** | chat-plan-builder §5 C3 | 多会话 · 方案 B · 计划 diff · 流式 partial |
+| P2-10 | 聊天页注意力收敛：后台态降噪 · fake/故障可信 · CTA 序 · 卡片 | ✅ **已落地** | chat-ux-focus U0–U2 | **t29 勾满**；与 P2-9 分列 |
 | P2-11 | 计划驱动执行闭环：拆分 plan_ref · 巡检对照勾选 · 回补波 | ✅ **已落地** | plan-execute-inspect-rework L0–L2 ✅ | **P-loop**；与 multi-cli inspect 分列扩展 |
+| P2-12 | 聊天主窗 · 未执行可改 · 已执行标识 · 有跑进执行/无跑进聊天 · stall 可见 · 重试尽换 CLI | ✅ **已落地** | chat-home-plan-cli H0–H4 · **P-chat-home** | **t28 勾满**；与 P2-9/10 分列；**≠** P-loop 进程 hang |
 
 #### 2.1.1 与 §1.3 的边界（防回灌）
 
@@ -155,9 +158,9 @@
 | Planner / plan job / confirm_start 不存在 | §1.3 Mode B0/B1 **已完成** |
 | 桌面不能选计划、不能跑 | §1.3 主路径简化 + UX 0–4 **已完成** |
 | 无 log_events / 可读监视 | §1.3 terminal A 路径 P0 **已完成**；残差仅 P1-1/2/3 |
-| 无 Codex provider | §1.3 Providers；P2-8 仅文档扫尾 |
+| 无 Codex provider | §1.3 Providers；**P2-8 ✅ t35**（文档债扫尾） |
 | 无 `cco plan` / `run` 不规划 | **已有** `cco plan`；`run` 散文 plan job / 结构化 skip（P0-1 **D1 闭环**） |
-| 无计划时不能在 App 内起草 | **P-chat ✅ C0–C2**：桌面聊天 → 落盘 → 分配；残差 C3→**P2-9** · 体验→**P2-10** |
+| 无计划时不能在 App 内起草 | **P-chat ✅ C0–C2**：桌面聊天 → 落盘 → 分配；C3 **t32–t34 全闭环**（多会话·方案 B·diff·流式）→**P2-9 ✅** · 体验→**P2-10 ✅** |
 
 #### 2.1.2 最小闭环定义（便于 D1–D3 验收）
 
@@ -476,16 +479,17 @@
 
 | 池 ID | 主题 | 来源子计划 | 现状锚点 | 立项门槛（才可出池） |
 |-------|------|------------|----------|----------------------|
-| **P2-1** | 确认屏删任务 / 改依赖 | Mode B2 可选 | `product-mode-b` B2 ☐；`PlanIR::validate` 已有 | 用户明确要在确认屏编辑任务图 |
-| **P2-2** | replan 保留人工修改 | Mode B2 可选 | `replan` API 已有；**保留策略未定** | 先书面策略，再改 planner/job |
-| **P2-3** | 虚拟列表 / 事件过滤 / ANSI / 导出 | terminal P2 | LogConsole 全量；P1-1 行边界已闭环 | 超长 run 真卡顿，或要导出 HTML/MD |
+| **P2-1** | 确认屏删任务 / 改依赖 | Mode B2 可选 | **已落地**（t30）：`remove_proposed_task` · `update_proposed_task(depends_on)` · 确认屏 UI | — |
+| **P2-2** | replan 保留人工修改 | Mode B2 可选 | **已落地**（t30）：`plan.user_edits.json` 按标题 · `preserve_from_job_id` | — |
+| **P2-3** | 虚拟列表 / 事件过滤 / ANSI / 导出 | terminal P2 | ✅ **t31+t34 闭环**（过滤/ANSI/导出 MD + 虚拟列表） | 过滤切换重置贴底 |
 | **P2-4** | 跨显示器系统级多窗口 | ux-simple 未做 | 现为应用内 CLI board / 面板 | 多显示器硬需求 |
 | **P2-5** | TUI 内嵌真 PTY 网格 | orchestrator M3 | embedded = 会话登记 + 日志路径 | 要在 TUI 内交互 attach |
 | **P2-6** | Claude Code skill `/cco-run` | orchestrator M4 可选 | 无 skill 薄封装 | 在 Claude Code 内高频触发 `cco run` |
 | **P2-7** | M5：SDK provider / Mermaid / 自动 PR / Windows launcher | orchestrator M5 | Codex 已落地（非本项）；其余未做 | 按需拆 **单独立项**（勿整包） |
-| **P2-9** | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | chat-plan-builder §5 C3 | C0–C2 已落地（**P-chat ✅**）；C3 未做 | 用户要流式/多会话或方案 B 时出池 |
-| **P2-10** | 聊天页注意力收敛（后台降噪 · fake 可信 · CTA） | chat-ux-focus U0–U2 | 方案已定稿 · 未实施；**不**回灌 P-chat | 用户抱怨「一页三态」/假计划可分配时出池 |
+| **P2-9** | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | chat-plan-builder §5 C3 | ✅ **t32–t34 闭环**（多会话 · 方案 B · 计划 diff · 流式 partial） | 流式 = stdout partial 轮询，非 SSE |
+| **P2-10** | 聊天页注意力收敛（后台降噪 · fake 可信 · CTA） | chat-ux-focus U0–U2 | **已落地** U0–U2；**P-chat-ux ✅**（t29） | 与 P2-9 分列 |
 | **P2-11** | 计划驱动执行闭环（拆分 · 巡检 · 回补） | plan-execute-inspect-rework L0–L2 | **已落地** L0–L2；**P-loop** | host ISSUES 分级 + rework 波 + 桌面一键 |
+| **P2-12** | 聊天主窗 · 未执行可改 · 已执行标识 · 有跑进执行 · stall 可见 · 重试尽换 CLI | chat-home-plan-cli H0–H4 | **已落地** H0–H4；**P-chat-home ✅**（t28） | 与 P2-9/10 分列；**≠** 进程 hang 外的 P-loop |
 
 **t15 完成定义（本阶段只做这些）**：
 
@@ -883,6 +887,15 @@ D0 文档同构（半天，降低所有后续返工）
 | 2026-07-19 | **t24 / P-chat-utf8 F1 闭环**：§2 **P-chat-utf8** 改 **F0+F1 闭环**；关联真源/L1/L2 指针同步；证据 `dist/CCO.app` + `.cco-out/inspect/f1_verify`→`F1_VERIFY_OK`；F2 仍不排期；**不**改 D0–D4 / P2-9/P2-10 |
 | 2026-07-19 | **t25 / 计划驱动执行闭环入池**：增 [`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md)（方案定稿 · 未实施 L0–L2）；§2 **P-loop / P2-11** · §4 D5 池行；扩 multi-cli inspect/回补语义；**不**回灌 D0–D4 / multi-cli 已勾项；L1/L2 指针 |
 | 2026-07-19 | **t26 / P-loop L0–L2 落地**：启发式 plan_ref/severity；host ISSUES 分级门禁 + rework 波；桌面巡检条/回补/接受残留；§2 **P-loop / P2-11 ✅**；示例 `examples/plans/plan-loop-inspect-rework.md`；**不**回灌 D0–D4 / multi-cli 已勾项 |
+| 2026-07-19 | **t27 / 聊天主窗·计划可改·CLI 不卡死入池**：增 [`chat-home-plan-cli-2026-07-19.md`](./chat-home-plan-cli-2026-07-19.md)（方案定稿 · 未实施 H0–H4）；§2 **P-chat-home / P2-12** · §4 D5 池行；与 **P2-9/P2-10/P-loop** 分列；**不**回灌 D0–D4 / P-chat；L1/L2 指针 |
+| 2026-07-20 | **t28 / P-chat-home H0–H4 勾满**：只读核对代码已齐（`resolveEntryRoute`/`plan-rail`/`list_plan_meta`/`stallStripText`/`failover_enabled`）；子计划 t9 已 S1–S8 PASS；总账 §2/§4/L1/L2 假缺口「未实施」→ **已落地**；**不**回灌 D0–D4；下一步出池 **P2-10** |
+| 2026-07-20 | **t29 / P-chat-ux U0–U2 勾满**：只读核对代码已齐（banner ghost/可关、chat 自指隐藏、计划卡 CTA、`env_note` soft-fallback 无 fence）；子计划 §5 勾满；总账 §2/§4/L1/L2 假缺口 → **已落地**；**不**回灌 D0–D4；下一步建议 **P2-1/P2-2** 确认屏高级编辑 |
+| 2026-07-20 | **t30 / P2-1·P2-2 确认屏高级编辑落地**：删任务 `remove_proposed_task` + 改 `depends_on`；replan 经 `plan.user_edits.json`/`preserve_from_job_id` 按标题回放人工改动；桌面确认屏删除钮/依赖勾选；planner 测 30 绿；Mode B B2 可选勾满；**不**回灌 D0–D4 |
+| 2026-07-20 | **t31 / multi-cli P2 残差 + 监视 P2-3 主项**：`write_task_diff` CHANGED.md（P2-2）；live `handoff_board` + 打开账本 + 确认屏引擎可见（P2-6）；日志事件过滤/轻量 ANSI/导出 MD（terminal P2-3）；handoff 13 测绿；P2-4 系统多窗口 / P2-5 真 PTY / multi-cli P2-4·P2-5 仍 D5；**不**回灌 D0–D4 |
+| 2026-07-20 | **t32 / P2-9 C3 多会话部分落地**：`chat_list_sessions`/`chat_new_session`/`chat_delete_session` + Tauri 薄壳 + 聊天页会话下拉/新建/删除；缓存键 `project::session_id`；chat 27 测绿；流式 / 方案 B / 计划 diff 仍残差；**不**回灌 D0–D4 / 不改 Q2 默认方案 A |
+| 2026-07-20 | **t33 / C3 方案 B + multi-cli P2-4/P2-5**：设置「执行时跳过二次确认」`#s-chat-assign-direct`（默认关→方案 A）；`TaskIR.tags` + `apply_tag_routing`；LLM planner 解析 provider/role/scope/outputs/tags；单测 apply_tag_routing/cco_v1 tags/parse_llm collab 绿；流式/计划 diff / 跨屏/PTY 仍残差；**不**回灌 D0–D4 |
+| 2026-07-20 | **t34 / P2-9 残差 + P2-3 虚拟列表**：计划 diff（plan-full 磁盘 vs 草稿 · 采用左/右写回 · `chat_save_plan`）；`chat_stream_partial` 轮询 stdout 增量（失败降级 wait label）；LogConsole 虚拟列表（阈值 80 · 过滤切换贴底重置）；chat 测 + node --check；§2/§4 P2-3·P2-9 ✅；跨屏/PTY 仍 D5；**不**回灌 D0–D4 |
+| 2026-07-20 | **t35 / 打包 + 工程扫尾**：`scripts/package-app.sh` → `dist/CCO.app`（含 t34 标记）；清 digest PathBuf / 死代码 opt_u32·opt_f64 警告；**P2-8 ✅** 全树无「尚无第二 provider」；**不**出池 P2-4/5/6/7；**不**回灌 D0–D4 |
 
 ### 9.1 边界（防与产品变更混淆）
 

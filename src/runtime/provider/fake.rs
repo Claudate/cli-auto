@@ -145,18 +145,44 @@ impl WorkerProvider for FakeProvider {
         };
 
         // Test hooks (inline / missing bin only):
-        //   CCO_FAKE_HANG     — write partial log, never finish (stall patrol test)
-        //   CCO_FAKE_FAIL_ONCE — fail first start; succeed once attempt-1.* archive exists
-        let hang = task.prompt.contains("CCO_FAKE_HANG");
+        //   CCO_FAKE_HANG                 — write partial log, never finish (stall patrol test)
+        //   CCO_FAKE_HANG_UNTIL_FAILOVER  — hang while provider == "claude"; succeed after switch
+        //   CCO_FAKE_FAIL_ONCE            — fail first start; succeed once attempt-1.* archive exists
+        //   CCO_FAKE_STOP                 — finish immediately as user-stop (exit 130)
+        let hang_until_failover = task.prompt.contains("CCO_FAKE_HANG_UNTIL_FAILOVER");
+        let hang = task.prompt.contains("CCO_FAKE_HANG") && !hang_until_failover;
         let fail_once = task.prompt.contains("CCO_FAKE_FAIL_ONCE");
+        let stop_now = task.prompt.contains("CCO_FAKE_STOP");
         let prior_fail = ctx.task_dir.join("attempt-1.stdout.json").exists()
             || ctx.task_dir.join("attempt-1.meta.json").exists();
+        let inlineish = self.bin == "inline"
+            || self.bin == "fake-inline"
+            || which::which(&self.bin).is_err();
 
-        if hang
-            && (self.bin == "inline"
-                || self.bin == "fake-inline"
-                || which::which(&self.bin).is_err())
-        {
+        if hang_until_failover && inlineish {
+            // Hang only under the original house ("claude"); after H4 switches to "codex", succeed.
+            if self.name == "claude" {
+                let body = format!(
+                    "{{\"type\":\"assistant\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"fake hang-until-failover {id} on {prov}\"}}]}}}}\n",
+                    id = task.id,
+                    prov = self.name
+                );
+                std::fs::write(&stdout_path, body)?;
+                std::fs::write(
+                    &meta_path,
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "provider": self.name,
+                        "mode": mode,
+                        "hang_until_failover": true,
+                    }))?,
+                )?;
+                // never write .done while still on claude
+                return Ok(handle);
+            }
+            // Fallback house: normal success path below.
+        }
+
+        if hang && inlineish {
             // Partial log so patrol has a baseline, then freeze.
             let body = format!(
                 "{{\"type\":\"assistant\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"fake hang {id}\"}}]}}}}\n",
@@ -172,6 +198,26 @@ impl WorkerProvider for FakeProvider {
                 }))?,
             )?;
             // never write .done
+            return Ok(handle);
+        }
+
+        if stop_now && inlineish {
+            // Simulate user-initiated stop: exit 130 → WorkerStatus::Stopped.
+            let body = format!(
+                "{{\"type\":\"assistant\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"fake stop {}\"}}]}}}}\n",
+                task.id
+            );
+            std::fs::write(&stdout_path, body)?;
+            std::fs::write(
+                &meta_path,
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "exit_code": 130,
+                    "provider": self.name,
+                    "mode": mode,
+                    "stopped": true,
+                }))?,
+            )?;
+            std::fs::write(&done_flag, "130")?;
             return Ok(handle);
         }
 
@@ -345,6 +391,7 @@ mod tests {
             role: None,
             scope: None,
             outputs: vec![],
+        tags: vec![],
         }
     }
 

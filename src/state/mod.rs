@@ -1,7 +1,7 @@
 //! Run state on disk: run.json, events.jsonl, per-task files.
 //!
 //! [INPUT]: runs_root · PlanIR（初始化）
-//! [OUTPUT]: RunState/TaskState · save/load · event append
+//! [OUTPUT]: RunState/TaskState(attempt/failover_used) · save/load · event append
 //! [POS]: 运行状态落盘；scheduler 与 services 读写
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/state/CLAUDE.md
 
@@ -60,6 +60,9 @@ pub struct TaskState {
     /// Last stall/fail reason short code for UI (stall / fail / timeout).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_retry_reason: Option<String>,
+    /// True once H4 provider failover has been applied for this task (run-state only).
+    #[serde(default)]
+    pub failover_used: bool,
 }
 
 impl TaskState {
@@ -81,6 +84,7 @@ impl TaskState {
             terminals: vec![],
             attempt: 0,
             last_retry_reason: None,
+            failover_used: false,
         }
     }
 }
@@ -246,6 +250,7 @@ impl RunState {
             ts.pid = None;
             ts.attempt = 0;
             ts.last_retry_reason = None;
+            ts.failover_used = false;
             n += 1;
         }
         self.status = RunStatus::Init;

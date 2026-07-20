@@ -13,6 +13,16 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const LOG_FONT_KEY = "cco.logFontSize";
 /** D1 决议：默认 auto-start；高级「规划后暂停确认」= true 时不自动开跑 */
 const PAUSE_CONFIRM_KEY = "cco.pauseConfirmAfterPlan";
+/** C3 方案 B：聊天/计划卡「执行此计划」是否直开 analyze（默认关 = 方案 A） */
+const CHAT_ASSIGN_DIRECT_KEY = "cco.chatAssignDirect";
+
+function chatAssignDirectEnabled() {
+  return localStorage.getItem(CHAT_ASSIGN_DIRECT_KEY) === "1";
+}
+
+function setChatAssignDirectEnabled(on) {
+  localStorage.setItem(CHAT_ASSIGN_DIRECT_KEY, on ? "1" : "0");
+}
 
 const state = {
   page: "welcome", // welcome | workspace | chat | doctor | help | settings
@@ -49,6 +59,8 @@ const state = {
     }
     return localStorage.getItem("cco.logViewMode") || "term";
   })(),
+  /** P2-3: event type filter for log panels — all | tool | error */
+  logEventFilter: localStorage.getItem("cco.logEventFilter") || "all",
   planJobId: null,
   planJob: null,
   confirmTaskId: null,
@@ -68,6 +80,11 @@ const state = {
   })(),
   assigning: false, // 分配计划进行中（防连点 + 按钮转圈）
   plansLoading: false,
+  /** H2: plan meta (ever_completed / last_run_*) for chooser + plan-rail */
+  planMetaItems: [],
+  planMetaByPath: {},
+  /** H2: 默认隐藏已成功执行；开关「显示已执行」可展开（chooser/右轨共用） */
+  showExecutedPlans: localStorage.getItem("cco.showExecutedPlans") === "1",
   planPollFails: 0,
   planStartedAt: 0,
   /** 按项目缓存规划会话，切页/切项目不丢 */
@@ -545,6 +562,23 @@ function showPage(name) {
           : "");
       // 后台 Mode B 态只走顶栏监控 ghost / 可关 banner，副标题不再夹「待确认/返回确认」
       sub.textContent = label ? `与 AI 写计划 · ${label}` : "与 AI 写计划文档";
+    }
+    try {
+      if (typeof renderPlanPicker === "function") renderPlanPicker();
+    } catch (_) {}
+  } else if (name === "plans") {
+    $("#page-title").textContent = "计划管理";
+    if (sub) {
+      sub.hidden = false;
+      const proj = (state.projects || []).find((p) => p.path === state.selectedPath);
+      const label =
+        proj?.name ||
+        (state.selectedPath
+          ? String(state.selectedPath).split(/[/\\]/).filter(Boolean).pop()
+          : "");
+      sub.textContent = label
+        ? `选中 · 预览 · 编辑 · 分配 · ${label}`
+        : "选中计划后预览、编辑或分配";
     }
     try {
       if (typeof renderPlanPicker === "function") renderPlanPicker();

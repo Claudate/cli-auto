@@ -1,7 +1,7 @@
 //! Shared backend calls used by the native GUI (same logic as CLI).
 //!
 //! [INPUT]: config::Config · plan::PlanIR/planner · runtime::{Scheduler,log_events,provider} · state · terminal
-//! [OUTPUT]: list/start/stop/resume runs · plan job · project_live_view · task_logs · open_task_terminal · settings · chat
+//! [OUTPUT]: list/start/stop/resume runs · list_plan_meta · plan job · project_live_view · task_logs · open_task_terminal · settings · chat
 //! [POS]: CLI 与 Tauri 共用服务层；禁止 UI 细节；D4 已目录化
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md
 
@@ -13,8 +13,12 @@ mod settings;
 mod util;
 
 pub use chat::{
-    chat_save_plan, chat_send, chat_session_get, ChatDraftPlan, ChatMessage, ChatSavePlanResponse,
-    ChatSendResponse, ChatSession,
+    chat_delete_session, chat_list_sessions, chat_new_session, chat_normalize_plan,
+    chat_save_attachment, chat_save_plan, chat_send, chat_session_get, chat_stream_partial,
+    cleanup_expired_chat_sessions, extract_title_from_md, normalize_plan_markdown, read_plan_md,
+    sanitize_plan_title, structure_plan_markdown, ChatAttachment, ChatDraftPlan, ChatMessage,
+    ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSendResponse, ChatSession,
+    ChatSessionSummary, ChatStreamPartial,
 };
 pub use live::{
     open_task_terminal, project_live_view, stop_task, task_logs, ProjectLiveView, TaskLiveView,
@@ -22,10 +26,11 @@ pub use live::{
 };
 pub use projects::{add_project, list_projects, remove_project, ProjectSummary};
 pub use runs::{
-    accept_run_residual, confirm_start, get_plan_job, latest_plan_job_for_project, list_plans,
-    list_runs, load_run, preview_plan, resume_run_async, run_doctor, start_plan_job,
-    start_rework_from_run, start_run_async, start_run_from_plan, stop_run, update_proposed_task,
-    PlanJobView, PlanPreview, ReworkStartResponse, RunSummary, StartPlanJobRequest, StartRunRequest,
+    accept_run_residual, confirm_start, get_plan_job, latest_plan_job_for_project, list_plan_meta,
+    list_plans, list_runs, load_run, preview_plan, resume_run_async, run_doctor, remove_proposed_task,
+    sanitize_proposed_deps, start_plan_job, start_rework_from_run, start_run_async,
+    start_run_from_plan, stop_run, update_proposed_task, PlanJobView, PlanMeta, PlanPreview,
+    ReworkStartResponse, RunSummary, SanitizeDepsResult, StartPlanJobRequest, StartRunRequest,
 };
 pub use settings::{get_settings, set_settings, SettingsUpdate, SettingsView};
 

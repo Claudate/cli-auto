@@ -10,9 +10,10 @@
 //! - `fake`  — fixed multi-task DAG for demos without API
 //! - `ai`    — LLM planner (print/stream-json → plan JSON) with heuristic fallback
 //!
-//! Limits: `MAX_TASKS`（validate + heuristic 合并 + LLM 拒绝超限）；stream-json 从
-//! 最终 `type=result` 取 plan，勿取 init 事件的首个 `{`。
+//! Limits: `PLANNER_MAX_TASKS`（拆解软上限）· `MAX_TASKS`（含系统收尾后硬上限）；
+//! stream-json 从最终 `type=result` 取 plan，勿取 init 事件的首个 `{`。
 
+mod digest;
 mod heuristic;
 mod job;
 mod llm;
@@ -23,8 +24,10 @@ pub use job::{
     PlanJobStatus, StartPlanJobRequest,
 };
 pub use view::{
-    job_view, load_proposed, load_proposed_for_exec, mark_confirmed, planner_cost_for_run,
-    update_proposed_task, PlanJobView, PlanTaskView,
+    apply_user_edits_to_ir, job_view, load_proposed, load_proposed_for_exec, load_user_edits,
+    mark_confirmed, planner_cost_for_run, remove_proposed_task, sanitize_proposed_deps,
+    update_proposed_task, write_user_edits, PlanJobView, PlanTaskView, PlanUserEdits,
+    SanitizeDepsResult, TaskUserEdit,
 };
 
 #[cfg(test)]
@@ -33,7 +36,7 @@ mod tests {
     use super::llm::{extract_json_object, parse_llm_plan_output, LlmPlanDoc};
     use super::*;
     use crate::config::Config;
-    use crate::plan::MAX_TASKS;
+    use crate::plan::{MAX_TASKS, PLANNER_MAX_TASKS};
     use std::path::PathBuf;
     use tempfile::tempdir;
 
@@ -56,6 +59,7 @@ mod tests {
                 provider: Some("fake".into()),
                 mode: Some("print".into()),
                 max_parallel: None,
+                preserve_from_job_id: None,
             },
         )
         .unwrap();
@@ -63,6 +67,76 @@ mod tests {
         assert!(view.task_count.unwrap() >= 3);
         assert!(!view.layers.is_empty());
         assert_eq!(view.layers[0].len(), 2); // t1,t2 parallel
+        // 默认系统收尾关：不应出现 sys-post-*
+        assert!(
+            !view
+                .tasks
+                .iter()
+                .any(|t| t.id.starts_with("sys-post-")),
+            "system post should be off by default"
+        );
+    }
+
+    #[test]
+    fn system_post_tasks_injected_when_enabled() {
+        use crate::plan::{SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID};
+
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let plan = project.join("idea.md");
+        std::fs::write(&plan, "# hello\n\ndo something cool\n").unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        cfg.default.post_inspect_enabled = true;
+        cfg.default.post_git_push_enabled = true;
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let view = start_plan_job(
+            &cfg,
+            StartPlanJobRequest {
+                project: project.clone(),
+                plan: PathBuf::from("idea.md"),
+                plan_mode: Some("fake".into()),
+                provider: Some("fake".into()),
+                mode: Some("print".into()),
+                max_parallel: None,
+                preserve_from_job_id: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(view.status, "planned", "err={:?}", view.error);
+        let ids: Vec<_> = view.tasks.iter().map(|t| t.id.as_str()).collect();
+        assert!(
+            ids.contains(&SYS_POST_INSPECT_ID),
+            "missing inspect: {ids:?}"
+        );
+        assert!(
+            ids.contains(&SYS_POST_GIT_PUSH_ID),
+            "missing push: {ids:?}"
+        );
+        let inspect = view
+            .tasks
+            .iter()
+            .find(|t| t.id == SYS_POST_INSPECT_ID)
+            .unwrap();
+        let push = view
+            .tasks
+            .iter()
+            .find(|t| t.id == SYS_POST_GIT_PUSH_ID)
+            .unwrap();
+        assert!(inspect.optional && inspect.include, "inspect default checked");
+        assert!(push.optional && push.include, "push default checked");
+        assert!(
+            push.depends_on.iter().any(|d| d == SYS_POST_INSPECT_ID),
+            "push should depend on inspect"
+        );
+        // last layer should include system posts
+        let last = view.layers.last().expect("layers");
+        assert!(
+            last.iter().any(|id| id == SYS_POST_GIT_PUSH_ID)
+                || last.iter().any(|id| id == SYS_POST_INSPECT_ID),
+            "system posts should appear in a late wave: {last:?}"
+        );
     }
 
     #[test]
@@ -89,6 +163,7 @@ mod tests {
                 mode: Some("print".into()),
                 // Explicit concurrency: 3 sections → one parallel wave.
                 max_parallel: Some(3),
+                preserve_from_job_id: None,
             },
         )
         .unwrap();
@@ -128,6 +203,7 @@ mod tests {
                 provider: Some("fake".into()),
                 mode: Some("print".into()),
                 max_parallel: None,
+                preserve_from_job_id: None,
             },
         )
         .unwrap();
@@ -141,6 +217,105 @@ mod tests {
         assert!(cfg.runs_dir().join(&run_id).join("run.json").exists());
         // give scheduler a moment
         std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+
+    #[test]
+    fn finish_plan_job_persists_critic_notes_for_landed_doc() {
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let plan = project.join("landed.md");
+        std::fs::write(
+            &plan,
+            r#"# landed plan
+
+> 状态：**已落地**（H0–H4 全 PASS）
+
+## 目标
+回归验证既有能力。
+"#,
+        )
+        .unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let view = start_plan_job(
+            &cfg,
+            StartPlanJobRequest {
+                project: project.clone(),
+                plan: PathBuf::from("landed.md"),
+                plan_mode: Some("fake".into()),
+                provider: Some("fake".into()),
+                mode: Some("print".into()),
+                max_parallel: None,
+                preserve_from_job_id: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(view.status, "planned");
+        assert_eq!(view.digest_mode.as_deref(), Some("regression"));
+        assert!(
+            view.critic_summary.is_some(),
+            "critic_summary should be set"
+        );
+        // fake demo graph has no role=inspect task → regression note expected
+        assert!(
+            view.critic_notes.iter().any(|n| n.contains("检验")),
+            "expected missing-inspect note, got {:?}",
+            view.critic_notes
+        );
+        assert!(view.critic_edges_removed.is_some());
+        assert!(view.critic_titles_rewritten.is_some());
+        assert!(view.critic_prompts_tagged.is_some());
+        // fake provider never runs LLM second pass
+        assert_eq!(view.critic_llm_used, Some(false));
+    }
+
+    #[test]
+    fn sanitize_proposed_deps_drops_unmotivated_edges() {
+        use super::view::{load_proposed, sanitize_proposed_deps, write_proposed};
+
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let plan = project.join("idea.md");
+        std::fs::write(&plan, "# x\n\ny\n").unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let view = start_plan_job(
+            &cfg,
+            StartPlanJobRequest {
+                project: project.clone(),
+                plan: PathBuf::from("idea.md"),
+                plan_mode: Some("fake".into()),
+                provider: Some("fake".into()),
+                mode: Some("print".into()),
+                max_parallel: None,
+                preserve_from_job_id: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(view.status, "planned");
+
+        // Inject an unmotivated edge t2 → t1 into proposed plan.
+        let mut ir = load_proposed(&cfg, &view.job_id).unwrap();
+        assert!(ir.tasks.len() >= 2, "fake plan should have ≥2 tasks");
+        let t1 = ir.tasks[0].id.clone();
+        ir.tasks[1].depends_on = vec![t1.clone()];
+        // Ensure prompt does NOT mention t1 so sanitize drops it.
+        ir.tasks[1].prompt = "do orthogonal work only\nCCO_DONE ok".into();
+        write_proposed(&cfg, &view.job_id, &ir).unwrap();
+
+        let res = sanitize_proposed_deps(&cfg, &view.job_id).unwrap();
+        assert!(res.removed >= 1, "should drop unmotivated edge");
+        let ir2 = load_proposed(&cfg, &view.job_id).unwrap();
+        assert!(
+            ir2.tasks[1].depends_on.is_empty(),
+            "edge should be gone: {:?}",
+            ir2.tasks[1].depends_on
+        );
+        assert_eq!(res.view.status, "planned");
     }
 
     #[test]
@@ -162,6 +337,7 @@ mod tests {
                 provider: Some("fake".into()),
                 mode: Some("print".into()),
                 max_parallel: Some(4),
+                preserve_from_job_id: None,
             },
         )
         .unwrap();
@@ -239,12 +415,64 @@ mod tests {
     }
 
     #[test]
+    fn parse_llm_plan_output_provider_role_scope_tags() {
+        use crate::plan::TaskRole;
+        let dir = tempdir().unwrap();
+        let src = dir.path().join("plan.md");
+        std::fs::write(&src, "# multi\n").unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        cfg.default.default_provider = "claude".into();
+
+        let plan_body = r#"{
+          "schema":"cco-plan/v1",
+          "name":"mixed",
+          "max_parallel":2,
+          "tasks":[
+            {
+              "id":"a",
+              "title":"实现 A",
+              "depends_on":[],
+              "provider":"codex",
+              "role":"implement",
+              "tags":["codex","backend"],
+              "scope":{"paths":["src/a/**"],"readonly":[],"forbid":[]},
+              "outputs":[".cco-out/a/SUMMARY.md"],
+              "prompt":"做 A\nCCO_DONE ok"
+            },
+            {
+              "id":"insp",
+              "title":"检验员终检",
+              "depends_on":["a"],
+              "tags":["inspect"],
+              "prompt":"对照计划验收\nCCO_DONE ok"
+            }
+          ]
+        }"#;
+        let ir = parse_llm_plan_output(plan_body, &src, &cfg).unwrap();
+        assert_eq!(ir.tasks.len(), 2);
+        let a = ir.tasks.iter().find(|t| t.id == "a").unwrap();
+        assert_eq!(a.provider, "codex");
+        assert_eq!(a.role, Some(TaskRole::Implement));
+        assert!(a.tags.iter().any(|t| t == "codex"));
+        assert_eq!(
+            a.scope.as_ref().map(|s| s.paths.as_slice()),
+            Some(["src/a/**".to_string()].as_slice())
+        );
+        assert!(a.outputs.iter().any(|o| o.contains("SUMMARY")));
+        let insp = ir.tasks.iter().find(|t| t.id == "insp").unwrap();
+        // Title+tag inferred inspect role
+        assert_eq!(insp.role, Some(TaskRole::Inspect));
+        assert!(insp.tags.iter().any(|t| t == "inspect"));
+    }
+
+    #[test]
     fn merge_sections_caps_at_max() {
         let sections: Vec<_> = (0..35)
             .map(|i| (format!("s{i}"), format!("body {i}")))
             .collect();
-        let merged = merge_sections(sections, MAX_TASKS);
-        assert_eq!(merged.len(), MAX_TASKS);
+        let merged = merge_sections(sections, PLANNER_MAX_TASKS);
+        assert_eq!(merged.len(), PLANNER_MAX_TASKS);
         assert!(merged.iter().all(|(_, b)| !b.is_empty()));
     }
 
@@ -275,6 +503,7 @@ mod tests {
                 provider: Some("fake".into()),
                 mode: Some("print".into()),
                 max_parallel: Some(4),
+                preserve_from_job_id: None,
             },
         )
         .unwrap();
@@ -385,6 +614,15 @@ t1
             max_parallel: Some(5),
             adapter: None,
             planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
         };
         std::fs::create_dir_all(job_dir(&cfg, &job.job_id)).unwrap();
         let ir = build_heuristic_ai_plan(&cfg, &job).expect("heuristic");
@@ -438,6 +676,7 @@ t1
                 provider: Some("fake".into()),
                 mode: Some("print".into()),
                 max_parallel: Some(5),
+                preserve_from_job_id: None,
             },
         )
         .unwrap();
@@ -485,5 +724,234 @@ t1
         assert_eq!(ir.tasks.len(), 2);
         assert_eq!(ir.tasks[0].id, "t3");
         assert_eq!(ir.tasks[1].id, "t4");
+    }
+
+    /// P2-1: delete a task and rewrite depends_on; refuse empty plan.
+    #[test]
+    fn remove_proposed_task_rewrites_deps() {
+        use super::view::{load_proposed, remove_proposed_task};
+
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let plan = project.join("idea.md");
+        std::fs::write(&plan, "# x\n\ny\n").unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let view = start_plan_job(
+            &cfg,
+            StartPlanJobRequest {
+                project: project.clone(),
+                plan: PathBuf::from("idea.md"),
+                plan_mode: Some("fake".into()),
+                provider: Some("fake".into()),
+                mode: Some("print".into()),
+                max_parallel: None,
+                preserve_from_job_id: None,
+            },
+        )
+        .unwrap();
+        let before = view.task_count.unwrap_or(0);
+        assert!(before >= 3);
+        let drop_id = view.tasks[0].id.clone();
+        let view2 = remove_proposed_task(&cfg, &view.job_id, &drop_id).unwrap();
+        assert_eq!(view2.task_count, Some(before - 1));
+        let ir = load_proposed(&cfg, &view.job_id).unwrap();
+        assert!(ir.tasks.iter().all(|t| t.id != drop_id));
+        for t in &ir.tasks {
+            assert!(
+                !t.depends_on.iter().any(|d| d == &drop_id),
+                "stale dep on removed task: {:?}",
+                t.depends_on
+            );
+        }
+    }
+
+    /// P2-1: explicit depends_on patch + validate cycle reject.
+    #[test]
+    fn update_proposed_task_sets_depends_on() {
+        use super::view::{load_proposed, update_proposed_task};
+
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let plan = project.join("idea.md");
+        std::fs::write(&plan, "# x\n\ny\n").unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let view = start_plan_job(
+            &cfg,
+            StartPlanJobRequest {
+                project: project.clone(),
+                plan: PathBuf::from("idea.md"),
+                plan_mode: Some("fake".into()),
+                provider: Some("fake".into()),
+                mode: Some("print".into()),
+                max_parallel: None,
+                preserve_from_job_id: None,
+            },
+        )
+        .unwrap();
+        let a = view.tasks[0].id.clone();
+        let b = view.tasks[1].id.clone();
+        // Make b depend on a.
+        update_proposed_task(
+            &cfg,
+            &view.job_id,
+            &b,
+            None,
+            None,
+            None,
+            None,
+            Some(vec![a.clone()]),
+        )
+        .unwrap();
+        let ir = load_proposed(&cfg, &view.job_id).unwrap();
+        let tb = ir.tasks.iter().find(|t| t.id == b).unwrap();
+        assert_eq!(tb.depends_on, vec![a.clone()]);
+
+        // Self-dep rejected.
+        let err = update_proposed_task(
+            &cfg,
+            &view.job_id,
+            &b,
+            None,
+            None,
+            None,
+            None,
+            Some(vec![b.clone()]),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("自己") || err.contains("itself") || err.contains("依赖"), "{err}");
+    }
+
+    /// P2-2: replan with preserve_from_job_id re-applies title/prompt/deps/removals.
+    #[test]
+    fn replan_preserves_user_edits_by_title() {
+        use super::view::{load_proposed, remove_proposed_task, update_proposed_task};
+
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let plan = project.join("idea.md");
+        std::fs::write(&plan, "# x\n\ny\n").unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let view = start_plan_job(
+            &cfg,
+            StartPlanJobRequest {
+                project: project.clone(),
+                plan: PathBuf::from("idea.md"),
+                plan_mode: Some("fake".into()),
+                provider: Some("fake".into()),
+                mode: Some("print".into()),
+                max_parallel: None,
+                preserve_from_job_id: None,
+            },
+        )
+        .unwrap();
+        let t1 = view.tasks[0].id.clone();
+        let t1_title = view.tasks[0].title.clone();
+        let t2 = view.tasks[1].id.clone();
+        let t2_title = view.tasks[1].title.clone();
+        let t3 = view.tasks.get(2).map(|t| t.id.clone());
+
+        // Rename t1 prompt + title; set t2 deps → t1; remove t3 if present.
+        // Keep same provider (fake) so multi-provider worktree gate is not tripped.
+        update_proposed_task(
+            &cfg,
+            &view.job_id,
+            &t1,
+            Some(format!("{t1_title}（人工）")),
+            Some("HUMAN_PATCHED_PROMPT\nCCO_DONE ok".into()),
+            None,
+            Some("fake".into()),
+            None,
+        )
+        .unwrap();
+        // After rename, t1 still matched by original key; set t2 deps by ids.
+        update_proposed_task(
+            &cfg,
+            &view.job_id,
+            &t2,
+            None,
+            None,
+            None,
+            None,
+            Some(vec![t1.clone()]),
+        )
+        .unwrap();
+        if let Some(ref id) = t3 {
+            let _ = remove_proposed_task(&cfg, &view.job_id, id);
+        }
+
+        // Fresh replan with preserve.
+        let view2 = start_plan_job(
+            &cfg,
+            StartPlanJobRequest {
+                project: project.clone(),
+                plan: PathBuf::from("idea.md"),
+                plan_mode: Some("fake".into()),
+                provider: Some("fake".into()),
+                mode: Some("print".into()),
+                max_parallel: None,
+                preserve_from_job_id: Some(view.job_id.clone()),
+            },
+        )
+        .unwrap();
+        assert_eq!(view2.status, "planned", "err={:?}", view2.error);
+        let ir = load_proposed(&cfg, &view2.job_id).unwrap();
+
+        // Title/prompt/provider preserved on the task whose *planned* title matches original t1.
+        let patched = ir
+            .tasks
+            .iter()
+            .find(|t| t.title.contains("人工") || t.prompt.contains("HUMAN_PATCHED_PROMPT"))
+            .expect("patched task should reappear");
+        assert!(
+            patched.prompt.contains("HUMAN_PATCHED_PROMPT"),
+            "prompt lost: {}",
+            patched.prompt
+        );
+        assert_eq!(patched.provider, "fake");
+
+        // t2 should depend on the patched task if both still present.
+        if let Some(tb) = ir.tasks.iter().find(|t| {
+            normalize_or(&t.title) == normalize_or(&t2_title)
+                || t.title == t2_title
+        }) {
+            assert!(
+                tb.depends_on.iter().any(|d| d == &patched.id),
+                "t2 deps should include patched: {:?} patched={}",
+                tb.depends_on,
+                patched.id
+            );
+        }
+
+        // Removed title should not return.
+        if let Some(ref id) = t3 {
+            let _ = id;
+            let removed_title = view
+                .tasks
+                .iter()
+                .find(|t| t3.as_ref() == Some(&t.id))
+                .map(|t| t.title.clone())
+                .unwrap_or_default();
+            assert!(
+                !ir.tasks
+                    .iter()
+                    .any(|t| super::view::normalize_task_title_key(&t.title)
+                        == super::view::normalize_task_title_key(&removed_title)),
+                "removed task came back: {removed_title}"
+            );
+        }
+    }
+
+    fn normalize_or(s: &str) -> String {
+        super::view::normalize_task_title_key(s)
     }
 }

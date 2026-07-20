@@ -28,12 +28,13 @@ pub use runtime::provider::{
 };
 pub use services::{
     add_project, chat_save_plan, chat_send, chat_session_get, confirm_start, get_plan_job,
-    get_settings, list_plans, list_projects, list_runs, load_run, open_task_terminal, preview_plan,
-    project_live_view, remove_project, resume_run_async, run_doctor, set_settings, start_plan_job,
-    start_run_async, start_run_from_plan, stop_run, stop_task, task_logs, ChatDraftPlan, ChatMessage,
-    ChatSavePlanResponse, ChatSendResponse, ChatSession, PlanJobView, PlanPreview, ProjectLiveView,
-    ProjectSummary, RunSummary, SettingsUpdate, SettingsView, StartPlanJobRequest, StartRunRequest,
-    TaskLiveView, TaskLogsView,
+    get_settings, list_plan_meta, list_plans, list_projects, list_runs, load_run,
+    open_task_terminal, preview_plan, project_live_view, read_plan_md, remove_project,
+    resume_run_async, run_doctor, set_settings, start_plan_job, start_run_async,
+    start_run_from_plan, stop_run, stop_task, task_logs, ChatDraftPlan, ChatMessage,
+    ChatSavePlanResponse, ChatSendResponse, ChatSession, PlanJobView, PlanMeta, PlanPreview,
+    ProjectLiveView, ProjectSummary, RunSummary, SettingsUpdate, SettingsView, StartPlanJobRequest,
+    StartRunRequest, TaskLiveView, TaskLogsView,
 };
 pub use state::{RunState, RunStatus, TaskState};
 pub use terminal::{SessionKind, TerminalManager, TerminalSession};

@@ -26,22 +26,6 @@ impl ClaudeProvider {
         Self { bin, extra_args }
     }
 
-    pub(super) fn opt_u32(opts: &serde_json::Value, key: &str) -> Option<u32> {
-        opts.get(key).and_then(|v| {
-            v.as_u64()
-                .map(|n| n as u32)
-                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
-        })
-    }
-
-    pub(super) fn opt_f64(opts: &serde_json::Value, key: &str) -> Option<f64> {
-        opts.get(key).and_then(|v| {
-            v.as_f64()
-                .or_else(|| v.as_i64().map(|i| i as f64))
-                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
-        })
-    }
-
     pub(super) fn opt_str(opts: &serde_json::Value, key: &str) -> Option<String> {
         opts.get(key)
             .and_then(|v| v.as_str().map(|s| s.to_string()))

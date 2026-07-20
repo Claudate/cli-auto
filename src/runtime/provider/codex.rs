@@ -686,6 +686,7 @@ mod tests {
             role: None,
             scope: None,
             outputs: vec![],
+        tags: vec![],
         };
         let err = p.validate_task(&task).unwrap_err().to_string();
         assert!(

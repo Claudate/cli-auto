@@ -214,4 +214,27 @@
   min-height: 18rem;
 }
 
+/* P2-3 virtual list: spacer + translated window of rows */
+.log-virt {
+  position: relative;
+  min-height: 100%;
+}
+.log-virt-spacer {
+  position: relative;
+  width: 100%;
+  pointer-events: none;
+}
+.log-virt-window {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: auto;
+  will-change: transform;
+}
+.log-console .log-virt .tx-line,
+.log-console .log-virt .log-event {
+  min-height: 1.4em;
+}
+
 

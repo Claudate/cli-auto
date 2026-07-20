@@ -18,7 +18,9 @@ use crate::runtime::log_events;
 
 use super::heuristic::{build_fake_plan, build_heuristic_ai_plan};
 use super::llm::build_llm_plan;
-use super::view::{job_view, write_proposed, PlanJobView};
+use super::view::{
+    apply_user_edits_to_ir, copy_user_edits, job_view, load_user_edits, write_proposed, PlanJobView,
+};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -66,6 +68,31 @@ pub struct PlanJob {
     /// Planner LLM spend (USD), separate from worker run cost (P1-5).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub planner_cost_usd: Option<f64>,
+    /// Document mode from digest: regression | greenfield | audit | mixed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub digest_mode: Option<String>,
+    /// One-line critic report for confirm UI (deps cleaned / titles rewritten / notes).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_summary: Option<String>,
+    /// Structured critic counters (confirm strip chips).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_edges_removed: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_titles_rewritten: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_prompts_tagged: Option<usize>,
+    /// Free-form critic notes (e.g. missing inspect tail).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub critic_notes: Vec<String>,
+    /// True when optional LLM second-pass critic was actually invoked this split.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_llm_used: Option<bool>,
+    /// USD spend of optional LLM critic (if reported by provider).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_llm_cost_usd: Option<f64>,
+    /// Wall time of optional LLM critic in milliseconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critic_llm_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -78,6 +105,10 @@ pub struct StartPlanJobRequest {
     pub mode: Option<String>,
     /// Scheduler concurrency chosen at split time (1–32). Defaults to config.
     pub max_parallel: Option<usize>,
+    /// P2-2: previous plan job id whose `plan.user_edits.json` should be re-applied
+    /// onto the fresh split (match by title; rebuild depends_on by dep titles).
+    #[serde(default)]
+    pub preserve_from_job_id: Option<String>,
 }
 
 pub fn plan_jobs_dir(config: &Config) -> PathBuf {
@@ -171,6 +202,12 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         .canonicalize()
         .with_context(|| format!("canonicalize {}", req.project.display()))?;
     let now = Utc::now();
+    let preserve_from = req
+        .preserve_from_job_id
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
     let mut job = PlanJob {
         job_id: job_id.clone(),
         status: PlanJobStatus::Planning,
@@ -188,8 +225,33 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         max_parallel: Some(max_parallel),
         adapter: None,
         planner_cost_usd: None,
+        digest_mode: None,
+        critic_summary: None,
+        critic_edges_removed: None,
+        critic_titles_rewritten: None,
+        critic_prompts_tagged: None,
+        critic_notes: vec![],
+        critic_llm_used: None,
+        critic_llm_cost_usd: None,
+        critic_llm_ms: None,
     };
     std::fs::create_dir_all(job_dir(config, &job_id))?;
+    // P2-2: copy user-edits sidecar before planner finishes so async path can apply it.
+    if let Some(ref from) = preserve_from {
+        if let Err(e) = copy_user_edits(config, from, &job_id) {
+            append_log(
+                config,
+                &job_id,
+                &format!("preserve user_edits from {from} failed: {e:#}"),
+            );
+        } else {
+            append_log(
+                config,
+                &job_id,
+                &format!("preserve user_edits from {from}"),
+            );
+        }
+    }
     job.save(config)?;
     append_log(
         config,
@@ -266,6 +328,96 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
             if let Some(n) = job.max_parallel {
                 ir.max_parallel = n.clamp(1, 32);
             }
+            // Rule critic (no second LLM): sanitize deps + regression title/prompt hygiene.
+            // Ensure digest_mode early so critic mode matches UI badge.
+            if job.digest_mode.is_none() {
+                if let Ok(abs) = crate::plan::resolve_plan_path(&job.project, &job.plan_path) {
+                    if let Ok(text) = std::fs::read_to_string(&abs) {
+                        let d = super::digest::build_plan_digest(&text);
+                        job.digest_mode = Some(d.mode.as_str().to_string());
+                    }
+                }
+            }
+            let mode = job
+                .digest_mode
+                .as_deref()
+                .map(super::digest::mode_from_str)
+                .unwrap_or(super::digest::PlanModeKind::Greenfield);
+            let mut critic = super::digest::critic_plan_tasks(&mut ir.tasks, mode);
+            // Optional second-pass LLM critic (settings / CCO_PLANNER_CRITIC). Soft-fail.
+            let llm_out = super::llm::run_optional_llm_critic(config, job, &mut ir, mode);
+            critic.edges_removed += llm_out.report.edges_removed;
+            critic.titles_rewritten += llm_out.report.titles_rewritten;
+            critic.prompts_tagged += llm_out.report.prompts_tagged;
+            for n in llm_out.report.notes {
+                if !critic.notes.iter().any(|x| x == &n) {
+                    critic.notes.push(n);
+                }
+            }
+            let mut critic_line = critic.summary_line();
+            if llm_out.used {
+                if critic_line.contains("无需改动") {
+                    critic_line = "拆分校对：规则 + 智能第二跳（无额外改动）".into();
+                } else if !critic_line.contains("智能") {
+                    critic_line = format!("{critic_line} · 含智能第二跳");
+                }
+                if let Some(ms) = llm_out.duration_ms {
+                    if ms >= 1000 {
+                        critic_line = format!("{critic_line} · {:.1}s", ms as f64 / 1000.0);
+                    } else {
+                        critic_line = format!("{critic_line} · {ms}ms");
+                    }
+                }
+                if let Some(c) = llm_out.cost_usd {
+                    critic_line = format!("{critic_line} · ${c:.3}");
+                }
+            }
+            append_log(config, &job_id, &critic_line);
+            job.critic_summary = Some(critic_line);
+            job.critic_edges_removed = Some(critic.edges_removed);
+            job.critic_titles_rewritten = Some(critic.titles_rewritten);
+            job.critic_prompts_tagged = Some(critic.prompts_tagged);
+            job.critic_notes = critic.notes.clone();
+            job.critic_llm_used = Some(llm_out.used);
+            job.critic_llm_cost_usd = llm_out.cost_usd;
+            job.critic_llm_ms = llm_out.duration_ms;
+            // System post-tasks（巡检 / git push）：不参与拆解，按设置注入可选尾任务
+            crate::plan::inject_system_post_tasks(&mut ir, config);
+            // P2-2: re-apply human confirm-screen patches (title match) before write.
+            let edits = load_user_edits(config, &job_id);
+            let (applied, removed_n) = apply_user_edits_to_ir(&mut ir, &edits);
+            if applied > 0 || removed_n > 0 {
+                append_log(
+                    config,
+                    &job_id,
+                    &format!(
+                        "preserve user edits: applied={applied} removed_tasks={removed_n}"
+                    ),
+                );
+                // Ensure DAG still valid after preserve (strip unknown deps as last resort).
+                if let Err(e) = ir.validate() {
+                    let ids: std::collections::HashSet<_> =
+                        ir.tasks.iter().map(|t| t.id.clone()).collect();
+                    for t in ir.tasks.iter_mut() {
+                        t.depends_on.retain(|d| ids.contains(d) && d != &t.id);
+                    }
+                    if let Err(e2) = ir.validate() {
+                        append_log(
+                            config,
+                            &job_id,
+                            &format!(
+                                "preserve user edits left invalid plan: {e:#} → still {e2:#}; writing anyway"
+                            ),
+                        );
+                    } else {
+                        append_log(
+                            config,
+                            &job_id,
+                            &format!("preserve user edits repaired after: {e:#}"),
+                        );
+                    }
+                }
+            }
             if let Err(e) = write_proposed(config, &job_id, &ir) {
                 job.status = PlanJobStatus::PlanFailed;
                 job.error = Some(e.to_string());
@@ -282,6 +434,15 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
             // Planner cost from LLM path (if any); parse/fake leave None.
             if job.planner_cost_usd.is_none() {
                 job.planner_cost_usd = super::llm::read_planner_cost(config, &job_id);
+            }
+            // Ensure digest_mode is set even for heuristic/parse paths.
+            if job.digest_mode.is_none() {
+                if let Ok(abs) = crate::plan::resolve_plan_path(&job.project, &job.plan_path) {
+                    if let Ok(text) = std::fs::read_to_string(&abs) {
+                        let d = super::digest::build_plan_digest(&text);
+                        job.digest_mode = Some(d.mode.as_str().to_string());
+                    }
+                }
             }
             job.error = None;
             job.updated_at = Utc::now();
@@ -498,11 +659,99 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
     }
 }
 
+/// Soft-fill job defaults onto tasks (H4 / Q6).
+///
+/// - Always sets `ir.default_provider` / `ir.default_mode` and each task's `mode`.
+/// - Provider is **soft**: only rewrite tasks whose provider is empty, the
+///   placeholder `"default"`, or still equal to the *prior* plan default.
+///   Tasks the user (or plan author) already pointed at another engine are kept.
+///
+/// Aligns with CLI soft `--provider` (`apply_provider_override`); desktop no longer
+/// hard-wipes every task at confirm_start / post-plan.
 pub(super) fn apply_worker_defaults(ir: &mut PlanIR, provider: &str, exec_mode: &str) {
+    let old_default = ir.default_provider.clone();
     ir.default_provider = provider.to_string();
     ir.default_mode = exec_mode.to_string();
     for t in &mut ir.tasks {
-        t.provider = provider.to_string();
         t.mode = exec_mode.to_string();
+        let p = t.provider.trim();
+        let still_default = p.is_empty()
+            || p.eq_ignore_ascii_case("default")
+            || (!old_default.is_empty() && p.eq_ignore_ascii_case(&old_default));
+        if still_default {
+            t.provider = provider.to_string();
+        }
+    }
+}
+
+#[cfg(test)]
+mod apply_worker_defaults_tests {
+    use super::apply_worker_defaults;
+    use crate::plan::{OnFailure, PlanIR, TaskIR};
+    use std::path::PathBuf;
+
+    fn task(id: &str, provider: &str) -> TaskIR {
+        TaskIR {
+            id: id.into(),
+            title: id.into(),
+            depends_on: vec![],
+            group: None,
+            provider: provider.into(),
+            mode: "print".into(),
+            prompt: "p".into(),
+            acceptance: None,
+            timeout_secs: None,
+            worktree: None,
+            provider_opts: serde_json::json!({}),
+            optional: false,
+            include: true,
+            role: None,
+            scope: None,
+            outputs: vec![],
+        tags: vec![],
+        }
+    }
+
+    fn mixed_ir() -> PlanIR {
+        PlanIR {
+            schema: "cco-plan/v1".into(),
+            name: "mixed".into(),
+            adapter: "cco-plan/v1".into(),
+            source_path: PathBuf::from("mixed.cco.yaml"),
+            max_parallel: 2,
+            on_failure: OnFailure::Pause,
+            retry_max: 0,
+            default_provider: "claude".into(),
+            default_mode: "print".into(),
+            worktree: true,
+            require_inspect: false,
+            tasks: vec![
+                task("t1", "claude"),
+                task("t2", "codex"),
+                task("t3", "default"),
+                task("t4", ""),
+            ],
+        }
+    }
+
+    #[test]
+    fn soft_fill_keeps_explicit_provider() {
+        let mut ir = mixed_ir();
+        apply_worker_defaults(&mut ir, "fake", "bg");
+        assert_eq!(ir.default_provider, "fake");
+        assert_eq!(ir.default_mode, "bg");
+        assert_eq!(ir.tasks[0].provider, "fake"); // was plan default
+        assert_eq!(ir.tasks[1].provider, "codex"); // user/plan explicit — kept
+        assert_eq!(ir.tasks[2].provider, "fake"); // placeholder
+        assert_eq!(ir.tasks[3].provider, "fake"); // empty
+        assert!(ir.tasks.iter().all(|t| t.mode == "bg"));
+    }
+
+    #[test]
+    fn soft_fill_same_provider_is_noop_on_tasks() {
+        let mut ir = mixed_ir();
+        apply_worker_defaults(&mut ir, "claude", "print");
+        assert_eq!(ir.tasks[0].provider, "claude");
+        assert_eq!(ir.tasks[1].provider, "codex");
     }
 }

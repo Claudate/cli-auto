@@ -26,6 +26,7 @@ pub fn run(config: &Config, project: Option<PathBuf>, plan: Option<PathBuf>, pla
             provider,
             mode,
             max_parallel: None,
+            preserve_from_job_id: None,
         },
     )?;
     // Poll if async (ai mode may return planning)

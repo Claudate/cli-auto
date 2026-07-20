@@ -1,8 +1,9 @@
 //! Provider-agnostic scheduler.
 //!
-//! [INPUT]: PlanIR · RunState · ProviderRegistry · TerminalManager 可选 · 预算/并行上限 · retry/stall 巡检
+//! [INPUT]: PlanIR · RunState · ProviderRegistry · TerminalManager 可选 · 预算/并行上限 · retry/stall 巡检 · failover
 //! [OUTPUT]: 推进任务状态 · events.jsonl · plan.resolved.json · handoff · [CCO_HANDOFF] ·
-//!           inspect VERDICT 门禁(P2-3+P-loop: Unknown/blocking ISSUES) · 终态 RunStatus
+//!           inspect VERDICT 门禁(P2-3+P-loop) · sys-post-git-push 先巡检 PASS 硬门禁 ·
+//!           task_retry / provider_switched(H4) · 终态 RunStatus
 //! [POS]: runtime 调度核心；CLI run 与 services.start_run_* 共用
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/CLAUDE.md
 
@@ -54,6 +55,11 @@ pub struct Scheduler {
     pub retry_max: u32,
     /// No stdout growth for this long → stall → stop + retry (or pause if exhausted).
     pub stall_secs: u64,
+    /// H4: after same-provider retries exhaust, switch claude↔codex and re-try.
+    /// Manual stop never triggers failover. Default true (config.default.failover_enabled).
+    pub failover_enabled: bool,
+    /// Extra attempts allowed on the fallback provider after a switch (default 1).
+    pub fallback_extra_attempts: u32,
 }
 
 impl Scheduler {
@@ -116,11 +122,13 @@ impl Scheduler {
         // In-memory stall patrol: stdout size fingerprint per running task.
         let mut progress: HashMap<String, ProgressWatch> = HashMap::new();
         let retry_budget = self.effective_retry_max();
-        // Floor 1s (tests); production default is 600. Config UI can clamp higher.
+        // Floor 1s (tests); production default is 180. Config UI can clamp higher.
         let stall_for = Duration::from_secs(self.stall_secs.max(1));
         info!(
             retry_max = retry_budget,
             stall_secs = stall_for.as_secs(),
+            failover = self.failover_enabled,
+            fallback_extra = self.fallback_extra_attempts,
             "scheduler patrol armed"
         );
 
@@ -335,6 +343,32 @@ impl Scheduler {
                         .task(&id)
                         .cloned()
                         .ok_or_else(|| anyhow::anyhow!("missing task {id}"))?;
+                    // Host hard-gate: sys-post-git-push only after inspect VERDICT=PASS
+                    if let Err(reason) = handoff::system_push_inspect_gate(
+                        &self.plan,
+                        &task,
+                        &self.state.project_root,
+                    ) {
+                        warn!(task = %id, %reason, "skip system push: inspect gate");
+                        if let Some(ts) = self.state.tasks.get_mut(&id) {
+                            ts.status = TaskStatus::Skipped;
+                            ts.error = Some(reason.clone());
+                            ts.finished_at = Some(chrono::Utc::now());
+                        }
+                        done.insert(id.clone());
+                        started.insert(id.clone());
+                        let _ = self.state.event(
+                            "task_end",
+                            serde_json::json!({
+                                "task_id": id,
+                                "status": "skipped",
+                                "error": reason,
+                                "gate": "system_push_inspect",
+                            }),
+                        );
+                        let _ = self.state.save();
+                        continue;
+                    }
                     match self.start_task(&task).await {
                         Ok((provider, handle, work_dir)) => {
                             started.insert(id.clone());
@@ -423,10 +457,11 @@ impl Scheduler {
                                     self.state.save()?;
                                     self.handoff_task_end(&id, &result, Some(&work_dir));
                                 } else {
-                                    let reason = if result.status == TaskStatus::Timeout {
-                                        "timeout"
-                                    } else {
-                                        "fail"
+                                    // Align with reap-loop reason codes so stop never retries/failovers.
+                                    let reason = match result.status {
+                                        TaskStatus::Timeout => "timeout",
+                                        TaskStatus::Stopped => "stopped",
+                                        _ => "fail",
                                     };
                                     let _ = self
                                         .finish_or_retry(
@@ -722,6 +757,51 @@ impl Scheduler {
         self.plan.retry_max.max(self.retry_max).min(10)
     }
 
+    /// Production failover target: claude↔codex only. `fake` and others → None.
+    fn production_failover_target(current: &str) -> Option<&'static str> {
+        match current {
+            "claude" => Some("codex"),
+            "codex" => Some("claude"),
+            _ => None,
+        }
+    }
+
+    /// Resolve a live fallback provider when H4 failover is armed and preflight passes.
+    async fn resolve_failover_provider(&self, current: &str) -> Option<String> {
+        if !self.failover_enabled {
+            return None;
+        }
+        let target = Self::production_failover_target(current)?;
+        let provider = match self.registry.get(target) {
+            Ok(p) => p,
+            Err(_) => return None,
+        };
+        if provider.preflight().await.is_err() {
+            warn!(
+                from = %current,
+                to = %target,
+                "failover preflight failed — skipping switch"
+            );
+            return None;
+        }
+        Some(target.to_string())
+    }
+
+    /// Attempt budget for this task: after failover, only `fallback_extra_attempts`.
+    fn attempt_budget_for(&self, id: &str, same_provider_budget: u32) -> u32 {
+        let used = self
+            .state
+            .tasks
+            .get(id)
+            .map(|t| t.failover_used)
+            .unwrap_or(false);
+        if used {
+            self.fallback_extra_attempts.min(10)
+        } else {
+            same_provider_budget
+        }
+    }
+
     /// Update progress fingerprint; return Some(action) when stalled long enough.
     async fn patrol_stall(
         &self,
@@ -765,7 +845,10 @@ impl Scheduler {
     }
 
     /// Apply terminal failure. If attempts remain, reset to Pending and clear `started`
-    /// so the ready set can pick it up again. Returns true when a retry was scheduled.
+    /// so the ready set can pick it up again. When same-provider budget is exhausted and
+    /// H4 failover is armed, switch `task.provider` (run-state + in-memory plan) and re-queue.
+    /// User-initiated stop (`reason_code == "stopped"`) never retries and never failovers.
+    /// Returns true when a retry (same house or switched) was scheduled.
     async fn finish_or_retry(
         &mut self,
         id: &str,
@@ -783,12 +866,12 @@ impl Scheduler {
             .get(id)
             .map(|t| t.attempt.max(1))
             .unwrap_or(1);
-        // User-initiated stop: never auto-retry.
-        let can_retry = reason_code != "stopped"
-            && reason_code != "ok"
-            && attempt <= retry_budget;
+        let budget = self.attempt_budget_for(id, retry_budget);
+        // User-initiated stop: never auto-retry, never failover.
+        let non_retryable = reason_code == "stopped" || reason_code == "ok";
+        let can_same_retry = !non_retryable && attempt <= budget;
 
-        if can_retry {
+        if can_same_retry {
             // Archive this attempt's logs so the next try starts clean.
             self.archive_attempt_logs(id, attempt);
             self.clear_done_flag(id);
@@ -811,7 +894,7 @@ impl Scheduler {
                     "task_id": id,
                     "attempt": attempt,
                     "next_attempt": attempt + 1,
-                    "retry_max": retry_budget,
+                    "retry_max": budget,
                     "reason": reason_code,
                     "error": result.error,
                 }),
@@ -827,6 +910,95 @@ impl Scheduler {
             return Ok(true);
         }
 
+        // Same-provider budget exhausted → H4 provider failover (once).
+        if !non_retryable {
+            let already_failed_over = self
+                .state
+                .tasks
+                .get(id)
+                .map(|t| t.failover_used)
+                .unwrap_or(false);
+            if !already_failed_over {
+                let current = self
+                    .plan
+                    .task(id)
+                    .map(|t| t.provider.clone())
+                    .or_else(|| {
+                        self.state
+                            .tasks
+                            .get(id)
+                            .map(|t| t.provider.clone())
+                    })
+                    .unwrap_or_default();
+                if let Some(fallback) = self.resolve_failover_provider(&current).await {
+                    self.archive_attempt_logs(id, attempt);
+                    self.clear_done_flag(id);
+
+                    // Run-state override: mutate in-memory plan + task state (not source plan file).
+                    if let Some(t) = self.plan.tasks.iter_mut().find(|t| t.id == id) {
+                        t.provider = fallback.clone();
+                    }
+                    // Keep plan.resolved.json in sync with run-time overrides.
+                    let resolved = self.state.run_dir.join("plan.resolved.json");
+                    if let Ok(text) = serde_json::to_string_pretty(&self.plan) {
+                        let _ = std::fs::write(&resolved, text);
+                    }
+
+                    if let Some(ts) = self.state.tasks.get_mut(id) {
+                        ts.provider = fallback.clone();
+                        ts.failover_used = true;
+                        // Reset attempt so fallback house starts at attempt 1.
+                        ts.attempt = 0;
+                        ts.status = TaskStatus::Pending;
+                        ts.error = result.error.clone().or_else(|| {
+                            Some(format!(
+                                "{reason_code} after {attempt} attempt(s); failover {current}→{fallback}"
+                            ))
+                        });
+                        ts.finished_at = None;
+                        ts.started_at = None;
+                        ts.pid = None;
+                        ts.last_retry_reason = Some(format!("failover:{reason_code}"));
+                    }
+                    started.remove(id);
+
+                    self.state.event(
+                        "provider_switched",
+                        serde_json::json!({
+                            "task_id": id,
+                            "from": current,
+                            "to": fallback,
+                            "reason": reason_code,
+                            "attempt": attempt,
+                            "fallback_extra_attempts": self.fallback_extra_attempts.min(10),
+                        }),
+                    )?;
+                    self.state.event(
+                        "task_retry",
+                        serde_json::json!({
+                            "task_id": id,
+                            "attempt": attempt,
+                            "next_attempt": 1,
+                            "retry_max": self.fallback_extra_attempts.min(10),
+                            "reason": format!("failover:{reason_code}"),
+                            "error": result.error,
+                            "provider": fallback,
+                            "from_provider": current,
+                        }),
+                    )?;
+                    self.state.save()?;
+                    info!(
+                        task = %id,
+                        from = %current,
+                        to = %fallback,
+                        reason = reason_code,
+                        "provider failover scheduled"
+                    );
+                    return Ok(true);
+                }
+            }
+        }
+
         // Exhausted or non-retryable → permanent fail / timeout.
         self.apply_result(id, &result)?;
         self.handoff_task_end(id, &result, _work_dir);
@@ -834,14 +1006,14 @@ impl Scheduler {
             ts.last_retry_reason = Some(reason_code.to_string());
             if ts.error.is_none() {
                 ts.error = Some(format!(
-                    "{reason_code} after {attempt} attempt(s) (retry_max={retry_budget})"
+                    "{reason_code} after {attempt} attempt(s) (retry_max={budget})"
                 ));
             } else if attempt > 1 {
                 let prev = ts.error.clone().unwrap_or_default();
                 ts.error = Some(format!(
                     "{prev} · 已重试 {}/{} 次仍失败",
                     attempt.saturating_sub(1),
-                    retry_budget
+                    budget
                 ));
             }
         }

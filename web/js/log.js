@@ -1,10 +1,17 @@
 /**
  * [INPUT]: 依赖 window 全局（顺序加载）；Tauri invoke
- * [OUTPUT]: log UI 片段
+ * [OUTPUT]: log UI 片段 · 虚拟列表（超长事件）· 事件过滤 / ANSI / 导出 MD
  * [POS]: web/js D4 自 app.js 纵切；无构建器，顺序 script 共享全局
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ * note: P2-3 虚拟列表：事件 ≥ 阈值时只挂可见窗；过滤切换重置贴底语义
  */
 /* cco desktop — log */
+
+/** Virtual list: only render a window when event count exceeds this. */
+const LOG_VIRTUAL_THRESHOLD = 80;
+/** Estimated row height (px) for spacer math; overscan absorbs variance. */
+const LOG_ROW_EST_PX = 30;
+const LOG_VIRT_OVERSCAN = 10;
 
 function isAiInteractionEvent(e) {
   if (!e) return false;
@@ -22,10 +29,230 @@ function isAiInteractionEvent(e) {
   return false;
 }
 
+/** P2-3: event-type filter (all | tool | error). */
+function eventPassesFilter(e, filter) {
+  const f = filter || state.logEventFilter || "all";
+  if (f === "all") return true;
+  const k = String(e?.kind || "").toLowerCase();
+  if (f === "tool") return k === "tool_use" || k === "tool_result";
+  if (f === "error") {
+    if (k === "error") return true;
+    const lvl = String(e?.level || "").toLowerCase();
+    if (lvl === "error" || lvl === "warn") return true;
+    const blob = `${e?.title || ""} ${e?.summary || ""}`.toLowerCase();
+    return /\berror\b|failed|panic|traceback|exception/.test(blob);
+  }
+  return true;
+}
+
+/**
+ * P2-3: minimal ANSI → HTML (raw mode only).
+ * Supports SGR bold/dim/colors 30–37 / 90–97 and reset. Strips other CSI.
+ */
+function ansiToHtml(text) {
+  const s = String(text || "");
+  // Detect CSI without embedding a raw ESC in source (avoids control-char issues).
+  let hasCsi = false;
+  for (let j = 0; j < s.length - 1; j++) {
+    if (s.charCodeAt(j) === 0x1b && s[j + 1] === "[") {
+      hasCsi = true;
+      break;
+    }
+  }
+  if (!hasCsi) return esc(s);
+  let out = "";
+  let i = 0;
+  let open = [];
+  const closeAll = () => {
+    while (open.length) {
+      out += "</span>";
+      open.pop();
+    }
+  };
+  const classFor = (codes) => {
+    const cls = [];
+    for (const c of codes) {
+      if (c === 1) cls.push("ansi-bold");
+      else if (c === 2) cls.push("ansi-dim");
+      else if (c === 31 || c === 91) cls.push("ansi-red");
+      else if (c === 32 || c === 92) cls.push("ansi-green");
+      else if (c === 33 || c === 93) cls.push("ansi-yellow");
+      else if (c === 34 || c === 94) cls.push("ansi-blue");
+      else if (c === 35 || c === 95) cls.push("ansi-magenta");
+      else if (c === 36 || c === 96) cls.push("ansi-cyan");
+    }
+    return cls.join(" ");
+  };
+  while (i < s.length) {
+    if (s.charCodeAt(i) === 0x1b && s[i + 1] === "[") {
+      const m = s.slice(i + 2).match(/^([0-9;]*)m/);
+      if (m) {
+        const codes = m[1]
+          ? m[1].split(";").map((x) => parseInt(x, 10) || 0)
+          : [0];
+        i += 2 + m[0].length;
+        if (codes.includes(0) || codes.length === 0) {
+          closeAll();
+        } else {
+          const cls = classFor(codes);
+          if (cls) {
+            out += `<span class="${cls}">`;
+            open.push(cls);
+          }
+        }
+        continue;
+      }
+      // unknown CSI — skip ESC[
+      i += 2;
+      continue;
+    }
+    out += esc(s[i]);
+    i += 1;
+  }
+  closeAll();
+  return out;
+}
+
+/** multi-cli P2-6: render handoff Board strip from live view. */
+function renderHandoffBoardStrip() {
+  const strip = $("#handoff-board-strip");
+  const rowsEl = $("#handoff-board-rows");
+  if (!strip || !rowsEl) return;
+  const live = state.live || {};
+  const board = live.handoff_board || live.handoffBoard || [];
+  const mdPath = live.handoff_md_path || live.handoffMdPath || null;
+  if (!board.length && !mdPath) {
+    strip.hidden = true;
+    rowsEl.innerHTML = "";
+    return;
+  }
+  strip.hidden = false;
+  const openBtn = $("#btn-open-handoff");
+  if (openBtn) {
+    openBtn.disabled = !mdPath;
+    openBtn.title = mdPath ? `打开 ${mdPath}` : "暂无 handoff.md";
+  }
+  if (!board.length) {
+    rowsEl.innerHTML =
+      '<span class="muted" style="font-size:0.75rem">账本已生成，Board 尚空</span>';
+    return;
+  }
+  rowsEl.innerHTML = board
+    .map((r) => {
+      const st = String(r.status || "").toLowerCase();
+      let cls = "handoff-board-chip";
+      if (st.includes("fail") || st.includes("timeout") || st.includes("error")) {
+        cls += " is-fail";
+      } else if (
+        st === "running" ||
+        st === "starting" ||
+        st === "queued"
+      ) {
+        cls += " is-run";
+      } else if (st === "done" || st === "skipped") {
+        cls += " is-done";
+      }
+      const role = r.role ? ` · ${r.role}` : "";
+      const prov = r.provider ? ` · ${r.provider}` : "";
+      const cost =
+        r.cost != null && Number.isFinite(Number(r.cost))
+          ? ` · $${Number(r.cost).toFixed(3)}`
+          : "";
+      return (
+        `<span class="${cls}" title="${esc(r.scope || "")}">` +
+        `<span class="hb-id">${esc(r.id)}</span>` +
+        `<span class="hb-meta">${esc(st)}${esc(role)}${esc(prov)}${esc(cost)}</span>` +
+        `</span>`
+      );
+    })
+    .join("");
+}
+
+async function openHandoffLedger() {
+  const path =
+    state.live?.handoff_md_path ||
+    state.live?.handoffMdPath ||
+    null;
+  if (!path) {
+    toast("当前运行尚无 handoff.md");
+    return;
+  }
+  try {
+    await invoke("open_path", { path });
+  } catch (e) {
+    toast(String(e?.message || e));
+  }
+}
+
+/** P2-3: export visible task logs as Markdown download. */
+function exportBoardLogsMd() {
+  const tasks = Array.isArray(state.live?.tasks) ? state.live.tasks : [];
+  if (!tasks.length) {
+    toast("没有可导出的任务日志");
+    return;
+  }
+  const filter = state.cliStatusFilter || "all";
+  const shown =
+    filter && filter !== "all"
+      ? tasks.filter((t) => taskBucket(t.status) === filter)
+      : tasks;
+  const runId = state.live?.run_id || state.live?.runId || "run";
+  const lines = [];
+  lines.push(`# cco 执行日志导出`);
+  lines.push("");
+  lines.push(`- run: \`${runId}\``);
+  lines.push(`- project: \`${state.live?.project_path || state.selectedPath || ""}\``);
+  lines.push(`- exported: ${new Date().toISOString()}`);
+  lines.push(`- filter: ${filter}`);
+  lines.push("");
+  for (const t of shown) {
+    lines.push(`## ${t.title || t.task_id} (\`${t.task_id}\`)`);
+    lines.push("");
+    lines.push(`- status: **${t.status}** · provider: \`${t.provider || "?"}\``);
+    if (t.error_summary || t.error) {
+      lines.push(`- error: ${t.error_summary || t.error}`);
+    }
+    lines.push("");
+    const events = (Array.isArray(t.log_events) ? t.log_events : [])
+      .filter(isAiInteractionEvent)
+      .filter((e) => eventPassesFilter(e, state.logEventFilter));
+    if (events.length) {
+      lines.push("```");
+      for (const e of events.slice(-80)) {
+        lines.push(
+          [e.kind, e.title, e.summary].filter(Boolean).join(" · ")
+        );
+      }
+      lines.push("```");
+    } else if (t.log_tail) {
+      lines.push("```");
+      lines.push(String(t.log_tail).slice(-4000));
+      lines.push("```");
+    } else {
+      lines.push("_无日志_");
+    }
+    lines.push("");
+  }
+  const blob = new Blob([lines.join("\n")], {
+    type: "text/markdown;charset=utf-8",
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `cco-log-${String(runId).replace(/[^\w.-]+/g, "_")}.md`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(a.href);
+    a.remove();
+  }, 0);
+  toast(`已导出 ${shown.length} 个任务日志`);
+}
+
 /** P1-1：日志面板内容签名；相同则跳过 innerHTML 重绘 */
 function logPanelSignature(t) {
   if (!t) return "";
   const mode = state.logViewMode || "term";
+  const evFilter = state.logEventFilter || "all";
   const events = Array.isArray(t.log_events) ? t.log_events : [];
   const last = events.length ? events[events.length - 1] : null;
   const lastId = last?.id || "";
@@ -38,6 +265,7 @@ function logPanelSignature(t) {
     lastId,
     lastSum,
     mode,
+    evFilter,
     t.error_summary || t.error || "",
     t.cost_usd ?? "",
   ].join("\0");
@@ -48,10 +276,120 @@ function isNearBottom(el, px = 48) {
   return el.scrollHeight - el.scrollTop - el.clientHeight < px;
 }
 
-/** Planner / generic：用 LogConsole 渲染事件列表（P1-3） */
+/** Render one event row HTML for a given mode (term / pretty / planner-term). */
+function renderLogRowHtml(e, mode) {
+  const m = mode || state.logViewMode || "term";
+  if (m === "pretty") return renderLogEvent(e);
+  // term transcript：planner 人类行用 raw_line / meta，也允许 message/tool
+  const k = String(e.kind || "").toLowerCase();
+  if (k === "raw_line" || k === "meta" || k === "stderr") {
+    const body = esc(e.summary || e.title || "…");
+    const role = k === "stderr" ? "stderr" : k === "meta" ? "meta" : "out";
+    return `<div class="tx-line role-${role}"><div class="tx-role">${role === "out" ? "log" : role}</div><div class="tx-body">${body}</div></div>`;
+  }
+  return renderTranscriptLine(e);
+}
+
+/**
+ * P2-3 virtual list: mount/update a scrollable window over `items`.
+ * Filter switch or mode change → new key → rebuild (scroll resets to bottom when stick).
+ * Returns true if virtual path used.
+ */
+function mountVirtualLog(container, items, { mode, stick } = {}) {
+  if (!container) return false;
+  const list = Array.isArray(items) ? items : [];
+  const m = mode || state.logViewMode || "term";
+  if (list.length < LOG_VIRTUAL_THRESHOLD) return false;
+
+  const key = `${m}|${list.length}|${list[list.length - 1]?.id || ""}|${state.logEventFilter || "all"}`;
+  let root = container.querySelector(":scope > .log-virt");
+  const reuse = root && container.dataset.virtKey === key;
+
+  if (!reuse) {
+    container.innerHTML = "";
+    root = document.createElement("div");
+    root.className = "log-virt";
+    root.innerHTML =
+      '<div class="log-virt-spacer"><div class="log-virt-window"></div></div>';
+    container.appendChild(root);
+    container.dataset.virtKey = key;
+    container._virtItems = list;
+    container._virtMode = m;
+    // Bind scroll once per container
+    if (!container._virtScrollBound) {
+      container._virtScrollBound = true;
+      let raf = 0;
+      container.addEventListener(
+        "scroll",
+        () => {
+          if (raf) return;
+          raf = requestAnimationFrame(() => {
+            raf = 0;
+            paintVirtualLogWindow(container, false);
+          });
+        },
+        { passive: true }
+      );
+    }
+  } else {
+    container._virtItems = list;
+    container._virtMode = m;
+  }
+
+  const spacer = root.querySelector(".log-virt-spacer");
+  if (spacer) {
+    spacer.style.height = Math.max(list.length * LOG_ROW_EST_PX, 1) + "px";
+  }
+
+  if (stick) {
+    // After spacer height set, pin bottom then paint
+    container.scrollTop = container.scrollHeight;
+  }
+  paintVirtualLogWindow(container, !!stick);
+  return true;
+}
+
+function paintVirtualLogWindow(container, forceBottom) {
+  const items = container._virtItems;
+  if (!Array.isArray(items) || !items.length) return;
+  const root = container.querySelector(":scope > .log-virt");
+  if (!root) return;
+  const windowEl = root.querySelector(".log-virt-window");
+  const spacer = root.querySelector(".log-virt-spacer");
+  if (!windowEl || !spacer) return;
+
+  if (forceBottom) {
+    container.scrollTop = container.scrollHeight;
+  }
+
+  const viewH = container.clientHeight || 240;
+  const scrollTop = container.scrollTop || 0;
+  const total = items.length;
+  let start = Math.floor(scrollTop / LOG_ROW_EST_PX) - LOG_VIRT_OVERSCAN;
+  if (start < 0) start = 0;
+  let end = Math.ceil((scrollTop + viewH) / LOG_ROW_EST_PX) + LOG_VIRT_OVERSCAN;
+  if (end > total) end = total;
+  if (end < start) end = start;
+
+  const mode = container._virtMode || state.logViewMode || "term";
+  const slice = items.slice(start, end);
+  const html = slice
+    .map((e) => renderLogRowHtml(e, mode))
+    .filter(Boolean)
+    .join("");
+  windowEl.style.transform = `translateY(${start * LOG_ROW_EST_PX}px)`;
+  windowEl.innerHTML =
+    html ||
+    `<div class="cli-empty-ai muted">当前窗口无可见行</div>`;
+}
+
+/** Planner / generic：用 LogConsole 渲染事件列表（P1-3 + P2-3 filter/ANSI + 虚拟列表） */
 function renderLogConsoleHtml(events, { mode, emptyText, rawText } = {}) {
   const m = mode || state.logViewMode || "term";
-  const list = Array.isArray(events) ? events : [];
+  const filter = state.logEventFilter || "all";
+  const list = (Array.isArray(events) ? events : []).filter((e) =>
+    eventPassesFilter(e, filter)
+  );
   if (m === "raw") {
     const plain =
       rawText ||
@@ -61,31 +399,61 @@ function renderLogConsoleHtml(events, { mode, emptyText, rawText } = {}) {
     if (!plain) {
       return `<div class="cli-empty-ai muted">${esc(emptyText || "等待输出…")}</div>`;
     }
-    return '<pre class="panel-log-pre">' + esc(plain) + "</pre>";
+    // P2-3: light ANSI coloring in raw mode
+    return (
+      '<pre class="panel-log-pre ansi-raw">' + ansiToHtml(plain) + "</pre>"
+    );
   }
   if (!list.length) {
-    return `<div class="cli-empty-ai muted">${esc(emptyText || "等待输出…")}</div>`;
+    return `<div class="cli-empty-ai muted">${esc(
+      emptyText || (filter !== "all" ? "当前过滤下无事件…" : "等待输出…")
+    )}</div>`;
+  }
+  // Small lists: full DOM. Large lists are handled by mountVirtualLog at call sites.
+  if (list.length >= LOG_VIRTUAL_THRESHOLD) {
+    // Marker so callers know to mount virtual (avoid double-render)
+    return `<!--virt:${list.length}-->`;
   }
   if (m === "pretty") {
-    return list.slice(-60).map((e) => renderLogEvent(e)).join("") || "";
+    return list.map((e) => renderLogEvent(e)).join("") || "";
   }
-  // term transcript：planner 人类行用 raw_line / meta，也允许 message/tool
   return (
     list
-      .slice(-80)
-      .map((e) => {
-        // planner 多为 raw_line：用精简 transcript；AI 行走原逻辑
-        const k = String(e.kind || "").toLowerCase();
-        if (k === "raw_line" || k === "meta" || k === "stderr") {
-          const body = esc(e.summary || e.title || "…");
-          const role = k === "stderr" ? "stderr" : k === "meta" ? "meta" : "out";
-          return `<div class="tx-line role-${role}"><div class="tx-role">${role === "out" ? "log" : role}</div><div class="tx-body">${body}</div></div>`;
-        }
-        return renderTranscriptLine(e);
-      })
+      .map((e) => renderLogRowHtml(e, m))
       .filter(Boolean)
       .join("") || ""
   );
+}
+
+/** Soften planner log lines for main-path readability (engine jargon → flow words). */
+function humanizePlannerLogLine(line) {
+  let s = String(line || "");
+  s = s.replace(/starting Claude LLM planner \(print\)…?/gi, "开始智能拆分…");
+  s = s.replace(/starting intelligent planner…?/gi, "开始智能拆分…");
+  s = s.replace(/planner CLI bin\s*=\s*\S+/gi, "执行环境已就绪");
+  s = s.replace(/async planner: will invoke Claude CLI[^\n]*/gi, "后台智能拆分进行中…");
+  s = s.replace(/using adapter parse[^\n]*/gi, "按已有结构直接解析…");
+  s = s.replace(/skipping LLM planner[^\n]*/gi, "使用本地规则拆分…");
+  s = s.replace(/LLM raw output (\d+) bytes/gi, "拆分结果已收到（$1 字节）");
+  s = s.replace(/LLM plan ok: (\d+) tasks/gi, "智能拆分完成：$1 个步骤");
+  s = s.replace(/planned ok name=(\S+) tasks=(\d+)/gi, "拆分完成 · $1 · $2 个步骤");
+  s = s.replace(/plan digest mode=(\w+)/gi, "文档模式：$1");
+  s = s.replace(/sanitize deps: removed (\d+)/gi, "已清理可疑依赖 $1 条");
+  s = s.replace(/critic：/gi, "拆分校对：");
+  s = s.replace(/critic:/gi, "拆分校对：");
+  s = s.replace(
+    /LLM critic cost_usd=([0-9.]+) duration_ms=(\d+)/gi,
+    "智能校对费用 $$1 · 耗时 $2ms"
+  );
+  s = s.replace(/LLM critic duration_ms=(\d+)/gi, "智能校对耗时 $1ms");
+  s = s.replace(/LLM critic ok:[^\n]*/gi, "智能校对完成");
+  s = s.replace(/LLM critic skipped[^\n]*/gi, "智能校对已跳过");
+  s = s.replace(/LLM critic:[^\n]*/gi, "智能校对");
+  s = s.replace(/LLM校对：/g, "智能校对：");
+  s = s.replace(/\bwave (\d+):/gi, "第 $1 波：");
+  s = s.replace(/\bClaude CLI\b/gi, "智能拆分");
+  s = s.replace(/\bCLI\b/g, "执行通道");
+  return s;
 }
 
 function fillPlannerLog(view) {
@@ -95,13 +463,23 @@ function fillPlannerLog(view) {
     view?.planner_log_events ||
     view?.plannerLogEvents ||
     [];
-  const tail =
+  const tailRaw =
     view?.planner_log_tail ||
     view?.plannerLogTail ||
     "";
+  const tail = String(tailRaw)
+    .split("\n")
+    .map((l) => humanizePlannerLogLine(l))
+    .join("\n");
   // 无事件时用 tail 拆行伪事件，避免 raw 墙
   let evs = Array.isArray(events) ? events : [];
-  if (!evs.length && tail) {
+  if (evs.length) {
+    evs = evs.map((e) => ({
+      ...e,
+      summary: humanizePlannerLogLine(e.summary || e.title || ""),
+      title: e.title === "log" ? "进度" : e.title,
+    }));
+  } else if (tail) {
     evs = String(tail)
       .split("\n")
       .filter((l) => l.trim() && !l.startsWith("… ("))
@@ -110,25 +488,39 @@ function fillPlannerLog(view) {
         id: `p${i}`,
         kind: "raw_line",
         stream: "stdout",
-        title: "log",
+        title: "进度",
         summary: line.replace(/^\[[^\]]+\]\s*/, ""),
-        level: /fail|error/i.test(line) ? "error" : "info",
+        level: /fail|error|失败/i.test(line) ? "error" : "info",
       }));
   }
+  const filter = state.logEventFilter || "all";
+  const filtered = evs.filter((e) => eventPassesFilter(e, filter));
   const sig = [
-    evs.length,
-    evs.length ? evs[evs.length - 1]?.id || evs[evs.length - 1]?.summary : "",
+    filtered.length,
+    filtered.length
+      ? filtered[filtered.length - 1]?.id || filtered[filtered.length - 1]?.summary
+      : "",
     tail.length,
     state.logViewMode || "term",
+    filter,
   ].join("|");
   if (logEl.dataset.sig === sig) return;
   const stick = isNearBottom(logEl);
   logEl.classList.add("log-console", "term-mode");
   logEl.classList.toggle("pretty-mode", (state.logViewMode || "term") === "pretty");
   logEl.classList.toggle("raw-mode", (state.logViewMode || "term") === "raw");
+  const mode = state.logViewMode || "term";
+  // Filter switch → new sig → rebuild; stick resets to bottom (documented residual).
+  if (
+    mode !== "raw" &&
+    mountVirtualLog(logEl, filtered, { mode, stick })
+  ) {
+    logEl.dataset.sig = sig;
+    return;
+  }
   logEl.innerHTML = renderLogConsoleHtml(evs, {
-    mode: state.logViewMode || "term",
-    emptyText: "正在分析…",
+    mode,
+    emptyText: "正在理解计划并拆分步骤…",
     rawText: tail,
   });
   logEl.dataset.sig = sig;
@@ -187,9 +579,16 @@ function aiLogPlainText(t) {
   return "";
 }
 
-function panelLogHtml(t) {
+/**
+ * Build panel log content.
+ * @returns {{ html?: string, virtItems?: any[], mode: string, empty?: boolean }}
+ * Caller prefers virtItems when present (mountVirtualLog).
+ */
+function panelLogContent(t) {
   const st = String(t.status || "").toLowerCase();
-  const events = (Array.isArray(t.log_events) ? t.log_events : []).filter(isAiInteractionEvent);
+  const events = (Array.isArray(t.log_events) ? t.log_events : [])
+    .filter(isAiInteractionEvent)
+    .filter((e) => eventPassesFilter(e, state.logEventFilter));
   const mode = state.logViewMode || "term";
 
   // 默认 term / pretty：只渲染 AI 事件，绝不 dump 原始 log_tail
@@ -198,45 +597,125 @@ function panelLogHtml(t) {
   if (mode !== "raw") {
     if (!viewEvents.length) {
       if (isLiveStatus(st)) {
-        return '<div class="cli-empty-ai muted">AI 运行中，等待交互输出…</div>';
+        return {
+          mode,
+          empty: true,
+          html: '<div class="cli-empty-ai muted">AI 运行中，等待交互输出…</div>',
+        };
       }
       if (isFailedStatus(st)) {
         const err = t.error && !isNoiseText(t.error) ? esc(String(t.error).slice(0, 240)) : "";
-        return err
-          ? `<div class="cli-empty-ai muted">任务失败<br/>${err}</div>`
-          : '<div class="cli-empty-ai muted">任务失败，无执行输出</div>';
+        return {
+          mode,
+          empty: true,
+          html: err
+            ? `<div class="cli-empty-ai muted">任务失败<br/>${err}</div>`
+            : '<div class="cli-empty-ai muted">任务失败，无执行输出</div>',
+        };
+      }
+      if ((state.logEventFilter || "all") !== "all") {
+        return {
+          mode,
+          empty: true,
+          html: '<div class="cli-empty-ai muted">当前过滤下无事件…</div>',
+        };
       }
       // 完成且仅有 result 摘要：黑区留空，成功由窗外徽章表达
-      return "";
+      return { mode, empty: true, html: "" };
+    }
+    // P2-3 virtual list: full history, only visible window in DOM
+    if (viewEvents.length >= LOG_VIRTUAL_THRESHOLD) {
+      return { mode, virtItems: viewEvents };
     }
     if (mode === "pretty") {
-      return viewEvents.slice(-40).map((e) => renderLogEvent(e)).join("") || "";
+      return {
+        mode,
+        html: viewEvents.map((e) => renderLogEvent(e)).join("") || "",
+      };
+    }
+    return {
+      mode,
+      html:
+        viewEvents
+          .map((e) => renderTranscriptLine(e))
+          .filter(Boolean)
+          .join("") || "",
+    };
+  }
+
+  // raw 模式：执行交互文本；result 摘要已在 aiLogPlainText 过滤；P2-3 轻量 ANSI
+  const plain = aiLogPlainText(t);
+  if (!plain) {
+    if (isLiveStatus(st)) {
+      return {
+        mode,
+        empty: true,
+        html: '<div class="cli-empty-ai muted">AI 运行中，等待交互输出…</div>',
+      };
+    }
+    if (isFailedStatus(st)) {
+      const err = t.error && !isNoiseText(t.error) ? esc(String(t.error).slice(0, 240)) : "";
+      return {
+        mode,
+        empty: true,
+        html: err
+          ? `<div class="cli-empty-ai muted">任务失败<br/>${err}</div>`
+          : '<div class="cli-empty-ai muted">任务失败，无执行输出</div>',
+      };
+    }
+    return { mode, empty: true, html: "" };
+  }
+  return {
+    mode,
+    html: '<pre class="panel-log-pre ansi-raw">' + ansiToHtml(plain) + "</pre>",
+  };
+}
+
+/** @deprecated keep name for any external refs; string-only path (no virt). */
+function panelLogHtml(t) {
+  const c = panelLogContent(t);
+  if (c.virtItems) {
+    // Fallback string path: last window only (virt preferred at call site)
+    const slice = c.virtItems.slice(-80);
+    if (c.mode === "pretty") {
+      return slice.map((e) => renderLogEvent(e)).join("") || "";
     }
     return (
-      viewEvents
-        .slice(-50)
+      slice
         .map((e) => renderTranscriptLine(e))
         .filter(Boolean)
         .join("") || ""
     );
   }
+  return c.html || "";
+}
 
-  // raw 模式：执行交互文本；result 摘要已在 aiLogPlainText 过滤
-  const plain = aiLogPlainText(t);
-  if (!plain) {
-    if (isLiveStatus(st)) return '<div class="cli-empty-ai muted">AI 运行中，等待交互输出…</div>';
-    if (isFailedStatus(st)) {
-      const err = t.error && !isNoiseText(t.error) ? esc(String(t.error).slice(0, 240)) : "";
-      return err
-        ? `<div class="cli-empty-ai muted">任务失败<br/>${err}</div>`
-        : '<div class="cli-empty-ai muted">任务失败，无执行输出</div>';
-    }
-    return "";
+/** Fill a cli-window-body (or planner log) with panel content + optional virtual list. */
+function fillPanelLogBody(body, t, { stick } = {}) {
+  if (!body) return;
+  const c = panelLogContent(t);
+  if (c.virtItems) {
+    const did = mountVirtualLog(body, c.virtItems, {
+      mode: c.mode,
+      stick: stick !== false && (stick || isNearBottom(body)),
+    });
+    if (did) return;
   }
-  return '<pre class="panel-log-pre">' + esc(plain) + "</pre>";
+  body.innerHTML = c.html || "";
+  if (stick) body.scrollTop = body.scrollHeight;
 }
 
 function renderCliBoard(tasks) {
+  try {
+    if (typeof renderHandoffBoardStrip === "function") renderHandoffBoardStrip();
+  } catch (_) {}
+  // Sync event-filter chips
+  try {
+    const f = state.logEventFilter || "all";
+    $$("#log-event-filter [data-ev-filter]").forEach((btn) => {
+      btn.classList.toggle("active", (btn.dataset.evFilter || "all") === f);
+    });
+  } catch (_) {}
   const shell = $("#cli-shell");
   // Preserve outer shell scroll: re-layout / height fit must not yank the user back to top.
   const shellScrollTop = shell ? shell.scrollTop : 0;
@@ -335,10 +814,12 @@ function renderCliBoard(tasks) {
       const f = state.cliStatusFilter || "all";
       empty.textContent =
         f === "all"
-          ? "暂无 CLI 窗口"
+          ? typeof flowEmptyBoard === "function"
+            ? flowEmptyBoard()
+            : "暂无执行窗口 · 开始运行后这里会按步骤出现"
           : `当前过滤（${
               { run: "运行中", wait: "待运行", done: "已完成", fail: "失败" }[f] || f
-            }）无匹配任务`;
+            }）无匹配步骤`;
       board.appendChild(empty);
       board.dataset.visKey = "empty:" + filter;
       state.logPanelSig = {};
@@ -398,8 +879,8 @@ function renderCliBoard(tasks) {
       card.style.gridColumn = "";
     }
 
-    // Do NOT include `elapsed` in chromeSig — it ticks every poll and used to
-    // wipe the whole card (resetting log scroll to top). Elapsed is light-updated.
+    // Do NOT include `elapsed` / stall idle in chromeSig — they tick every poll and
+    // used to wipe the whole card (resetting log scroll to top). Light-updated below.
     const chromeSig = [
       t.status,
       title,
@@ -411,6 +892,8 @@ function renderCliBoard(tasks) {
       isLiveStatus(st) ? 1 : 0,
       t.attempt || 0,
       t.last_retry_reason || "",
+      // presence of stall strip (not the ticking idle seconds)
+      stallStripText(t) ? 1 : 0,
     ].join("|");
 
     if (card.dataset.chrome !== chromeSig) {
@@ -418,12 +901,19 @@ function renderCliBoard(tasks) {
       const prevBody = card.querySelector(".cli-window-body");
       const prevScroll = prevBody ? prevBody.scrollTop : 0;
       const wasNearBottom = prevBody ? isNearBottom(prevBody) : true;
+      const stallTxt = stallStripText(t);
+      // Remember expand preference per task (default collapsed).
+      const expanded =
+        state.cliLogExpanded && state.cliLogExpanded[t.task_id] === true;
+      if (!state.cliLogExpanded) state.cliLogExpanded = {};
+      card.classList.toggle("is-log-collapsed", !expanded);
       card.innerHTML = `
       <div class="cli-window-head" data-drag="${esc(t.task_id)}">
         <div class="cli-window-title">
           <span class="dot ${statusDot(st)}"></span>
           <strong title="${esc(title)}">${esc(title)}</strong>
           ${badge(t.status)}
+          <span class="cli-elapsed muted" data-elapsed="${esc(t.task_id)}">· ${esc(elapsed)}</span>
         </div>
         <div class="cli-window-actions">
           ${
@@ -431,28 +921,42 @@ function renderCliBoard(tasks) {
               ? `<button type="button" class="btn primary sm cli-rerun-btn" data-rerun="${esc(t.task_id)}" title="再跑一次">再跑一次</button>`
               : ""
           }
+          <button type="button" class="btn ghost sm cli-log-toggle" data-log-toggle="${esc(t.task_id)}" title="展开或折叠详细日志">${
+            expanded ? "收起日志" : "详细日志"
+          }</button>
           <button type="button" class="icon-btn sm" data-focus="${esc(t.task_id)}" title="聚焦">◉</button>
           <button type="button" class="icon-btn sm" data-close="${esc(t.task_id)}" title="关闭窗口">×</button>
         </div>
       </div>
       <div class="cli-window-meta muted">
-        ${esc(t.task_id)} · ${esc(elapsed)}${
+        ${esc(t.task_id)}${
           t.cost_usd != null ? ` · $${Number(t.cost_usd).toFixed(4)}` : ""
-        }${t.provider ? ` · ${esc(t.provider)}` : ""}${
+        }${
           t.attempt && t.attempt > 1
             ? ` · 第 ${t.attempt} 次${t.last_retry_reason ? "·" + esc(t.last_retry_reason) : ""}`
             : ""
         }
       </div>
       ${
+        stallTxt
+          ? `<div class="cli-window-stall" data-stall="${esc(t.task_id)}" title="${esc(
+              typeof flowStallUserText === "function" ? flowStallUserText(stallTxt) : stallTxt
+            )}">${esc(
+              typeof flowStallUserText === "function" ? flowStallUserText(stallTxt) : stallTxt
+            )}</div>`
+          : ""
+      }
+      ${
         sum && failed
           ? `<div class="cli-window-err" title="${esc(sum)}">${esc(sum)}</div>`
           : ""
       }
-      <div class="cli-window-body log-console term-mode" data-log="${esc(t.task_id)}"></div>
+      <div class="cli-window-body log-console term-mode" data-log="${esc(t.task_id)}" ${
+        expanded ? "" : "hidden"
+      }></div>
       <div class="cli-window-foot">
         <button type="button" class="btn ghost sm" data-copy="${esc(t.task_id)}">复制</button>
-        <button type="button" class="btn ghost sm" data-extterm="${esc(t.task_id)}" title="在系统终端 tail -f 日志">外置终端</button>
+        <button type="button" class="btn ghost sm" data-extterm="${esc(t.task_id)}" title="在系统终端查看日志">外置终端</button>
         <button type="button" class="btn danger sm" data-stop="${esc(t.task_id)}" ${
           isLiveStatus(st) ? "" : "hidden"
         }>停止</button>
@@ -464,16 +968,25 @@ function renderCliBoard(tasks) {
       card.dataset.prevScroll = String(prevScroll);
       card.dataset.wasNearBottom = wasNearBottom ? "1" : "0";
     } else {
-      // light meta/badge refresh without wiping log body
+      // light elapsed / meta / stall refresh without wiping log body
+      const elEl = card.querySelector(`[data-elapsed="${CSS.escape(t.task_id)}"]`);
+      if (elEl) elEl.textContent = `· ${elapsed}`;
       const meta = card.querySelector(".cli-window-meta");
       if (meta) {
-        meta.textContent = `${t.task_id} · ${elapsed}${
+        // Main path: no provider/engine brand in meta strip.
+        meta.textContent = `${t.task_id}${
           t.cost_usd != null ? ` · $${Number(t.cost_usd).toFixed(4)}` : ""
-        }${t.provider ? ` · ${t.provider}` : ""}${
+        }${
           t.attempt && t.attempt > 1
             ? ` · 第 ${t.attempt} 次${t.last_retry_reason ? "·" + t.last_retry_reason : ""}`
             : ""
         }`;
+      }
+      const stallEl = card.querySelector(`[data-stall="${CSS.escape(t.task_id)}"]`);
+      const stallTxt = stallStripText(t);
+      if (stallEl && stallTxt) {
+        stallEl.textContent = stallTxt;
+        stallEl.title = stallTxt;
       }
       const stopBtn = card.querySelector("[data-stop]");
       if (stopBtn) stopBtn.hidden = !isLiveStatus(st);
@@ -490,12 +1003,17 @@ function renderCliBoard(tasks) {
           card.dataset.wasNearBottom === "1" ||
           (card.dataset.wasNearBottom == null && isNearBottom(body));
         const keepScroll = parseInt(card.dataset.prevScroll || "0", 10) || 0;
-        body.innerHTML = panelLogHtml(t);
+        // P2-3: virtual list when event count is large; else plain HTML
+        fillPanelLogBody(body, t, { stick });
         state.logPanelSig[t.task_id] = sig;
         if (stick) {
           body.scrollTop = body.scrollHeight;
         } else if (keepScroll > 0) {
           body.scrollTop = keepScroll;
+          // Re-paint virtual window at restored scroll
+          if (body.querySelector(":scope > .log-virt")) {
+            paintVirtualLogWindow(body, false);
+          }
         }
         delete card.dataset.prevScroll;
         delete card.dataset.wasNearBottom;
@@ -505,6 +1023,9 @@ function renderCliBoard(tasks) {
         const keepScroll = parseInt(card.dataset.prevScroll || "0", 10) || 0;
         if (stick) body.scrollTop = body.scrollHeight;
         else if (keepScroll > 0) body.scrollTop = keepScroll;
+        if (body.querySelector(":scope > .log-virt")) {
+          paintVirtualLogWindow(body, !!stick);
+        }
         delete card.dataset.prevScroll;
         delete card.dataset.wasNearBottom;
       }
@@ -582,6 +1103,26 @@ function renderCliBoard(tasks) {
       await cancelTask();
     };
   });
+  $$("[data-log-toggle]", board).forEach((b) => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const id = b.dataset.logToggle;
+      if (!id) return;
+      if (!state.cliLogExpanded) state.cliLogExpanded = {};
+      const next = !state.cliLogExpanded[id];
+      state.cliLogExpanded[id] = next;
+      const card = board.querySelector(`.cli-window[data-task="${CSS.escape(id)}"]`);
+      if (card) {
+        card.classList.toggle("is-log-collapsed", !next);
+        const body = card.querySelector(".cli-window-body");
+        if (body) body.hidden = !next;
+        b.textContent = next ? "收起日志" : "详细日志";
+        // Force log body refill when expanding
+        if (next) delete state.logPanelSig[id];
+      }
+      if (next) renderCliBoard(tasks);
+    };
+  });
 
   // drag move
   $$("[data-drag]", board).forEach((head) => {
@@ -641,6 +1182,38 @@ function renderCliBoard(tasks) {
     };
   });
   __fitAfter();
+}
+
+/**
+ * H3 stall strip copy. Prefer live stall_idle_secs + threshold; fall back to
+ * last_retry_reason=stall after a retry was scheduled. Idle ticking is light-
+ * updated (not in chromeSig) so the card does not rebuild every poll.
+ */
+function stallStripText(t) {
+  if (!t) return "";
+  const thr =
+    t.stall_threshold_secs != null
+      ? Number(t.stall_threshold_secs)
+      : null;
+  const idle = t.stall_idle_secs != null ? Number(t.stall_idle_secs) : null;
+  const reason = String(t.last_retry_reason || "").toLowerCase();
+  const live = isLiveStatus(t.status);
+  // Approaching / over threshold while still running → warn strip.
+  if (live && idle != null && thr != null && thr > 0 && idle >= Math.max(15, thr * 0.5)) {
+    const action =
+      idle >= thr
+        ? "将重试"
+        : `阈值 ${Math.round(thr)}s`;
+    return `日志 ${Math.round(idle)}s 无增长 · 阈值 ${Math.round(thr)}s · ${action}`;
+  }
+  // After a stall-triggered retry, surface reason on the next attempt chrome.
+  if (reason === "stall") {
+    const thrBit = thr != null && thr > 0 ? ` · 阈值 ${Math.round(thr)}s` : "";
+    const attemptBit =
+      t.attempt && t.attempt > 1 ? ` · 第 ${t.attempt} 次` : "";
+    return `因卡死已重试${thrBit}${attemptBit}`;
+  }
+  return "";
 }
 
 function renderTaskList(tasks) {

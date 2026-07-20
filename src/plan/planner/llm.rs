@@ -3,6 +3,10 @@
 //! [INPUT]: PlanJob · Config · ClaudeProvider
 //! [OUTPUT]: build_llm_plan · parse_llm_plan_output · read_planner_cost
 //! [POS]: planner 子模块；ai mode 首选路径
+//! note: digest 模式（regression/greenfield）进 system prompt；sanitize_task_deps 去假依赖
+//! note: max_parallel 仅为调度上限，prompt 禁止为凑波次加 depends_on
+//! note: finish_plan_job 再跑 critic_plan_tasks（回归改标题/钉 prompt）；本文件 parse 仅 sanitize
+//! note: 可选第二跳 LLM critic：`CCO_PLANNER_CRITIC=1`（默认关；失败则保留规则校对）
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/plan/CLAUDE.md
 
 use std::path::Path;
@@ -14,9 +18,10 @@ use serde::Deserialize;
 
 use crate::config::Config;
 use crate::plan::adapters::raw_single::default_provider_opts;
-use crate::plan::{OnFailure, PlanIR, TaskIR, MAX_TASKS, PLANNER_MAX_BUDGET_USD};
+use crate::plan::{OnFailure, PlanIR, TaskIR, PLANNER_MAX_TASKS, PLANNER_MAX_BUDGET_USD};
 
 use super::job::{append_log, apply_worker_defaults, job_dir, PlanJob};
+// PlanJob used when persisting digest_mode mid-plan
 
 /// Call Claude CLI (print) to produce a cco-plan/v1 JSON task graph.
 pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
@@ -66,9 +71,26 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
         .max_parallel
         .unwrap_or(config.default.max_parallel)
         .clamp(1, 32);
-    let prompt = planner_system_prompt(&job.project, &source_text, max_parallel);
+    let digest = super::digest::build_plan_digest(&source_text);
+    append_log(
+        config,
+        &job.job_id,
+        &format!(
+            "plan digest mode={} landed={} phases={}",
+            digest.mode.as_str(),
+            digest.landed_hint,
+            digest.phase_lines.len()
+        ),
+    );
+    // Persist mode early so UI can show regression/greenfield while still planning.
+    if let Ok(mut j) = PlanJob::load(config, &job.job_id) {
+        j.digest_mode = Some(digest.mode.as_str().to_string());
+        j.updated_at = Utc::now();
+        let _ = j.save(config);
+    }
+    let prompt = planner_system_prompt(&job.project, &source_text, max_parallel, &digest);
     std::fs::write(task_dir.join("prompt.md"), &prompt)?;
-    append_log(config, &job.job_id, "starting Claude LLM planner (print)…");
+    append_log(config, &job.job_id, "starting intelligent planner…");
 
     let planner_task = TaskIR {
         id: "__planner__".into(),
@@ -92,6 +114,7 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
         role: None,
         scope: None,
         outputs: vec![],
+    tags: vec![],
     };
 
     let ctx = StartCtx {
@@ -190,6 +213,9 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
 
     let mut ir = parse_llm_plan_output(&raw_out, &abs, config)?;
     apply_worker_defaults(&mut ir, &job.provider, &job.exec_mode);
+    // P2-4/5: tags may still override soft defaults after worker paint.
+    crate::plan::apply_tag_routing(&mut ir);
+    crate::plan::materialize_role_defaults(&mut ir);
     ir.adapter = "planner-ai-llm".into();
     ir.source_path = abs;
     ir.validate()?;
@@ -199,6 +225,239 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
         &format!("LLM plan ok: {} tasks", ir.tasks.len()),
     );
     Ok(ir)
+}
+
+/// Gate for optional second-pass LLM critic (default off).
+/// On if `config.default.planner_critic_enabled` **or** env `CCO_PLANNER_CRITIC=1|true|yes`.
+pub(super) fn llm_critic_enabled(config: &Config) -> bool {
+    if config.default.planner_critic_enabled {
+        return true;
+    }
+    std::env::var("CCO_PLANNER_CRITIC")
+        .map(|v| {
+            let v = v.trim();
+            v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes")
+        })
+        .unwrap_or(false)
+}
+
+/// Outcome of optional LLM critic for job persistence / UI.
+#[derive(Debug, Clone, Default)]
+pub(super) struct LlmCriticOutcome {
+    pub used: bool,
+    pub report: super::digest::CriticReport,
+    pub cost_usd: Option<f64>,
+    pub duration_ms: Option<u64>,
+}
+
+/// Optional second-pass LLM critic: only drop bad edges + notes.
+/// Soft-fail: any error is logged and ignored (rule critic already ran).
+pub(super) fn run_optional_llm_critic(
+    config: &Config,
+    job: &PlanJob,
+    ir: &mut crate::plan::PlanIR,
+    mode: super::digest::PlanModeKind,
+) -> LlmCriticOutcome {
+    use super::digest::{
+        apply_llm_critic_patch, parse_llm_critic_patch, tasks_skeleton_json, CriticReport,
+    };
+
+    if !llm_critic_enabled(config) {
+        return LlmCriticOutcome::default();
+    }
+    if job.provider.eq_ignore_ascii_case("fake") {
+        append_log(
+            config,
+            &job.job_id,
+            "LLM critic skipped (fake provider)",
+        );
+        return LlmCriticOutcome::default();
+    }
+
+    let skeleton = tasks_skeleton_json(&ir.tasks);
+    let prompt = format!(
+        r#"你是 cco 规划校对员。下面是已生成的任务 DAG 骨架（mode={mode}）。
+只做两件事：1）标出应删除的假依赖边 2）给 0～3 条中文 notes。
+禁止新增/删除任务，禁止改写 prompt 全文。
+
+输出**仅一个 JSON 对象**（不要 Markdown 解释）：
+{{
+  "remove_edges": [{{"task": "t5", "deps": ["t3"]}}],
+  "notes": ["可选说明"]
+}}
+
+规则：
+- 无真实产物/接口耦合的 depends_on 应删除
+- regression 模式：正交阶段（如 meta vs failover）默认无边
+- 不确定就不要删边
+
+任务骨架：
+{skeleton}
+"#,
+        mode = mode.as_str(),
+        skeleton = skeleton,
+    );
+
+    let started = std::time::Instant::now();
+    match run_short_claude_print(config, job, &prompt, "__critic__") {
+        Ok((raw, cost)) => {
+            let duration_ms = started.elapsed().as_millis() as u64;
+            let _ = std::fs::write(
+                job_dir(config, &job.job_id).join("llm_critic_raw.txt"),
+                &raw,
+            );
+            let (report, note) = match parse_llm_critic_patch(&raw) {
+                Some(patch) => {
+                    let report = apply_llm_critic_patch(&mut ir.tasks, &patch);
+                    (
+                        report,
+                        format!(
+                            "LLM critic ok: dropped edges, notes applied; cost={:?} ms={}",
+                            cost, duration_ms
+                        ),
+                    )
+                }
+                None => (
+                    CriticReport::default(),
+                    format!(
+                        "LLM critic: no valid JSON patch; keep rule critic only; cost={:?} ms={}",
+                        cost, duration_ms
+                    ),
+                ),
+            };
+            append_log(config, &job.job_id, &note);
+            if let Some(c) = cost {
+                append_log(
+                    config,
+                    &job.job_id,
+                    &format!("LLM critic cost_usd={c:.4} duration_ms={duration_ms}"),
+                );
+            } else {
+                append_log(
+                    config,
+                    &job.job_id,
+                    &format!("LLM critic duration_ms={duration_ms}"),
+                );
+            }
+            LlmCriticOutcome {
+                used: true,
+                report,
+                cost_usd: cost,
+                duration_ms: Some(duration_ms),
+            }
+        }
+        Err(e) => {
+            append_log(
+                config,
+                &job.job_id,
+                &format!("LLM critic skipped (error): {e:#}"),
+            );
+            LlmCriticOutcome::default()
+        }
+    }
+}
+
+/// Short Claude print call (shared by optional critic).
+/// Returns `(stdout, cost_usd)`.
+fn run_short_claude_print(
+    config: &Config,
+    job: &PlanJob,
+    prompt: &str,
+    task_id: &str,
+) -> Result<(String, Option<f64>)> {
+    use crate::runtime::provider::{
+        claude::ClaudeProvider, StartCtx, WorkerProvider, WorkerStatus,
+    };
+
+    let bin_cfg = config
+        .provider("claude")
+        .map(|p| p.bin.clone())
+        .unwrap_or_else(|| "claude".into());
+    let bin = crate::runtime::provider::resolve_provider_bin(&bin_cfg, "CCO_CLAUDE_BIN");
+    let extra = config
+        .provider("claude")
+        .map(|p| p.extra_args.clone())
+        .unwrap_or_default();
+    let provider = ClaudeProvider::new(bin, extra);
+
+    let work = job_dir(config, &job.job_id).join("llm_work");
+    let task_dir = work.join("tasks").join(task_id);
+    std::fs::create_dir_all(&task_dir)?;
+    let _ = std::fs::remove_file(task_dir.join(".done"));
+    let _ = std::fs::write(task_dir.join("stdout.json"), "");
+    std::fs::write(task_dir.join("prompt.md"), prompt)?;
+
+    let planner_task = TaskIR {
+        id: task_id.into(),
+        title: "plan critic".into(),
+        depends_on: vec![],
+        group: None,
+        provider: "claude".into(),
+        mode: "print".into(),
+        prompt: prompt.to_string(),
+        acceptance: None,
+        timeout_secs: Some(180),
+        worktree: Some(false),
+        provider_opts: serde_json::json!({
+            "max_turns": 3,
+            "max_budget_usd": 0.35,
+            "permission_mode": "dontAsk",
+            "allowed_tools": [],
+        }),
+        optional: false,
+        include: true,
+        role: None,
+        scope: None,
+        outputs: vec![],
+    tags: vec![],
+    };
+    let ctx = StartCtx {
+        run_id: job.job_id.clone(),
+        project_root: job.project.clone(),
+        work_dir: job.project.clone(),
+        task_dir: task_dir.clone(),
+        env_extra: vec![],
+    };
+
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .context("tokio for llm critic")?;
+
+    rt.block_on(async {
+        provider.preflight().await?;
+        provider.validate_task(&planner_task)?;
+        let handle = provider.start(&planner_task, &ctx).await?;
+        let mut ticks = 0u32;
+        loop {
+            match provider.poll(&handle).await? {
+                WorkerStatus::Running => {
+                    ticks += 1;
+                    if ticks > 450 {
+                        // ~3 min
+                        bail!("llm critic timeout");
+                    }
+                    tokio::time::sleep(Duration::from_millis(400)).await;
+                }
+                WorkerStatus::Done
+                | WorkerStatus::Failed
+                | WorkerStatus::Stopped
+                | WorkerStatus::Timeout => break,
+            }
+        }
+        let result = provider.collect(&handle).await?;
+        let cost = result.cost_usd;
+        let stdout = result
+            .stdout_path
+            .as_ref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .unwrap_or_default();
+        if !matches!(result.status, crate::runtime::provider::TaskStatus::Done) {
+            let err = result.error.unwrap_or_else(|| "critic worker failed".into());
+            bail!("critic worker not done: {err}");
+        }
+        Ok((stdout, cost))
+    })
 }
 
 /// Read planner cost written by LLM path (if any).
@@ -211,9 +470,40 @@ pub(super) fn read_planner_cost(config: &Config, job_id: &str) -> Option<f64> {
         .or_else(|| v.get("planner_cost_usd").and_then(|x| x.as_f64()))
 }
 
-pub(super) fn planner_system_prompt(project: &Path, source: &str, max_parallel: usize) -> String {
+pub(super) fn planner_system_prompt(
+    project: &Path,
+    source: &str,
+    max_parallel: usize,
+    digest: &super::digest::PlanDigest,
+) -> String {
     let max_parallel = max_parallel.max(1);
-    let max_tasks = MAX_TASKS;
+    let max_tasks = PLANNER_MAX_TASKS;
+    let digest_block = super::digest::format_digest_for_prompt(digest);
+    let mode = digest.mode.as_str();
+    let mode_rules = match digest.mode {
+        super::digest::PlanModeKind::Regression => r#"
+## 模式 = regression（文档声明已落地 / 勾选多已完成）— 硬约束
+- 每个任务 = **回归验证 + 仅 blocking 残差才改代码**；title 用「回归验证 …」「核对 …」「补残差 …」，**禁止**「实现完整 H0–H4 / 从零落地」。
+- 每条 prompt **第一行**写：`文档声明相关阶段已落地。默认只读验证；仅 ISSUES 中 severity=blocking 才改代码。`
+- 正交能力（如 meta 过滤 vs failover）**默认无 depends_on**；禁止按章节编号串成假链。
+- 任务数宜 3–8；最后一波可加 **检验员（可选）** 对照 S*/勾选表。
+"#,
+        super::digest::PlanModeKind::Audit => r#"
+## 模式 = audit — 硬约束
+- 以只读检验 / 对照勾选为主；避免大段业务实现任务。
+- 产出应含 VERDICT/ISSUES 类检验步骤。
+"#,
+        super::digest::PlanModeKind::Mixed => r#"
+## 模式 = mixed — 硬约束
+- 已勾选项 → 回归验证；未勾选项 → 可实施工作包；二者在 title/prompt 中区分。
+- 禁止把已完成项再拆成「从零实现」。
+"#,
+        super::digest::PlanModeKind::Greenfield => r#"
+## 模式 = greenfield — 硬约束
+- 提炼可落地的实施工作包（调研 → 并行实现 → 整合 → 检验），3–12 个为宜。
+- 依赖只能来自真实产物/接口耦合，禁止章节顺序当依赖。
+"#,
+    };
     // Cap source length so huge specs don't drown the instruction rules.
     let source = if source.chars().count() > 28_000 {
         let head: String = source.chars().take(24_000).collect();
@@ -225,18 +515,26 @@ pub(super) fn planner_system_prompt(project: &Path, source: &str, max_parallel: 
         r#"你是 cco 编排器的「规划器」。用户只会提供 **Markdown 计划**（不会写 YAML）。你的产出是给确认屏看的**可执行工作包 DAG**，不是文档目录。
 
 项目路径: {project}
-用户选择的 max_parallel（必须原样写入 JSON，并据此设计 depends_on 波次）: {max_parallel}
+用户选择的 max_parallel: {max_parallel}
+说明：**max_parallel 只是调度并发上限**，用来限制同一时刻跑几步；**禁止**为了「凑波次」而人为增加 depends_on。先按真实依赖建图，再自然形成波次。
+
+## 文档摘要（规则抽取，优先于全文臆测）
+{digest_block}
+判定 mode = **{mode}**
+{mode_rules}
 
 ## 什么叫「任务」（必须）
-- 每个 task = 一个 worker 能独立做完的**工作包**：有动词（实现/修复/新增/改造/验收/检验…）、有范围、有完成标志。
-- title 用中文短句，例如「实现 handoff 归并」「接入混跑 worktree 校验」「检验员终检」。
+- 每个 task = 一个 worker 能独立做完的**工作包**：有动词（实现/修复/核对/回归/改造/验收/检验…）、有范围、有完成标志。
+- title 用中文短句，例如「回归验证 H0 入口」「实现 handoff 归并」「检验员终检」。
 - prompt 自包含：目标、可改路径、禁止事项、验收、最后一行 `CCO_DONE ok`。
+- 每个 prompt 写清 **plan_ref**（对应阶段/勾选 ID）。若有依赖，写明 **依赖原因**（产物路径/接口），并在正文提到被依赖的 task id。
 
 ## 绝对禁止（违反则整次规划失败）
 - **禁止**把文档结构当成任务：Board / Timeline / Fragments / 目录 / TOC / 附录 / 修订历史 / 非目标 / 成功标准 / 决策树 / PROTOCOL / 关联真源 / 代码锚点。
 - **禁止**用 Markdown 表格表头当 title（例如含多个 `|` 的 `id | provider | role | …`）。
 - **禁止**只用阶段标签当 title：单独的 P0/P1/P2/M0–M5/D0–D5、「阶段切分」「勾选表」——阶段名只能出现在 prompt 引用里，title 必须是工作内容。
-- **禁止**「1 波把全文所有章节并行」：若文档是产品方案/契约/总账，先**提炼要落地的实施项**，再拆 3–8 个有依赖的工作包（调研 → 并行实现 → 整合 → 检验）。
+- **禁止**「1 波把全文所有章节并行」：先提炼工作包，再拆 3–8 个有**真实**依赖的包。
+- **禁止**无理由 depends_on（编号顺序 / 同一文档章节 / 为凑 max_parallel 加边）。无真实耦合 → depends_on: []。
 - 用户文档里的示例 YAML/代码块是**说明**，不要逐段复制成空壳任务。
 
 ## 输出要求（必须遵守）
@@ -253,13 +551,18 @@ pub(super) fn planner_system_prompt(project: &Path, source: &str, max_parallel: 
       "title": "中文短标题（工作包，不是章节名）",
       "depends_on": [],
       "optional": false,
+      "provider": "claude",
+      "role": "implement",
+      "tags": [],
+      "scope": {{ "paths": ["src/**"], "readonly": [], "forbid": [] }},
+      "outputs": [],
       "prompt": "给执行 worker 的完整中文说明，自包含，结尾要求输出 CCO_DONE ok"
     }}
   ]
 }}
-3. 任务数 2–{max_tasks}（硬上限 {max_tasks}）；能并行的不要串成一条长链；同一波最多约 {max_parallel} 个无依赖任务。
+3. 任务数 2–{max_tasks}（硬上限 {max_tasks}）；能并行的不要串成一条长链。
 4. id 仅用 [a-z0-9_-]，稳定且唯一。
-5. depends_on 只能引用已有 id，无环。
+5. depends_on 只能引用已有 id，无环；每条边应在 prompt 中可辩护。
 6. 每个 prompt 必须自包含（worker 看不到其它任务对话）；单任务 prompt 勿过长。
 7. max_parallel 字段必须等于 {max_parallel}。
 8. **可选项（用户自选）**：
@@ -269,12 +572,19 @@ pub(super) fn planner_system_prompt(project: &Path, source: &str, max_parallel: 
    - 必做项标题不要写「可选」。
    - 至少保留 1 个必做任务；不要把全部标成 optional。
    - 其他任务的 depends_on 尽量不要只依赖 optional 任务（optional 可能被用户关掉）。
-9. 若文档像「落地某方案」：默认最后一波含 **检验/验收** 任务（只读检查 + 写结论，不写大段业务代码）。
+9. 若文档像「落地/回归某方案」：默认最后一波含 **检验/验收** 任务（只读检查 + 写结论，不写大段业务代码），可 optional。
+10. **多 CLI 协作字段（P2-5，建议填写；缺省可省略）**：
+   - `provider`：`claude` | `codex` | `fake`。缺省 = 配置默认引擎。
+   - `role`：`scout` | `implement` | `integrate` | `inspect`。检验/验收任务写 `inspect`；主实现写 `implement`。
+   - `tags`：短标签数组，供路由（例：`["frontend"]`、`["codex"]`、`["inspect"]`）。可空。
+   - `scope`：`paths` 可写白名单 glob；并行 implement 的 paths **不应相交**。inspect 可只写 inspect 输出目录。
+   - `outputs`：完成后必须存在的相对路径（inspect 建议含 `.cco-out/inspect/VERDICT.md`）。
+   - 混用 claude+codex 时：implement 任务尽量设 `worktree` 语义（prompt 写清独立目录）；**不要**给 codex 设 bg 模式。
 
 ## 执行闭环（P-loop，必须遵守）
 - **计划是唯一勾选真源**：拆分与巡检都对照计划 § 阶段 / S* / V*，不另造第二清单。
-- 每个工作包 prompt 写清：**plan_ref**（对应哪些勾选 ID）、改哪些路径、不做哪些、完成标志、验收可否降级（默认否）。
-- 落地任务须要求 worker 在 progress 写 `plan_ref → 证据`；**禁止**静默把成功标准改弱。
+- 每个工作包 prompt 写清：**plan_ref**、改哪些路径、不做哪些、完成标志、验收可否降级（默认否）。
+- 落地/回归任务须要求 worker 在 progress 写 `plan_ref → 证据`；**禁止**静默把成功标准改弱。
 - 若有检验任务：prompt 要求产出计划勾选对照表 + `.cco-out/inspect/VERDICT.md`（Result: PASS|FAIL）+ `ISSUES.md`（severity=blocking|map|residual|out-of-scope、plan_ref、fix_wp）。
 - **禁止**存在 blocking/map 时写 PASS；map（L1/L2 不同构）默认 blocking。
 - 回补由后续 rework 波做；检验员默认不改业务代码。
@@ -285,6 +595,9 @@ pub(super) fn planner_system_prompt(project: &Path, source: &str, max_parallel: 
         project = project.display(),
         max_parallel = max_parallel,
         max_tasks = max_tasks,
+        digest_block = digest_block,
+        mode = mode,
+        mode_rules = mode_rules,
         source = source,
     )
 }
@@ -312,6 +625,21 @@ pub(super) struct LlmTask {
     pub(super) group: Option<String>,
     #[serde(default)]
     pub(super) optional: bool,
+    /// P2-5: per-task engine hint from planner JSON.
+    #[serde(default)]
+    pub(super) provider: Option<String>,
+    /// P2-5: collaboration role (scout|implement|integrate|inspect).
+    #[serde(default)]
+    pub(super) role: Option<crate::plan::TaskRole>,
+    /// P2-5: path contract.
+    #[serde(default)]
+    pub(super) scope: Option<crate::plan::TaskScope>,
+    /// P2-5: required artifact paths.
+    #[serde(default)]
+    pub(super) outputs: Vec<String>,
+    /// P2-4: free-form routing tags.
+    #[serde(default)]
+    pub(super) tags: Vec<String>,
 }
 
 pub(super) fn parse_llm_plan_output(raw: &str, source_path: &Path, config: &Config) -> Result<PlanIR> {
@@ -325,9 +653,9 @@ pub(super) fn parse_llm_plan_output(raw: &str, source_path: &Path, config: &Conf
     if doc.tasks.is_empty() {
         bail!("LLM plan has no tasks");
     }
-    if doc.tasks.len() > MAX_TASKS {
+    if doc.tasks.len() > PLANNER_MAX_TASKS {
         bail!(
-            "LLM plan has too many tasks ({} > max {MAX_TASKS})",
+            "LLM plan has too many tasks ({} > max {PLANNER_MAX_TASKS})",
             doc.tasks.len()
         );
     }
@@ -368,24 +696,58 @@ pub(super) fn parse_llm_plan_output(raw: &str, source_path: &Path, config: &Conf
             if !prompt.contains("CCO_DONE") {
                 prompt.push_str("\n\n全部完成后在最后一行输出：CCO_DONE ok\n");
             }
+            // P2-5: accept planner-provided provider; fall back to config default.
+            let task_provider = t
+                .provider
+                .as_ref()
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| matches!(s.as_str(), "claude" | "codex" | "fake"))
+                .unwrap_or_else(|| provider.clone());
+            let task_opts = if task_provider == provider {
+                opts.clone()
+            } else {
+                default_provider_opts(config, &task_provider)
+            };
+            // Empty scope object → treat as absent.
+            let scope = t.scope.and_then(|s| {
+                if s.paths.is_empty() && s.readonly.is_empty() && s.forbid.is_empty() {
+                    None
+                } else {
+                    Some(s)
+                }
+            });
+            // Infer inspect role from title/tags when model forgot the field.
+            let mut role = t.role;
+            let tags = t.tags;
+            if role.is_none() {
+                let lower = title.to_ascii_lowercase();
+                if lower.contains("检验")
+                    || lower.contains("验收")
+                    || lower.contains("inspect")
+                    || tags.iter().any(|x| x.eq_ignore_ascii_case("inspect"))
+                {
+                    role = Some(crate::plan::TaskRole::Inspect);
+                }
+            }
             Some(TaskIR {
                 id: t.id,
                 title,
                 depends_on: t.depends_on,
                 group: t.group,
-                provider: provider.clone(),
+                provider: task_provider,
                 mode: config.default.default_mode.clone(),
                 prompt,
                 acceptance: None,
                 timeout_secs: None,
                 worktree: Some(false),
-                provider_opts: opts.clone(),
+                provider_opts: task_opts,
                 optional,
                 // Optional tasks default off — user opts in on confirm screen.
                 include: !optional,
-                role: None,
-                scope: None,
-                outputs: vec![],
+                role,
+                scope,
+                outputs: t.outputs,
+                tags,
             })
         })
         .collect();
@@ -403,6 +765,8 @@ pub(super) fn parse_llm_plan_output(raw: &str, source_path: &Path, config: &Conf
     for t in &mut tasks {
         t.depends_on.retain(|d| keep.contains(d));
     }
+    // Drop unmotivated edges (no id/title mention / no depend reason in prompt).
+    super::digest::sanitize_task_deps(&mut tasks);
     if !dropped_meta.is_empty() {
         tracing::warn!(
             dropped = ?dropped_meta,

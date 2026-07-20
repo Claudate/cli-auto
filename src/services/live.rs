@@ -60,6 +60,12 @@ pub struct TaskLiveView {
     /// Last auto-retry reason (stall / fail / timeout), if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_retry_reason: Option<String>,
+    /// Seconds since stdout last grew (live tasks only; H3 stall strip).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stall_idle_secs: Option<u64>,
+    /// Config stall threshold (seconds) for UI copy; always set when config known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stall_threshold_secs: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -87,6 +93,29 @@ pub struct ProjectLiveView {
     /// P-loop: inspect VERDICT / blocking count / rework eligibility (desktop strip).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inspect_loop: Option<InspectLoopView>,
+    /// Run directory on disk (for open handoff / report).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_dir: Option<String>,
+    /// Absolute path to host handoff.md when present (multi-cli P2-6 Board).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handoff_md_path: Option<String>,
+    /// Compact Board rows from handoff.json (id/provider/role/status).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub handoff_board: Vec<HandoffBoardRowView>,
+}
+
+/// Compact Board row for desktop handoff strip (multi-cli P2-6).
+#[derive(Debug, Clone, Serialize)]
+pub struct HandoffBoardRowView {
+    pub id: String,
+    pub provider: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    pub status: String,
+    #[serde(default)]
+    pub scope: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost: Option<f64>,
 }
 
 pub fn project_live_view(
@@ -138,6 +167,9 @@ pub fn project_live_view(
             planner_cost_usd: None,
             exec_cost_usd: None,
             inspect_loop: None,
+            run_dir: None,
+            handoff_md_path: None,
+            handoff_board: vec![],
         });
     };
 
@@ -206,6 +238,8 @@ pub fn project_live_view(
                 .filter(|d| !done_ids.contains(*d))
                 .cloned()
                 .collect();
+            let stall_threshold_secs = Some(config.default.stall_secs);
+            let stall_idle_secs = stall_idle_secs_for(&stdout, ts);
             TaskLiveView {
                 task_id: tid.clone(),
                 title,
@@ -228,6 +262,8 @@ pub fn project_live_view(
                 waiting_on,
                 attempt: ts.attempt,
                 last_retry_reason: ts.last_retry_reason.clone(),
+                stall_idle_secs,
+                stall_threshold_secs,
             }
         })
         .collect();
@@ -281,6 +317,31 @@ pub fn project_live_view(
         &rs.project_root,
     ));
 
+    // multi-cli P2-6: expose handoff Board for desktop strip / open ledger.
+    let handoff_md_path = {
+        let p = handoff::Handoff::path_md(&rs.run_dir);
+        if p.is_file() {
+            Some(p.display().to_string())
+        } else {
+            None
+        }
+    };
+    let handoff_board = handoff::Handoff::load(&rs.run_dir)
+        .map(|h| {
+            h.board
+                .into_iter()
+                .map(|r| HandoffBoardRowView {
+                    id: r.id,
+                    provider: r.provider,
+                    role: r.role,
+                    status: r.status,
+                    scope: r.scope,
+                    cost: r.cost,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     Ok(ProjectLiveView {
         project_path: project.display().to_string(),
         project_name: name,
@@ -295,6 +356,9 @@ pub fn project_live_view(
         planner_cost_usd,
         exec_cost_usd,
         inspect_loop,
+        run_dir: Some(rs.run_dir.display().to_string()),
+        handoff_md_path,
+        handoff_board,
     })
 }
 
@@ -489,4 +553,27 @@ pub fn stop_task(config: &Config, run_id: &str, task_id: Option<&str>) -> Result
         }),
     );
     Ok(())
+}
+
+/// Approx seconds since stdout last grew — for H3 stall strip (not the patrol clock).
+/// Uses file mtime; falls back to time since `started_at` when the file is missing.
+fn stall_idle_secs_for(stdout: &Path, ts: &state::TaskState) -> Option<u64> {
+    if !matches!(
+        ts.status,
+        TaskStatus::Running | TaskStatus::Starting
+    ) {
+        return None;
+    }
+    let now = std::time::SystemTime::now();
+    if let Ok(meta) = std::fs::metadata(stdout) {
+        if let Ok(modified) = meta.modified() {
+            return Some(now.duration_since(modified).unwrap_or_default().as_secs());
+        }
+    }
+    ts.started_at.map(|s| {
+        chrono::Utc::now()
+            .signed_duration_since(s)
+            .num_seconds()
+            .max(0) as u64
+    })
 }

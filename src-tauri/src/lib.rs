@@ -4,6 +4,7 @@
 //! [OUTPUT]: tauri commands → cco::services（meta/runs/plans/plan_job/live/settings/chat…）
 //! [POS]: 桌面薄壳；禁止堆业务逻辑；P1-2 open_task_terminal 已接；chat 建计划已接
 //! note: chat_send_cmd 必须 async + spawn_blocking，禁止同步堵 UI
+//! note: C3 多会话 chat_list/new/delete_session_cmd
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src-tauri/CLAUDE.md
 
 use std::path::PathBuf;
@@ -11,13 +12,17 @@ use std::sync::Mutex;
 
 use cco::config::Config;
 use cco::services::{
-    accept_run_residual, add_project, chat_save_plan, chat_send, chat_session_get, confirm_start,
-    get_plan_job, get_settings, latest_plan_job_for_project, list_plans, list_projects, list_runs,
-    load_run, open_task_terminal, preview_plan, project_live_view, remove_project, resume_run_async,
-    run_doctor, set_settings, start_plan_job, start_rework_from_run, start_run_async, stop_run,
-    stop_task, task_logs, update_proposed_task, ChatSavePlanResponse, ChatSendResponse, ChatSession,
-    PlanJobView, PlanPreview, ProjectLiveView, ProjectSummary, ReworkStartResponse, RunSummary,
-    SettingsUpdate, SettingsView, StartPlanJobRequest, StartRunRequest,
+    accept_run_residual, add_project, chat_delete_session, chat_list_sessions, chat_new_session,
+    chat_normalize_plan, chat_save_attachment, chat_save_plan, chat_send, chat_session_get,
+    chat_stream_partial, confirm_start, get_plan_job, get_settings, latest_plan_job_for_project,
+    list_plan_meta, list_plans, list_projects, list_runs, load_run, open_task_terminal, preview_plan,
+    project_live_view, read_plan_md, remove_project, remove_proposed_task, resume_run_async,
+    run_doctor, sanitize_proposed_deps, set_settings, start_plan_job, start_rework_from_run,
+    start_run_async, stop_run, stop_task, task_logs, update_proposed_task, ChatAttachment,
+    ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSendResponse, ChatSession,
+    ChatSessionSummary, ChatStreamPartial, PlanJobView, PlanMeta, PlanPreview, ProjectLiveView,
+    ProjectSummary, ReworkStartResponse, RunSummary, SanitizeDepsResult, SettingsUpdate,
+    SettingsView, StartPlanJobRequest, StartRunRequest,
 };
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -79,6 +84,16 @@ fn get_run(state: tauri::State<'_, AppState>, run_id: String) -> Result<Value, S
 #[tauri::command]
 fn get_plans(project: String) -> Result<Vec<String>, String> {
     list_plans(PathBuf::from(project).as_path()).map_err(map_err)
+}
+
+/// H2: plans + ever_completed / last_run_* (chooser & plan-rail).
+#[tauri::command]
+fn get_plan_meta(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<Vec<PlanMeta>, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    list_plan_meta(&config, PathBuf::from(project).as_path()).map_err(map_err)
 }
 
 #[tauri::command]
@@ -262,9 +277,48 @@ fn update_plan_task_cmd(
     prompt: Option<String>,
     // Optional-task checkbox; ignored / rejected for required tasks.
     include: Option<bool>,
+    // Per-task worker engine (H4); soft-kept at confirm_start.
+    provider: Option<String>,
+    // P2-1: explicit depends_on edge list (task ids); None = leave unchanged.
+    #[allow(non_snake_case)]
+    dependsOn: Option<Vec<String>>,
 ) -> Result<PlanJobView, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    update_proposed_task(&config, &jobId, &taskId, title, prompt, include).map_err(map_err)
+    update_proposed_task(
+        &config,
+        &jobId,
+        &taskId,
+        title,
+        prompt,
+        include,
+        provider,
+        dependsOn,
+    )
+    .map_err(map_err)
+}
+
+/// P2-1: remove a task from the proposed plan (confirm screen).
+#[tauri::command]
+fn remove_plan_task_cmd(
+    state: tauri::State<'_, AppState>,
+    #[allow(non_snake_case)]
+    jobId: String,
+    #[allow(non_snake_case)]
+    taskId: String,
+) -> Result<PlanJobView, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    remove_proposed_task(&config, &jobId, &taskId).map_err(map_err)
+}
+
+/// Confirm-screen: drop unmotivated depends_on edges (same rules as planner sanitize).
+#[tauri::command]
+fn sanitize_plan_deps_cmd(
+    state: tauri::State<'_, AppState>,
+    #[allow(non_snake_case)]
+    jobId: String,
+) -> Result<SanitizeDepsResult, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    sanitize_proposed_deps(&config, &jobId).map_err(map_err)
 }
 
 #[tauri::command]
@@ -334,6 +388,18 @@ fn accept_residual_cmd(
 
 #[tauri::command]
 fn open_path(path: String) -> Result<(), String> {
+    let p = std::path::PathBuf::from(&path);
+    // 目录不存在时先创建，便于「打开计划夹」在空 projects 上可用
+    if path.ends_with('/') || path.ends_with('\\') || (!p.exists() && p.extension().is_none()) {
+        if !p.exists() {
+            std::fs::create_dir_all(&p).map_err(map_err)?;
+        }
+    } else if let Some(parent) = p.parent() {
+        // 文件：确保父目录存在
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            std::fs::create_dir_all(parent).map_err(map_err)?;
+        }
+    }
     std::process::Command::new("open")
         .arg(&path)
         .status()
@@ -382,6 +448,30 @@ fn chat_session_get_cmd(
     chat_session_get(PathBuf::from(project).as_path(), sid).map_err(map_err)
 }
 
+/// C3: list chat sessions for multi-session switcher.
+#[tauri::command]
+fn chat_list_sessions_cmd(project: String) -> Result<Vec<ChatSessionSummary>, String> {
+    chat_list_sessions(PathBuf::from(project).as_path()).map_err(map_err)
+}
+
+/// C3: create empty session (optional title).
+#[tauri::command]
+fn chat_new_session_cmd(
+    project: String,
+    title: Option<String>,
+) -> Result<ChatSession, String> {
+    chat_new_session(PathBuf::from(project).as_path(), title.as_deref()).map_err(map_err)
+}
+
+/// C3: delete session JSON (+ attachments dir best-effort).
+#[tauri::command]
+fn chat_delete_session_cmd(
+    project: String,
+    #[allow(non_snake_case)] sessionId: String,
+) -> Result<(), String> {
+    chat_delete_session(PathBuf::from(project).as_path(), &sessionId).map_err(map_err)
+}
+
 /// Chat → Claude CLI can run for minutes. Must not block the Tauri async runtime
 /// or the webview freezes (send button stuck, whole app "dead").
 #[tauri::command]
@@ -390,6 +480,7 @@ async fn chat_send_cmd(
     project: String,
     message: String,
     #[allow(non_snake_case)] sessionId: Option<String>,
+    attachments: Option<Vec<ChatAttachment>>,
 ) -> Result<ChatSendResponse, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
     tokio::task::spawn_blocking(move || {
@@ -398,11 +489,55 @@ async fn chat_send_cmd(
             PathBuf::from(project).as_path(),
             &message,
             sessionId.as_deref(),
+            attachments,
         )
         .map_err(map_err)
     })
     .await
     .map_err(|e| format!("chat_send join error: {e}"))?
+}
+
+/// C3: poll partial assistant text while chat_send is in-flight (non-blocking).
+/// Failure → empty text (UI keeps wait label); never blocks / panics on CJK.
+#[tauri::command]
+fn chat_stream_partial_cmd(
+    project: String,
+    #[allow(non_snake_case)] sessionId: Option<String>,
+) -> Result<ChatStreamPartial, String> {
+    chat_stream_partial(PathBuf::from(project).as_path(), sessionId.as_deref()).map_err(map_err)
+}
+
+#[tauri::command]
+fn read_plan_md_cmd(project: String, plan: String) -> Result<String, String> {
+    read_plan_md(PathBuf::from(project).as_path(), &plan).map_err(map_err)
+}
+
+/// G4: save one image (base64) under .cco/chat/attachments/.
+#[tauri::command]
+async fn chat_save_attachment_cmd(
+    project: String,
+    #[allow(non_snake_case)] sessionId: Option<String>,
+    #[allow(non_snake_case)] fileName: String,
+    mime: String,
+    // Raw base64 (no data: URL prefix).
+    #[allow(non_snake_case)] dataBase64: String,
+) -> Result<ChatAttachment, String> {
+    tokio::task::spawn_blocking(move || {
+        use base64::Engine as _;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(dataBase64.trim())
+            .map_err(|e| format!("invalid base64: {e}"))?;
+        chat_save_attachment(
+            PathBuf::from(project).as_path(),
+            sessionId.as_deref(),
+            &fileName,
+            &mime,
+            &bytes,
+        )
+        .map_err(map_err)
+    })
+    .await
+    .map_err(|e| format!("chat_save_attachment join error: {e}"))?
 }
 
 #[tauri::command]
@@ -411,6 +546,10 @@ async fn chat_save_plan_cmd(
     markdown: String,
     #[allow(non_snake_case)] sessionId: Option<String>,
     title: Option<String>,
+    // Optional project-relative path to overwrite (H1 未执行可改).
+    #[allow(non_snake_case)] planRel: Option<String>,
+    // G1: project-relative dir for new files (default plans/).
+    #[allow(non_snake_case)] plansDir: Option<String>,
 ) -> Result<ChatSavePlanResponse, String> {
     tokio::task::spawn_blocking(move || {
         chat_save_plan(
@@ -418,11 +557,35 @@ async fn chat_save_plan_cmd(
             sessionId.as_deref(),
             title.as_deref(),
             &markdown,
+            planRel.as_deref(),
+            plansDir.as_deref(),
         )
         .map_err(map_err)
     })
     .await
     .map_err(|e| format!("chat_save_plan join error: {e}"))?
+}
+
+/// G0b: reshape draft plan markdown (local structure; optional CLI when available).
+#[tauri::command]
+async fn chat_normalize_plan_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    markdown: String,
+    hint: Option<String>,
+) -> Result<ChatNormalizePlanResponse, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?.clone();
+    tokio::task::spawn_blocking(move || {
+        chat_normalize_plan(
+            &config,
+            PathBuf::from(project).as_path(),
+            &markdown,
+            hint.as_deref(),
+        )
+        .map_err(map_err)
+    })
+    .await
+    .map_err(|e| format!("chat_normalize_plan join error: {e}"))?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -449,6 +612,7 @@ pub fn run() {
             get_runs,
             get_run,
             get_plans,
+            get_plan_meta,
             preview_plan_cmd,
             get_projects,
             add_project_cmd,
@@ -464,6 +628,8 @@ pub fn run() {
             latest_plan_job_cmd,
             confirm_start_cmd,
             update_plan_task_cmd,
+            remove_plan_task_cmd,
+            sanitize_plan_deps_cmd,
             stop_run_cmd,
             resume_run_cmd,
             start_rework_cmd,
@@ -473,8 +639,15 @@ pub fn run() {
             set_settings_cmd,
             set_project_default_plan,
             chat_session_get_cmd,
+            chat_list_sessions_cmd,
+            chat_new_session_cmd,
+            chat_delete_session_cmd,
             chat_send_cmd,
+            chat_stream_partial_cmd,
             chat_save_plan_cmd,
+            chat_normalize_plan_cmd,
+            chat_save_attachment_cmd,
+            read_plan_md_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
