@@ -1,12 +1,15 @@
 //! TUI page renderers: Dashboard / Graph / Task / Logs / Terminals / Help.
 //!
-//! [INPUT]: RunState 快照 · 选中 task
+//! [INPUT]: RunState 快照 · 选中 task · term pane focus/zoom
 //! [OUTPUT]: ratatui Frame 绘制
 //! [POS]: tui 页面层
+//! note: P2-5 Terminals = multi-pane log grid (pseudo-PTY); interactive write stays external
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/tui/CLAUDE.md
 
+use std::path::PathBuf;
+
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders, Cell, List, ListItem, Paragraph, Row, Table, Wrap};
+use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table, Wrap};
 
 use super::app::{App, Page};
 use super::widgets::{status_color_run, status_color_task};
@@ -261,33 +264,173 @@ fn render_logs(frame: &mut Frame, app: &App, area: Rect) {
     );
 }
 
+/// P2-5: multi-pane log grid (pseudo-PTY for print/bg workers).
+/// Interactive keyboard→PTY write is still external-terminal only (O).
 fn render_terminals(frame: &mut Frame, app: &App, area: Rect) {
-    let items: Vec<ListItem> = app
-        .term_sessions
-        .iter()
-        .map(|s| {
-            let mark = if s.closed { "closed" } else { "open" };
-            ListItem::new(format!(
-                "{}  [{mark}]  task={}  {:?}  {}",
-                s.id,
-                s.task_id,
-                s.kind,
-                s.log_path
-                    .as_ref()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_else(|| s.command.chars().take(40).collect())
-            ))
-        })
-        .collect();
-    let list = List::new(items).block(
-        Block::default()
-            .title(" Terminals (o embed · O external · x close selected session) ")
-            .borders(Borders::ALL),
-    );
-    frame.render_widget(list, area);
+    let panes = app.open_term_panes();
+    if panes.is_empty() {
+        let hint = "No open terminal sessions.\n\n\
+  o  open embedded log pane for selected task (registry + live tail)\n\
+  O  open external system terminal (interactive attach)\n\
+  n/p  cycle panes · z zoom · x close selected task sessions\n\n\
+Workers in print/bg mode have no interactive PTY — panes show stdout tail.";
+        frame.render_widget(
+            Paragraph::new(hint)
+                .block(
+                    Block::default()
+                        .title(" Terminals · empty ")
+                        .borders(Borders::ALL),
+                )
+                .wrap(Wrap { trim: false }),
+            area,
+        );
+        return;
+    }
 
-    // optional log preview for first open session of selected task
-    // (kept simple: list only; M3.1 can split panes)
+    let focus = app.selected_term_idx.min(panes.len().saturating_sub(1));
+    if app.term_zoom {
+        render_term_pane(frame, app, panes[focus], area, true);
+        return;
+    }
+
+    // Grid: 1 → full; 2 → 1×2; 3–4 → 2×2; 5–6 → 2×3; else clamp to 6.
+    let n = panes.len().min(6);
+    let (cols, rows) = match n {
+        1 => (1, 1),
+        2 => (2, 1),
+        3 | 4 => (2, 2),
+        _ => (3, 2),
+    };
+    let row_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(vec![Constraint::Ratio(1, rows as u32); rows])
+        .split(area);
+    for r in 0..rows {
+        let col_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![Constraint::Ratio(1, cols as u32); cols])
+            .split(row_chunks[r]);
+        for c in 0..cols {
+            let i = r * cols + c;
+            if i >= n {
+                frame.render_widget(
+                    Block::default().borders(Borders::ALL).title(" — "),
+                    col_chunks[c],
+                );
+                continue;
+            }
+            render_term_pane(frame, app, panes[i], col_chunks[c], i == focus);
+        }
+    }
+}
+
+fn render_term_pane(
+    frame: &mut Frame,
+    app: &App,
+    session: &crate::terminal::TerminalSession,
+    area: Rect,
+    focused: bool,
+) {
+    let kind = match session.kind {
+        crate::terminal::SessionKind::Embedded => "embed",
+        crate::terminal::SessionKind::External => "ext",
+    };
+    let mark = if focused { "▶" } else { " " };
+    let zoom = if app.term_zoom { " · ZOOM" } else { "" };
+    let title = format!(
+        " {mark} {} · {kind} · {}{zoom} ",
+        session.task_id,
+        &session.id[..session.id.len().min(8)]
+    );
+
+    let body = term_pane_body(session, area);
+    let block = if focused {
+        Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan))
+    } else {
+        Block::default().title(title).borders(Borders::ALL)
+    };
+    frame.render_widget(
+        Paragraph::new(body)
+            .block(block)
+            .wrap(Wrap { trim: false }),
+        area,
+    );
+}
+
+fn term_pane_body(session: &crate::terminal::TerminalSession, area: Rect) -> String {
+    let h = area.height.saturating_sub(2) as usize;
+    let w = area.width.saturating_sub(2) as usize;
+    let path = session
+        .log_path
+        .clone()
+        .unwrap_or_else(|| PathBuf::from(&session.command));
+    let raw = if path.is_file() {
+        std::fs::read_to_string(&path).unwrap_or_else(|e| format!("(read error: {e})"))
+    } else if matches!(session.kind, crate::terminal::SessionKind::External) {
+        format!(
+            "(external terminal)\nlauncher={}\ncwd={}\ncmd={}",
+            session.launcher.as_deref().unwrap_or("—"),
+            session.cwd.display(),
+            session.command
+        )
+    } else {
+        "(no log file yet — worker may not have started)".into()
+    };
+    // Strip crude ANSI CSI for a clean pane (full VT parse is not this slice).
+    let cleaned = strip_ansi_lite(&raw);
+    let lines: Vec<&str> = cleaned.lines().collect();
+    let start = lines.len().saturating_sub(h.max(1));
+    lines[start..]
+        .iter()
+        .map(|l| {
+            let t: String = l.chars().take(w.max(8)).collect();
+            t
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Drop common CSI / OSC sequences without a full vt100 crate.
+fn strip_ansi_lite(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            match chars.peek() {
+                Some('[') => {
+                    chars.next();
+                    while let Some(n) = chars.next() {
+                        if n.is_ascii_alphabetic() || n == '@' {
+                            break;
+                        }
+                    }
+                }
+                Some(']') => {
+                    chars.next();
+                    // OSC … BEL or ST
+                    while let Some(n) = chars.next() {
+                        if n == '\u{7}' {
+                            break;
+                        }
+                        if n == '\u{1b}' {
+                            let _ = chars.next(); // eat \
+                            break;
+                        }
+                    }
+                }
+                Some(_) => {
+                    let _ = chars.next();
+                }
+                None => {}
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
 }
 
 fn render_help(frame: &mut Frame, area: Rect) {
@@ -296,21 +439,24 @@ fn render_help(frame: &mut Frame, area: Rect) {
 Pages: 1 Dashboard  2 Graph  3 Task  4 Logs  5 Terminals  6 Help
 
 Keys:
-  q / Esc     quit TUI (does not kill run)
+  q / Esc     quit TUI (does not kill run; Esc also unzooms Terminals)
   Tab         next page
   1-6         jump page
   j / ↓       next task
   k / ↑       prev task
   s           stop selected task (best-effort kill / .done)
-  o           open embedded terminal session (log follow registry)
+  o           open embedded log pane (stdout tail grid · P2-5)
   O           open external terminal window for selected task
-  x           close first open terminal of selected task
+  x           close open terminal sessions of selected task
+  n / p / ←→  cycle terminal panes (Terminals page)
+  z           zoom focused pane (Terminals page)
   r           reload state from disk
   ?           this help
 
 Architecture:
   TUI only observes ~/.cco/runs/<id> (+ terminals.json).
   Scheduler runs independently; use headless `cco run` or `cco tui <run_id>`.
+  Terminals grid = multi-pane log tail (pseudo-PTY); interactive write → external (O).
 "#;
     frame.render_widget(
         Paragraph::new(text)

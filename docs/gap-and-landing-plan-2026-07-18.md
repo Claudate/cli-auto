@@ -142,7 +142,7 @@
 | P2-2 | replan 保留人工修改 | ✅ **已落地** | Mode B2 · `plan.user_edits.json` / `preserve_from_job_id` | **t30**；按标题匹配回放 title/prompt/provider/deps/删除 |
 | P2-3 | 虚拟列表 / 事件过滤 / ANSI / 导出报告 | ✅ **t31+t34 闭环** | terminal P2 | **t31** 过滤/ANSI/导出 MD；**t34** 虚拟列表 |
 | P2-4 | 跨显示器系统级多窗口 | ✅ **t39 薄切片** | ux-simple · `open_monitor_window_cmd` | 系统级「独立监视窗」可拖第二屏；非整应用多窗 IDE |
-| P2-5 | TUI 内嵌真 PTY 网格 | ☐ **D5 池** | orchestrator M3 未勾增强项 | 当前 embedded=会话登记+日志路径 |
+| P2-5 | TUI 内嵌真 PTY 网格 | ✅ **t40 薄切片** | orchestrator M3 · Terminals 多窗格 | 只读 log 网格+zoom（伪 PTY）；交互 write 仍外部终端 |
 | P2-6 | Claude Code skill `/cco-run` | ✅ **t37 已落地** | M4 · `.claude/skills/cco-run/SKILL.md` | 薄封装 `cco run`；不重写 Scheduler |
 | P2-7 | M5：SDK provider / Mermaid / 自动开 PR / Windows launcher | ☐ **D5 池** | orchestrator M5 列表 | 按需拆单独立项；Codex 已出池 |
 | P2-8 | M5「第二 provider」文档债 | ✅ **t35 扫尾** | M5 已划掉 Codex 并指向 `codex.rs`；全树无「尚无第二 provider」 | 发现即改 |
@@ -483,7 +483,7 @@
 | **P2-2** | replan 保留人工修改 | Mode B2 可选 | **已落地**（t30）：`plan.user_edits.json` 按标题 · `preserve_from_job_id` | — |
 | **P2-3** | 虚拟列表 / 事件过滤 / ANSI / 导出 | terminal P2 | ✅ **t31+t34 闭环**（过滤/ANSI/导出 MD + 虚拟列表） | 过滤切换重置贴底 |
 | **P2-4** | 跨显示器系统级多窗口 | ux-simple 未做 | ✅ **t39**：`open_monitor_window_cmd` + `#btn-open-monitor-window`（优先第二显示器） | 非整应用多窗；监视专用 OS 窗 |
-| **P2-5** | TUI 内嵌真 PTY 网格 | orchestrator M3 | embedded = 会话登记 + 日志路径 | 要在 TUI 内交互 attach |
+| **P2-5** | TUI 内嵌真 PTY 网格 | orchestrator M3 | ✅ **t40**：Terminals 多窗格 stdout 网格 + zoom；n/p 切窗 · z 放大 | 真交互 write / portable-pty 未做（print 模式无 PTY） |
 | **P2-6** | Claude Code skill `/cco-run` | orchestrator M4 可选 | ✅ **t37**：`.claude/skills/cco-run/SKILL.md` 薄封装 | — |
 | **P2-7** | M5：SDK provider / Mermaid / 自动 PR / Windows launcher | orchestrator M5 | Codex 已落地（非本项）；其余未做 | 按需拆 **单独立项**（勿整包） |
 | **P2-9** | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | chat-plan-builder §5 C3 | ✅ **t32–t34 闭环**（多会话 · 方案 B · 计划 diff · 流式 partial） | 流式 = stdout partial 轮询，非 SSE |
@@ -495,7 +495,7 @@
 
 - [x] §2.1 P2 表状态统一为「☐ **D5 池**」并与上表一一对应  
 - [x] 子计划勾选指向总账：Mode B B2 可选 → P2-1/2；terminal P2 → P2-3；ux-simple → P2-4；orchestrator M3 PTY / M4 skill / M5 → P2-5/6/7；**chat C3 → P2-9**（t12）；**chat UX focus → P2-10**（t22）；**执行闭环 → P2-11**（t25）  
-- [x] 明确 **禁止在 D5 任务内实现**（未出池项）：真 PTY、自动 PR、Windows launcher；**已出池落地**：P2-1/2/3/4/6/8–12 等见上表；**P2-6 skill t37** · **P2-4 监视窗 t39**；**P2-5/7 仍池内**  
+- [x] 明确 **禁止在 D5 任务内实现**（未出池项）：portable-pty 真交互写、自动 PR、Windows launcher；**已出池落地**：P2-1…6/8–12 等见上表；**P2-5 伪 PTY 网格 t40**；**P2-7 仍池内**  
 - [x] D0–D4 已闭环项 **不得** 因本池存在而回灌为缺口 
 
 **不做（防范围膨胀）**：
@@ -900,6 +900,7 @@ D0 文档同构（半天，降低所有后续返工）
 | 2026-07-20 | **t37 / P2-6 `/cco-run` skill 出池落地**：仓库 `.claude/skills/cco-run/SKILL.md` 薄封装 `cco run`/`status`/`report`/`stop`（解析本仓 `target/release/cco` 或 PATH）；orchestrator M4 可选勾；§2/§4 P2-6 ✅；**不**出池 P2-4/5/7；**不**回灌 D0–D4 / 不重写 Scheduler |
 | 2026-07-20 | **t38 / 热修：全部停止 + 落地分期图 + 确认屏正文 + CLI 日志默认展开**：`stop_run`/`stop_task` 冻 Pending + meta pid + SIGTERM/KILL；scheduler 盘状态 `external_stop` 合流退出；heuristic `extract_work_phases(W0/W1…)` 优先真窗、无窗才 meta 四波；确认屏 `stripWorkerScaffold`；CLI board 日志默认展开；plan 76 + services 34 + retry_and_stall 5 绿；**不**出池 P2-4/5/7 |
 | 2026-07-20 | **t39 / P2-4 系统级独立监视窗（薄切片）**：`open_monitor_window_cmd` 建/聚焦 `cco-monitor` OS 窗（有第二显示器则落其上）；web `?cco_window=monitor` 直进 workspace + `body.cco-window-monitor` 藏侧栏；任务看板「独立监视窗」按钮；capabilities 扩 `cco-monitor`；**不**出池 P2-5/7；非整应用多窗 IDE |
+| 2026-07-20 | **t40 / P2-5 TUI Terminals 多窗格网格（薄切片）**：`render_terminals` 1–6 窗格 stdout 尾 + 轻量 strip ANSI + 焦点/zoom（n/p/z）；`open` embed 后跳 Terminals；**不**引入 portable-pty / 键盘写入 PTY（print 模式无交互 PTY；交互仍 O 外开）；**不**出池 P2-7 |
 
 ### 9.1 边界（防与产品变更混淆）
 

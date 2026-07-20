@@ -3,6 +3,7 @@
 //! [INPUT]: run_dir · Config 派生选项 · 终端 events
 //! [OUTPUT]: 多页切换 · stop/term 操作（不杀 detached run）
 //! [POS]: tui 主循环
+//! note: P2-5 Terminals keys n/p/z cycle+zoom panes (stdout tail grid)
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/tui/CLAUDE.md
 
 use std::path::{Path, PathBuf};
@@ -74,6 +75,10 @@ pub struct App {
     pub page: Page,
     pub selected_task_idx: Option<usize>,
     pub term_sessions: Vec<TerminalSession>,
+    /// P2-5: focused open pane index into `open_term_panes()` (not full session list).
+    pub selected_term_idx: usize,
+    /// P2-5: zoom focused pane to full Terminals area.
+    pub term_zoom: bool,
     pub message: String,
     pub tm: TerminalManager,
     pub should_quit: bool,
@@ -96,11 +101,14 @@ impl App {
             page: Page::Dashboard,
             selected_task_idx: Some(0),
             term_sessions,
+            selected_term_idx: 0,
+            term_zoom: false,
             message: String::new(),
             tm,
             should_quit: false,
         };
         app.clamp_selection();
+        app.clamp_term_selection();
         Ok(app)
     }
 
@@ -110,8 +118,63 @@ impl App {
         self.plan = load_resolved_plan(&dir);
         self.term_sessions = self.tm.list().unwrap_or_default();
         self.clamp_selection();
+        self.clamp_term_selection();
         self.message = format!("reloaded {}", chrono::Local::now().format("%H:%M:%S"));
         Ok(())
+    }
+
+    /// Open (non-closed) sessions suitable for Terminals grid panes.
+    pub fn open_term_panes(&self) -> Vec<&TerminalSession> {
+        self.term_sessions
+            .iter()
+            .filter(|s| !s.closed)
+            .collect()
+    }
+
+    fn clamp_term_selection(&mut self) {
+        let n = self.open_term_panes().len();
+        if n == 0 {
+            self.selected_term_idx = 0;
+            self.term_zoom = false;
+            return;
+        }
+        if self.selected_term_idx >= n {
+            self.selected_term_idx = n - 1;
+        }
+    }
+
+    fn select_next_term(&mut self) {
+        let n = self.open_term_panes().len();
+        if n == 0 {
+            return;
+        }
+        self.selected_term_idx = (self.selected_term_idx + 1) % n;
+    }
+
+    fn select_prev_term(&mut self) {
+        let n = self.open_term_panes().len();
+        if n == 0 {
+            return;
+        }
+        self.selected_term_idx = if self.selected_term_idx == 0 {
+            n - 1
+        } else {
+            self.selected_term_idx - 1
+        };
+    }
+
+    fn toggle_term_zoom(&mut self) {
+        if self.open_term_panes().is_empty() {
+            self.term_zoom = false;
+            self.message = "no open terminal panes (o = embed log · O = external)".into();
+            return;
+        }
+        self.term_zoom = !self.term_zoom;
+        self.message = if self.term_zoom {
+            "term zoom on (z to restore grid)".into()
+        } else {
+            "term zoom off".into()
+        };
     }
 
     pub fn sorted_task_ids(&self) -> Vec<String> {
@@ -224,6 +287,17 @@ impl App {
             Err(e) => self.message = format!("term open failed: {e:#}"),
         }
         let _ = self.reload();
+        // Focus the newest open pane for this task after reload.
+        if let Some(i) = self
+            .open_term_panes()
+            .iter()
+            .rposition(|s| s.task_id == id)
+        {
+            self.selected_term_idx = i;
+        }
+        if matches!(kind, SessionKind::Embedded) {
+            self.page = Page::Terminals;
+        }
     }
 
     fn close_term_for_task(&mut self) {
@@ -286,6 +360,29 @@ fn handle_key(app: &mut App, code: KeyCode, mods: KeyModifiers) {
     if mods.contains(KeyModifiers::CONTROL) && code == KeyCode::Char('c') {
         app.should_quit = true;
         return;
+    }
+    // P2-5: Terminals page — Esc unzooms first; n/p cycle panes; z zoom.
+    if app.page == Page::Terminals {
+        match code {
+            KeyCode::Esc if app.term_zoom => {
+                app.term_zoom = false;
+                app.message = "term zoom off".into();
+                return;
+            }
+            KeyCode::Char('z') => {
+                app.toggle_term_zoom();
+                return;
+            }
+            KeyCode::Char('n') | KeyCode::Char(']') | KeyCode::Right => {
+                app.select_next_term();
+                return;
+            }
+            KeyCode::Char('p') | KeyCode::Char('[') | KeyCode::Left => {
+                app.select_prev_term();
+                return;
+            }
+            _ => {}
+        }
     }
     match code {
         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,

@@ -976,7 +976,7 @@ cp target/release/cco ~/.local/bin/
 - [x] 快捷键：切页、stop、开/关终端  
 - [x] UI 与 scheduler 解耦（轮询 run 目录）  
 - [x] 关 TUI 不杀 run（scheduler 可继续至结束）  
-- [ ] 内嵌 PTY 真网格 zoom → 总账 **D5 / P2-5**（当前 embedded=会话登记 + 日志路径；不排期则不碰）
+- [x] Terminals 多窗格 log 网格 + zoom（伪 PTY 只读 tail）→ 总账 **P2-5 ✅ t40**；真交互 write 仍外部终端；portable-pty 未引入
 
 ### M4 · 体验与硬化
 

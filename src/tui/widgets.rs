@@ -48,6 +48,6 @@ pub fn page_tabs(selected: usize) -> Tabs<'static> {
 }
 
 pub fn help_footer() -> Paragraph<'static> {
-    Paragraph::new("q quit · Tab/1-6 pages · j/k or ↑↓ select · s stop task · o embed term · O external · r reload · ? help")
+    Paragraph::new("q quit · Tab/1-6 · j/k task · s stop · o embed pane · O external · Term: n/p pane · z zoom · r reload · ? help")
         .style(Style::default().fg(Color::DarkGray))
 }
