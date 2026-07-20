@@ -2,9 +2,16 @@
   "$schema": "https://schema.tauri.app/config/2/capability",
   "identifier": "default",
   "description": "Default capabilities for CCO desktop",
-  "windows": ["main"],
+  "windows": ["main", "cco-monitor"],
   "permissions": [
     "core:default",
+    "core:window:allow-create",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "core:window:allow-available-monitors",
+    "core:window:allow-primary-monitor",
+    "core:window:allow-set-position",
+    "core:webview:allow-create-webview-window",
     "dialog:default",
     "dialog:allow-open",
     "shell:allow-open"

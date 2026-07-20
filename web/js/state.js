@@ -28,6 +28,8 @@ const state = {
   page: "welcome", // welcome | workspace | chat | doctor | help | settings
   /** Mode B phase: pick | planning | confirm | running | done */
   phase: "pick",
+  /** P2-4: true when this webview is the detached system monitor window */
+  isMonitorWindow: false,
   projects: [],
   selectedPath: null,
   live: null,

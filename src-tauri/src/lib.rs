@@ -5,6 +5,7 @@
 //! [POS]: 桌面薄壳；禁止堆业务逻辑；P1-2 open_task_terminal 已接；chat 建计划已接
 //! note: chat_send_cmd 必须 async + spawn_blocking，禁止同步堵 UI
 //! note: C3 多会话 chat_list/new/delete_session_cmd
+//! note: P2-4 open_monitor_window_cmd — 系统级第二窗（可拖到另一显示器）
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src-tauri/CLAUDE.md
 
 use std::path::PathBuf;
@@ -26,10 +27,15 @@ use cco::services::{
 };
 use serde::Serialize;
 use serde_json::{json, Value};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 struct AppState {
     config: Mutex<Config>,
 }
+
+/// System-level second window for live CLI board (P2-4).
+/// Prefer a non-primary monitor when available so users can park logs on another display.
+const MONITOR_WINDOW_LABEL: &str = "cco-monitor";
 
 fn map_err(e: impl std::fmt::Display) -> String {
     e.to_string()
@@ -407,6 +413,81 @@ fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// P2-4: open (or focus) a real OS window for the live CLI board.
+/// Prefer the first non-primary display so the pane can sit on a second monitor.
+/// Query `?cco_window=monitor` lets the webview boot straight into workspace.
+#[tauri::command]
+async fn open_monitor_window_cmd(
+    app: AppHandle,
+    project: Option<String>,
+) -> Result<Value, String> {
+    let label = MONITOR_WINDOW_LABEL;
+    if let Some(existing) = app.get_webview_window(label) {
+        let _ = existing.set_focus();
+        let _ = existing.unminimize();
+        return Ok(json!({
+            "ok": true,
+            "created": false,
+            "label": label,
+            "focused": true,
+        }));
+    }
+
+    let mut url_path = "index.html?cco_window=monitor".to_string();
+    if let Some(p) = project
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
+        // Keep path readable; encode only unsafe query chars.
+        let enc = p
+            .replace('%', "%25")
+            .replace('&', "%26")
+            .replace('#', "%23")
+            .replace('+', "%2B")
+            .replace(' ', "%20");
+        url_path.push_str("&project=");
+        url_path.push_str(&enc);
+    }
+
+    let mut builder = WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url_path.into()))
+        .title("cco · 监视")
+        .inner_size(980.0, 720.0)
+        .min_inner_size(640.0, 420.0)
+        .resizable(true)
+        .focused(true);
+
+    // Place on a secondary monitor when present (physical → logical via scale).
+    if let Ok(monitors) = app.available_monitors() {
+        let primary = app.primary_monitor().ok().flatten();
+        let primary_pos = primary.as_ref().map(|m| *m.position());
+        let target = monitors.iter().find(|m| {
+            primary_pos
+                .map(|pp| m.position().x != pp.x || m.position().y != pp.y)
+                .unwrap_or(true)
+        });
+        if let Some(m) = target {
+            let scale = m.scale_factor();
+            let pos = m.position();
+            // 40px inset from top-left of that display (logical units for .position).
+            let x = (pos.x as f64 / scale) + 40.0;
+            let y = (pos.y as f64 / scale) + 40.0;
+            builder = builder.position(x, y);
+        }
+    }
+
+    builder
+        .build()
+        .map_err(|e| format!("open monitor window: {e}"))?;
+
+    Ok(json!({
+        "ok": true,
+        "created": true,
+        "label": label,
+        "focused": true,
+    }))
+}
+
 #[tauri::command]
 fn set_project_default_plan(
     state: tauri::State<'_, AppState>,
@@ -635,6 +716,7 @@ pub fn run() {
             start_rework_cmd,
             accept_residual_cmd,
             open_path,
+            open_monitor_window_cmd,
             get_settings_cmd,
             set_settings_cmd,
             set_project_default_plan,

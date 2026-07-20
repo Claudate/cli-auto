@@ -251,6 +251,11 @@ function renderTaskStrip(live, tasks, ctx) {
 
   const stop = $("#btn-ws-stop-all");
   if (stop) stop.hidden = !active;
+  // P2-4: open system-level monitor window (hidden inside that window itself).
+  const monWin = $("#btn-open-monitor-window");
+  if (monWin) {
+    monWin.hidden = !!state.isMonitorWindow || !(hasRun || active);
+  }
   const resume = $("#btn-ws-resume");
   if (resume) {
     resume.hidden = !["paused", "failed", "aborted"].includes(

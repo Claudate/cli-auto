@@ -241,6 +241,10 @@ const UI_ACTIONS = {
   "m-confirm-project": () => addProjectFromModal(),
   "m-cancel-project": () => closeModal(),
   "btn-ws-stop-all": () => stopAll(),
+  "btn-open-monitor-window": () =>
+    typeof openMonitorWindow === "function"
+      ? openMonitorWindow()
+      : toast("独立监视窗不可用"),
   "btn-ws-resume": () => resumeRun(),
   "btn-ws-rework": () => startReworkWave(),
   "btn-ws-accept-residual": () => acceptRunResidual(),
@@ -1041,6 +1045,45 @@ function wire() {
   bindGlobalUI();
 }
 
+/** P2-4: URL query for detached system window (`?cco_window=monitor`). */
+function parseCcoWindowBoot() {
+  try {
+    const q = new URLSearchParams(window.location.search || "");
+    const role = (q.get("cco_window") || "").trim().toLowerCase();
+    let project = q.get("project");
+    if (project) {
+      try {
+        project = decodeURIComponent(project);
+      } catch (_) {
+        /* keep raw */
+      }
+    }
+    return {
+      isMonitor: role === "monitor",
+      project: project && project.trim() ? project.trim() : null,
+    };
+  } catch (_) {
+    return { isMonitor: false, project: null };
+  }
+}
+
+/** Open/focus the system-level monitor window (Tauri only). */
+async function openMonitorWindow() {
+  if (!isTauriReady()) {
+    toast("请在 CCO.app 内使用独立监视窗");
+    return;
+  }
+  try {
+    const res = await invoke("open_monitor_window_cmd", {
+      project: state.selectedPath || null,
+    });
+    if (res?.created) toast("已打开独立监视窗（可拖到另一显示器）");
+    else toast("已聚焦独立监视窗");
+  } catch (e) {
+    toast(String(e?.message || e));
+  }
+}
+
 async function boot() {
   bindGlobalUI();
   // 等 invoke 就绪（最多 ~5s），期间 UI 按钮已可点
@@ -1060,6 +1103,42 @@ async function boot() {
     const cs = $("#conn-status");
     if (cs) cs.textContent = `桌面应用 · v${meta.version}`;
     await loadProjects();
+
+    // P2-4: detached monitor window boots straight into workspace for one project.
+    const bootWin = parseCcoWindowBoot();
+    state.isMonitorWindow = !!bootWin.isMonitor;
+    if (bootWin.isMonitor) {
+      document.body.classList.add("cco-window-monitor");
+      if (cs) cs.textContent = `监视窗 · v${meta.version}`;
+      let path = bootWin.project;
+      if (path && !(state.projects || []).some((p) => p.path === path)) {
+        // Project may not be in list yet (path still valid on disk for live).
+        path = bootWin.project;
+      }
+      if (!path && (state.projects || []).length === 1) {
+        path = state.projects[0].path;
+      }
+      if (!path) {
+        const active = (state.projects || []).find(
+          (p) => p.running_tasks > 0 || isLiveStatus(p.active_status)
+        );
+        if (active) path = active.path;
+      }
+      if (path) {
+        await selectProject(path);
+        showPage("workspace");
+        state.phase = state.phase === "pick" ? "running" : state.phase;
+        try {
+          await loadLive();
+        } catch (_) {}
+      } else {
+        showPage("welcome");
+        toast("监视窗：请先在主窗选择项目");
+      }
+      startPolling(1500);
+      return;
+    }
+
     // H0 冷启动：仅「有活动 run」的项目自动进执行；
     // 单项目无跑 → selectProject → chat 主窗（不再因历史 planJob 进计划页）
     const active = state.projects.find(

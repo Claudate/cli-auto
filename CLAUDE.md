@@ -30,7 +30,7 @@ Cargo.toml — workspace（cco + cco-desktop）
 [`docs/desktop-ux-redesign-plan.md`](./docs/desktop-ux-redesign-plan.md) — 桌面壳 UX（0–4 已实施，勿再当缺口）
 [`docs/product-mode-b-ai-planner.md`](./docs/product-mode-b-ai-planner.md) — Mode B（plan job / confirm_start；**B0–B3 已闭环** D1/D3；**P2-1/P2-2 确认屏删任务·改依赖·replan 保人工 已落地**）
 [`docs/terminal-console-plan.md`](./docs/terminal-console-plan.md) — 监视日志（log_events A 路径 P0+P1 **D2 已接** · **P2 过滤/ANSI/导出 MD/虚拟列表 t34 已闭环**）
-[`docs/ux-simple-mainpath-2026-07-17.md`](./docs/ux-simple-mainpath-2026-07-17.md) — 易用性主路径简化（已落地）
+[`docs/ux-simple-mainpath-2026-07-17.md`](./docs/ux-simple-mainpath-2026-07-17.md) — 易用性主路径简化（已落地；**P2-4 独立监视窗 t39**）
 [`docs/chat-plan-builder-2026-07-18.md`](./docs/chat-plan-builder-2026-07-18.md) — 聊天共建计划 → 落盘 → 分配（**已落地** C0–C2 ✅ · 五指标全绿 · **§9 验证清单 t11 七绿** · **§10 t12 文档/GEB**；C3 t32–t34 全闭环 → **P2-9 ✅**）
 [`docs/chat-ux-focus-2026-07-19.md`](./docs/chat-ux-focus-2026-07-19.md) — 聊天页注意力收敛（后台降噪 · fake/故障可信 · CTA · **U0–U2 已落地** → D5/P2-10 · P-chat-ux ✅；**不**回灌 P-chat）
 [`docs/chat-utf8-fence-panic-2026-07-19.md`](./docs/chat-utf8-fence-panic-2026-07-19.md) — 聊天 plan fence UTF-8 panic 热修（**F0+F1 已闭环** · F2 可选不排期 · **P-chat-utf8**；**不**并入 P2-10）

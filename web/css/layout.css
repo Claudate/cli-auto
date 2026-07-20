@@ -675,4 +675,30 @@ th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
   border-top-color: #fff;
 }
 
+/* P2-4: detached system monitor window — hide chrome, keep board */
+body.cco-window-monitor #app {
+  grid-template-columns: 1fr !important;
+}
+body.cco-window-monitor .sidebar {
+  display: none !important;
+}
+body.cco-window-monitor main {
+  max-width: none;
+}
+body.cco-window-monitor .topbar .chat-top-btn,
+body.cco-window-monitor #btn-plan-mgmt,
+body.cco-window-monitor #btn-plan-choose,
+body.cco-window-monitor #btn-pp-analyze,
+body.cco-window-monitor #btn-open-chat,
+body.cco-window-monitor #btn-open-monitor-window {
+  display: none !important;
+}
+body.cco-window-monitor #page-welcome,
+body.cco-window-monitor #page-chat,
+body.cco-window-monitor #page-doctor,
+body.cco-window-monitor #page-help,
+body.cco-window-monitor #page-settings,
+body.cco-window-monitor #page-plans {
+  display: none !important;
+}
 
