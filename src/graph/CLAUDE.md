@@ -2,7 +2,7 @@
 > L2 | 父级: /src/CLAUDE.md
 
 成员清单
-mod.rs: ready_tasks · topo_layers · format_graph（调度与展示）
+mod.rs: ready_tasks · topo_layers · format_graph · **format_mermaid**（P2-7 薄切片 · `cco parse --mermaid`）
 
 法则: 成员完整·一行一文件·父级链接·技术词前置
 

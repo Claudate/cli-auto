@@ -993,7 +993,7 @@ cp target/release/cco ~/.local/bin/
 - ~~第二真实 CLI Provider（Codex）~~ → **已有** `src/runtime/provider/codex.rs`（已出池；勿再写「尚无第二 provider」）  
 - 更多真实 Provider（Gemini 等，继续验证扩展契约） → **P2-7**  
 - Agent SDK 作为 `ClaudeSdkProvider` → **P2-7**  
-- 计划可视化导出（Mermaid） → **P2-7**  
+- 计划可视化导出（Mermaid） → **P2-7 部分 t41**：`format_mermaid` + `cco parse --mermaid` ✅；其余 M5 仍池内  
 - 自动开 PR（gh） → **P2-7**  
 - 远程 worker — 明确不在 v1  
 - Windows 外部终端 launcher → **P2-7** 

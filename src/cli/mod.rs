@@ -52,6 +52,9 @@ pub enum Commands {
         plan: Option<PathBuf>,
         #[arg(long)]
         adapter: Option<String>,
+        /// Also print Mermaid flowchart (P2-7 thin slice)
+        #[arg(long)]
+        mermaid: bool,
     },
     /// Mode B: analyze plan into a task DAG (does not start workers)
     Plan {
@@ -203,7 +206,8 @@ pub async fn execute(cli: Cli) -> Result<i32> {
             project,
             plan,
             adapter,
-        } => commands::parse::run(&config, project, plan, adapter),
+            mermaid,
+        } => commands::parse::run(&config, project, plan, adapter, mermaid),
         Commands::Plan {
             project,
             plan,

@@ -144,7 +144,7 @@
 | P2-4 | 跨显示器系统级多窗口 | ✅ **t39 薄切片** | ux-simple · `open_monitor_window_cmd` | 系统级「独立监视窗」可拖第二屏；非整应用多窗 IDE |
 | P2-5 | TUI 内嵌真 PTY 网格 | ✅ **t40 薄切片** | orchestrator M3 · Terminals 多窗格 | 只读 log 网格+zoom（伪 PTY）；交互 write 仍外部终端 |
 | P2-6 | Claude Code skill `/cco-run` | ✅ **t37 已落地** | M4 · `.claude/skills/cco-run/SKILL.md` | 薄封装 `cco run`；不重写 Scheduler |
-| P2-7 | M5：SDK provider / Mermaid / 自动开 PR / Windows launcher | ☐ **D5 池** | orchestrator M5 列表 | 按需拆单独立项；Codex 已出池 |
+| P2-7 | M5：SDK provider / Mermaid / 自动开 PR / Windows launcher | ⚠ **t41 部分** | orchestrator M5 · `format_mermaid` | **Mermaid 已落地**（`cco parse --mermaid`）；SDK/PR/Windows 仍池内 |
 | P2-8 | M5「第二 provider」文档债 | ✅ **t35 扫尾** | M5 已划掉 Codex 并指向 `codex.rs`；全树无「尚无第二 provider」 | 发现即改 |
 | P2-9 | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | ✅ **t32–t34 闭环** | chat-plan-builder §5 C3 | 多会话 · 方案 B · 计划 diff · 流式 partial |
 | P2-10 | 聊天页注意力收敛：后台态降噪 · fake/故障可信 · CTA 序 · 卡片 | ✅ **已落地** | chat-ux-focus U0–U2 | **t29 勾满**；与 P2-9 分列 |
@@ -485,7 +485,7 @@
 | **P2-4** | 跨显示器系统级多窗口 | ux-simple 未做 | ✅ **t39**：`open_monitor_window_cmd` + `#btn-open-monitor-window`（优先第二显示器） | 非整应用多窗；监视专用 OS 窗 |
 | **P2-5** | TUI 内嵌真 PTY 网格 | orchestrator M3 | ✅ **t40**：Terminals 多窗格 stdout 网格 + zoom；n/p 切窗 · z 放大 | 真交互 write / portable-pty 未做（print 模式无 PTY） |
 | **P2-6** | Claude Code skill `/cco-run` | orchestrator M4 可选 | ✅ **t37**：`.claude/skills/cco-run/SKILL.md` 薄封装 | — |
-| **P2-7** | M5：SDK provider / Mermaid / 自动 PR / Windows launcher | orchestrator M5 | Codex 已落地（非本项）；其余未做 | 按需拆 **单独立项**（勿整包） |
+| **P2-7** | M5：SDK provider / Mermaid / 自动 PR / Windows launcher | orchestrator M5 | ⚠ **t41**：Mermaid = `graph::format_mermaid` + `cco parse --mermaid`；SDK/PR/Windows 仍未做 | 勿整包；下一项须再点名 |
 | **P2-9** | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | chat-plan-builder §5 C3 | ✅ **t32–t34 闭环**（多会话 · 方案 B · 计划 diff · 流式 partial） | 流式 = stdout partial 轮询，非 SSE |
 | **P2-10** | 聊天页注意力收敛（后台降噪 · fake 可信 · CTA） | chat-ux-focus U0–U2 | **已落地** U0–U2；**P-chat-ux ✅**（t29） | 与 P2-9 分列 |
 | **P2-11** | 计划驱动执行闭环（拆分 · 巡检 · 回补） | plan-execute-inspect-rework L0–L2 | **已落地** L0–L2；**P-loop** | host ISSUES 分级 + rework 波 + 桌面一键 |
@@ -901,6 +901,7 @@ D0 文档同构（半天，降低所有后续返工）
 | 2026-07-20 | **t38 / 热修：全部停止 + 落地分期图 + 确认屏正文 + CLI 日志默认展开**：`stop_run`/`stop_task` 冻 Pending + meta pid + SIGTERM/KILL；scheduler 盘状态 `external_stop` 合流退出；heuristic `extract_work_phases(W0/W1…)` 优先真窗、无窗才 meta 四波；确认屏 `stripWorkerScaffold`；CLI board 日志默认展开；plan 76 + services 34 + retry_and_stall 5 绿；**不**出池 P2-4/5/7 |
 | 2026-07-20 | **t39 / P2-4 系统级独立监视窗（薄切片）**：`open_monitor_window_cmd` 建/聚焦 `cco-monitor` OS 窗（有第二显示器则落其上）；web `?cco_window=monitor` 直进 workspace + `body.cco-window-monitor` 藏侧栏；任务看板「独立监视窗」按钮；capabilities 扩 `cco-monitor`；**不**出池 P2-5/7；非整应用多窗 IDE |
 | 2026-07-20 | **t40 / P2-5 TUI Terminals 多窗格网格（薄切片）**：`render_terminals` 1–6 窗格 stdout 尾 + 轻量 strip ANSI + 焦点/zoom（n/p/z）；`open` embed 后跳 Terminals；**不**引入 portable-pty / 键盘写入 PTY（print 模式无交互 PTY；交互仍 O 外开）；**不**出池 P2-7 |
+| 2026-07-20 | **t41 / P2-7 单项 Mermaid 导出（勿整包 M5）**：`graph::format_mermaid` + 单测；`cco parse --mermaid` 追加 flowchart TD；**不**做 SDK provider / 自动 PR / Windows launcher |
 
 ### 9.1 边界（防与产品变更混淆）
 
