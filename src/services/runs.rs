@@ -406,17 +406,38 @@ pub fn confirm_start(config: Config, job_id: &str) -> Result<String> {
 pub fn stop_run(config: &Config, run_id: &str) -> Result<()> {
     let dir = state::resolve_run_dir(&config.runs_dir(), Some(run_id))?;
     let mut rs = RunState::load(&dir)?;
+    let mut stopped: Vec<String> = Vec::new();
     for (tid, ts) in rs.tasks.iter_mut() {
+        // Must include Pending: otherwise the in-process scheduler keeps
+        // spawning later waves after the user hits "全部停止".
         if matches!(
             ts.status,
-            TaskStatus::Running | TaskStatus::Starting | TaskStatus::Queued
+            TaskStatus::Running
+                | TaskStatus::Starting
+                | TaskStatus::Queued
+                | TaskStatus::Pending
         ) {
             if let Some(pid) = ts.pid {
                 kill_pid(pid);
             }
-            let _ = std::fs::write(dir.join("tasks").join(tid).join(".done"), "130");
+            // meta.json may hold a fresher pid than RunState (provider write race).
+            let meta = dir.join("tasks").join(tid).join("meta.json");
+            if meta.exists() {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(
+                    &std::fs::read_to_string(&meta).unwrap_or_default(),
+                ) {
+                    if let Some(pid) = v.get("pid").and_then(|p| p.as_u64()) {
+                        kill_pid(pid as u32);
+                    }
+                }
+            }
+            let task_dir = dir.join("tasks").join(tid);
+            let _ = std::fs::create_dir_all(&task_dir);
+            let _ = std::fs::write(task_dir.join(".done"), "130");
             ts.status = TaskStatus::Stopped;
             ts.finished_at = Some(chrono::Utc::now());
+            ts.pid = None;
+            stopped.push(tid.clone());
         }
     }
     rs.status = RunStatus::Aborted;
@@ -424,7 +445,11 @@ pub fn stop_run(config: &Config, run_id: &str) -> Result<()> {
     rs.save()?;
     let _ = rs.event(
         "run_end",
-        serde_json::json!({"status": "aborted", "via": "desktop"}),
+        serde_json::json!({
+            "status": "aborted",
+            "via": "desktop",
+            "stopped_tasks": stopped,
+        }),
     );
     Ok(())
 }

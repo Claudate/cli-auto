@@ -16,15 +16,21 @@ use crate::terminal::TerminalManager;
 pub fn run(config: &Config, run_id: Option<String>, task: Option<String>) -> Result<i32> {
     let dir = state::resolve_run_dir(&config.runs_dir(), run_id.as_deref())?;
     let mut st = RunState::load(&dir)?;
+    let whole_run = task.is_none();
     let targets: Vec<String> = if let Some(t) = task {
         vec![t]
     } else {
+        // Whole-run stop: freeze running + pending so the scheduler cannot
+        // spawn later waves after the user aborts.
         st.tasks
             .iter()
             .filter(|(_, t)| {
                 matches!(
                     t.status,
-                    TaskStatus::Running | TaskStatus::Starting | TaskStatus::Queued
+                    TaskStatus::Running
+                        | TaskStatus::Starting
+                        | TaskStatus::Queued
+                        | TaskStatus::Pending
                 )
             })
             .map(|(k, _)| k.clone())
@@ -55,6 +61,7 @@ pub fn run(config: &Config, run_id: Option<String>, task: Option<String>) -> Res
         if let Some(ts) = st.tasks.get_mut(tid) {
             ts.status = TaskStatus::Stopped;
             ts.finished_at = Some(chrono::Utc::now());
+            ts.pid = None;
         }
         // close terminals for task
         let tm = TerminalManager::for_run(
@@ -65,21 +72,18 @@ pub fn run(config: &Config, run_id: Option<String>, task: Option<String>) -> Res
         let _ = tm.close_task(tid);
     }
 
-    if targets.is_empty() {
-        st.status = RunStatus::Aborted;
-        st.finished_at = Some(chrono::Utc::now());
-        st.event("run_end", serde_json::json!({"status": "aborted"}))?;
-        println!("no running tasks; marked run aborted: {}", st.run_id);
-    } else if targets.len() == st.tasks.len()
-        || st.tasks.values().all(|t| t.status.is_terminal())
-    {
+    if whole_run || targets.is_empty() || st.tasks.values().all(|t| t.status.is_terminal()) {
         st.status = RunStatus::Aborted;
         st.finished_at = Some(chrono::Utc::now());
         st.event(
             "run_end",
             serde_json::json!({"status": "aborted", "stopped_tasks": targets}),
         )?;
-        println!("stopped tasks {:?}; run aborted", targets);
+        if targets.is_empty() {
+            println!("no running tasks; marked run aborted: {}", st.run_id);
+        } else {
+            println!("stopped tasks {:?}; run aborted", targets);
+        }
     } else {
         st.event(
             "tasks_stopped",

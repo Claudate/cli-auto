@@ -133,6 +133,118 @@ impl Scheduler {
         );
 
         loop {
+            // Desktop/CLI stop writes Aborted|Paused + Stopped on disk while this
+            // loop still holds the in-memory state. Reload so "全部停止" actually stops
+            // spawning and we do not overwrite the user's abort at run_end.
+            if let Ok(disk) = RunState::load(&self.state.run_dir) {
+                let external_stop = matches!(
+                    disk.status,
+                    RunStatus::Aborted | RunStatus::Paused
+                );
+                // Merge terminal task statuses written by stop_run / stop_task.
+                for (id, dts) in &disk.tasks {
+                    if dts.status.is_terminal() {
+                        if let Some(mts) = self.state.tasks.get_mut(id) {
+                            if !mts.status.is_terminal() {
+                                mts.status = dts.status;
+                                mts.finished_at = dts.finished_at.or(mts.finished_at);
+                                mts.pid = None;
+                            }
+                        }
+                        if dts.status == TaskStatus::Stopped
+                            || dts.status == TaskStatus::Skipped
+                        {
+                            // Treat as settled so ready_tasks will not re-pick them.
+                            done.insert(id.clone());
+                            started.insert(id.clone());
+                        } else if dts.status == TaskStatus::Failed
+                            || dts.status == TaskStatus::Timeout
+                        {
+                            failed.insert(id.clone());
+                            started.insert(id.clone());
+                        } else if dts.status == TaskStatus::Done {
+                            done.insert(id.clone());
+                            started.insert(id.clone());
+                        }
+                    }
+                }
+                if external_stop {
+                    // Force-stop any workers still in this process.
+                    let live: Vec<String> = running.keys().cloned().collect();
+                    for id in live {
+                        if let Some((provider, handle, work_dir)) = running.remove(&id) {
+                            progress.remove(&id);
+                            if let Err(e) = provider.stop(&handle).await {
+                                warn!(task = %id, err = %e, "external-stop provider.stop failed");
+                            }
+                            let mut result =
+                                provider.collect(&handle).await.unwrap_or_else(|e| {
+                                    super::provider::TaskResult {
+                                        status: TaskStatus::Stopped,
+                                        exit_code: Some(130),
+                                        stdout_path: Some(handle.stdout_path.clone()),
+                                        session_id: None,
+                                        agent_id: None,
+                                        cost_usd: None,
+                                        raw: serde_json::json!({}),
+                                        error: Some(format!("external stop collect: {e:#}")),
+                                    }
+                                });
+                            result.status = TaskStatus::Stopped;
+                            if result.exit_code.is_none() {
+                                result.exit_code = Some(130);
+                            }
+                            let _ = self
+                                .finish_or_retry(
+                                    &id,
+                                    result,
+                                    "stopped",
+                                    &mut done,
+                                    &mut failed,
+                                    &mut started,
+                                    retry_budget,
+                                    Some(&work_dir),
+                                )
+                                .await;
+                        }
+                    }
+                    // Freeze remaining pending so end-of-loop does not claim success.
+                    for (id, ts) in self.state.tasks.iter_mut() {
+                        if matches!(
+                            ts.status,
+                            TaskStatus::Pending
+                                | TaskStatus::Queued
+                                | TaskStatus::Starting
+                                | TaskStatus::Running
+                        ) {
+                            ts.status = TaskStatus::Stopped;
+                            ts.finished_at = Some(chrono::Utc::now());
+                            ts.pid = None;
+                            done.insert(id.clone());
+                            started.insert(id.clone());
+                        }
+                    }
+                    self.state.status = disk.status;
+                    if self.state.finished_at.is_none() {
+                        self.state.finished_at = Some(chrono::Utc::now());
+                    }
+                    self.state.save()?;
+                    self.state.event(
+                        "run_end",
+                        serde_json::json!({
+                            "status": match disk.status {
+                                RunStatus::Aborted => "aborted",
+                                RunStatus::Paused => "paused",
+                                _ => "stopped",
+                            },
+                            "via": "external_stop",
+                        }),
+                    )?;
+                    let _ = handoff::on_run_end(&self.plan, &self.state, disk.status);
+                    return Ok(disk.status);
+                }
+            }
+
             // ── Reap finished workers ─────────────────────────────────
             let ids: Vec<String> = running.keys().cloned().collect();
             for id in ids {
@@ -309,6 +421,15 @@ impl Scheduler {
             {
                 let mut ready = ready_tasks(&self.plan, &done, &started);
                 ready.retain(|id| active_ids.contains(id));
+                // External stop may have marked tasks terminal on disk / memory —
+                // never re-spawn them even if started/done sets lag a tick.
+                ready.retain(|id| {
+                    self.state
+                        .tasks
+                        .get(id)
+                        .map(|t| !t.status.is_terminal())
+                        .unwrap_or(true)
+                });
                 if matches!(self.plan.on_failure, OnFailure::Continue) {
                     for id in ready.clone() {
                         if let Some(t) = self.plan.task(&id) {
@@ -554,7 +675,17 @@ impl Scheduler {
             tokio::time::sleep(self.poll_interval).await;
         }
 
-        let status = if !failed.is_empty() {
+        // User stop (provider STOP / desktop stop_run) → Aborted, not Completed.
+        // Stopped tasks sit in `done` so they do not trip on_failure Pause mid-graph,
+        // but the whole run must not look successful.
+        let any_stopped = self
+            .state
+            .tasks
+            .values()
+            .any(|t| t.status == TaskStatus::Stopped);
+        let status = if any_stopped {
+            RunStatus::Aborted
+        } else if !failed.is_empty() {
             if matches!(self.plan.on_failure, OnFailure::Pause) {
                 RunStatus::Paused
             } else {
@@ -999,26 +1130,34 @@ impl Scheduler {
             }
         }
 
-        // Exhausted or non-retryable → permanent fail / timeout.
+        // Exhausted or non-retryable → permanent fail / timeout / user stop.
         self.apply_result(id, &result)?;
         self.handoff_task_end(id, &result, _work_dir);
         if let Some(ts) = self.state.tasks.get_mut(id) {
             ts.last_retry_reason = Some(reason_code.to_string());
-            if ts.error.is_none() {
-                ts.error = Some(format!(
-                    "{reason_code} after {attempt} attempt(s) (retry_max={budget})"
-                ));
-            } else if attempt > 1 {
-                let prev = ts.error.clone().unwrap_or_default();
-                ts.error = Some(format!(
-                    "{prev} · 已重试 {}/{} 次仍失败",
-                    attempt.saturating_sub(1),
-                    budget
-                ));
+            // User stop is not a failure message.
+            if reason_code != "stopped" {
+                if ts.error.is_none() {
+                    ts.error = Some(format!(
+                        "{reason_code} after {attempt} attempt(s) (retry_max={budget})"
+                    ));
+                } else if attempt > 1 {
+                    let prev = ts.error.clone().unwrap_or_default();
+                    ts.error = Some(format!(
+                        "{prev} · 已重试 {}/{} 次仍失败",
+                        attempt.saturating_sub(1),
+                        budget
+                    ));
+                }
             }
         }
-        if result.status == TaskStatus::Done {
+        if result.status == TaskStatus::Done || result.status == TaskStatus::Stopped {
+            // Stopped is terminal-success-for-DAG: do not trip on_failure Pause,
+            // and do not re-queue.
             done.insert(id.to_string());
+            if result.status == TaskStatus::Stopped {
+                info!(task = %id, "task stopped by user / external");
+            }
         } else {
             failed.insert(id.to_string());
             warn!(

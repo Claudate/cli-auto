@@ -515,21 +515,37 @@ pub fn stop_task(config: &Config, run_id: &str, task_id: Option<&str>) -> Result
         if let Some(ts) = rs.tasks.get_mut(tid) {
             if matches!(
                 ts.status,
-                TaskStatus::Running | TaskStatus::Starting | TaskStatus::Queued | TaskStatus::Pending
+                TaskStatus::Running
+                    | TaskStatus::Starting
+                    | TaskStatus::Queued
+                    | TaskStatus::Pending
             ) {
                 if let Some(pid) = ts.pid {
                     kill_pid(pid);
+                }
+                let meta = dir.join("tasks").join(tid).join("meta.json");
+                if meta.exists() {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(
+                        &std::fs::read_to_string(&meta).unwrap_or_default(),
+                    ) {
+                        if let Some(pid) = v.get("pid").and_then(|p| p.as_u64()) {
+                            kill_pid(pid as u32);
+                        }
+                    }
                 }
                 let task_dir = dir.join("tasks").join(tid);
                 let _ = std::fs::create_dir_all(&task_dir);
                 let _ = std::fs::write(task_dir.join(".done"), "130");
                 ts.status = TaskStatus::Stopped;
                 ts.finished_at = Some(chrono::Utc::now());
+                ts.pid = None;
             }
         }
     }
 
-    // If any tasks still live, keep run running; else abort.
+    // Whole-run stop (no task_id) → Aborted so the scheduler loop exits and
+    // never spawns remaining pending work. Single-task stop keeps pending
+    // siblings so the user can keep the rest of the graph.
     let still_live = rs.tasks.values().any(|t| {
         matches!(
             t.status,
@@ -537,12 +553,24 @@ pub fn stop_task(config: &Config, run_id: &str, task_id: Option<&str>) -> Result
         )
     });
     let still_pending = rs.tasks.values().any(|t| t.status == TaskStatus::Pending);
-    if !still_live && !still_pending {
+    if task_id.is_none() {
+        // stop_all path: freeze every remaining pending too.
+        for (_tid, ts) in rs.tasks.iter_mut() {
+            if ts.status == TaskStatus::Pending {
+                ts.status = TaskStatus::Stopped;
+                ts.finished_at = Some(chrono::Utc::now());
+            }
+        }
+        rs.status = RunStatus::Aborted;
+        rs.finished_at = Some(chrono::Utc::now());
+    } else if !still_live && !still_pending {
         rs.status = RunStatus::Aborted;
         rs.finished_at = Some(chrono::Utc::now());
     } else if !still_live {
-        // All stopped but some pending — pause so scheduler can exit cleanly if needed.
+        // All stopped workers, siblings still pending — pause so scheduler
+        // reloads Aborted/Paused from disk and does not keep spawning.
         rs.status = RunStatus::Paused;
+        rs.finished_at = Some(chrono::Utc::now());
     }
     rs.save()?;
     let _ = rs.event(
@@ -550,6 +578,11 @@ pub fn stop_task(config: &Config, run_id: &str, task_id: Option<&str>) -> Result
         serde_json::json!({
             "tasks": targets,
             "via": "desktop",
+            "run_status": match rs.status {
+                RunStatus::Aborted => "aborted",
+                RunStatus::Paused => "paused",
+                _ => "running",
+            },
         }),
     );
     Ok(())

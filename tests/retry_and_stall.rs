@@ -435,8 +435,11 @@ tasks:
     .await
     .unwrap();
     assert!(
-        matches!(status, RunStatus::Paused | RunStatus::Failed),
-        "stop should end the run, got {status:?}"
+        matches!(
+            status,
+            RunStatus::Aborted | RunStatus::Paused | RunStatus::Failed
+        ),
+        "stop should end the run (aborted/paused/failed), got {status:?}"
     );
     let st = RunState::load(&run_dir).unwrap();
     assert_eq!(

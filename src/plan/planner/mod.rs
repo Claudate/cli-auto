@@ -533,6 +533,7 @@ mod tests {
         let project = dir.path().to_path_buf();
         let plan = project.join("multi-cli-collaboration-2026-07-18.md");
         // Minimal chrome-heavy product spec (same failure mode as real multi-cli doc).
+        // No W0/W1 windows → still falls back to meta work-order template.
         let md = r#"# cco 多 CLI 协作
 
 > 关联真源 · PROTOCOL · GEB 入口 · 不排期则不碰 · D5 池
@@ -665,6 +666,107 @@ t1
             ir.tasks.iter().any(|t| t.prompt.contains("plan_ref")),
             "work-order prompts should require plan_ref"
         );
+
+        // Landing plan with W0/W1… must become those phases — NOT the meta 4-wave.
+        let landing = project.join("StoryForge-landing.md");
+        let landing_md = r#"# StoryForge 落地计划
+
+> 关联真源 · PROTOCOL · GEB 入口 · 不排期则不碰
+
+## 0. 一句话
+
+焊章生命周期四块。
+
+## 1. 为什么做（问题陈述）
+
+痛点表。
+
+## 8. 非目标
+
+N1
+
+## 5. 分期与窗（W 纵队）
+
+### W0 · 规格冻结与测量（0.5–1 天）
+
+- [ ] 本文件评审通过
+- [ ] 选定 1 本长测书
+
+**完成判据**：存储路径拍板。
+
+### W1 · Handoff + Envelope + 写注入（P0 主刀）
+
+1. ContinuityHandoff 类型
+2. Settle 生成 handoff
+3. Write 前 Envelope
+
+**Acceptance**：连续写 2 章。
+
+### W2 · ChapterPlan 字段 + PlanReconciliation
+
+Memo 扩展 goals。
+
+### W3 · Fact Canon 门
+
+fact status candidate→confirmed。
+
+### W4 · 可观测 + CanonCheck（P1）
+
+injection 分层可见。
+
+### W5 · 细纲 scenes（P2 · 可选）
+
+scenes 落盘。
+
+## 10. 成功标准
+
+S1
+
+## 12. 修订历史
+
+t1
+"#;
+        std::fs::write(&landing, landing_md).unwrap();
+        assert!(
+            looks_like_spec_document(landing_md),
+            "landing plan is still a spec MD"
+        );
+        let job2 = PlanJob {
+            job_id: "plan-test-landing".into(),
+            plan_path: PathBuf::from("StoryForge-landing.md"),
+            ..job.clone()
+        };
+        std::fs::create_dir_all(job_dir(&cfg, &job2.job_id)).unwrap();
+        let ir2 = build_heuristic_ai_plan(&cfg, &job2).expect("landing heuristic");
+        let titles2: Vec<_> = ir2.tasks.iter().map(|t| t.title.clone()).collect();
+        assert!(
+            titles2.iter().any(|t| t.contains("W0") || t.contains("W1")),
+            "landing plan must split into W-windows, got {titles2:?}"
+        );
+        assert!(
+            titles2.iter().all(|t| {
+                !t.contains("读懂目标与范围")
+                    && !t.contains("拆出可执行工作包")
+                    && !t.contains("专门巡检")
+            }),
+            "must NOT use meta work-order titles, got {titles2:?}"
+        );
+        assert!(
+            !ir2.require_inspect,
+            "W-window split should not force meta inspect tail; got require_inspect=true titles={titles2:?}"
+        );
+        assert!(
+            ir2.tasks.iter().all(|t| t.role != Some(crate::plan::TaskRole::Inspect)),
+            "no forced inspect role on landing phases: {titles2:?}"
+        );
+        // Sequential deps: t2 waits t1
+        if ir2.tasks.len() >= 2 {
+            assert!(
+                ir2.tasks[1].depends_on.contains(&"t1".into()),
+                "phases should be sequential, deps={:?}",
+                ir2.tasks[1].depends_on
+            );
+        }
 
         // Full Mode B ai path (fake → heuristic, no LLM).
         let view = start_plan_job(

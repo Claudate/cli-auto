@@ -898,6 +898,7 @@ D0 文档同构（半天，降低所有后续返工）
 | 2026-07-20 | **t35 / 打包 + 工程扫尾**：`scripts/package-app.sh` → `dist/CCO.app`（含 t34 标记）；清 digest PathBuf / 死代码 opt_u32·opt_f64 警告；**P2-8 ✅** 全树无「尚无第二 provider」；**不**出池 P2-4/5/6/7；**不**回灌 D0–D4 |
 | 2026-07-20 | **t36 / chat 测 CCO_CHAT_FAKE 竞态热修**：`fake_send_persists_messages` 等三测改 `fake_cfg()`（`default_provider=fake`）触发 force_fake，去掉进程级 `set_var`/`remove_var` 并行竞态；chat 28 测并行×3 绿；**不**出池 D5；**不**回灌 D0–D4 |
 | 2026-07-20 | **t37 / P2-6 `/cco-run` skill 出池落地**：仓库 `.claude/skills/cco-run/SKILL.md` 薄封装 `cco run`/`status`/`report`/`stop`（解析本仓 `target/release/cco` 或 PATH）；orchestrator M4 可选勾；§2/§4 P2-6 ✅；**不**出池 P2-4/5/7；**不**回灌 D0–D4 / 不重写 Scheduler |
+| 2026-07-20 | **t38 / 热修：全部停止 + 落地分期图 + 确认屏正文 + CLI 日志默认展开**：`stop_run`/`stop_task` 冻 Pending + meta pid + SIGTERM/KILL；scheduler 盘状态 `external_stop` 合流退出；heuristic `extract_work_phases(W0/W1…)` 优先真窗、无窗才 meta 四波；确认屏 `stripWorkerScaffold`；CLI board 日志默认展开；plan 76 + services 34 + retry_and_stall 5 绿；**不**出池 P2-4/5/7 |
 
 ### 9.1 边界（防与产品变更混淆）
 

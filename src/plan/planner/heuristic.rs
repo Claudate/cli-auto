@@ -173,20 +173,38 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
         );
     }
 
-    // Spec / contract docs: NEVER TOC-split, even if some ## survived meta filter
-    // (e.g. "1. 产品结论" / "分配策略档位" still look like section titles, not work).
+    // Spec / contract docs:
+    // 1) Prefer real work phases (W0/W1… / 阶段 / 分期窗) carved from the plan.
+    // 2) Only fall back to the meta "scope→breakdown→implement→inspect" template
+    //    when the MD is pure product chrome with no work windows (old multi-cli
+    //    style). Landing plans like StoryForge W0–W5 must become those windows,
+    //    not a second meta loop.
     let mut force_serial = false;
     let sections = if looks_like_spec_document(&text) {
-        append_log(
-            config,
-            &job.job_id,
-            &format!(
-                "heuristic: product/spec MD ({} leftover heading section(s)) → work-order template",
-                sections.len()
-            ),
-        );
-        force_serial = true;
-        work_order_template_from_spec(&text)
+        let phases = extract_work_phases(&text);
+        if phases.len() >= 2 {
+            append_log(
+                config,
+                &job.job_id,
+                &format!(
+                    "heuristic: product/spec MD → {} work phase(s) from plan (not meta template)",
+                    phases.len()
+                ),
+            );
+            force_serial = true;
+            phases
+        } else {
+            append_log(
+                config,
+                &job.job_id,
+                &format!(
+                    "heuristic: product/spec MD ({} leftover heading section(s), no work phases) → work-order template",
+                    sections.len()
+                ),
+            );
+            force_serial = true;
+            work_order_template_from_spec(&text)
+        }
     } else if sections.len() <= 1 {
         // Fall back to chunking long prose into up to 3 sequential tasks.
         force_serial = true;
@@ -434,9 +452,150 @@ pub(super) fn looks_like_spec_document(text: &str) -> bool {
     score >= 3
 }
 
-/// When the MD is a spec, emit a sequential work DAG aligned to the plan-loop
+/// Pull real work windows from a landing / phase plan (W0/W1…, 阶段, 窗).
+/// Returns empty when the doc has no actionable phases — caller falls back to
+/// the meta work-order template (product chrome only).
+pub(super) fn extract_work_phases(text: &str) -> Vec<(String, String)> {
+    // Prefer ### (W0/W1 under ## 分期) then ##; drop meta chrome.
+    let mut candidates = split_sections_level(text, /*include_h3=*/ true);
+    candidates.retain(|(title, body)| {
+        !body.trim().is_empty()
+            && !crate::plan::title_is_meta_heading(title)
+            && title_looks_like_work_phase(title)
+    });
+    if candidates.len() >= 2 {
+        return trim_phase_bodies(candidates);
+    }
+    // Coarser: ## only that look like work (e.g. "## 阶段 1 · 实现 handoff").
+    let mut coarse = split_sections_level(text, /*include_h3=*/ false);
+    coarse.retain(|(title, body)| {
+        !body.trim().is_empty()
+            && !crate::plan::title_is_meta_heading(title)
+            && title_looks_like_work_phase(title)
+    });
+    if coarse.len() >= 2 {
+        return trim_phase_bodies(coarse);
+    }
+    // Single explicit work window still better than meta template when present.
+    if candidates.len() == 1 {
+        return trim_phase_bodies(candidates);
+    }
+    if coarse.len() == 1 {
+        return trim_phase_bodies(coarse);
+    }
+    Vec::new()
+}
+
+/// W0 / 阶段1 / 窗 / Phase 2 / Sprint — actionable implementation slices.
+fn title_looks_like_work_phase(title: &str) -> bool {
+    let t = title.trim();
+    if t.is_empty() {
+        return false;
+    }
+    let lower = t.to_ascii_lowercase();
+    // W0 · W1 · W2 (Chinese landing plans) / Phase N / Sprint N / 阶段 N / 第N窗
+    // W0 / w0 / W10 at start or after separators
+    let w_phase = regex_is_work_window(t);
+    if w_phase {
+        return true;
+    }
+    if lower.contains("phase ")
+        || lower.starts_with("phase")
+        || lower.contains("sprint")
+        || t.contains("阶段")
+        || t.contains("分期")
+        || t.contains("里程碑")
+        || t.contains("迭代")
+        || t.contains("交付窗")
+        || t.contains("实现窗")
+        || (t.contains("窗") && (t.contains("W") || t.chars().any(|c| c.is_ascii_digit())))
+    {
+        // Exclude pure status / freeze tables
+        if t.contains("冻结面") || t.contains("状态表") || t.contains("修订") {
+            return false;
+        }
+        return true;
+    }
+    // Checkbox-heavy body sections titled with verbs often are work packages
+    // when parent was a phase heading — already filtered by title_is_meta.
+    false
+}
+
+fn regex_is_work_window(title: &str) -> bool {
+    // Match W0 / W1 / W10 / w0 at word-ish boundaries without pulling in "Board".
+    let chars: Vec<char> = title.chars().collect();
+    let n = chars.len();
+    let mut i = 0;
+    while i + 1 < n {
+        let c = chars[i];
+        let is_w = c == 'W' || c == 'w';
+        if is_w && chars[i + 1].is_ascii_digit() {
+            let prev_ok = i == 0
+                || chars[i - 1].is_whitespace()
+                || matches!(chars[i - 1], '·' | '•' | '—' | '-' | '/' | '|' | '（' | '(' | '【' | '[');
+            if prev_ok {
+                // consume digits
+                let mut j = i + 1;
+                while j < n && chars[j].is_ascii_digit() {
+                    j += 1;
+                }
+                // require at least one digit and not part of a longer token like "Write"
+                let next_ok = j >= n
+                    || chars[j].is_whitespace()
+                    || matches!(
+                        chars[j],
+                        '·' | '•' | '—' | '-' | '/' | '|' | '）' | ')' | '】' | ']' | '：' | ':' | '，' | ','
+                    )
+                    || !chars[j].is_ascii_alphabetic();
+                if next_ok {
+                    return true;
+                }
+            }
+        }
+        i += 1;
+    }
+    // 阶段 0 / 阶段1 / 第 1 阶段
+    if title.contains("阶段") {
+        return title.chars().any(|c| c.is_ascii_digit())
+            || title.contains("一")
+            || title.contains("二")
+            || title.contains("三")
+            || title.contains("四")
+            || title.contains("五");
+    }
+    false
+}
+
+fn trim_phase_bodies(mut sections: Vec<(String, String)>) -> Vec<(String, String)> {
+    // Cap body size so worker prompts stay readable; full plan is still on disk.
+    const MAX_CHARS: usize = 3_500;
+    for (_, body) in sections.iter_mut() {
+        if body.chars().count() > MAX_CHARS {
+            let clipped: String = body.chars().take(MAX_CHARS).collect();
+            *body = format!(
+                "{clipped}\n\n…（正文已截断；请读计划全文对应章节，勿只依赖摘录）"
+            );
+        }
+        // Prepend a short host contract so workers implement the phase, not re-plan.
+        let contract = "\
+按**本阶段/本窗**交付，不要另起「读范围→拆包→巡检」元流程。\n\
+- 对照本段清单与完成判据 / Acceptance 实现或验收。\n\
+- 不做范围外与非目标；不把修订历史/Board 当任务。\n\
+- 有验收命令则跑通；改代码须可回看证据。\n\n\
+--- 本阶段说明 ---\n";
+        *body = format!("{contract}{body}");
+    }
+    // Cap task count for planner limit.
+    if sections.len() > PLANNER_MAX_TASKS {
+        sections = merge_sections(sections, PLANNER_MAX_TASKS);
+    }
+    sections
+}
+
+/// When the MD is pure product chrome (no W-windows), emit the meta work-order
 /// (scope → breakdown with plan_ref → implement with evidence → inspect checklist).
 /// See `docs/plan-execute-inspect-rework-2026-07-19.md` §3 / L0.
+/// **Do not** use this when `extract_work_phases` already found real phases.
 fn work_order_template_from_spec(text: &str) -> Vec<(String, String)> {
     let excerpt: String = text.chars().take(2_500).collect();
     vec![

@@ -124,11 +124,40 @@ function flowConfirmDepsLine(kind, depTitles, opts = {}) {
 
 function flowConfirmMetaLine(chars, editing) {
   if (editing) return `编辑中 · 说明 ${chars} 字`;
-  return `说明 ${chars} 字 · 点左侧可切换步骤`;
+  return `任务内容 ${chars} 字 · 点左侧可切换步骤`;
 }
 
 function flowPromptLabel(editing) {
-  return editing ? "编辑步骤说明" : "完整步骤说明（执行时按此自动进行）";
+  return editing
+    ? "编辑步骤说明"
+    : "拆解后的任务内容（执行时按完整 worker 说明进行）";
+}
+
+/**
+ * Confirm pane should show the *decomposed task body*, not the host worker
+ * scaffold the planner wraps around it ("你是执行任务 tN…CCO_DONE ok").
+ * Edit mode keeps the full prompt so advanced users can still tune it.
+ */
+function stripWorkerScaffold(prompt) {
+  let s = String(prompt || "");
+  if (!s.trim()) return s;
+  // Drop leading worker identity / cwd / "依据下列说明" preamble.
+  s = s.replace(
+    /^你是执行任务[\s\S]*?(?=##\s*任务说明|##\s*依赖原因|按\*\*本阶段|阅读下列|根据\s*`\.cco-out|你是\*\*检验员)/u,
+    ""
+  );
+  // Prefer content under ## 任务说明
+  const m = s.match(/##\s*任务说明\s*\n([\s\S]*?)(?:\n全部完成后在最后一行输出[：:][\s\S]*)?$/u);
+  if (m && m[1] && m[1].trim().length > 20) {
+    s = m[1].trim();
+  } else {
+    // Drop trailing CCO_DONE contract line(s)
+    s = s.replace(/\n*全部完成后在最后一行输出[：:][\s\S]*$/u, "").trim();
+    s = s.replace(/\n*完成后输出一行[：:]\s*CCO_DONE[\s\S]*$/iu, "").trim();
+  }
+  // Drop empty ## 依赖原因 block noise when no deps note content left alone
+  s = s.replace(/^##\s*依赖原因\s*\n等待前置步骤产物[：:][^\n]*\n*/u, "");
+  return s.trim() || String(prompt || "");
 }
 
 /** Map provider id → short product label (only when advanced shows engine). */

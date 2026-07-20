@@ -11,6 +11,8 @@ use crate::runtime::log_events;
 use crate::runtime::provider::TaskStatus;
 use crate::state::RunStatus;
 
+/// Best-effort stop a worker OS process. Unix: SIGTERM then SIGKILL so hung
+/// Claude/Codex CLIs actually die (desktop stop used to send only SIGTERM).
 pub(super) fn kill_pid(pid: u32) {
     #[cfg(unix)]
     {
@@ -18,12 +20,15 @@ pub(super) fn kill_pid(pid: u32) {
             extern "C" {
                 fn kill(pid: i32, sig: i32) -> i32;
             }
-            let _ = kill(pid as i32, 15);
+            let _ = kill(pid as i32, 15); // SIGTERM
+            let _ = kill(pid as i32, 9); // SIGKILL (idempotent if already gone)
         }
     }
     #[cfg(not(unix))]
     {
-        let _ = pid;
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .status();
     }
 }
 

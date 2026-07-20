@@ -2434,6 +2434,12 @@ function renderConfirmPanel() {
       cur.prompt_preview ||
       cur.promptPreview ||
       "";
+    // Confirm pane shows the *task content* (phase body / work package), not the
+    // worker scaffold ("你是执行任务 tN…CCO_DONE ok"). Edit still keeps full prompt.
+    const displayBody =
+      typeof stripWorkerScaffold === "function"
+        ? stripWorkerScaffold(full)
+        : full;
     if (editing) {
       if (promptEl) promptEl.hidden = true;
       if (editForm) editForm.hidden = false;
@@ -2482,7 +2488,7 @@ function renderConfirmPanel() {
       if (promptEl) {
         promptEl.hidden = false;
         promptEl.classList.add("md-body");
-        promptEl.innerHTML = renderMarkdown(full);
+        promptEl.innerHTML = renderMarkdown(displayBody || full);
         promptEl.scrollTop = 0;
       }
       if (editForm) editForm.hidden = true;
@@ -2490,18 +2496,18 @@ function renderConfirmPanel() {
         promptLabel.textContent =
           typeof flowPromptLabel === "function"
             ? flowPromptLabel(false)
-            : "完整步骤说明（执行时按此自动进行）";
+            : "拆解后的任务内容（执行时按完整 worker 说明进行）";
       }
     }
     if (metaEl) {
-      const chars = [...full].length;
+      const chars = [...(displayBody || full)].length;
       metaEl.hidden = false;
       metaEl.textContent =
         typeof flowConfirmMetaLine === "function"
           ? flowConfirmMetaLine(chars, editing)
           : editing
             ? `编辑中 · 说明 ${chars} 字`
-            : `说明 ${chars} 字 · 点左侧可切换步骤`;
+            : `任务内容 ${chars} 字 · 点左侧可切换步骤`;
     }
   } else {
     $("#confirm-task-title").textContent = "选择左侧任务查看说明";

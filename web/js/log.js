@@ -902,10 +902,16 @@ function renderCliBoard(tasks) {
       const prevScroll = prevBody ? prevBody.scrollTop : 0;
       const wasNearBottom = prevBody ? isNearBottom(prevBody) : true;
       const stallTxt = stallStripText(t);
-      // Remember expand preference per task (default collapsed).
-      const expanded =
-        state.cliLogExpanded && state.cliLogExpanded[t.task_id] === true;
+      // Default expanded for live/finished runs so CLI execution info is visible
+      // (previous default collapsed hid the transcript users expect).
       if (!state.cliLogExpanded) state.cliLogExpanded = {};
+      const expanded =
+        state.cliLogExpanded[t.task_id] !== undefined
+          ? state.cliLogExpanded[t.task_id] === true
+          : true; // default ON
+      if (state.cliLogExpanded[t.task_id] === undefined) {
+        state.cliLogExpanded[t.task_id] = true;
+      }
       card.classList.toggle("is-log-collapsed", !expanded);
       card.innerHTML = `
       <div class="cli-window-head" data-drag="${esc(t.task_id)}">
