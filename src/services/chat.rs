@@ -1805,6 +1805,14 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    /// Force-fake via Config only — avoids process-wide `CCO_CHAT_FAKE` races under
+    /// `cargo test` parallel threads (set_var/remove_var interleaved → flaky `r.fake`).
+    fn fake_cfg() -> Config {
+        let mut cfg = Config::default();
+        cfg.default.default_provider = "fake".into();
+        cfg
+    }
+
     #[test]
     fn extract_plan_fence_last_wins() {
         let t = "intro\n```plan\n# A\n```\nmore\n```plan\n# B\nbody\n```\n";
@@ -2084,10 +2092,8 @@ mod tests {
         assert!(session_path(&project, &created.session_id).is_file());
 
         // Seed default with a user msg so list preview works
-        std::env::set_var("CCO_CHAT_FAKE", "1");
-        let cfg = Config::default();
+        let cfg = fake_cfg();
         let _ = chat_send(&cfg, &project, "默认会话第一条", Some("default"), None).unwrap();
-        std::env::remove_var("CCO_CHAT_FAKE");
 
         let list = chat_list_sessions(&project).unwrap();
         assert!(list.len() >= 2, "got {list:?}");
@@ -2204,8 +2210,7 @@ mod tests {
         assert_eq!(att.mime, "image/png");
         assert!(project.join(&att.path).is_file());
 
-        let cfg = Config::default();
-        std::env::set_var("CCO_CHAT_FAKE", "1");
+        let cfg = fake_cfg();
         let r = chat_send(
             &cfg,
             &project,
@@ -2218,7 +2223,6 @@ mod tests {
         let user = r.messages.iter().find(|m| m.role == "user").unwrap();
         assert!(!user.attachments.is_empty());
         assert!(user.content.contains(&att.path));
-        std::env::remove_var("CCO_CHAT_FAKE");
     }
 
     #[test]
@@ -2236,8 +2240,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let project = dir.path().join("app");
         std::fs::create_dir_all(&project).unwrap();
-        std::env::set_var("CCO_CHAT_FAKE", "1");
-        let cfg = Config::default();
+        let cfg = fake_cfg();
         let r = chat_send(&cfg, &project, "帮我写个登录页计划", None, None).unwrap();
         assert!(r.fake);
         assert!(!r.reply.is_empty());
@@ -2246,7 +2249,6 @@ mod tests {
         assert!(r.env_note.is_none(), "forced fake has no env_note");
         // 联调路径仍产出 fence
         assert!(r.reply.contains("```plan"), "got: {}", r.reply);
-        std::env::remove_var("CCO_CHAT_FAKE");
     }
 
     #[test]

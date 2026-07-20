@@ -896,6 +896,7 @@ D0 文档同构（半天，降低所有后续返工）
 | 2026-07-20 | **t33 / C3 方案 B + multi-cli P2-4/P2-5**：设置「执行时跳过二次确认」`#s-chat-assign-direct`（默认关→方案 A）；`TaskIR.tags` + `apply_tag_routing`；LLM planner 解析 provider/role/scope/outputs/tags；单测 apply_tag_routing/cco_v1 tags/parse_llm collab 绿；流式/计划 diff / 跨屏/PTY 仍残差；**不**回灌 D0–D4 |
 | 2026-07-20 | **t34 / P2-9 残差 + P2-3 虚拟列表**：计划 diff（plan-full 磁盘 vs 草稿 · 采用左/右写回 · `chat_save_plan`）；`chat_stream_partial` 轮询 stdout 增量（失败降级 wait label）；LogConsole 虚拟列表（阈值 80 · 过滤切换贴底重置）；chat 测 + node --check；§2/§4 P2-3·P2-9 ✅；跨屏/PTY 仍 D5；**不**回灌 D0–D4 |
 | 2026-07-20 | **t35 / 打包 + 工程扫尾**：`scripts/package-app.sh` → `dist/CCO.app`（含 t34 标记）；清 digest PathBuf / 死代码 opt_u32·opt_f64 警告；**P2-8 ✅** 全树无「尚无第二 provider」；**不**出池 P2-4/5/6/7；**不**回灌 D0–D4 |
+| 2026-07-20 | **t36 / chat 测 CCO_CHAT_FAKE 竞态热修**：`fake_send_persists_messages` 等三测改 `fake_cfg()`（`default_provider=fake`）触发 force_fake，去掉进程级 `set_var`/`remove_var` 并行竞态；chat 28 测并行×3 绿；**不**出池 D5；**不**回灌 D0–D4 |
 
 ### 9.1 边界（防与产品变更混淆）
 
