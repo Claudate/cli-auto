@@ -17,6 +17,7 @@ chat-home-plan-cli-2026-07-19.md: 聊天主窗 · 未执行可改 · 已执行�
 ux-plan-mgmt-attach-ttl-2026-07-19.md: 计划管理默认藏右栏 · 标题列表/单击双击 · CLI/本地规范化 · 附图 · 会话 2 天清理 · **主线已落地** G0–G6/G0b/G4 → 总账 **D5/P2-13 · P-plan-mgmt**
 plan-mgmt-to-exec-flow-2026-07-19.md: 计划管理→执行任务操作流收敛（单列表/单 CTA/入口不越权/拆完回跳 · **E0–E4 已落地** → 总账 **D5/P2-14 · P-plan-exec-flow**；不回灌 P2-12/P2-13；桌面重打包目视）
 system-post-tasks-2026-07-19.md: 系统收尾任务（巡检 · git push · 设置总开关默认关 · 拆分后可选默认勾选 · **已落地** → **D5/P2-15 · P-sys-post**）
+（关联 skill，非 docs 成员）`../.claude/skills/cco-run/`：Claude Code `/cco-run` 薄封装 · 总账 **P2-6 ✅ t37**
 
 法则: 成员完整·一行一文件·父级链接·技术词前置
 

@@ -19,6 +19,7 @@ Rust + Tokio + Clap + ratatui + Tauri 2 + 原生 web（HTML/CSS/JS）
 [`examples/`](./examples/CLAUDE.md) — 示例计划
 [`tests/`](./tests/CLAUDE.md) — 集成与金样
 [`scripts/`](./scripts/CLAUDE.md) — 打包与 smoke
+[`.claude/skills/cco-run/`](./.claude/skills/cco-run/CLAUDE.md) — Claude Code skill `/cco-run`（**P2-6** 薄封装 `cco run`）
 dist/ — 已打包 CCO.app（生成物，无 L2）
 </directory>
 

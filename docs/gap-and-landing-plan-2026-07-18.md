@@ -143,7 +143,7 @@
 | P2-3 | 虚拟列表 / 事件过滤 / ANSI / 导出报告 | ✅ **t31+t34 闭环** | terminal P2 | **t31** 过滤/ANSI/导出 MD；**t34** 虚拟列表 |
 | P2-4 | 跨显示器系统级多窗口 | ☐ **D5 池** | ux-simple「未做」 | 现为应用内面板；未做系统级多窗口 |
 | P2-5 | TUI 内嵌真 PTY 网格 | ☐ **D5 池** | orchestrator M3 未勾增强项 | 当前 embedded=会话登记+日志路径 |
-| P2-6 | Claude Code skill `/cco-run` | ☐ **D5 池** | M4 可选 ☐ | |
+| P2-6 | Claude Code skill `/cco-run` | ✅ **t37 已落地** | M4 · `.claude/skills/cco-run/SKILL.md` | 薄封装 `cco run`；不重写 Scheduler |
 | P2-7 | M5：SDK provider / Mermaid / 自动开 PR / Windows launcher | ☐ **D5 池** | orchestrator M5 列表 | 按需拆单独立项；Codex 已出池 |
 | P2-8 | M5「第二 provider」文档债 | ✅ **t35 扫尾** | M5 已划掉 Codex 并指向 `codex.rs`；全树无「尚无第二 provider」 | 发现即改 |
 | P2-9 | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | ✅ **t32–t34 闭环** | chat-plan-builder §5 C3 | 多会话 · 方案 B · 计划 diff · 流式 partial |
@@ -484,7 +484,7 @@
 | **P2-3** | 虚拟列表 / 事件过滤 / ANSI / 导出 | terminal P2 | ✅ **t31+t34 闭环**（过滤/ANSI/导出 MD + 虚拟列表） | 过滤切换重置贴底 |
 | **P2-4** | 跨显示器系统级多窗口 | ux-simple 未做 | 现为应用内 CLI board / 面板 | 多显示器硬需求 |
 | **P2-5** | TUI 内嵌真 PTY 网格 | orchestrator M3 | embedded = 会话登记 + 日志路径 | 要在 TUI 内交互 attach |
-| **P2-6** | Claude Code skill `/cco-run` | orchestrator M4 可选 | 无 skill 薄封装 | 在 Claude Code 内高频触发 `cco run` |
+| **P2-6** | Claude Code skill `/cco-run` | orchestrator M4 可选 | ✅ **t37**：`.claude/skills/cco-run/SKILL.md` 薄封装 | — |
 | **P2-7** | M5：SDK provider / Mermaid / 自动 PR / Windows launcher | orchestrator M5 | Codex 已落地（非本项）；其余未做 | 按需拆 **单独立项**（勿整包） |
 | **P2-9** | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | chat-plan-builder §5 C3 | ✅ **t32–t34 闭环**（多会话 · 方案 B · 计划 diff · 流式 partial） | 流式 = stdout partial 轮询，非 SSE |
 | **P2-10** | 聊天页注意力收敛（后台降噪 · fake 可信 · CTA） | chat-ux-focus U0–U2 | **已落地** U0–U2；**P-chat-ux ✅**（t29） | 与 P2-9 分列 |
@@ -495,7 +495,7 @@
 
 - [x] §2.1 P2 表状态统一为「☐ **D5 池**」并与上表一一对应  
 - [x] 子计划勾选指向总账：Mode B B2 可选 → P2-1/2；terminal P2 → P2-3；ux-simple → P2-4；orchestrator M3 PTY / M4 skill / M5 → P2-5/6/7；**chat C3 → P2-9**（t12）；**chat UX focus → P2-10**（t22）；**执行闭环 → P2-11**（t25）  
-- [x] 明确 **禁止在 D5 任务内实现**：确认屏编辑器、虚拟列表/过滤/导出、真 PTY、skill、自动 PR、Windows launcher、跨屏多窗口、**聊天 C3 打磨（P2-9 未出池）**、**聊天 UX 收敛（P2-10 未出池）**；**执行闭环 P2-11 已落地（t26）**  
+- [x] 明确 **禁止在 D5 任务内实现**（未出池项）：真 PTY、自动 PR、Windows launcher、跨屏多窗口；**已出池落地**：P2-1/2/3/6/8–12 等见上表；**P2-6 skill t37**；**P2-4/5/7 仍池内**  
 - [x] D0–D4 已闭环项 **不得** 因本池存在而回灌为缺口 
 
 **不做（防范围膨胀）**：
@@ -897,6 +897,7 @@ D0 文档同构（半天，降低所有后续返工）
 | 2026-07-20 | **t34 / P2-9 残差 + P2-3 虚拟列表**：计划 diff（plan-full 磁盘 vs 草稿 · 采用左/右写回 · `chat_save_plan`）；`chat_stream_partial` 轮询 stdout 增量（失败降级 wait label）；LogConsole 虚拟列表（阈值 80 · 过滤切换贴底重置）；chat 测 + node --check；§2/§4 P2-3·P2-9 ✅；跨屏/PTY 仍 D5；**不**回灌 D0–D4 |
 | 2026-07-20 | **t35 / 打包 + 工程扫尾**：`scripts/package-app.sh` → `dist/CCO.app`（含 t34 标记）；清 digest PathBuf / 死代码 opt_u32·opt_f64 警告；**P2-8 ✅** 全树无「尚无第二 provider」；**不**出池 P2-4/5/6/7；**不**回灌 D0–D4 |
 | 2026-07-20 | **t36 / chat 测 CCO_CHAT_FAKE 竞态热修**：`fake_send_persists_messages` 等三测改 `fake_cfg()`（`default_provider=fake`）触发 force_fake，去掉进程级 `set_var`/`remove_var` 并行竞态；chat 28 测并行×3 绿；**不**出池 D5；**不**回灌 D0–D4 |
+| 2026-07-20 | **t37 / P2-6 `/cco-run` skill 出池落地**：仓库 `.claude/skills/cco-run/SKILL.md` 薄封装 `cco run`/`status`/`report`/`stop`（解析本仓 `target/release/cco` 或 PATH）；orchestrator M4 可选勾；§2/§4 P2-6 ✅；**不**出池 P2-4/5/7；**不**回灌 D0–D4 / 不重写 Scheduler |
 
 ### 9.1 边界（防与产品变更混淆）
 

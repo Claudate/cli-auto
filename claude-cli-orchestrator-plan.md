@@ -984,7 +984,7 @@ cp target/release/cco ~/.local/bin/
 - [x] 更强 serial-prompts 解析 + 黄金 fixture  
 - [x] 单元/集成测试完善（bg / worktree / resume / budget / serial）  
 - [x] 文档与 example  
-- [ ] （可选）Claude Code skill：`/cco-run` → 总账 **D5 / P2-6**（不排期则不碰）  
+- [x] （可选）Claude Code skill：`/cco-run` → 总账 **P2-6 ✅ t37**（`.claude/skills/cco-run/SKILL.md` 薄封装）  
 - [x] per-provider 并行上限、run 级预算  
 - [x] `cco resume` 从暂停/失败继续  
 
