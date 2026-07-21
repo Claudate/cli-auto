@@ -144,7 +144,7 @@
 | P2-4 | 跨显示器系统级多窗口 | ✅ **t39 薄切片** | ux-simple · `open_monitor_window_cmd` | 系统级「独立监视窗」可拖第二屏；非整应用多窗 IDE |
 | P2-5 | TUI 内嵌真 PTY 网格 | ✅ **t40 薄切片** | orchestrator M3 · Terminals 多窗格 | 只读 log 网格+zoom（伪 PTY）；交互 write 仍外部终端 |
 | P2-6 | Claude Code skill `/cco-run` | ✅ **t37 已落地** | M4 · `.claude/skills/cco-run/SKILL.md` | 薄封装 `cco run`；不重写 Scheduler |
-| P2-7 | M5：SDK provider / Mermaid / 自动开 PR / Windows launcher | ⚠ **t41+t59+t60+t62+t65 部分** | orchestrator M5 · `format_mermaid` · `terminal/external` · `provider/sdk` · `system_post` open-pr | **Mermaid ✅ t41**；**Windows launcher ✅ t59**；**SDK S0 ✅ t60**；**自动开 PR ✅ t62（S-PR · 默认关 · gh）**；**SDK S1 HTTP ✅ t65**；S2 tool loop 未做 |
+| P2-7 | M5：SDK provider / Mermaid / 自动开 PR / Windows launcher | ⚠ **t41+t59+t60+t62+t65+t67 部分** | orchestrator M5 · `format_mermaid` · `terminal/external` · `provider/sdk` · `system_post` open-pr | **Mermaid ✅ t41**；**Windows launcher ✅ t59**；**SDK S0 ✅ t60**；**自动开 PR ✅ t62（S-PR · 默认关 · gh）**；**SDK S1 HTTP ✅ t65**；**SDK S2 tool loop ✅ t67** |
 | P2-8 | M5「第二 provider」文档债 | ✅ **t35 扫尾** | M5 已划掉 Codex 并指向 `codex.rs`；全树无「尚无第二 provider」 | 发现即改 |
 | P2-9 | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | ✅ **t32–t34 闭环** | chat-plan-builder §5 C3 | 多会话 · 方案 B · 计划 diff · 流式 partial |
 | P2-10 | 聊天页注意力收敛：后台态降噪 · fake/故障可信 · CTA 序 · 卡片 | ✅ **已落地** | chat-ux-focus U0–U2 | **t29 勾满**；与 P2-9 分列 |
@@ -487,7 +487,7 @@
 | **P2-4** | 跨显示器系统级多窗口 | ux-simple 未做 | ✅ **t39**：`open_monitor_window_cmd` + `#btn-open-monitor-window`（优先第二显示器） | 非整应用多窗；监视专用 OS 窗 |
 | **P2-5** | TUI 内嵌真 PTY 网格 | orchestrator M3 | ✅ **t40**：Terminals 多窗格 stdout 网格 + zoom；n/p 切窗 · z 放大 | 真交互 write / portable-pty 未做（print 模式无 PTY） |
 | **P2-6** | Claude Code skill `/cco-run` | orchestrator M4 可选 | ✅ **t37**：`.claude/skills/cco-run/SKILL.md` 薄封装 | — |
-| **P2-7** | M5：SDK provider / Mermaid / 自动 PR / Windows launcher | orchestrator M5 | ⚠ **t41+t59+t60+t62+t65**：Mermaid ✅；Windows ✅；**SDK S0 ✅**；**自动开 PR ✅ t62（S-PR）**；**SDK S1 HTTP ✅ t65**；S2 tool loop 仍未做 | 勿整包；下一项须再点名 |
+| **P2-7** | M5：SDK provider / Mermaid / 自动 PR / Windows launcher | orchestrator M5 | ⚠ **t41+t59+t60+t62+t65+t67**：Mermaid ✅；Windows ✅；**SDK S0 ✅**；**自动开 PR ✅ t62（S-PR）**；**SDK S1 HTTP ✅ t65**；**SDK S2 tool loop ✅ t67** | 勿整包；下一项须再点名 |
 | **P2-9** | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | chat-plan-builder §5 C3 | ✅ **t32–t34 闭环**（多会话 · 方案 B · 计划 diff · 流式 partial） | 流式 = stdout partial 轮询，非 SSE |
 | **P2-10** | 聊天页注意力收敛（后台降噪 · fake 可信 · CTA） | chat-ux-focus U0–U2 | **已落地** U0–U2；**P-chat-ux ✅**（t29） | 与 P2-9 分列 |
 | **P2-11** | 计划驱动执行闭环（拆分 · 巡检 · 回补） | plan-execute-inspect-rework L0–L2 | **已落地** L0–L2；**P-loop** | host ISSUES 分级 + rework 波 + 桌面一键 |
@@ -499,7 +499,7 @@
 
 - [x] §2.1 P2 表状态统一为「☐ **D5 池**」并与上表一一对应  
 - [x] 子计划勾选指向总账：Mode B B2 可选 → P2-1/2；terminal P2 → P2-3；ux-simple → P2-4；orchestrator M3 PTY / M4 skill / M5 → P2-5/6/7；**chat C3 → P2-9**（t12）；**chat UX focus → P2-10**（t22）；**执行闭环 → P2-11**（t25）  
-- [x] 明确 **禁止在 D5 任务内实现**（未出池项）：portable-pty 真交互写；**已出池落地**：P2-1…6/8–12 等见上表；**P2-5 伪 PTY 网格 t40**；**P2-7 部分**：Mermaid t41 · Windows launcher t59 · **SDK S0 t60** · **自动开 PR t62（S-PR · 默认关 · gh）** · **SDK S1 HTTP t65**；S2 tool loop 仍池内  
+- [x] 明确 **禁止在 D5 任务内实现**（未出池项）：portable-pty 真交互写；**已出池落地**：P2-1…6/8–12 等见上表；**P2-5 伪 PTY 网格 t40**；**P2-7 部分**：Mermaid t41 · Windows launcher t59 · **SDK S0 t60** · **自动开 PR t62（S-PR · 默认关 · gh）** · **SDK S1 HTTP t65** · **SDK S2 tool loop t67**；真 PTY 仍池内  
 
 - [x] D0–D4 已闭环项 **不得** 因本池存在而回灌为缺口 
 
@@ -932,6 +932,7 @@ D0 文档同构（半天，降低所有后续返工）
 | 2026-07-21 | **t64 / T-sync-T2 GEB 文档**：architecture §7/§11 A3 role/scope **展示/写字段待** → **可写（S-role/t61）**；A5/S8/附录 C `state.js` **D9 未做/仍厚 820** → **D9+ ~230**；L1/src L2 同步；总账 P2-17 注 t61–t63；P2-7 已与 t41/t59/t60/t62 一致（**SDK S1 HTTP 未做**）；**A5-5 仍不做**；**真 PTY 仍未出池**；**零**业务代码 · **不开 A6** |
 | 2026-07-21 | **t65 / P2-7 单项 SDK S1 HTTP（勿整包 M5）**：`runtime/provider/sdk_http.rs` `AnthropicMessagesBackend` 实现 `SdkBackend`（one-shot `/v1/messages` · mockable `MessagesHttpClient`）；`build_sdk_provider` 按 `bin=messages`/`CCO_SDK_BACKEND` 注入；`reqwest` json；registry 仍 **opt-in**（`providers.sdk.enabled` 默认 false）；S0 inline 默认不变；单测 mock HTTP start/poll/collect + preflight key；**不**做 S2 tool loop / 自动 PR 返工 / 旁路 confirm；**不**回灌 D0–D4 |
 | 2026-07-21 | **t66 / T-sync-T3 热修 A0-R4 ParseOnly 同 drop optional（D-T3-1）**：`app::run::materialize_run` 内调 `materialize_selected_tasks`，返回 `(run_id,state,ir)`；CLI ParseOnly / `confirm_materialize` 调度**返回 IR**；`start_run_from_plan` 同 drop（idempotent）；A0 金样 + unit；契约 `behavior-golden` A0-R4 扩全写 run 入口；architecture C.2/脚注 + L2 同步；**不**旁路 Mode B · **不**改 confirm 唯一开跑 · **不开 A6** · **不**回灌 D0–D4 |
+| 2026-07-21 | **t67 / P2-7 单项 SDK S2 tool loop（勿整包 M5）**：`runtime/provider/sdk_tool_loop/` `AnthropicToolLoopBackend` 实现 `SdkBackend`（multi-turn `/v1/messages` + tools · cwd-scoped `read_file`/`list_dir`/`write_file` · mockable `MessagesHttpClient`）；`build_sdk_provider` 按 `bin=tools`/`CCO_SDK_BACKEND=tools` 注入；`CCO_SDK_MAX_TOOL_ROUNDS`；registry 仍 **opt-in**（`providers.sdk.enabled` 默认 false）；S0/S1 默认不变；单测 multi-round mock + path escape + write + max rounds；**不**做 Bash/真 PTY/自动 PR 返工/旁路 confirm；**不**回灌 D0–D4 |
 
 ### 9.1 边界（防与产品变更混淆）
 

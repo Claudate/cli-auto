@@ -24,7 +24,7 @@ multi-cli-collaboration-2026-07-18.md: 多 CLI · provider/role/scope · handoff
 plan-execute-inspect-rework-2026-07-19.md: 拆分 plan_ref · 巡检对照勾选 · 回补波（**P-loop / P2-11** 已落地）
 product-mainpath-optimize-2026-07-20.md: 拆分台三栏/结果台/模板 **交互意图**（波次 1–5 UI 已闭环；勾选听架构）
 gap-and-landing-plan-2026-07-18.md: 历史总账 + D5 池导航（D0–D4 已闭环 · P2-17 收口 t58；**不**新开 D 阶段）
-p2-7-sdk-provider-2026-07-21.md: **P2-7 单项** 非 CLI `sdk` WorkerPort（S0 inline ✅ · S1 Messages HTTP ✅ · 默认关 · 勿整包 M5）
+p2-7-sdk-provider-2026-07-21.md: **P2-7 单项** 非 CLI `sdk` WorkerPort（S0 inline ✅ · S1 Messages HTTP ✅ · S2 tool loop ✅ · 默认关 · 勿整包 M5）
 （根目录，非本目录成员）[`../claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md): 编排器设计（M0–M4 已落地；M5 → D5）
 
 ---

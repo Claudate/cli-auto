@@ -1,6 +1,6 @@
 # P2-7 · SDK provider（非 CLI worker）— 设计与最小切片
 
-> 日期：2026-07-21 · 状态：**S0 ✅**（inline）· **S1 ✅**（Anthropic Messages HTTP）· S2 Agent SDK tool loop 未做  
+> 日期：2026-07-21 · 状态：**S0 ✅**（inline）· **S1 ✅**（Anthropic Messages HTTP）· **S2 ✅**（Messages tool loop · cwd-scoped）  
 > 归属：总账 **P2-7** 单项（勿整包 M5：不做自动 PR / Windows 已 t59 / Mermaid 已 t41）  
 > 红线：只经 `ports::WorkerPort` · **不**旁路 confirm · **默认关** · 不改 run_dir/session/plan job
 
@@ -35,7 +35,7 @@ P2-7 出池单项目标：**先证明** 存在一条 **非 CLI 适配路径**，
 
 | 项 | 说明 |
 |----|------|
-| Agent SDK tool loop / 写盘 agent（S2） | S1 只做 **one-shot** `messages.create`；不改业务树、无 tools |
+| 完整 Agent SDK / 真 PTY / 任意 shell tool | S2 仅 Messages API + **cwd 内** read/list/write；**无** Bash、无 CLI 嵌套 |
 | 替代默认 `claude` | 默认 provider 仍 `claude` |
 | 自动 PR · Windows · Mermaid | 已有或仍池内；本切片无关 |
 | Failover 配对 sdk | `production_failover_target` 不纳入 sdk（与 fake 同） |
@@ -74,11 +74,11 @@ SdkProvider : WorkerPort
 
 | 相 | 后端 | 何时 |
 |----|------|------|
-| **S0 ✅** | `InlineSdkBackend` | `bin=inline`（默认）或非 messages 别名 |
+| **S0 ✅** | `InlineSdkBackend` | `bin=inline`（默认）或非 messages/tools 别名 |
 | **S1 ✅** | `AnthropicMessagesBackend` | `bin=messages\|http\|anthropic\|api` 或 `CCO_SDK_BACKEND=messages`；需 API key |
-| S2（未做） | Agent SDK / 托管会话 | 真 tool loop + cwd scope |
+| **S2 ✅** | `AnthropicToolLoopBackend` | `bin=tools\|tool_loop\|tool-loop\|agent` 或 `CCO_SDK_BACKEND=tools`；需 API key；cwd-scoped tools |
 
-S1 落点：同一 `SdkProvider`，registry 经 `build_sdk_provider` 注入 `Arc<dyn SdkBackend>`；**禁止** scheduler 分支 backend 名。
+S1/S2 落点：同一 `SdkProvider`，registry 经 `build_sdk_provider` 注入 `Arc<dyn SdkBackend>`；**禁止** scheduler 分支 backend 名。
 
 ---
 
@@ -88,17 +88,18 @@ S1 落点：同一 `SdkProvider`，registry 经 `build_sdk_provider` 注入 `Arc
 # 默认不写 = 不注册。显式开启：
 [providers.sdk]
 enabled = false   # 必须显式 true 才进 registry
-bin = "inline"    # S0；S1 改 "messages"（或 http/anthropic/api）
-extra_args = []   # S1：首项可作 model 覆盖（或 CCO_SDK_MODEL）
+bin = "inline"    # S0；S1 "messages"；S2 "tools"
+extra_args = []   # 首项可作 model 覆盖（或 CCO_SDK_MODEL）
 ```
 
-Env（S1）：
+Env（S1/S2）：
 
 - `CCO_SDK_API_KEY` / `ANTHROPIC_API_KEY`（preflight 必需其一）
 - `CCO_SDK_MODEL`（默认 `claude-sonnet-4-5`）
 - `CCO_SDK_BASE_URL`（默认 `https://api.anthropic.com`；可指 mock）
-- `CCO_SDK_BACKEND=messages|inline`（强制选后端，覆盖 bin）
+- `CCO_SDK_BACKEND=messages|tools|inline`（强制选后端，覆盖 bin）
 - `CCO_SDK_MAX_TOKENS` / `CCO_SDK_TIMEOUT_SECS`
+- `CCO_SDK_MAX_TOOL_ROUNDS`（S2 默认 8）
 
 ---
 
@@ -108,8 +109,10 @@ Env（S1）：
 
 - `prompt.md`
 - `stdout.json`（NDJSON stream-json 形，末行可含 `CCO_DONE`）
-- `meta.json`（`provider`/`mode`/`exit_code`/`backend`/`inline_sdk`；S1 `backend=messages` · `inline_sdk=false`）
+- `meta.json`（`provider`/`mode`/`exit_code`/`backend`/`inline_sdk`；S1 `backend=messages` · S2 `backend=tools` · `inline_sdk=false`）
 - `.done`（exit code 文本；start 必须清残留）
+
+S2 tools（仅 `work_dir` 内相对路径；禁止 `..` 逃逸与绝对路径）：`read_file` · `list_dir` · `write_file`。
 
 **禁止** 改 `run.json` / plan job 路径 / handoff schema。
 
@@ -134,7 +137,8 @@ Env（S1）：
 |------|------|
 | `src/runtime/provider/sdk.rs` | `SdkProvider` + `InlineSdkBackend` + `SdkBackend` trait（含 preflight） |
 | `src/runtime/provider/sdk_http.rs` | **S1** `AnthropicMessagesBackend` · `MessagesHttpClient` · mock 单测 |
-| `src/runtime/provider/mod.rs` | `mod sdk`/`sdk_http` · registry opt-in · `build_sdk_provider` |
+| `src/runtime/provider/sdk_tool_loop/` | **S2** `AnthropicToolLoopBackend` · cwd tools · multi-turn mock 单测 |
+| `src/runtime/provider/mod.rs` | `mod sdk`/`sdk_http`/`sdk_tool_loop` · registry opt-in · `build_sdk_provider` |
 | `src/domain/worker/types.rs` | `ProviderId::Sdk` |
 | `src/config/mod.rs` | default/load/template：`providers.sdk` **enabled=false** · bin 注释 |
 | 本文件 | 设计真源（单项） |
@@ -161,7 +165,7 @@ Env（S1）：
 - [x] `ProviderId::Sdk`  
 - [x] S0 单测  
 - [x] **S1** Anthropic Messages HTTP backend（`sdk_http` · mock client 单测 · `bin=messages`）  
-- [ ] S2 Agent SDK tool loop  
+- [x] **S2** Messages tool loop（`sdk_tool_loop` · cwd read/list/write · `bin=tools` · mock 多轮）  
 - [ ] 桌面/CLI 向导暴露 sdk（产品决策，非本切片）
 
 [PROTOCOL]: 改边界先改本文与 L2；合入后总账 gap 记 t6x 一行（勿整包勾 P2-7）

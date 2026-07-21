@@ -12,18 +12,20 @@
 //! | route soft/force fill | preflight · spawn · poll · stop · collect |
 //! | failover target name | live registry get + preflight gate |
 //! | isolation FailClosed | worktree path create (worktree.rs) |
-//! note: `sdk` = 非 CLI 路径（P2-7 S0 inline · S1 messages HTTP）；默认 config 不注册
+//! note: `sdk` = 非 CLI 路径（P2-7 S0 inline · S1 messages HTTP · S2 tool loop）；默认 config 不注册
 
 pub mod claude;
 pub mod codex;
 pub mod fake;
 pub mod sdk;
 pub mod sdk_http;
+pub mod sdk_tool_loop;
 
 // re-export parse helper for tests
 pub use claude::parse_agent_id;
 pub use sdk::{InlineSdkBackend, SdkBackend, SdkProvider};
 pub use sdk_http::{AnthropicMessagesBackend, MessagesHttpClient, ReqwestMessagesClient};
+pub use sdk_tool_loop::{is_tools_bin, AnthropicToolLoopBackend};
 
 use std::sync::Arc;
 
@@ -69,7 +71,7 @@ impl ProviderRegistry {
             }
         }
         // P2-7: non-CLI sdk path — opt-in only (default enabled=false).
-        // S0 bin=inline (default); S1 bin=messages|http|anthropic|api → Messages HTTP.
+        // S0 bin=inline; S1 bin=messages|… → HTTP one-shot; S2 bin=tools|… → tool loop.
         if let Some(pc) = config.provider("sdk") {
             if pc.enabled {
                 providers.push(Arc::new(build_sdk_provider(pc)?));
@@ -116,27 +118,47 @@ impl ProviderRegistry {
     }
 }
 
-/// Assemble [`SdkProvider`] with inline (S0) or messages HTTP (S1) backend.
+/// Assemble [`SdkProvider`] with inline (S0), messages HTTP (S1), or tool loop (S2).
 ///
-/// Selection: `providers.sdk.bin` ∈ {messages, http, anthropic, api} → HTTP;
-/// anything else (incl. `inline`) → [`InlineSdkBackend`]. Env `CCO_SDK_BACKEND`
-/// may force `messages` / `inline` when set.
+/// Selection (env `CCO_SDK_BACKEND` wins when set):
+/// - `tools` | `tool_loop` | `agent` → [`sdk_tool_loop::AnthropicToolLoopBackend`]
+/// - `messages` | `http` | `anthropic` | `api` → Messages one-shot
+/// - `inline` → [`InlineSdkBackend`]
+/// - else: `bin` aliases via [`sdk_http::is_messages_bin`] / [`sdk_tool_loop::is_tools_bin`]
 pub fn build_sdk_provider(pc: &ProviderConfig) -> Result<SdkProvider> {
     let env_backend = std::env::var("CCO_SDK_BACKEND")
         .ok()
         .map(|s| s.trim().to_ascii_lowercase())
         .filter(|s| !s.is_empty());
-    let use_messages = match env_backend.as_deref() {
-        Some("messages") | Some("http") | Some("anthropic") | Some("api") => true,
-        Some("inline") => false,
-        _ => sdk_http::is_messages_bin(&pc.bin),
+    let kind = match env_backend.as_deref() {
+        Some("tools") | Some("tool_loop") | Some("tool-loop") | Some("agent") => {
+            SdkBackendKind::Tools
+        }
+        Some("messages") | Some("http") | Some("anthropic") | Some("api") => {
+            SdkBackendKind::Messages
+        }
+        Some("inline") => SdkBackendKind::Inline,
+        _ if sdk_tool_loop::is_tools_bin(&pc.bin) => SdkBackendKind::Tools,
+        _ if sdk_http::is_messages_bin(&pc.bin) => SdkBackendKind::Messages,
+        _ => SdkBackendKind::Inline,
     };
-    if use_messages {
-        let backend = sdk_http::messages_backend_from_config(&pc.extra_args)?;
-        Ok(SdkProvider::with_backend(backend))
-    } else {
-        Ok(SdkProvider::new())
+    match kind {
+        SdkBackendKind::Tools => {
+            let backend = sdk_tool_loop::tool_loop_backend_from_config(&pc.extra_args)?;
+            Ok(SdkProvider::with_backend(backend))
+        }
+        SdkBackendKind::Messages => {
+            let backend = sdk_http::messages_backend_from_config(&pc.extra_args)?;
+            Ok(SdkProvider::with_backend(backend))
+        }
+        SdkBackendKind::Inline => Ok(SdkProvider::new()),
     }
+}
+
+enum SdkBackendKind {
+    Inline,
+    Messages,
+    Tools,
 }
 
 pub fn resolve_provider_bin(default: &str, env_key: &str) -> String {
@@ -272,6 +294,19 @@ mod tests {
             enabled: true,
             bin: "inline".into(),
             extra_args: vec![],
+            max_parallel: None,
+        };
+        let p = build_sdk_provider(&pc).unwrap();
+        assert_eq!(p.name(), "sdk");
+    }
+
+    #[test]
+    fn build_sdk_provider_tools_bin_selects_tool_loop() {
+        // Construction must succeed without API key; preflight gates keys (async).
+        let pc = ProviderConfig {
+            enabled: true,
+            bin: "tools".into(),
+            extra_args: vec!["claude-test".into()],
             max_parallel: None,
         };
         let p = build_sdk_provider(&pc).unwrap();

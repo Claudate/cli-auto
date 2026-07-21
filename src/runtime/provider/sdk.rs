@@ -4,7 +4,7 @@
 //! [OUTPUT]: in-process TaskResult (no agent CLI spawn)
 //! [POS]: runtime/provider — proves non-CLI path; default registry **off**
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/provider/CLAUDE.md
-//! note: S0 = InlineSdkBackend；S1 HTTP = [`super::sdk_http`] via injected backend（不堆进本文件）
+//! note: S0 = InlineSdkBackend；S1 HTTP = [`super::sdk_http`]；S2 tools = [`super::sdk_tool_loop`]（均注入，不堆进本文件）
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,7 +19,7 @@ use super::{
 };
 use crate::plan::TaskIR;
 
-/// Transport behind [`SdkProvider`]. S0 = inline; S1 = Messages HTTP ([`super::sdk_http`]).
+/// Transport behind [`SdkProvider`]. S0 = inline; S1 = Messages HTTP; S2 = tool loop.
 #[async_trait]
 pub trait SdkBackend: Send + Sync {
     /// Human label for meta.json (not the registry provider name).
