@@ -110,3 +110,21 @@ fn detect_launcher_auto() {
     assert!(!l.as_str().is_empty());
     let _ = PathBuf::from(".");
 }
+
+#[test]
+fn detect_launcher_windows_names() {
+    // Prefer aliases must resolve even on macOS/Linux host (no spawn).
+    assert_eq!(
+        cco::terminal::detect_launcher("wt").as_str(),
+        "wt"
+    );
+    assert_eq!(
+        cco::terminal::detect_launcher("powershell").as_str(),
+        "powershell"
+    );
+    assert_eq!(cco::terminal::detect_launcher("cmd").as_str(), "cmd");
+    assert_eq!(
+        cco::terminal::detect_launcher("windows_terminal").as_str(),
+        "wt"
+    );
+}

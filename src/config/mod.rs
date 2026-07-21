@@ -375,8 +375,10 @@ extra_args = []
 
 [terminal]
 default_kind = "embedded"
+# auto | iterm | terminal_app | wt | powershell | cmd | kitty | wezterm | ghostty | tmux | xdg | custom
 external_launcher = "auto"
 # external_command = "kitty -d {cwd} -e sh -c '{cmd}'"
+# Windows custom example: external_command = "wt -d {cwd} -- powershell -NoExit -Command {cmd}"
 max_embedded = 6
 max_external = 8
 auto_open_on_start = false

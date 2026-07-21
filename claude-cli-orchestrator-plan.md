@@ -996,7 +996,7 @@ cp target/release/cco ~/.local/bin/
 - 计划可视化导出（Mermaid） → **P2-7 部分 t41**：`format_mermaid` + `cco parse --mermaid` ✅；其余 M5 仍池内  
 - 自动开 PR（gh） → **P2-7**  
 - 远程 worker — 明确不在 v1  
-- Windows 外部终端 launcher → **P2-7** 
+- Windows 外部终端 launcher → **P2-7 部分 t59**：`wt` / `powershell` / `cmd` + Win follow_logs；**不做** SDK / 自动 PR 
 
 ---
 
