@@ -29,6 +29,8 @@ split-soft-sqlite-2026-07-21.md: 拆分软接受 + SQLite **过渡** dual-write�
 cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**（顺序/并发/是否执行 + 完整任务字段；现 CLI 规划仍会卡）
 split-agent-model-path-2026-07-21.md: **专用拆分 Agent（走模型）** + 任务参数 schema；僵尸 planning reap（Z1）；开源对照 OpenHands/LangGraph 等
 openhands-style-split-agent-landing-2026-07-21.md: **换窗口执行真源** — OpenHands 气质拆分 Agent 完整落地（P0–P5 · 现状盘点 · PR 切片 · 启动指令）
+subjective-desire-decision-concept.md: **接近主观渴望 · 构思真源**（个人价值澄清 · 非营运 · Brief 终点 · 与 cco 姊妹关系 · **无排期**）
+guided-plan-memory-decision-2026-07-21.md: **引导/记忆/对抗工程草稿**（可被 subjective-desire 构思纠偏；嫁接 cco 时的形状想象）
 gap-and-landing-plan-2026-07-18.md: 历史总账 + D5 池导航（D0–D4 已闭环 · P2-17 收口 t58；**不**新开 D 阶段）
 p2-7-sdk-provider-2026-07-21.md: **P2-7 单项** 非 CLI `sdk` WorkerPort（S0 inline ✅ · S1 Messages HTTP ✅ · S2 tool loop ✅ · 默认关 · 勿整包 M5）
 （根目录，非本目录成员）[`../claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md): 编排器设计（M0–M4 已落地；M5 → D5）
