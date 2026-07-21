@@ -110,8 +110,8 @@ function flowPlanHowLabel(adapter) {
 
 function flowChooserSub(hasSelected) {
   return hasSelected
-    ? "确认同时进行几步后，点「开始拆分」"
-    : "选好计划，确认同时进行几步后点「开始拆分」；可换一份计划";
+    ? "确认同时进行几步后，点「拆成步骤」"
+    : "选好计划，确认同时进行几步后点「拆成步骤」；可换一份计划";
 }
 
 function flowConfirmDepsLine(kind, depTitles, opts = {}) {
@@ -124,13 +124,32 @@ function flowConfirmDepsLine(kind, depTitles, opts = {}) {
 
 function flowConfirmMetaLine(chars, editing) {
   if (editing) return `编辑中 · 说明 ${chars} 字`;
-  return `任务内容 ${chars} 字 · 点左侧可切换步骤`;
+  return `说明 ${chars} 字 · 点中间卡片可切换步骤`;
 }
 
 function flowPromptLabel(editing) {
   return editing
     ? "编辑步骤说明"
-    : "拆解后的任务内容（执行时按完整 worker 说明进行）";
+    : "步骤说明（执行时按完整说明进行）";
+}
+
+function flowConfirmStartLabel(kind) {
+  if (kind === "running") return "运行中…";
+  if (kind === "paused") return "继续运行";
+  if (kind === "again") return "再次确认并开始";
+  return "确认并开始";
+}
+
+function flowSplitCtaLabel() {
+  return "拆成步骤";
+}
+
+function flowReplanLabel() {
+  return "重新拆分（保留你的修改）";
+}
+
+function flowSanitizeDepsLabel() {
+  return "让可并行的真正并行";
 }
 
 /**
@@ -170,11 +189,11 @@ function flowEngineLabel(provider) {
 }
 
 function flowBoardSectionLabel() {
-  return "执行看板";
+  return "步骤日志";
 }
 
 function flowEmptyBoard() {
-  return "暂无执行窗口 · 开始运行后这里会按步骤出现";
+  return "暂无执行窗口 · 确认并开始后这里会按步骤出现";
 }
 
 function flowRunningMonitorTitle() {
@@ -185,11 +204,23 @@ function flowStallUserText(raw) {
   const s = String(raw || "").trim();
   if (!s) return flowPickBlurb("stall", "x") || "步骤较久没有新进展，正在处理…";
   // Soften engine jargon if present
-  return s
+  let out = s
     .replace(/CLI/gi, "执行通道")
     .replace(/provider/gi, "执行方式")
     .replace(/claude/gi, "默认通道")
-    .replace(/codex/gi, "备用通道");
+    .replace(/codex/gi, "备用通道")
+    .replace(/卡死/g, "卡住")
+    .replace(/阈值/g, "等待上限");
+  // Prefer fun blurb as suffix when serious already has numbers
+  const fun = flowPickBlurb("stall", out.slice(0, 24));
+  if (fun && !out.includes(fun.slice(0, 6))) {
+    return flowJoinSeriousFun(out, fun);
+  }
+  return out;
+}
+
+function flowFiveStateHint() {
+  return "排队中 · 进行中 · 已完成 · 已卡住 · 失败";
 }
 
 function flowWaveTaskMeta(id, depsText, statusHint) {
@@ -220,38 +251,37 @@ function flowModeHint(mode) {
 }
 
 /**
- * Flow stages for the strip: read → split → confirm → run → wrap.
- * @param {"planning"|"confirm"|"running"|"done"|"fail"|"idle"} phase
+ * Flow stages (PRODUCT 五步压缩条): 写计划 → 拆分 → 执行 → 结果
+ * planning+confirm 同属「拆分」高亮；confirm 时副文案区分核对。
+ * @param {"planning"|"confirm"|"running"|"done"|"fail"|"idle"|"pick"} phase
  */
 function flowStageState(phase) {
   const p = String(phase || "idle");
-  // order: 0 read, 1 split, 2 confirm, 3 run, 4 wrap
+  // order: 0 写计划, 1 拆分, 2 执行, 3 结果
   const stages = [
-    { id: "read", label: "读计划" },
-    { id: "split", label: "拆步骤" },
-    { id: "confirm", label: "确认" },
+    { id: "author", label: "写计划" },
+    { id: "split", label: "拆分" },
     { id: "run", label: "执行" },
-    { id: "wrap", label: "收尾" },
+    { id: "result", label: "结果" },
   ];
   let active = 0;
-  if (p === "planning") active = 1;
-  else if (p === "confirm") active = 2;
-  else if (p === "running") active = 3;
-  else if (p === "done") active = 4;
-  else if (p === "fail") active = 3;
+  if (p === "planning" || p === "confirm") active = 1;
+  else if (p === "running") active = 2;
+  else if (p === "done") active = 3;
+  else if (p === "fail") active = 2;
   else if (p === "idle" || p === "pick") active = 0;
   return { stages, active, phase: p };
 }
 
-/** HTML for the horizontal flow stage strip. */
+/** HTML for the horizontal flow stage strip. opts.compact = 只阶段点、不副文案 */
 function flowStageStripHtml(phase, opts = {}) {
   const { stages, active } = flowStageState(phase);
   const serious =
     opts.serious ||
     (phase === "planning"
-      ? "正在拆成可执行步骤"
+      ? "正在把计划拆成可执行步骤"
       : phase === "confirm"
-        ? "请确认步骤后开始"
+        ? "看清波次后点「确认并开始」"
         : phase === "running"
           ? "按波次推进中"
           : phase === "done"
@@ -273,7 +303,7 @@ function flowStageStripHtml(phase, opts = {}) {
               : phase === "fail"
                 ? flowPickBlurb("fail", phase)
                 : "";
-  const line = flowJoinSeriousFun(serious, fun);
+  const line = opts.compact ? "" : flowJoinSeriousFun(serious, fun);
   const steps = stages
     .map((s, i) => {
       let cls = "flow-stage";
@@ -284,7 +314,7 @@ function flowStageStripHtml(phase, opts = {}) {
     })
     .join('<span class="flow-stage-sep" aria-hidden="true">→</span>');
   return (
-    `<div class="flow-stage-strip" role="status" aria-live="polite">` +
+    `<div class="flow-stage-strip${opts.compact ? " is-compact" : ""}" role="status" aria-live="polite">` +
     `<div class="flow-stage-row">${steps}</div>` +
     (line ? `<div class="flow-stage-line muted">${line}</div>` : "") +
     `</div>`
@@ -307,4 +337,10 @@ function renderFlowStageStrip(parentEl, phase, opts = {}) {
   tmp.innerHTML = html;
   const next = tmp.firstElementChild;
   if (next) box.replaceWith(next);
+}
+
+// A5-2d: ESM settings form reads local prefs via window
+if (typeof window !== "undefined") {
+  window.flowFunEnabled = flowFunEnabled;
+  window.setFlowFunEnabled = setFlowFunEnabled;
 }

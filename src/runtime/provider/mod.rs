@@ -1,9 +1,17 @@
-//! WorkerProvider trait and registry. Host never assembles CLI flags here.
+//! Worker adapters implementing [`crate::ports::WorkerPort`] (A1-4).
+//! Host never assembles CLI flags here.
 //!
-//! [INPUT]: 依赖 config::Config、plan::TaskIR、which/dirs 解析 bin
-//! [OUTPUT]: ProviderRegistry / WorkerProvider / bin 解析
-//! [POS]: runtime/provider 总线，被 scheduler 与 doctor 消费
+//! [INPUT]: config::Config · domain::plan::TaskIR · which/dirs 解析 bin
+//! [OUTPUT]: ProviderRegistry · WorkerPort 实现（claude/codex/fake）
+//! [POS]: runtime/provider 适配器；被 scheduler 与 doctor 消费
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/provider/CLAUDE.md
+//!
+//! ## Pure vs IO
+//! | Pure (domain/worker) | IO (this module) |
+//! |----------------------|------------------|
+//! | route soft/force fill | preflight · spawn · poll · stop · collect |
+//! | failover target name | live registry get + preflight gate |
+//! | isolation FailClosed | worktree path create (worktree.rs) |
 
 pub mod claude;
 pub mod codex;
@@ -12,117 +20,27 @@ pub mod fake;
 // re-export parse helper for tests
 pub use claude::parse_agent_id;
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::plan::TaskIR;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum TaskStatus {
-    Pending,
-    Queued,
-    Starting,
-    Running,
-    Done,
-    Failed,
-    Stopped,
-    Skipped,
-    Timeout,
-}
+// ── Port DTO + trait re-exports (compat: historical `runtime::provider::*` paths) ──
+pub use crate::ports::worker::{
+    Capabilities, StartCtx, TaskResult, TaskStatus, WorkerHandle, WorkerPort, WorkerStatus,
+};
 
-impl TaskStatus {
-    pub fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            Self::Done | Self::Failed | Self::Stopped | Self::Skipped | Self::Timeout
-        )
-    }
-
-    pub fn is_success(&self) -> bool {
-        matches!(self, Self::Done)
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct Capabilities {
-    pub print: bool,
-    pub background: bool,
-    pub stop: bool,
-    pub cost: bool,
-    pub session_resume: bool,
-    pub interactive_pty: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct StartCtx {
-    pub run_id: String,
-    pub project_root: PathBuf,
-    pub work_dir: PathBuf,
-    pub task_dir: PathBuf,
-    pub env_extra: Vec<(String, String)>,
-}
-
-#[derive(Debug, Clone)]
-pub struct WorkerHandle {
-    pub provider: String,
-    pub task_id: String,
-    pub mode: String,
-    /// Provider-private opaque id (pid string, agent id, …)
-    pub opaque_id: String,
-    pub pid: Option<u32>,
-    pub started_at: chrono::DateTime<chrono::Utc>,
-    pub stdout_path: PathBuf,
-    pub meta_path: PathBuf,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkerStatus {
-    Running,
-    Done,
-    Failed,
-    Stopped,
-    Timeout,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskResult {
-    pub status: TaskStatus,
-    pub exit_code: Option<i32>,
-    pub stdout_path: Option<PathBuf>,
-    pub session_id: Option<String>,
-    pub agent_id: Option<String>,
-    pub cost_usd: Option<f64>,
-    pub raw: serde_json::Value,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
-
-#[async_trait]
-pub trait WorkerProvider: Send + Sync {
-    fn name(&self) -> &str;
-    fn capabilities(&self) -> Capabilities;
-    async fn preflight(&self) -> Result<()>;
-    fn validate_task(&self, task: &TaskIR) -> Result<()>;
-    async fn start(&self, task: &TaskIR, ctx: &StartCtx) -> Result<WorkerHandle>;
-    async fn poll(&self, handle: &WorkerHandle) -> Result<WorkerStatus>;
-    async fn stop(&self, handle: &WorkerHandle) -> Result<()>;
-    async fn collect(&self, handle: &WorkerHandle) -> Result<TaskResult>;
-}
+/// Historical name for [`WorkerPort`]. Prefer `WorkerPort` / `ports::WorkerPort`.
+pub use crate::ports::worker::WorkerPort as WorkerProvider;
 
 pub struct ProviderRegistry {
-    providers: Vec<Arc<dyn WorkerProvider>>,
+    providers: Vec<Arc<dyn WorkerPort>>,
 }
 
 impl ProviderRegistry {
     pub fn from_config(config: &Config) -> Result<Self> {
-        let mut providers: Vec<Arc<dyn WorkerProvider>> = Vec::new();
+        let mut providers: Vec<Arc<dyn WorkerPort>> = Vec::new();
 
         if let Some(pc) = config.provider("claude") {
             if pc.enabled {
@@ -158,14 +76,14 @@ impl ProviderRegistry {
     }
 
     /// Build a registry from pre-constructed providers (integration tests / mock aliases).
-    pub fn from_providers(providers: Vec<Arc<dyn WorkerProvider>>) -> Result<Self> {
+    pub fn from_providers(providers: Vec<Arc<dyn WorkerPort>>) -> Result<Self> {
         if providers.is_empty() {
             bail!("ProviderRegistry::from_providers: empty provider list");
         }
         Ok(Self { providers })
     }
 
-    pub fn get(&self, name: &str) -> Result<Arc<dyn WorkerProvider>> {
+    pub fn get(&self, name: &str) -> Result<Arc<dyn WorkerPort>> {
         self.providers
             .iter()
             .find(|p| p.name() == name)

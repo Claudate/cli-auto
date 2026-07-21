@@ -1,10 +1,14 @@
-//! Run lifecycle: list/load/start/stop/resume + plan-job confirm.
+//! Run lifecycle IO adapter (migration facade · A1-7).
+//!
+//! Presentation should call [`crate::app::run`] / [`crate::app::split`].
+//! This module holds disk/scheduler IO; `confirm_start` is a one-line
+//! facade over [`crate::app::split::confirm`].
 //!
 //! [INPUT]: Config · StartRunRequest · PlanIR · plan job id
 //! [OUTPUT]: RunSummary · PlanMeta · list_plans/list_plan_meta · start_run_* · confirm_start ·
 //!           stop_run · resume_run_async · start_rework_from_run · accept_run_residual（P-loop）
-//! [POS]: services 子模块；Mode B confirm_start 唯一业务入口；rework 另起 run
-//! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md
+//! [POS]: services 子模块；Mode B 开跑真源 = app::split::confirm；rework 另起 run
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md · **勿在此新增业务策略**
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -396,11 +400,11 @@ pub use crate::plan::planner::{
 };
 
 /// Freeze proposed plan and start scheduler; returns run_id.
+///
+/// A1 facade: business entry lives in [`crate::app::split::confirm`]; this
+/// symbol stays for CLI/Tauri/tests until all call sites migrate.
 pub fn confirm_start(config: Config, job_id: &str) -> Result<String> {
-    let (job, ir) = crate::plan::planner::load_proposed_for_exec(&config, job_id)?;
-    let run_id = start_run_from_plan(config.clone(), job.project.clone(), &ir)?;
-    crate::plan::planner::mark_confirmed(&config, job_id, &run_id, &ir)?;
-    Ok(run_id)
+    crate::app::split::confirm(config, job_id)
 }
 
 pub fn stop_run(config: &Config, run_id: &str) -> Result<()> {

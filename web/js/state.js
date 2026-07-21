@@ -1,7 +1,9 @@
 /**
- * [INPUT]: 依赖 window 全局（顺序加载）；Tauri invoke
- * [OUTPUT]: state UI 片段
- * [POS]: web/js D4 自 app.js 纵切；无构建器，顺序 script 共享全局
+ * [INPUT]: 依赖 window 全局（顺序加载）；Tauri invoke 桥
+ * [OUTPUT]: state UI 片段 · 全局 invoke/requireGateway（A2/A5-2e）
+ * [POS]: web/js D4 自 app.js 纵切；A2 ESM 入口 main.js 后挂 ccoGateway
+ * note: invoke/getInvoke = 迁移期桥；业务 classic 用 requireGateway()→ccoGateway；
+ *       feature 内禁止直接 invoke/__TAURI__（只经 shared/gateway.js）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 /* cco desktop — state */
@@ -10,10 +12,20 @@
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
+// A2/A5: classic `const` is not on window; ESM features/* need the same object.
+if (typeof window !== "undefined") {
+  window.$ = $;
+  window.$$ = $$;
+}
+
 const LOG_FONT_KEY = "cco.logFontSize";
-/** D1 决议：默认 auto-start；高级「规划后暂停确认」= true 时不自动开跑 */
+/**
+ * P2-16 / S0：存储键语义仍是「暂停确认」——值为 "1" 表示停在拆分台。
+ * 产品默认：停在拆分台（主受众看见拆分）；高级「拆分后自动开始」写 "0"。
+ * 未写入过键 → 默认停台（与 D1 旧默认 true 翻转）。
+ */
 const PAUSE_CONFIRM_KEY = "cco.pauseConfirmAfterPlan";
-/** C3 方案 B：聊天/计划卡「执行此计划」是否直开 analyze（默认关 = 方案 A） */
+/** C3 方案 B：聊天/计划卡「拆成步骤」是否直开 analyze（默认关 = 方案 A） */
 const CHAT_ASSIGN_DIRECT_KEY = "cco.chatAssignDirect";
 
 function chatAssignDirectEnabled() {
@@ -41,13 +53,13 @@ const state = {
   planPreview: null,
   selectedTaskId: null,
   filterFailedOnly: false, // legacy, mapped to cliStatusFilter=fail
-  cliStatusFilter: "all", // all | run | wait | done | fail
+  cliStatusFilter: "all", // all | run | wait | stall | done | fail
   planCollapsed: true, // 默认只显示当前计划条
   planChooserOpen: false,
     doctorCache: null, // { ok, at, lines }
   doctorDismissedKey: null, // 用户点忽略后隐藏同类警告
-  /** 默认 true：分配后自动 confirm_start；高级开关 pauseConfirm 可关 */
-  autoStartAfterPlan: localStorage.getItem(PAUSE_CONFIRM_KEY) !== "1",
+  /** 默认 false：拆完停拆分台；仅当用户显式开「拆分后自动开始」(存 "0") 才 auto confirm_start */
+  autoStartAfterPlan: localStorage.getItem(PAUSE_CONFIRM_KEY) === "0",
   closedPanels: {}, // taskId -> true
   panelPos: JSON.parse(localStorage.getItem("cco.panelPos") || "{}"),
   /** P1-1：每任务日志签名，避免全量 innerHTML 重绘闪烁 */
@@ -73,7 +85,15 @@ const state = {
   drag: null, // { id, ox, oy }
   dragSession: {}, // taskId -> true 本会话拖过才保留 free
   taskStripExpanded: localStorage.getItem("cco.taskStripExpanded") === "1",
+  /** R1: 执行台默认展开进度看板（主视觉）；用户可再折叠 */
   taskDashCollapsed: localStorage.getItem("cco.taskDashCollapsed") === "1",
+  /**
+   * Per-task log expand map. R1 default OFF (logs secondary).
+   * Missing key → collapsed; user toggle writes true/false.
+   */
+  cliLogExpanded: {},
+  /** Monitor details fold open state (session) */
+  monitorLogsOpen: localStorage.getItem("cco.monitorLogsOpen") === "1",
   cliBodyHeight: (() => {
     const v = localStorage.getItem("cco.cliBodyHeight");
     if (v === "auto" || v == null || v === "") return "auto";
@@ -101,31 +121,73 @@ const state = {
   chatSessions: {}, // path -> { session_id, messages, draft_plan, draftPath, busy, waitStartedAt }
 };
 
-/* ── Status labels (人话) ── */
+// A2/A5 ESM bridge — features/* read window.state + classic helpers
+if (typeof window !== "undefined") {
+  window.state = state;
+  window.PAUSE_CONFIRM_KEY = PAUSE_CONFIRM_KEY;
+}
+// Helpers assigned after definition (toast/esc/badge) — see bottom bridge
+
+/* ── Status labels (人话 · R2 五态优先) ── */
 const STATUS_LABEL = {
   completed: "已完成",
   done: "已完成",
-  ok: "正常",
-  running: "运行中",
-  starting: "启动中",
+  ok: "已完成",
+  running: "进行中",
+  starting: "进行中",
   queued: "排队中",
-  validated: "校验中",
-  init: "初始化",
-  paused: "已暂停",
-  resuming: "恢复中",
+  validated: "进行中",
+  init: "进行中",
+  paused: "排队中",
+  resuming: "进行中",
   failed: "失败",
-  aborted: "已中止",
-  timeout: "超时",
-  stopped: "已停止",
-  pending: "等待中",
-  skipped: "已跳过",
-  idle: "空闲",
-  err: "错误",
+  aborted: "失败",
+  timeout: "失败",
+  stopped: "失败",
+  pending: "排队中",
+  waiting: "排队中",
+  ready: "排队中",
+  skipped: "已完成",
+  idle: "排队中",
+  err: "失败",
+  stall: "已卡住",
+  stalled: "已卡住",
+};
+
+/** R2 product five states */
+const FIVE_STATE_LABEL = {
+  wait: "排队中",
+  run: "进行中",
+  done: "已完成",
+  stall: "已卡住",
+  fail: "失败",
 };
 
 function statusLabel(status) {
   const s = String(status || "").toLowerCase();
   return STATUS_LABEL[s] || status || "—";
+}
+
+function fiveStateLabel(bucket) {
+  return FIVE_STATE_LABEL[bucket] || "排队中";
+}
+
+/** True when live task is past half stall threshold (or last retry was stall). */
+function isStalledTask(t) {
+  if (!t) return false;
+  const st = String(t.status || "").toLowerCase();
+  const live =
+    typeof isLiveStatus === "function"
+      ? isLiveStatus(st)
+      : ["running", "starting", "queued", "validated", "init", "resuming"].includes(st);
+  if (!live) return false;
+  const thr =
+    t.stall_threshold_secs != null ? Number(t.stall_threshold_secs) : null;
+  const idle = t.stall_idle_secs != null ? Number(t.stall_idle_secs) : null;
+  if (idle != null && thr != null && thr > 0 && idle >= Math.max(15, thr * 0.5)) {
+    return true;
+  }
+  return String(t.last_retry_reason || "").toLowerCase() === "stall" && live;
 }
 
 function toast(msg) {
@@ -172,16 +234,29 @@ async function invoke(cmd, args = {}) {
   }
 }
 
+/**
+ * A5-2e: classic business IPC → named gateway methods only.
+ * Command strings live in shared/gateway.js; features import that module.
+ * @returns {import('./shared/gateway.js').gateway}
+ */
+function requireGateway() {
+  const g = typeof window !== "undefined" ? window.ccoGateway : null;
+  if (!g) throw new Error("请通过 CCO.app 启动（gateway 未就绪）");
+  return g;
+}
+
 async function openNativeDialog(opts) {
-  // tauri-plugin-dialog 全局形态兜底
+  // Prefer gateway (A5-2e); bridge falls back for pre-main classic only.
+  if (window.ccoGateway?.dialogOpen) {
+    return window.ccoGateway.dialogOpen(opts);
+  }
   const d =
     window.__TAURI__?.dialog ||
     window.__TAURI__?.plugins?.dialog ||
     null;
   if (d?.open) return d.open(opts);
-  // 动态 import（若打包进了 webview）
   try {
-    if (window.__TAURI__?.core?.invoke) {
+    if (getInvoke()) {
       // plugin command 需 { options } 包装（含 defaultPath）
       return await invoke("plugin:dialog|open", { options: opts });
     }
@@ -419,12 +494,14 @@ function badge(status) {
   return `<span class="badge ${cls}">${esc(statusLabel(status))}</span>`;
 }
 
-function statusDot(status) {
+/** @param {string} status @param {object} [task] for stall tint */
+function statusDot(status, task) {
+  if (task && typeof isStalledTask === "function" && isStalledTask(task)) return "warn";
   const s = String(status || "").toLowerCase();
   if (["running", "starting", "queued", "validated", "init"].includes(s)) return "live";
   if (["paused", "resuming", "pending"].includes(s)) return "warn";
   if (["failed", "aborted", "timeout", "stopped"].includes(s)) return "err";
-  if (["completed", "done", "ok", "skipped"].includes(s)) return "live";
+  if (["completed", "done", "ok", "skipped"].includes(s)) return "ok";
   return "";
 }
 
@@ -544,11 +621,23 @@ function showPage(name) {
   }
   $$(".page").forEach((p) => p.classList.toggle("active", p.id === `page-${name}`));
   const sub = $("#page-sub");
+  // F3：body 上标记主区角色，便于 CSS 互斥噪音
+  try {
+    document.body.dataset.ccoPage = name;
+    document.body.dataset.ccoPhase = state.phase || "pick";
+    document.body.classList.toggle(
+      "cco-run-active",
+      typeof hasActiveRun === "function" && hasActiveRun()
+    );
+  } catch (_) {}
+  try {
+    if (typeof refreshFlowStrips === "function") refreshFlowStrips();
+  } catch (_) {}
   if (name === "welcome") {
     $("#page-title").textContent = "欢迎";
     if (sub) {
       sub.hidden = false;
-      sub.textContent = "添加项目 → 选计划 → 开始运行";
+      sub.textContent = "添加项目 → 写计划 → 拆成步骤 → 确认并开始";
     }
   } else if (name === "workspace") {
     updateWorkspaceTitle();
@@ -579,8 +668,8 @@ function showPage(name) {
           ? String(state.selectedPath).split(/[/\\]/).filter(Boolean).pop()
           : "");
       sub.textContent = label
-        ? `选中 · 预览 · 编辑 · 分配 · ${label}`
-        : "选中计划后预览、编辑或分配";
+        ? `选中 · 预览 · 编辑 · 拆成步骤 · ${label}`
+        : "选中计划后预览、编辑或拆成步骤";
     }
     try {
       if (typeof renderPlanPicker === "function") renderPlanPicker();
@@ -633,13 +722,19 @@ function goHome() {
     $("#page-title").textContent = "我的项目";
     $("#page-sub").textContent = "从左侧选择一个项目（可多项目同时运行）";
     const we = $("#welcome-empty");
+    const tplHtml =
+      typeof planTemplateWelcomeHtml === "function"
+        ? planTemplateWelcomeHtml()
+        : "";
     we.innerHTML = `
+      <p class="welcome-kicker muted">本机任务控制台</p>
       <h2>选择左侧项目，或添加新项目</h2>
-      <p class="muted">多个项目可同时运行；进入项目后选计划即可开始，右侧显示任务进度与日志。</p>
+      <p class="muted">进入项目后写计划、从模板开始或选已有 →「拆成步骤」→ 拆分台确认后开跑。多项目可并行。</p>
       <div class="welcome-actions">
         <button class="btn primary" id="btn-welcome-add2" type="button">添加项目文件夹</button>
-      </div>`;
-    // 点击由全局委托处理 btn-welcome-add2
+      </div>
+      ${tplHtml}`;
+    // 点击由全局委托处理 btn-welcome-add2 / data-plan-template
   }
 }
 
@@ -660,7 +755,11 @@ function closeModal() {
 
 /* ── Projects ── */
 async function loadProjects() {
-  state.projects = (await invoke("get_projects")) || [];
+  // A5-2e: named gateway when main mounted; invoke bridge only pre-main
+  const g = typeof window !== "undefined" ? window.ccoGateway : null;
+  state.projects = g?.getProjects
+    ? (await g.getProjects()) || []
+    : (await invoke("get_projects")) || [];
   renderProjectList();
   if (state.selectedPath && !state.projects.some((p) => p.path === state.selectedPath)) {
     state.selectedPath = null;
@@ -706,3 +805,16 @@ function renderProjectList() {
   });
 }
 
+// A5-2d: expose helpers for features/settings ESM (classic const/function not on window)
+if (typeof window !== "undefined") {
+  window.toast = toast;
+  window.esc = esc;
+  window.badge = badge;
+  window.chatAssignDirectEnabled = chatAssignDirectEnabled;
+  window.setChatAssignDirectEnabled = setChatAssignDirectEnabled;
+  window.applyLogFontSize = applyLogFontSize;
+  window.isLiveStatus = isLiveStatus;
+  if (typeof PAUSE_CONFIRM_KEY !== "undefined") {
+    window.PAUSE_CONFIRM_KEY = PAUSE_CONFIRM_KEY;
+  }
+}

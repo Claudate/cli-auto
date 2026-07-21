@@ -9,23 +9,20 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
+use crate::app::run as run_uc;
 use crate::cli::interactive;
 use crate::config::Config;
-use crate::plan;
 
 pub fn run(_config: &Config, project: Option<PathBuf>) -> Result<i32> {
     let project = interactive::resolve_project(project, true)?;
     interactive::ensure_project_dir(&project)?;
-    let plans = plan::list_plans(&project)?;
+    // A5-1: list via app (same strings as desktop plan_meta paths).
+    let plans = run_uc::plans(&project)?;
     if plans.is_empty() {
         println!("(no plans found under docs/ or .cco/)");
     } else {
-        for p in plans {
-            if let Ok(rel) = p.strip_prefix(&project) {
-                println!("{}", rel.display());
-            } else {
-                println!("{}", p.display());
-            }
+        for rel in plans {
+            println!("{rel}");
         }
     }
     Ok(0)

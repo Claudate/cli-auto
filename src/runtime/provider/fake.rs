@@ -1,4 +1,4 @@
-//! Fake WorkerProvider for tests and demos.
+//! Fake adapter implementing [`crate::ports::WorkerPort`] for tests and demos.
 //!
 //! [INPUT]: StartCtx · TaskIR（读 prompt 中 CCO_DONE）
 //! [OUTPUT]: 立即/短延迟完成的 TaskResult

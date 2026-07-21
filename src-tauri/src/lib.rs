@@ -1,29 +1,38 @@
-//! Tauri desktop shell for cco.
+//! Tauri desktop shell for cco (A1-7 · thin presentation).
 //!
 //! [INPUT]: webview invoke · AppState(Config mutex)
-//! [OUTPUT]: tauri commands → cco::services（meta/runs/plans/plan_job/live/settings/chat…）
-//! [POS]: 桌面薄壳；禁止堆业务逻辑；P1-2 open_task_terminal 已接；chat 建计划已接
+//! [OUTPUT]: tauri commands → **cco::app** (split/run/chat) + thin services adapters (live/projects/settings)
+//! [POS]: 桌面薄壳；禁止堆业务逻辑；handler = 解析 IPC → app → DTO/错误字符串
 //! note: chat_send_cmd 必须 async + spawn_blocking，禁止同步堵 UI
 //! note: C3 多会话 chat_list/new/delete_session_cmd
 //! note: P2-4 open_monitor_window_cmd — 系统级第二窗（可拖到另一显示器）
+//! note: A1-7 — chat/split/run 走 app::*；IPC 命令名与 JSON 字段保持兼容
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src-tauri/CLAUDE.md
+//!
+//! ## Command → app map (A1-7)
+//! | Tauri command | Application |
+//! |---------------|-------------|
+//! | confirm_start_cmd | app::split::confirm |
+//! | start_plan_job_cmd / get_plan_job_cmd / latest_plan_job_cmd | app::split::* |
+//! | update/remove/sanitize plan task | app::split::* |
+//! | stop_run_cmd / resume_run_cmd / rework / residual | app::run::* |
+//! | get_runs / get_run / plan meta / preview | app::run::* |
+//! | start_run (legacy ParseOnly) | app::run::start_from_request |
+//! | chat_* / read_plan_md | app::chat::* |
+//! | live / projects / settings / doctor | services thin adapters (not yet app modules) |
 
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use cco::app::{chat as chat_uc, run as run_uc, split as split_uc};
 use cco::config::Config;
 use cco::services::{
-    accept_run_residual, add_project, chat_delete_session, chat_list_sessions, chat_new_session,
-    chat_normalize_plan, chat_save_attachment, chat_save_plan, chat_send, chat_session_get,
-    chat_stream_partial, confirm_start, get_plan_job, get_settings, latest_plan_job_for_project,
-    list_plan_meta, list_plans, list_projects, list_runs, load_run, open_task_terminal, preview_plan,
-    project_live_view, read_plan_md, remove_project, remove_proposed_task, resume_run_async,
-    run_doctor, sanitize_proposed_deps, set_settings, start_plan_job, start_rework_from_run,
-    start_run_async, stop_run, stop_task, task_logs, update_proposed_task, ChatAttachment,
-    ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSendResponse, ChatSession,
-    ChatSessionSummary, ChatStreamPartial, PlanJobView, PlanMeta, PlanPreview, ProjectLiveView,
-    ProjectSummary, ReworkStartResponse, RunSummary, SanitizeDepsResult, SettingsUpdate,
-    SettingsView, StartPlanJobRequest, StartRunRequest,
+    add_project, get_settings, list_projects, open_task_terminal, project_live_view, remove_project,
+    run_doctor, set_settings, task_logs, ChatAttachment, ChatNormalizePlanResponse,
+    ChatSavePlanResponse, ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
+    PlanJobView, PlanMeta, PlanPreview, ProjectLiveView, ProjectSummary, ReworkStartResponse,
+    RunSummary, SanitizeDepsResult, SettingsUpdate, SettingsView, StartPlanJobRequest,
+    StartRunRequest,
 };
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -34,7 +43,6 @@ struct AppState {
 }
 
 /// System-level second window for live CLI board (P2-4).
-/// Prefer a non-primary monitor when available so users can park logs on another display.
 const MONITOR_WINDOW_LABEL: &str = "cco-monitor";
 
 fn map_err(e: impl std::fmt::Display) -> String {
@@ -65,13 +73,13 @@ fn meta(state: tauri::State<'_, AppState>) -> Result<Value, String> {
 #[tauri::command]
 fn get_runs(state: tauri::State<'_, AppState>) -> Result<Vec<RunSummary>, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    list_runs(&config).map_err(map_err)
+    run_uc::list(&config).map_err(map_err)
 }
 
 #[tauri::command]
 fn get_run(state: tauri::State<'_, AppState>, run_id: String) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    let rs = load_run(&config, &run_id).map_err(map_err)?;
+    let rs = run_uc::load(&config, &run_id).map_err(map_err)?;
     let report_md = std::fs::read_to_string(rs.run_dir.join("report.md")).ok();
     Ok(json!({
         "run_id": rs.run_id,
@@ -89,7 +97,7 @@ fn get_run(state: tauri::State<'_, AppState>, run_id: String) -> Result<Value, S
 
 #[tauri::command]
 fn get_plans(project: String) -> Result<Vec<String>, String> {
-    list_plans(PathBuf::from(project).as_path()).map_err(map_err)
+    run_uc::plans(PathBuf::from(project).as_path()).map_err(map_err)
 }
 
 /// H2: plans + ever_completed / last_run_* (chooser & plan-rail).
@@ -99,13 +107,13 @@ fn get_plan_meta(
     project: String,
 ) -> Result<Vec<PlanMeta>, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    list_plan_meta(&config, PathBuf::from(project).as_path()).map_err(map_err)
+    run_uc::plan_meta(&config, PathBuf::from(project).as_path()).map_err(map_err)
 }
 
 #[tauri::command]
 fn preview_plan_cmd(project: String, plan: String) -> Result<PlanPreview, String> {
     let config = Config::load().unwrap_or_default();
-    preview_plan(
+    run_uc::plan_preview(
         PathBuf::from(project).as_path(),
         PathBuf::from(plan).as_path(),
         &config,
@@ -172,10 +180,8 @@ fn get_task_logs(
 #[tauri::command]
 fn open_task_terminal_cmd(
     state: tauri::State<'_, AppState>,
-    #[allow(non_snake_case)]
-    runId: String,
-    #[allow(non_snake_case)]
-    taskId: String,
+    #[allow(non_snake_case)] runId: String,
+    #[allow(non_snake_case)] taskId: String,
     kind: Option<String>,
 ) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
@@ -186,13 +192,11 @@ fn open_task_terminal_cmd(
 #[tauri::command]
 fn stop_task_cmd(
     state: tauri::State<'_, AppState>,
-    #[allow(non_snake_case)]
-    runId: String,
-    #[allow(non_snake_case)]
-    taskId: Option<String>,
+    #[allow(non_snake_case)] runId: String,
+    #[allow(non_snake_case)] taskId: Option<String>,
 ) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    stop_task(&config, &runId, taskId.as_deref()).map_err(map_err)?;
+    run_uc::stop_task(&config, &runId, taskId.as_deref()).map_err(map_err)?;
     Ok(json!({ "ok": true, "run_id": runId, "task_id": taskId }))
 }
 
@@ -218,19 +222,19 @@ async fn doctor_cmd(
     Ok(json!({ "ok": report.ok, "lines": lines }))
 }
 
+/// Legacy ParseOnly / direct disk plan start (IPC name kept for web compatibility).
+/// Mode B open-run is **only** [`confirm_start_cmd`] → app::split::confirm.
 #[tauri::command]
 fn start_run(state: tauri::State<'_, AppState>, req: StartRunRequest) -> Result<Value, String> {
     let mut config = state.config.lock().map_err(|e| e.to_string())?;
-    // Auto-pin project to allowed list when starting a run.
     let _ = add_project(&mut config, req.project.clone(), None);
-    // Record last_plan on the allowed project entry.
     if let Some(proj) = config.projects.iter_mut().find(|p| p.path == req.project) {
         proj.last_plan = Some(req.plan.clone());
         let _ = config.save();
     }
     let cfg = config.clone();
     drop(config);
-    let run_id = start_run_async(cfg, req).map_err(map_err)?;
+    let run_id = run_uc::start_from_request(cfg, req).map_err(map_err)?;
     Ok(json!({
         "run_id": run_id,
         "status": "started",
@@ -247,18 +251,16 @@ fn start_plan_job_cmd(
     let _ = add_project(&mut config, req.project.clone(), None);
     let cfg = config.clone();
     drop(config);
-    start_plan_job(&cfg, req).map_err(map_err)
+    split_uc::start_job(&cfg, req).map_err(map_err)
 }
 
 #[tauri::command]
 fn get_plan_job_cmd(
     state: tauri::State<'_, AppState>,
-    // Tauri 2 IPC expects camelCase keys from the webview.
-    #[allow(non_snake_case)]
-    jobId: String,
+    #[allow(non_snake_case)] jobId: String,
 ) -> Result<PlanJobView, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    get_plan_job(&config, &jobId).map_err(map_err)
+    split_uc::get_job(&config, &jobId).map_err(map_err)
 }
 
 #[tauri::command]
@@ -267,30 +269,22 @@ fn latest_plan_job_cmd(
     project: String,
 ) -> Result<Option<PlanJobView>, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    latest_plan_job_for_project(&config, PathBuf::from(project).as_path()).map_err(map_err)
+    split_uc::latest_job_for_project(&config, PathBuf::from(project).as_path()).map_err(map_err)
 }
-
 
 #[tauri::command]
 fn update_plan_task_cmd(
     state: tauri::State<'_, AppState>,
-    // Tauri 2 IPC expects camelCase keys from the webview.
-    #[allow(non_snake_case)]
-    jobId: String,
-    #[allow(non_snake_case)]
-    taskId: String,
+    #[allow(non_snake_case)] jobId: String,
+    #[allow(non_snake_case)] taskId: String,
     title: Option<String>,
     prompt: Option<String>,
-    // Optional-task checkbox; ignored / rejected for required tasks.
     include: Option<bool>,
-    // Per-task worker engine (H4); soft-kept at confirm_start.
     provider: Option<String>,
-    // P2-1: explicit depends_on edge list (task ids); None = leave unchanged.
-    #[allow(non_snake_case)]
-    dependsOn: Option<Vec<String>>,
+    #[allow(non_snake_case)] dependsOn: Option<Vec<String>>,
 ) -> Result<PlanJobView, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    update_proposed_task(
+    split_uc::edit_task(
         &config,
         &jobId,
         &taskId,
@@ -303,41 +297,34 @@ fn update_plan_task_cmd(
     .map_err(map_err)
 }
 
-/// P2-1: remove a task from the proposed plan (confirm screen).
 #[tauri::command]
 fn remove_plan_task_cmd(
     state: tauri::State<'_, AppState>,
-    #[allow(non_snake_case)]
-    jobId: String,
-    #[allow(non_snake_case)]
-    taskId: String,
+    #[allow(non_snake_case)] jobId: String,
+    #[allow(non_snake_case)] taskId: String,
 ) -> Result<PlanJobView, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    remove_proposed_task(&config, &jobId, &taskId).map_err(map_err)
+    split_uc::remove_task(&config, &jobId, &taskId).map_err(map_err)
 }
 
-/// Confirm-screen: drop unmotivated depends_on edges (same rules as planner sanitize).
 #[tauri::command]
 fn sanitize_plan_deps_cmd(
     state: tauri::State<'_, AppState>,
-    #[allow(non_snake_case)]
-    jobId: String,
+    #[allow(non_snake_case)] jobId: String,
 ) -> Result<SanitizeDepsResult, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    sanitize_proposed_deps(&config, &jobId).map_err(map_err)
+    split_uc::sanitize_deps(&config, &jobId).map_err(map_err)
 }
 
+/// **Sole Mode B business open-run** — app::split::confirm (A0-R1).
 #[tauri::command]
 fn confirm_start_cmd(
     state: tauri::State<'_, AppState>,
-    // Tauri 2 IPC expects camelCase keys from the webview.
-    #[allow(non_snake_case)]
-    jobId: String,
+    #[allow(non_snake_case)] jobId: String,
 ) -> Result<Value, String> {
     let mut config = state.config.lock().map_err(|e| e.to_string())?;
-    // Refresh last_plan from job if possible
     let cfg_for_job = config.clone();
-    if let Ok(view) = get_plan_job(&cfg_for_job, &jobId) {
+    if let Ok(view) = split_uc::get_job(&cfg_for_job, &jobId) {
         let project = PathBuf::from(&view.project);
         let plan = PathBuf::from(&view.plan_path);
         if let Some(proj) = config.projects.iter_mut().find(|p| p.path == project) {
@@ -347,7 +334,7 @@ fn confirm_start_cmd(
     }
     let cfg = config.clone();
     drop(config);
-    let run_id = confirm_start(cfg, &jobId).map_err(map_err)?;
+    let run_id = split_uc::confirm(cfg, &jobId).map_err(map_err)?;
     Ok(json!({
         "run_id": run_id,
         "status": "started",
@@ -357,30 +344,34 @@ fn confirm_start_cmd(
 }
 
 #[tauri::command]
-fn stop_run_cmd(state: tauri::State<'_, AppState>, #[allow(non_snake_case)] runId: String) -> Result<Value, String> {
+fn stop_run_cmd(
+    state: tauri::State<'_, AppState>,
+    #[allow(non_snake_case)] runId: String,
+) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    stop_run(&config, &runId).map_err(map_err)?;
+    run_uc::stop(&config, &runId).map_err(map_err)?;
     Ok(json!({ "ok": true, "run_id": runId, "status": "aborted" }))
 }
 
 #[tauri::command]
-fn resume_run_cmd(state: tauri::State<'_, AppState>, #[allow(non_snake_case)] runId: String) -> Result<Value, String> {
+fn resume_run_cmd(
+    state: tauri::State<'_, AppState>,
+    #[allow(non_snake_case)] runId: String,
+) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
-    resume_run_async(config, &runId).map_err(map_err)?;
+    run_uc::resume(config, &runId).map_err(map_err)?;
     Ok(json!({ "ok": true, "run_id": runId, "status": "resuming" }))
 }
 
-/// P-loop L2: generate rework wave from inspect ISSUES and start a new run.
 #[tauri::command]
 fn start_rework_cmd(
     state: tauri::State<'_, AppState>,
     #[allow(non_snake_case)] runId: String,
 ) -> Result<ReworkStartResponse, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
-    start_rework_from_run(config, &runId).map_err(map_err)
+    run_uc::start_rework(config, &runId).map_err(map_err)
 }
 
-/// P-loop L2: user explicitly accepts residual open risks.
 #[tauri::command]
 fn accept_residual_cmd(
     state: tauri::State<'_, AppState>,
@@ -388,20 +379,18 @@ fn accept_residual_cmd(
     note: Option<String>,
 ) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    accept_run_residual(&config, &runId, note.as_deref()).map_err(map_err)?;
+    run_uc::accept_residual(&config, &runId, note.as_deref()).map_err(map_err)?;
     Ok(json!({ "ok": true, "run_id": runId, "accepted_residual": true }))
 }
 
 #[tauri::command]
 fn open_path(path: String) -> Result<(), String> {
     let p = std::path::PathBuf::from(&path);
-    // 目录不存在时先创建，便于「打开计划夹」在空 projects 上可用
     if path.ends_with('/') || path.ends_with('\\') || (!p.exists() && p.extension().is_none()) {
         if !p.exists() {
             std::fs::create_dir_all(&p).map_err(map_err)?;
         }
     } else if let Some(parent) = p.parent() {
-        // 文件：确保父目录存在
         if !parent.as_os_str().is_empty() && !parent.exists() {
             std::fs::create_dir_all(parent).map_err(map_err)?;
         }
@@ -414,8 +403,6 @@ fn open_path(path: String) -> Result<(), String> {
 }
 
 /// P2-4: open (or focus) a real OS window for the live CLI board.
-/// Prefer the first non-primary display so the pane can sit on a second monitor.
-/// Query `?cco_window=monitor` lets the webview boot straight into workspace.
 #[tauri::command]
 async fn open_monitor_window_cmd(
     app: AppHandle,
@@ -439,7 +426,6 @@ async fn open_monitor_window_cmd(
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
     {
-        // Keep path readable; encode only unsafe query chars.
         let enc = p
             .replace('%', "%25")
             .replace('&', "%26")
@@ -457,7 +443,6 @@ async fn open_monitor_window_cmd(
         .resizable(true)
         .focused(true);
 
-    // Place on a secondary monitor when present (physical → logical via scale).
     if let Ok(monitors) = app.available_monitors() {
         let primary = app.primary_monitor().ok().flatten();
         let primary_pos = primary.as_ref().map(|m| *m.position());
@@ -469,7 +454,6 @@ async fn open_monitor_window_cmd(
         if let Some(m) = target {
             let scale = m.scale_factor();
             let pos = m.position();
-            // 40px inset from top-left of that display (logical units for .position).
             let x = (pos.x as f64 / scale) + 40.0;
             let y = (pos.y as f64 / scale) + 40.0;
             builder = builder.position(x, y);
@@ -520,41 +504,37 @@ fn set_settings_cmd(
     Ok(get_settings(&config))
 }
 
+// ── Chat (app::chat only · no open-run) ──────────────────────────────
+
 #[tauri::command]
 fn chat_session_get_cmd(
     project: String,
     #[allow(non_snake_case)] sessionId: Option<String>,
 ) -> Result<ChatSession, String> {
-    let sid = sessionId.as_deref();
-    chat_session_get(PathBuf::from(project).as_path(), sid).map_err(map_err)
+    chat_uc::get_session(PathBuf::from(project).as_path(), sessionId.as_deref()).map_err(map_err)
 }
 
-/// C3: list chat sessions for multi-session switcher.
 #[tauri::command]
 fn chat_list_sessions_cmd(project: String) -> Result<Vec<ChatSessionSummary>, String> {
-    chat_list_sessions(PathBuf::from(project).as_path()).map_err(map_err)
+    chat_uc::list_sessions(PathBuf::from(project).as_path()).map_err(map_err)
 }
 
-/// C3: create empty session (optional title).
 #[tauri::command]
 fn chat_new_session_cmd(
     project: String,
     title: Option<String>,
 ) -> Result<ChatSession, String> {
-    chat_new_session(PathBuf::from(project).as_path(), title.as_deref()).map_err(map_err)
+    chat_uc::new_session(PathBuf::from(project).as_path(), title.as_deref()).map_err(map_err)
 }
 
-/// C3: delete session JSON (+ attachments dir best-effort).
 #[tauri::command]
 fn chat_delete_session_cmd(
     project: String,
     #[allow(non_snake_case)] sessionId: String,
 ) -> Result<(), String> {
-    chat_delete_session(PathBuf::from(project).as_path(), &sessionId).map_err(map_err)
+    chat_uc::delete_session(PathBuf::from(project).as_path(), &sessionId).map_err(map_err)
 }
 
-/// Chat → Claude CLI can run for minutes. Must not block the Tauri async runtime
-/// or the webview freezes (send button stuck, whole app "dead").
 #[tauri::command]
 async fn chat_send_cmd(
     state: tauri::State<'_, AppState>,
@@ -565,7 +545,7 @@ async fn chat_send_cmd(
 ) -> Result<ChatSendResponse, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
     tokio::task::spawn_blocking(move || {
-        chat_send(
+        chat_uc::send(
             &config,
             PathBuf::from(project).as_path(),
             &message,
@@ -578,29 +558,25 @@ async fn chat_send_cmd(
     .map_err(|e| format!("chat_send join error: {e}"))?
 }
 
-/// C3: poll partial assistant text while chat_send is in-flight (non-blocking).
-/// Failure → empty text (UI keeps wait label); never blocks / panics on CJK.
 #[tauri::command]
 fn chat_stream_partial_cmd(
     project: String,
     #[allow(non_snake_case)] sessionId: Option<String>,
 ) -> Result<ChatStreamPartial, String> {
-    chat_stream_partial(PathBuf::from(project).as_path(), sessionId.as_deref()).map_err(map_err)
+    chat_uc::stream_partial(PathBuf::from(project).as_path(), sessionId.as_deref()).map_err(map_err)
 }
 
 #[tauri::command]
 fn read_plan_md_cmd(project: String, plan: String) -> Result<String, String> {
-    read_plan_md(PathBuf::from(project).as_path(), &plan).map_err(map_err)
+    chat_uc::read_plan_md(PathBuf::from(project).as_path(), &plan).map_err(map_err)
 }
 
-/// G4: save one image (base64) under .cco/chat/attachments/.
 #[tauri::command]
 async fn chat_save_attachment_cmd(
     project: String,
     #[allow(non_snake_case)] sessionId: Option<String>,
     #[allow(non_snake_case)] fileName: String,
     mime: String,
-    // Raw base64 (no data: URL prefix).
     #[allow(non_snake_case)] dataBase64: String,
 ) -> Result<ChatAttachment, String> {
     tokio::task::spawn_blocking(move || {
@@ -608,7 +584,7 @@ async fn chat_save_attachment_cmd(
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(dataBase64.trim())
             .map_err(|e| format!("invalid base64: {e}"))?;
-        chat_save_attachment(
+        chat_uc::save_attachment(
             PathBuf::from(project).as_path(),
             sessionId.as_deref(),
             &fileName,
@@ -627,13 +603,11 @@ async fn chat_save_plan_cmd(
     markdown: String,
     #[allow(non_snake_case)] sessionId: Option<String>,
     title: Option<String>,
-    // Optional project-relative path to overwrite (H1 未执行可改).
     #[allow(non_snake_case)] planRel: Option<String>,
-    // G1: project-relative dir for new files (default plans/).
     #[allow(non_snake_case)] plansDir: Option<String>,
 ) -> Result<ChatSavePlanResponse, String> {
     tokio::task::spawn_blocking(move || {
-        chat_save_plan(
+        chat_uc::save_plan(
             PathBuf::from(project).as_path(),
             sessionId.as_deref(),
             title.as_deref(),
@@ -647,7 +621,6 @@ async fn chat_save_plan_cmd(
     .map_err(|e| format!("chat_save_plan join error: {e}"))?
 }
 
-/// G0b: reshape draft plan markdown (local structure; optional CLI when available).
 #[tauri::command]
 async fn chat_normalize_plan_cmd(
     state: tauri::State<'_, AppState>,
@@ -657,7 +630,7 @@ async fn chat_normalize_plan_cmd(
 ) -> Result<ChatNormalizePlanResponse, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
     tokio::task::spawn_blocking(move || {
-        chat_normalize_plan(
+        chat_uc::normalize_plan(
             &config,
             PathBuf::from(project).as_path(),
             &markdown,

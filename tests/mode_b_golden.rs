@@ -82,6 +82,7 @@ async fn golden_prose_md_plan_confirm_exec() {
             provider: Some("fake".into()),
             mode: Some("print".into()),
             max_parallel: Some(2),
+            preserve_from_job_id: None,
         },
     )
     .unwrap();
@@ -139,6 +140,7 @@ async fn golden_serial_prompts_plan_confirm_exec() {
             provider: Some("fake".into()),
             mode: Some("print".into()),
             max_parallel: Some(2),
+            preserve_from_job_id: None,
         },
     )
     .unwrap();
@@ -194,6 +196,7 @@ async fn golden_cco_v1_plan_confirm_exec() {
             provider: Some("fake".into()),
             mode: Some("print".into()),
             max_parallel: Some(1),
+            preserve_from_job_id: None,
         },
     )
     .unwrap();
@@ -237,9 +240,11 @@ async fn golden_cco_v1_plan_confirm_exec() {
 }
 
 /// Limits: validate rejects > MAX_TASKS (unit covered in plan mod; smoke here via load).
+/// MAX_TASKS = hard cap including system-post tails; PLANNER_MAX_TASKS is the softer split cap.
 #[test]
 fn golden_limits_constants_exported() {
-    assert_eq!(MAX_TASKS, 20);
+    assert_eq!(MAX_TASKS, 22);
+    assert_eq!(cco::plan::PLANNER_MAX_TASKS, 20);
     assert!(cco::plan::MAX_PROMPT_CHARS >= 8_000);
     assert_eq!(cco::plan::MAX_TIMEOUT_SECS, 86_400);
 }

@@ -1,0 +1,270 @@
+//! Chat pure rules (A1-6 · P2-17).
+//!
+//! ## Pure parse/normalize vs session IO
+//! | Pure (this module) | IO (`services/chat` · future adapters) |
+//! |--------------------|----------------------------------------|
+//! | extract_plan_fence · nest fence depth | `.cco/chat/*.json` load/save/list |
+//! | sanitize_plan_title · extract_title_from_md | attachments write · plan.md write |
+//! | normalize/structure_plan_markdown | Claude CLI spawn / stream poll |
+//! | truncate_chars · sanitize_session_id | chat_stream_partial disk read |
+//! | extract_assistant_text · stream_result_summary | TTL cleanup · path resolve |
+//!
+//! [INPUT]: strings only (assistant text · md · session id tokens)
+//! [OUTPUT]: pure transforms; **no** path join / fs / provider
+//! [POS]: Domain Chat 上下文；只服务「生成计划」步，**禁止** confirm/start_run
+//! [PROTOCOL]: 变更时更新此头部与 domain/CLAUDE.md
+
+mod fence;
+mod id;
+mod normalize;
+mod stream_parse;
+mod text;
+mod title;
+
+pub use fence::extract_plan_fence;
+pub use id::{sanitize_session_id, DEFAULT_SESSION};
+pub use normalize::{normalize_plan_markdown, structure_plan_markdown};
+pub use stream_parse::{extract_assistant_text, stream_result_summary};
+pub use text::truncate_chars;
+pub use title::{extract_title_from_md, sanitize_plan_title, PLAN_TITLE_MAX_CHARS};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_plan_fence_last_wins() {
+        let t = "intro\n```plan\n# A\n```\nmore\n```plan\n# B\nbody\n```\n";
+        assert_eq!(extract_plan_fence(t).as_deref(), Some("# B\nbody"));
+    }
+
+    /// Desktop 2026-07-19: plain ``` then CJK used to panic with
+    /// `start byte index 3 is not a char boundary; it is inside '若'/'和'`.
+    #[test]
+    fn extract_plan_fence_cjk_after_plain_fence_no_panic() {
+        let cases = [
+            "```\n若无异议\n```\n",
+            "```\n和xx\n```\n",
+            "好的\n```\n若需调整\n```\n后面",
+            "text ``` 若xxx",
+            "x```若y",
+            "x```和y",
+            "```ab若",
+            "```\u{00e9}若",
+            "聊天界面设计进度不合理",
+            "a```b若c",
+        ];
+        for c in cases {
+            let r = std::panic::catch_unwind(|| extract_plan_fence(c));
+            assert!(r.is_ok(), "panicked on {c:?}: {r:?}");
+            assert!(r.unwrap().is_none(), "unexpected plan from {c:?}");
+        }
+    }
+
+    #[test]
+    fn extract_plan_fence_plan_after_cjk_plain_fence() {
+        let t = "先说明一下\n```\n若无异议，可直接点保存\n```\n\n```plan\n# 真实计划\n## 目标\n做完\n```\n";
+        assert_eq!(
+            extract_plan_fence(t).as_deref(),
+            Some("# 真实计划\n## 目标\n做完")
+        );
+    }
+
+    #[test]
+    fn extract_plan_fence_plan_with_cjk_body() {
+        let t = "```plan\n# 若和计划\n若无异议\n```\n";
+        assert_eq!(
+            extract_plan_fence(t).as_deref(),
+            Some("# 若和计划\n若无异议")
+        );
+    }
+
+    #[test]
+    fn extract_plan_fence_skips_markdown_and_keeps_later_plan() {
+        let t = "```markdown\n# not plan\n```\n```plan\n# yes\n```\n";
+        assert_eq!(extract_plan_fence(t).as_deref(), Some("# yes"));
+    }
+
+    #[test]
+    fn extract_plan_fence_nested_text_block_keeps_full_body() {
+        let t = r#"先说明
+
+```plan
+# cco 全量落地总计划
+
+## 目标
+把多轮诉求收成一条产品：
+
+```text
+选项目 → 聊天共建 → 落盘 .md
+     → 计划管理 → 分配 → 跑
+```
+
+## 任务大纲
+### T1 · 修 fence
+- 说明：嵌套 ```text 不得截断
+- 验收：全文落盘
+
+## 验收
+- [ ] 计划管理预览可见全文
+```
+"#;
+        let got = extract_plan_fence(t).expect("plan fence");
+        assert!(
+            got.contains("## 任务大纲"),
+            "must not stop at nested ```text; got:\n{got}"
+        );
+        assert!(
+            got.contains("选项目 → 聊天共建"),
+            "nested diagram body must be kept; got:\n{got}"
+        );
+        assert!(
+            got.contains("- [ ] 计划管理预览可见全文"),
+            "tail after nested fence must remain; got:\n{got}"
+        );
+        assert!(!got.trim_end().ends_with("```"));
+    }
+
+    #[test]
+    fn extract_plan_fence_nested_multiple_diagrams() {
+        let t = "```plan\n# A\n\n```text\none\n```\n\nmid\n\n```text\ntwo\n```\n\ntail\n```\n";
+        assert_eq!(
+            extract_plan_fence(t).as_deref(),
+            Some("# A\n\n```text\none\n```\n\nmid\n\n```text\ntwo\n```\n\ntail")
+        );
+    }
+
+    #[test]
+    fn extract_plan_fence_ignores_midline_triple_backticks() {
+        let t = "```plan\n# T\nuse ```inline``` sparingly\n## 尾\n```\n";
+        let got = extract_plan_fence(t).expect("plan");
+        assert!(got.contains("## 尾"), "got:\n{got}");
+        assert!(got.contains("```inline```"), "got:\n{got}");
+    }
+
+    #[test]
+    fn truncate_chars_cjk_safe() {
+        let s = "若和计划".repeat(10);
+        let out = truncate_chars(&s, 5);
+        assert_eq!(out.chars().count(), 6);
+        assert!(out.ends_with('…'));
+        assert!(!out.contains('\u{FFFD}'));
+        assert_eq!(truncate_chars("短", 4000), "短");
+        assert_eq!(truncate_chars("abc", 3), "abc");
+        assert_eq!(truncate_chars("abcd", 3), "abc…");
+    }
+
+    #[test]
+    fn extract_assistant_text_from_result_line() {
+        let raw = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hi"}]}}
+{"type":"result","result":"final answer"}
+"#;
+        assert_eq!(extract_assistant_text(raw), "final answer");
+    }
+
+    #[test]
+    fn extract_assistant_text_falls_back_to_longest_assistant() {
+        let long = "## 较长的计划草稿\n\n- a\n- b";
+        let long_line = serde_json::json!({
+            "type": "assistant",
+            "message": { "content": [{ "type": "text", "text": long }] }
+        })
+        .to_string();
+        let raw = format!(
+            "{}\n{}\n{}\n{}\n",
+            r#"{"type":"system","subtype":"init"}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"short"}]}}"#,
+            long_line,
+            r#"{"type":"result","subtype":"success","result":""}"#,
+        );
+        let t = extract_assistant_text(&raw);
+        assert!(t.contains("较长的计划草稿"), "got: {t}");
+    }
+
+    #[test]
+    fn extract_assistant_text_from_error_max_turns_keeps_prose() {
+        let prose = "先摸清项目结构和现有计划/进度文档，再据此梳理框架与进度。";
+        let raw = format!(
+            "{}\n{}\n{}\n",
+            r#"{"type":"system","subtype":"init"}"#,
+            serde_json::json!({
+                "type": "assistant",
+                "message": { "content": [{ "type": "text", "text": prose }] }
+            }),
+            serde_json::json!({
+                "type": "result",
+                "subtype": "error_max_turns",
+                "is_error": true,
+                "result": null,
+                "errors": ["Reached maximum number of turns (2)"],
+                "num_turns": 3,
+                "stop_reason": "tool_use",
+            }),
+        );
+        let t = extract_assistant_text(&raw);
+        assert!(t.contains("先摸清项目结构"), "got: {t}");
+        let summary = stream_result_summary(&raw);
+        assert!(summary.contains("error_max_turns"), "got: {summary}");
+        assert!(summary.contains("turns=3"), "got: {summary}");
+    }
+
+    #[test]
+    fn extract_assistant_text_plain_non_json() {
+        assert_eq!(
+            extract_assistant_text("hello plan\nsecond line\n"),
+            "hello plan\nsecond line"
+        );
+    }
+
+    #[test]
+    fn extract_title_cuts_jammed_single_line_wall() {
+        let wall = "# cco 全局体验优化：简单主路径 · 计划管理## 目标把桌面端收成一条## 任务大纲1. 做";
+        let t = extract_title_from_md(wall).expect("title");
+        assert!(t.contains("全局体验优化") || t.contains("简单主路径"), "got: {t}");
+        assert!(!t.contains("##"), "title must not include ##: {t}");
+        assert!(!t.contains("目标把"), "title must stop before body: {t}");
+        assert!(
+            t.chars().count() <= PLAN_TITLE_MAX_CHARS + 1,
+            "got len {}",
+            t.chars().count()
+        );
+    }
+
+    #[test]
+    fn extract_title_clamps_long_h1() {
+        let long = format!("# {}\n\nbody\n", "字".repeat(120));
+        let t = extract_title_from_md(&long).expect("title");
+        assert!(t.ends_with('…'), "got: {t}");
+        assert!(t.chars().count() <= PLAN_TITLE_MAX_CHARS + 1);
+    }
+
+    #[test]
+    fn normalize_plan_markdown_breaks_single_line_headings() {
+        let wall = "# 标题短## 目标说明一下### T1 · 任务";
+        let out = normalize_plan_markdown(wall);
+        assert!(out.contains('\n'), "expected newlines: {out}");
+        assert!(out.contains("## 目标"), "got: {out}");
+        assert!(out.contains("### T1"), "got: {out}");
+        let title = extract_title_from_md(&out).unwrap();
+        assert_eq!(title, "标题短");
+    }
+
+    #[test]
+    fn structure_plan_markdown_fills_missing_sections() {
+        let thin = "# 登录优化\n\n做快点\n";
+        let out = structure_plan_markdown(thin);
+        assert!(out.contains("## 目标"), "got: {out}");
+        assert!(out.contains("## 范围"), "got: {out}");
+        assert!(out.contains("## 任务"), "got: {out}");
+        assert!(out.contains("## 验收"), "got: {out}");
+        assert_eq!(extract_title_from_md(&out).as_deref(), Some("登录优化"));
+    }
+
+    #[test]
+    fn sanitize_session_id_strips_unsafe() {
+        assert_eq!(sanitize_session_id("default"), "default");
+        assert_eq!(sanitize_session_id("s-20260720-120000"), "s-20260720-120000");
+        assert_eq!(sanitize_session_id("../evil"), "___evil");
+        assert_eq!(sanitize_session_id(""), "default");
+    }
+}

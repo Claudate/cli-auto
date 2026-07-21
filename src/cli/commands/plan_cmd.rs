@@ -1,8 +1,8 @@
-//! CLI subcommand handler.
+//! CLI `cco plan` — thin presentation over [`crate::app::split`].
 //!
 //! [INPUT]: Config · clap fields
 //! [OUTPUT]: exit code
-//! [POS]: cli/commands；D4 自 mod.rs 抽出
+//! [POS]: cli/commands；A1-7 只规划，开跑经桌面 confirm / split::confirm
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/cli/CLAUDE.md
 
 use std::path::PathBuf;
@@ -10,37 +10,45 @@ use std::time::Duration;
 
 use anyhow::Result;
 
+use crate::app::split as split_uc;
 use crate::cli::interactive;
 use crate::config::Config;
+use crate::plan::planner::StartPlanJobRequest;
 
-pub fn run(config: &Config, project: Option<PathBuf>, plan: Option<PathBuf>, plan_mode: String, provider: Option<String>, mode: Option<String>, json: bool) -> Result<i32> {
+pub fn run(
+    config: &Config,
+    project: Option<PathBuf>,
+    plan: Option<PathBuf>,
+    plan_mode: String,
+    provider: Option<String>,
+    mode: Option<String>,
+    json: bool,
+) -> Result<i32> {
     let project = interactive::resolve_project(project, true)?;
     interactive::ensure_project_dir(&project)?;
     let plan = interactive::resolve_plan(&project, plan, true)?;
-    let view = crate::services::start_plan_job(
-        &config,
-        crate::services::StartPlanJobRequest {
+    let view = split_uc::start_job(
+        config,
+        StartPlanJobRequest {
             project: project.clone(),
             plan: plan.clone(),
-            plan_mode: Some(plan_mode.clone()),
+            plan_mode: Some(plan_mode),
             provider,
             mode,
             max_parallel: None,
             preserve_from_job_id: None,
         },
     )?;
-    // Poll if async (ai mode may return planning)
     let mut view = view;
     if view.status == "planning" {
         println!("planning… (job {})", view.job_id);
         for _ in 0..600 {
             std::thread::sleep(Duration::from_millis(500));
-            view = crate::services::get_plan_job(&config, &view.job_id)?;
+            view = split_uc::get_job(config, &view.job_id)?;
             if view.status != "planning" {
                 break;
             }
             if !view.planner_log_tail.is_empty() {
-                // show last line progress
                 if let Some(last) = view.planner_log_tail.lines().last() {
                     eprint!("\r{}", last.chars().take(100).collect::<String>());
                 }
@@ -75,8 +83,7 @@ pub fn run(config: &Config, project: Option<PathBuf>, plan: Option<PathBuf>, pla
         };
         println!("  - {}  \"{}\"  depends=[{deps}]", t.id, t.title);
     }
-    let proposed = crate::plan::planner::job_dir(&config, &view.job_id)
-        .join("plan.proposed.json");
+    let proposed = crate::plan::planner::job_dir(config, &view.job_id).join("plan.proposed.json");
     println!("proposed: {}", proposed.display());
     if json {
         if let Ok(body) = std::fs::read_to_string(&proposed) {

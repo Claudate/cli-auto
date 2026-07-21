@@ -659,29 +659,12 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
     }
 }
 
-/// Soft-fill job defaults onto tasks (H4 / Q6).
+/// Soft-fill job defaults onto tasks (H4 / Q6 / A1-4).
 ///
-/// - Always sets `ir.default_provider` / `ir.default_mode` and each task's `mode`.
-/// - Provider is **soft**: only rewrite tasks whose provider is empty, the
-///   placeholder `"default"`, or still equal to the *prior* plan default.
-///   Tasks the user (or plan author) already pointed at another engine are kept.
-///
-/// Aligns with CLI soft `--provider` (`apply_provider_override`); desktop no longer
-/// hard-wipes every task at confirm_start / post-plan.
+/// Delegates pure route fill to [`crate::domain::worker::apply_worker_defaults`].
+/// Soft: never overwrites explicit non-default engines. Aligns with CLI `--provider`.
 pub(super) fn apply_worker_defaults(ir: &mut PlanIR, provider: &str, exec_mode: &str) {
-    let old_default = ir.default_provider.clone();
-    ir.default_provider = provider.to_string();
-    ir.default_mode = exec_mode.to_string();
-    for t in &mut ir.tasks {
-        t.mode = exec_mode.to_string();
-        let p = t.provider.trim();
-        let still_default = p.is_empty()
-            || p.eq_ignore_ascii_case("default")
-            || (!old_default.is_empty() && p.eq_ignore_ascii_case(&old_default));
-        if still_default {
-            t.provider = provider.to_string();
-        }
-    }
+    crate::domain::worker::apply_worker_defaults(ir, provider, exec_mode);
 }
 
 #[cfg(test)]

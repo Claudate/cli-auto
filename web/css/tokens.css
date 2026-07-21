@@ -11,7 +11,7 @@
  */
 
 :root {
-  /* 浅色 macOS 风 */
+  /* 浅色 macOS 风 · A2-3 一体密度 tokens */
   --bg: #F5F5F7;
   --bg2: #FFFFFF;
   --bg3: #F0F0F2;
@@ -20,6 +20,7 @@
   --muted: #6E6E73;
   --accent: #0071E3;
   --accent2: #0071E3;
+  /* 状态色三种（主路径）：进行 / 成功 / 风险 */
   --ok: #34C759;
   --warn: #FF9F0A;
   --danger: #FF3B30;
@@ -28,9 +29,67 @@
   --radius: 12px;
   --font: "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
-  --sidebar-w: 260px;
+  --sidebar-w: 200px; /* V1: narrower sidebar, main area max */
   --task-list-w: 260px;
   --log-font-size: 0.875rem; /* 14px */
+  /* A2-3 主 CTA 单一视觉（primary 按钮共用） */
+  --cta-bg: var(--accent);
+  --cta-bg-hover: #0077ED;
+  --cta-fg: #FFFFFF;
+  --cta-radius: 10px;
+  --cta-pad-y: 0.55rem;
+  --cta-pad-x: 1rem;
+  --cta-font-weight: 600;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --focus-ring: 0 0 0 3px rgba(0, 113, 227, 0.28);
+}
+
+/* 主 CTA 原子：一屏一个主按钮视觉；ghost/次要不抢 */
+.btn.primary,
+button.btn.primary {
+  background: var(--cta-bg);
+  color: var(--cta-fg);
+  border: 1px solid transparent;
+  border-radius: var(--cta-radius);
+  padding: var(--cta-pad-y) var(--cta-pad-x);
+  font-weight: var(--cta-font-weight);
+  box-shadow: none;
+}
+.btn.primary:hover:not(:disabled),
+button.btn.primary:hover:not(:disabled) {
+  background: var(--cta-bg-hover);
+}
+.btn.primary:focus-visible,
+button.btn.primary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.btn.primary:disabled,
+button.btn.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 壳 phase 人话标签（A2 AppViewModel；默认不占主路径第一句） */
+.cco-app-phase-label {
+  position: fixed;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 20;
+  font-size: 0.7rem;
+  color: var(--muted);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  pointer-events: none;
+  opacity: 0.85;
+}
+body.cco-window-monitor .cco-app-phase-label {
+  display: none !important;
 }
 
 * { box-sizing: border-box; }

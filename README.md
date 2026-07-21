@@ -2,7 +2,8 @@
 
 独立 **Rust** 编排器：读计划 → DAG 调度 → 通过 `WorkerProvider` 启停 agent CLI（首期 **Claude**，可扩展）。
 
-设计真源：[`claude-cli-orchestrator-plan.md`](./claude-cli-orchestrator-plan.md)
+产品方向（给谁用、主循环、轻量化）：[`PRODUCT.md`](./PRODUCT.md)  
+工程设计真源：[`claude-cli-orchestrator-plan.md`](./claude-cli-orchestrator-plan.md)
 
 ## 状态
 

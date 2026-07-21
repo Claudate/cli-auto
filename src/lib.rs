@@ -5,14 +5,23 @@
 //! [POS]: src 根；二进制 main 与 src-tauri 均依赖本 crate
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md
 //!
-//! Architecture: plan adapters → PlanIR → scheduler → WorkerProvider → TaskResult.
-//! Desktop shell is Tauri (`src-tauri`); CLI is `cco` binary.
+//! Architecture (target P2-17): Presentation → App → Domain ← Ports ← Adapters.
+//! A1 ✅: `domain/{plan,run,worker,inspect,chat}` · `app/{split,run,chat}` ·
+//! `ports::{WorkerPort,HandoffStore}` · `runtime/{scheduler,handoff}/*` · `services/*` deprecated facade.
+//! A1-7: Tauri/CLI handlers → `app::*` (no presentation business policy). A2: frontend MVVM 待.
+//! Adapters: `runtime/provider/*` implement WorkerPort. Desktop: Tauri; CLI: `cco` binary.
 
+/// Application use cases (A0 skeleton → A1 real use cases).
+pub mod app;
 pub mod cli;
 pub mod config;
+/// Domain models (A0 skeleton → A1 pure models).
+pub mod domain;
 pub mod doctor;
 pub mod graph;
 pub mod plan;
+/// Port traits only (A0 skeleton → A1 WorkerPort/Store/…).
+pub mod ports;
 pub mod report;
 pub mod runtime;
 pub mod services;
@@ -24,7 +33,7 @@ pub use config::Config;
 pub use plan::{PlanIR, TaskIR, TaskRole, TaskScope};
 pub use runtime::provider::{
     Capabilities, ProviderRegistry, StartCtx, TaskResult, TaskStatus, WorkerHandle,
-    WorkerProvider, WorkerStatus,
+    WorkerPort, WorkerProvider, WorkerStatus,
 };
 pub use services::{
     add_project, chat_save_plan, chat_send, chat_session_get, confirm_start, get_plan_job,

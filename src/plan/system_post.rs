@@ -14,19 +14,13 @@
 use serde_json::json;
 
 use crate::config::Config;
-use crate::plan::{normalize_optional_title, PlanIR, TaskIR, TaskRole, TaskScope, MAX_TASKS};
-
-/// Fixed id — task 巡检（对照计划勾选 / VERDICT+ISSUES）.
-pub const SYS_POST_INSPECT_ID: &str = "sys-post-inspect";
-/// Fixed id — git commit + push（可选收尾）.
-pub const SYS_POST_GIT_PUSH_ID: &str = "sys-post-git-push";
+use crate::domain::plan::{
+    normalize_optional_title, PlanIR, TaskIR, TaskRole, TaskScope, MAX_TASKS,
+};
+// Domain-owned ids + predicate (A1); re-export for plan::system_post callers.
+pub use crate::domain::plan::{is_system_post_task, SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID};
 
 const SYS_GROUP: &str = "系统收尾";
-
-/// True when task id is a host-owned system post-task.
-pub fn is_system_post_task(id: &str) -> bool {
-    id == SYS_POST_INSPECT_ID || id == SYS_POST_GIT_PUSH_ID
-}
 
 /// Append or strip system post-tasks according to config switches.
 ///

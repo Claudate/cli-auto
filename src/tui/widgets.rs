@@ -8,7 +8,8 @@
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Paragraph, Tabs};
 
-use crate::runtime::provider::TaskStatus;
+// Wire TaskStatus lives on ports (DTO); avoid runtime/provider adapter path (A5-3).
+use crate::ports::TaskStatus;
 use crate::state::RunStatus;
 
 pub fn status_color_task(s: &TaskStatus) -> Color {

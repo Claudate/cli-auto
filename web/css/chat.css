@@ -696,6 +696,17 @@
   background: #f4f8fd;
   color: var(--accent, #2563eb);
 }
+/* T2: 模板芯片（一键落盘，区别于填入示例） */
+.chat-hint-tpl {
+  margin-top: 0.85rem;
+}
+.chat-tpl-chip {
+  border-style: dashed;
+  font-weight: 550;
+}
+.chat-tpl-chip:hover {
+  border-style: solid;
+}
 
 /* G4: attachments */
 .chat-attach-preview {

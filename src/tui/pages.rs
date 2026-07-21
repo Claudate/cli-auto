@@ -1,8 +1,8 @@
 //! TUI page renderers: Dashboard / Graph / Task / Logs / Terminals / Help.
 //!
-//! [INPUT]: RunState 快照 · 选中 task · term pane focus/zoom
+//! [INPUT]: RunState 快照（app::run 查询）· 选中 task · term pane focus/zoom
 //! [OUTPUT]: ratatui Frame 绘制
-//! [POS]: tui 页面层
+//! [POS]: tui 页面层 · 只渲染，不写 stop/.done 业务
 //! note: P2-5 Terminals = multi-pane log grid (pseudo-PTY); interactive write stays external
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/tui/CLAUDE.md
 
@@ -15,7 +15,8 @@ use super::app::{App, Page};
 use super::widgets::{status_color_run, status_color_task};
 use crate::graph::topo_layers;
 use crate::plan::PlanIR;
-use crate::runtime::provider::TaskStatus;
+// Wire DTO from ports (not runtime/provider adapter) — A5-3
+use crate::ports::TaskStatus;
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     match app.page {
@@ -444,18 +445,18 @@ Keys:
   1-6         jump page
   j / ↓       next task
   k / ↑       prev task
-  s           stop selected task (best-effort kill / .done)
+  s           stop selected task (via app::run::stop_task · same as desktop)
   o           open embedded log pane (stdout tail grid · P2-5)
   O           open external terminal window for selected task
   x           close open terminal sessions of selected task
   n / p / ←→  cycle terminal panes (Terminals page)
   z           zoom focused pane (Terminals page)
-  r           reload state from disk
+  r           reload state from disk (app::run load)
   ?           this help
 
 Architecture:
-  TUI only observes ~/.cco/runs/<id> (+ terminals.json).
-  Scheduler runs independently; use headless `cco run` or `cco tui <run_id>`.
+  TUI = observe + light control; load/stop via app::run (A5-3).
+  Not a second split desk. Scheduler runs independently.
   Terminals grid = multi-pane log tail (pseudo-PTY); interactive write → external (O).
 "#;
     frame.render_widget(

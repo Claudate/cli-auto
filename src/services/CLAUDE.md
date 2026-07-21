@@ -2,15 +2,34 @@
 > L2 | 父级: /src/CLAUDE.md
 
 成员清单
-mod.rs: re-export live/projects/runs/settings/chat
+mod.rs: re-export live/projects/runs/settings/chat · **A1-7 deprecated facade**（Presentation 应调 `app::*`）
 live.rs: project_live_view（含 inspect_loop · handoff_board/handoff_md_path P2-6）· task_logs · open_task_terminal · stop_task（Pending 可停 · SIGTERM+KILL · 整 run 冻 pending→Aborted）
 projects.rs: list/add/remove projects
-runs.rs: list/start/stop/resume · plan job · confirm_start · sanitize_proposed_deps · update_proposed_task/remove_proposed_task（P2-1 depends_on/删任务）· list_plans · list_plan_meta（H2 ever_completed/last_run_*）· start_rework_from_run · accept_run_residual（P-loop）· **stop_run 含 Pending + meta.json pid + SIGKILL**
+runs.rs: list/start/stop/resume · plan job re-export · confirm_start（→ app::split::confirm）· sanitize/update/remove proposed · list_plans · list_plan_meta · start_rework_from_run · accept_run_residual · **stop_run 含 Pending + meta.json pid + SIGKILL** · **新逻辑勿进本文件**
 settings.rs: get/set settings view（failover H4 · post_inspect/post_git_push 系统收尾 · planner_critic_enabled 可选 LLM 第二跳）
-chat.rs: chat_session_get · chat_list/new/delete_session（C3 多会话）· chat_send(+attachments) · chat_stream_partial（C3 流式 partial）· chat_save_plan(plan_rel/plans_dir) · chat_save_attachment（G4）· read_plan_md · chat_normalize_plan/structure（G0b）· cleanup_expired 48h（G3）· 标题 sanitize（G0；无 max_turns；exit≠0 仍取 assistant 文本；复用 __chat__ 清 .done；extract_plan_fence 行首嵌套 depth + CJK 安全）
+chat/: **A1-6 多文件 IO 适配**（单文件 ≤600；出巨石榜）
+  · mod.rs: facade re-export + domain pure re-export
+  · types.rs: ChatSession/Message/Draft/Send/Stream/Normalize DTO
+  · session.rs: get/list/new/delete · save · cleanup 48h
+  · send.rs: chat_send（fake/soft-fallback · draft from fence）
+  · stream.rs: chat_stream_partial
+  · plan_md.rs: chat_save_plan · read_plan_md
+  · attachment.rs: chat_save_attachment
+  · cli_call.rs: Claude print spawn for chat/normalize
+  · normalize.rs: chat_normalize_plan G0b
+  · paths.rs: `.cco/chat` · plan path resolve
+  · tests.rs: 集成测
+  · 纯规则真源：`domain/chat`；用例面：`app/chat`
 util.rs: kill_pid · log tail helpers
 
+## 硬规则（A1-7）
+
+1. **Presentation 入口**优先 `crate::app`；本目录 = IO 适配 + 过渡 re-export。  
+2. **禁止**新增业务策略（soft-fill / confirm / Mode B 开跑）。  
+3. `confirm_start` 必须保持一行委托 `app::split::confirm`。  
+4. 本刀**不**删光 services 文件（A5 再收敛）。
+
 法则: 成员完整·一行一文件·父级链接·技术词前置
-注: UI 细节禁止；Tauri/CLI 共用；Mode B 业务入口仍是 confirm_start
+注: UI 细节禁止；Tauri/CLI 共用 DTO；Mode B 业务入口仍是 confirm / app::split::confirm；chat **只写散文**
 
 [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md

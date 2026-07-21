@@ -5,12 +5,13 @@
 //! [POS]: scheduler 启动任务前可选隔离
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/CLAUDE.md
 
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 use tracing::{info, warn};
+
+use crate::domain::worker::{self as worker_policy, IsolationOnFail};
 
 #[derive(Debug, Clone)]
 pub struct WorktreeInfo {
@@ -20,6 +21,7 @@ pub struct WorktreeInfo {
 }
 
 /// What to do when `ensure_worktree` fails while the task wants a worktree.
+/// IO-side mirror of [`IsolationOnFail`]; pure multi-provider rule lives in domain/worker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WorktreeOnFail {
     /// Single-provider legacy: warn and use `project_root`.
@@ -29,13 +31,32 @@ pub enum WorktreeOnFail {
     FailClosed,
 }
 
+impl From<IsolationOnFail> for WorktreeOnFail {
+    fn from(v: IsolationOnFail) -> Self {
+        match v {
+            IsolationOnFail::FailClosed => Self::FailClosed,
+            IsolationOnFail::FallbackSharedRoot => Self::FallbackProjectRoot,
+        }
+    }
+}
+
 /// True when the plan actually uses more than one distinct `task.provider`.
+/// Pure rule: [`worker_policy::is_multi_provider`].
 pub fn is_multi_provider<'a, I>(providers: I) -> bool
 where
     I: IntoIterator<Item = &'a str>,
 {
-    let set: HashSet<&str> = providers.into_iter().collect();
-    set.len() > 1
+    worker_policy::is_multi_provider(providers)
+}
+
+/// Isolation on_fail for the plan's provider set (domain policy → worktree enum).
+pub fn on_fail_for_providers<'a, I>(providers: I) -> WorktreeOnFail
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    WorktreeOnFail::from(worker_policy::isolation_on_fail(
+        worker_policy::is_multi_provider(providers),
+    ))
 }
 
 /// Whether `project_root` looks like a git work tree.

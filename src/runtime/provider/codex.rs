@@ -1,4 +1,4 @@
-//! Codex CLI WorkerProvider (second real provider).
+//! Codex CLI adapter implementing [`crate::ports::WorkerPort`] (second real provider).
 //!
 //! [INPUT]: StartCtx · TaskIR · config bin
 //! [OUTPUT]: spawn/poll/collect

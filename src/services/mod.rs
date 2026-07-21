@@ -1,8 +1,14 @@
-//! Shared backend calls used by the native GUI (same logic as CLI).
+//! Shared backend calls (migration-era facade · A1-7).
+//!
+//! **Deprecated for Presentation entry points.** CLI / Tauri should call
+//! [`crate::app`] (`split` / `run` / `chat`). This module remains for:
+//! - DTO types still imported by the desktop shell
+//! - live / projects / settings adapters not yet cut into app
+//! - internal IO used by app thin facades
 //!
 //! [INPUT]: config::Config · plan::PlanIR/planner · runtime::{Scheduler,log_events,provider} · state · terminal
 //! [OUTPUT]: list/start/stop/resume runs · list_plan_meta · plan job · project_live_view · task_logs · open_task_terminal · settings · chat
-//! [POS]: CLI 与 Tauri 共用服务层；禁止 UI 细节；D4 已目录化
+//! [POS]: 迁移期 facade；新逻辑不得进 services，放 app 用例
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md
 
 mod chat;

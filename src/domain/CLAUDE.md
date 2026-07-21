@@ -1,0 +1,25 @@
+# src/domain/
+> L2 | 父级: /src/CLAUDE.md
+
+成员清单
+mod.rs: 领域根；A0 骨架 marker；挂 `plan` · `run` · `worker` · `inspect` · `chat`
+plan/: **A1-1** PlanIR/TaskIR/TaskRole/TaskScope/OnFailure · MAX_* · optional 标题 · materialize_selected/role · validate+collab · apply_tag_routing · system post ids（纯，无 Config IO）
+run/: **A1-3** 纯 run 规则 — status（终态/external-stop/slot/budget/stall）· retry（SameProvider/TryFailover/Permanent · claude↔codex）· active（--only/--from 下游展开）；**无**路径拼接 / provider IO / VERDICT 解析
+worker/: **A1-4** 纯 worker 策略 — ProviderId/WorkerRoute/CapabilityFlags · soft-fill Soft/Force（`apply_route_fill` / `apply_worker_defaults`）· FailoverPolicy · IsolationOnFail / is_multi_provider；**无** spawn / worktree 路径
+inspect/: **A1-5** 纯 VERDICT/ISSUES — types（InspectVerdict/IssueSeverity/ParsedIssue · REWORK_MAX · MAP 白名单）· parse（parse_verdict_text/parse_issues_text）· gate（candidate paths · task_has_verdict_gate · count_blocking · inspect_gate_fail_reason · push_inspect_gate_decision · can_start_rework）；**无**路径拼接 / fs / git
+chat/: **A1-6** 纯 chat 规则 — fence（extract_plan_fence 嵌套 depth + CJK）· title（sanitize/extract H1）· normalize/structure_plan_markdown · stream_parse（extract_assistant_text）· id（sanitize_session_id）· text（truncate_chars）；**无**路径拼接 / fs / provider
+
+## 硬规则
+
+1. **禁止**依赖 tauri / clap / UI / 具体 provider 实现（L1 #6）。  
+2. **禁止**拼 run_dir / plan_jobs / `.cco/chat` 路径（Store / services 适配器的事）。  
+3. 纯函数优先；需要 IO 的放 `plan` facade、`runtime/handoff` 或 `services/chat` 适配器。  
+4. 体积：业务文件软 400 / 硬 600 行。  
+5. **run.json schema `cco-run/v1`** 落盘类型仍在 `state/`；domain 只持决策规则，不改 wire 形状。  
+6. soft-fill **不得**静默覆盖任务上已显式声明的 route（全量覆盖须 Force）。  
+7. VERDICT 正文解析只在 `inspect/parse`；scheduler **禁止**内嵌解析。  
+8. chat 纯规则 **不**开跑、**不** spawn worker；只服务「生成计划」步。
+
+法则: 成员完整·一行一文件·父级链接·技术词前置
+
+[PROTOCOL]: 变更时更新此头部，然后检查 /src/CLAUDE.md

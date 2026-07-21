@@ -2,11 +2,12 @@
 <html lang="zh-CN">
 <head>
 <!--
-[INPUT]: 无静态依赖；由 Tauri 加载 app.css + web/js/*（D4）
+[INPUT]: 无静态依赖；由 Tauri 加载 app.css + web/js/*（D4）+ A2/A3 js/main.js module
 [OUTPUT]: DOM 结构：sidebar · welcome · workspace(plan/monitor) · chat · modals
 [POS]: 桌面壳结构真源；规划相位 spinner · 合并选计划弹窗 · task-dash · 执行看板 · 聊天建计划
 [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
 note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高级选项
+note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|split|run|result
 -->
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -45,35 +46,56 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
         <div class="top-title">
           <h1 id="page-title">欢迎</h1>
           <div id="page-sub" class="muted sub"></div>
+          <!-- F1: 全局阶段条（写计划/拆分/执行/结果） -->
+          <div id="flow-strip-global" class="flow-strip-host flow-strip-global" aria-live="polite"></div>
         </div>
         <div class="top-actions" id="top-actions">
           <button class="btn ghost sm chat-top-btn" id="btn-open-chat" type="button" hidden title="与 AI 共建计划文档">聊天</button>
-          <button class="btn primary sm" id="btn-plan-mgmt" type="button" hidden title="进入计划管理页：选中 / 预览 / 编辑文档">计划管理</button>
+          <button class="btn primary sm" id="btn-pp-analyze" type="button" hidden disabled>拆成步骤</button>
           <button class="btn ghost sm" id="btn-monitor-plan" type="button" hidden title="返回执行或继续确认拆分">返回执行</button>
-          <button class="btn ghost sm" id="btn-plan-choose" type="button" hidden>选择计划</button>
-          <button class="btn primary sm" id="btn-pp-analyze" type="button" hidden disabled>执行此计划</button>
           <div id="split-plan-chip" class="split-plan-chip" hidden title="点击查看拆分结果">
             <span class="split-plan-chip-label">拆分</span>
             <strong id="split-plan-chip-name">—</strong>
             <span id="split-plan-chip-meta" class="muted">—</span>
           </div>
-          <!-- P1-5: 规划 vs 执行预算简版 -->
-          <div id="budget-chip" class="budget-chip muted" hidden title="规划成本 · 执行成本">
-            <span id="budget-chip-text">—</span>
-          </div>
-          <button type="button" class="linkish" id="btn-edit-plan" hidden title="仅暂停后、且未执行的任务可编辑">编辑任务</button>
-          <button id="btn-refresh" class="btn ghost" type="button">刷新</button>
+          <!-- F5: 次要入口收进「更多」 -->
+          <details class="top-more" id="top-more">
+            <summary class="btn ghost sm top-more-sum">更多</summary>
+            <div class="top-more-menu" role="menu">
+              <button class="btn ghost sm" id="btn-plan-mgmt" type="button" hidden title="进入计划管理页">计划管理</button>
+              <button class="btn ghost sm" id="btn-plan-choose" type="button" hidden>选择计划</button>
+              <button type="button" class="linkish" id="btn-edit-plan" hidden title="仅暂停后、且未执行的任务可编辑">编辑任务</button>
+              <div id="budget-chip" class="budget-chip muted" hidden title="规划成本 · 执行成本">
+                <span id="budget-chip-text">—</span>
+              </div>
+              <button id="btn-refresh" class="btn ghost sm" type="button">刷新</button>
+            </div>
+          </details>
         </div>
       </header>
 
       <!-- Welcome / no project -->
       <section id="page-welcome" class="page active">
         <div class="empty-state" id="welcome-empty">
-          <h2>用计划驱动多个 Claude 一起干活</h2>
-          <p class="muted">添加项目 → 和 AI 写计划（或选已有）→ 点「执行此计划」→ 自动拆分并执行。</p>
+          <p class="welcome-kicker muted">给 PM / 出海 / 非开发的本机任务控制台</p>
+          <h2>写清计划 → 拆成步骤 → 并行推进 → 对照收口</h2>
+          <p class="muted">添加项目后和 AI 写计划，或选已有文档。默认会停在<strong>拆分台</strong>看清波次，再点「确认并开始」。</p>
+          <ol class="welcome-steps muted">
+            <li>添加本机项目文件夹</li>
+            <li>聊天写计划、从模板开始，或从计划管理选一份</li>
+            <li>点「拆成步骤」→ 核对 →「确认并开始」</li>
+          </ol>
           <div class="welcome-actions">
             <button class="btn primary" id="btn-welcome-add" type="button">添加项目文件夹</button>
             <button class="btn ghost" id="btn-welcome-help" type="button">查看帮助</button>
+          </div>
+          <!-- T1/T2: 模板冷启动（一键落盘 plans/；需先有选中项目） -->
+          <div class="welcome-templates" id="welcome-templates">
+            <p class="muted welcome-tpl-label">从模板开始（需先选中项目）</p>
+            <div class="welcome-template-row">
+              <button class="btn ghost sm" type="button" data-plan-template="overseas-landing" title="文案 · SEO · 表单 · 多语言要点">出海落地页</button>
+              <button class="btn ghost sm" type="button" data-plan-template="req-outline" title="背景 · 目标 · 范围 · 验收 · 风险">通用需求大纲</button>
+            </div>
           </div>
         </div>
       </section>
@@ -125,15 +147,15 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
             </div>
           </div>
 
-          <!-- B0: planning phase -->
+          <!-- B0 / S8: planning phase — progress first, log collapsed -->
           <div id="plan-phase-planning" class="plan-phase" hidden>
             <div id="flow-strip-planning" class="flow-strip-host" aria-live="polite"></div>
             <div class="plan-phase-head">
               <div class="planning-title-row">
                 <span class="spinner lg" aria-hidden="true"></span>
                 <div>
-                  <h3>正在拆分计划步骤…</h3>
-                  <p class="muted" id="planning-sub">先理解计划结构，再生成有依赖的工作步骤；不可用时自动用本地规则兜底</p>
+                  <h3>正在把计划拆成可执行步骤…</h3>
+                  <p class="muted" id="planning-sub">先理解计划结构，再生成有依赖的工作步骤</p>
                   <p class="flow-mode-badge-row" id="planning-mode-row" hidden>
                     <span class="flow-mode-badge" id="planning-mode-badge">—</span>
                     <span class="muted flow-mode-hint" id="planning-mode-hint"></span>
@@ -144,61 +166,74 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
             <div class="planning-progress" aria-live="polite">
               <div class="planning-progress-bar"></div>
             </div>
-            <div id="planner-log" class="detail-log planner-log log-console term-mode" aria-live="polite"></div>
+            <details class="planner-log-fold" id="planner-log-fold">
+              <summary class="planner-log-summary muted">规划日志（需要时展开）</summary>
+              <div id="planner-log" class="detail-log planner-log log-console term-mode" aria-live="polite"></div>
+            </details>
             <div class="plan-actions">
-              <button class="btn ghost" id="btn-cancel-planning" type="button">返回选计划</button>
+              <button class="btn ghost" id="btn-cancel-planning" type="button">取消回计划</button>
             </div>
           </div>
 
-          <!-- B0: confirm phase (waves + start) -->
-          <div id="plan-phase-confirm" class="plan-phase" hidden>
+          <!-- S1: 拆分台 — 波次时间线 · 步骤卡 · 详情 -->
+          <div id="plan-phase-confirm" class="plan-phase plan-phase-split" hidden>
             <div id="flow-strip-confirm" class="flow-strip-host" aria-live="polite"></div>
-            <div class="plan-phase-head">
-              <div>
-                <h3 id="confirm-title">待确认的执行计划</h3>
+            <div class="plan-phase-head split-head">
+              <div class="split-head-main">
+                <h3 id="confirm-title">拆分结果</h3>
                 <p class="muted" id="confirm-meta"></p>
                 <p class="flow-mode-badge-row" id="confirm-mode-row" hidden>
                   <span class="flow-mode-badge" id="confirm-mode-badge">—</span>
                   <span class="muted flow-mode-hint" id="confirm-mode-hint"></span>
                 </p>
-                <p class="flow-critic-note" id="confirm-critic-note" hidden role="status"></p>
-                <div class="flow-critic-chips" id="confirm-critic-chips" hidden>
-                  <span class="flow-critic-chip" id="chip-critic-mode" hidden></span>
-                  <span class="flow-critic-chip" id="chip-critic-edges" hidden></span>
-                  <span class="flow-critic-chip" id="chip-critic-titles" hidden></span>
-                  <span class="flow-critic-chip" id="chip-critic-prompts" hidden></span>
-                  <span class="flow-critic-chip" id="chip-critic-cost" hidden></span>
-                  <span class="flow-critic-chip" id="chip-critic-ms" hidden></span>
-                </div>
-                <ul class="flow-critic-notes" id="confirm-critic-notes" hidden></ul>
-                <div class="flow-critic-actions" id="confirm-critic-actions" hidden>
-                  <button class="btn ghost sm" id="btn-enable-post-inspect" type="button" title="在设置中开启「拆分后附加：任务巡检」，并按当前计划重新拆分">
-                    开启巡检并重拆
-                  </button>
-                  <button class="btn ghost sm" id="btn-enable-planner-critic" type="button" hidden title="在设置中开启智能第二跳校对，并按当前计划重新拆分">
-                    开启智能校对并重拆
-                  </button>
-                </div>
+                <details class="split-quality" id="split-quality">
+                  <summary class="split-quality-summary">
+                    <span class="flow-critic-note" id="confirm-critic-note" hidden role="status"></span>
+                    <span class="muted" id="split-quality-fallback" hidden>拆分质量提示</span>
+                  </summary>
+                  <div class="split-quality-body">
+                    <div class="flow-critic-chips" id="confirm-critic-chips" hidden>
+                      <span class="flow-critic-chip" id="chip-critic-mode" hidden></span>
+                      <span class="flow-critic-chip" id="chip-critic-edges" hidden></span>
+                      <span class="flow-critic-chip" id="chip-critic-titles" hidden></span>
+                      <span class="flow-critic-chip" id="chip-critic-prompts" hidden></span>
+                      <span class="flow-critic-chip" id="chip-critic-cost" hidden></span>
+                      <span class="flow-critic-chip" id="chip-critic-ms" hidden></span>
+                    </div>
+                    <ul class="flow-critic-notes" id="confirm-critic-notes" hidden></ul>
+                    <div class="flow-critic-actions" id="confirm-critic-actions" hidden>
+                      <button class="btn ghost sm" id="btn-enable-post-inspect" type="button" title="在设置中开启「拆分后附加：任务巡检」，并按当前计划重新拆分">
+                        开启巡检并重拆
+                      </button>
+                      <button class="btn ghost sm" id="btn-enable-planner-critic" type="button" hidden title="在设置中开启智能第二跳校对，并按当前计划重新拆分">
+                        开启智能校对并重拆
+                      </button>
+                    </div>
+                  </div>
+                </details>
               </div>
-              <div class="plan-actions">
+              <div class="plan-actions split-actions">
                 <button class="btn ghost sm" id="btn-confirm-back" type="button" hidden>返回监视</button>
-                <button class="btn ghost sm" id="btn-sanitize-deps" type="button" title="去掉说明里未写明原因的依赖边，让可并行步骤真正并行">清理可疑依赖</button>
-                <button class="btn ghost sm" id="btn-replan" type="button" title="按当前计划重新拆分步骤">重新拆分</button>
+                <button class="btn ghost sm" id="btn-sanitize-deps" type="button" title="让可并行的步骤真正并行">让可并行的真正并行</button>
+                <button class="btn ghost sm" id="btn-replan" type="button" title="重新拆分（保留你的修改）">重新拆分（保留你的修改）</button>
+                <!-- S14: 可选写回步骤摘要到计划文末；默认不自动 -->
+                <button class="btn ghost sm" id="btn-split-writeback" type="button" title="把步骤标题追加到计划文末（不覆盖正文）">写回步骤摘要</button>
                 <button class="btn ghost sm" id="btn-skip-confirm" type="button" hidden>跳过预览</button>
-                <button class="btn primary" id="btn-confirm-start" type="button">开始运行</button>
+                <button class="btn primary" id="btn-confirm-start" type="button">确认并开始</button>
               </div>
             </div>
-            <div class="confirm-layout">
-              <div class="confirm-waves" id="confirm-waves"></div>
-              <div class="confirm-detail">
+            <div class="confirm-layout split-layout">
+              <aside class="split-timeline" id="split-timeline" aria-label="波次时间线"></aside>
+              <div class="confirm-waves split-cards" id="confirm-waves"></div>
+              <div class="confirm-detail split-detail">
                 <div class="confirm-detail-head">
                   <div class="confirm-detail-titles">
-                    <div id="confirm-task-title" class="confirm-task-title muted">选择左侧任务查看说明</div>
+                    <div id="confirm-task-title" class="confirm-task-title muted">选择步骤查看说明</div>
                     <div id="confirm-task-deps" class="muted confirm-deps"></div>
                     <div id="confirm-task-meta" class="confirm-meta muted" hidden></div>
                   </div>
                   <div class="confirm-detail-actions">
-                    <label class="field confirm-task-provider-field" id="confirm-provider-field" hidden title="高级：本步骤执行通道；改过的在开始运行后保留">
+                    <label class="field confirm-task-provider-field" id="confirm-provider-field" hidden title="高级：本步骤执行通道">
                       <span class="sr-only">执行通道</span>
                       <select id="confirm-task-provider" disabled>
                         <option value="claude">默认通道</option>
@@ -207,12 +242,12 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
                       </select>
                     </label>
                     <button class="btn ghost sm" id="btn-confirm-edit" type="button" hidden>编辑</button>
-                    <button class="btn ghost sm danger" id="btn-confirm-delete" type="button" hidden title="从本轮拆分中删除此步骤（重拆时可按标题保留删除）">删除</button>
+                    <button class="btn ghost sm danger" id="btn-confirm-delete" type="button" hidden title="从本轮拆分中删除此步骤">删除</button>
                     <button class="btn ghost sm" id="btn-confirm-edit-cancel" type="button" hidden>取消</button>
                     <button class="btn primary sm" id="btn-confirm-edit-save" type="button" hidden>保存</button>
                   </div>
                 </div>
-                <div class="confirm-prompt-label" id="confirm-prompt-label">完整步骤说明（执行时按此自动进行）</div>
+                <div class="confirm-prompt-label" id="confirm-prompt-label">步骤说明</div>
                 <div id="confirm-task-prompt" class="confirm-prompt md-body"></div>
                 <div id="confirm-edit-form" class="confirm-edit-form" hidden>
                   <label class="field">
@@ -241,22 +276,27 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
             <span id="confirm-error" class="err-text" hidden></span>
           </div>
 
-          <!-- Unified run/result card (replaces banner + empty fail + completion stack) -->
-          <!-- 任务看板：方形数据块（固定区域，内部可滚） -->
+          <!-- 执行台/结果台：进度为主（R1/R3）；日志在 #monitor 次级 -->
           <div id="result-card" class="task-dash" hidden>
             <div class="task-dash-head">
+              <div class="task-dash-title-row">
+                <h2 class="task-dash-heading" id="task-dash-heading">执行进度</h2>
+                <span class="run-status-pill" id="run-status-pill" hidden></span>
+              </div>
               <div class="task-dash-kpis">
                 <span id="run-status-badge" hidden></span>
                 <div class="kpi-card done"><div class="kpi-n" id="stat-done-n">0</div><div class="kpi-l">已完成</div></div>
                 <div class="kpi-card run"><div class="kpi-n" id="stat-run-n">0</div><div class="kpi-l">进行中</div></div>
-                <div class="kpi-card wait"><div class="kpi-n" id="stat-wait-n">0</div><div class="kpi-l">未启动</div></div>
+                <div class="kpi-card wait"><div class="kpi-n" id="stat-wait-n">0</div><div class="kpi-l">排队中</div></div>
+                <div class="kpi-card stall" id="kpi-stall" hidden><div class="kpi-n" id="stat-stall-n">0</div><div class="kpi-l">已卡住</div></div>
                 <div class="kpi-card fail" id="kpi-fail" hidden><div class="kpi-n" id="stat-fail-n">0</div><div class="kpi-l">失败</div></div>
                 <div class="kpi-meta muted" id="result-meta-text"></div>
               </div>
               <div class="task-dash-actions" id="result-actions">
                 <button class="btn primary sm" id="btn-ws-resume" type="button" hidden>继续</button>
-                <button class="btn primary sm" id="btn-ws-rework" type="button" hidden title="根据巡检 ISSUES 生成回补波并再巡检">回补并再巡检</button>
-                <button class="btn ghost sm" id="btn-ws-accept-residual" type="button" hidden title="显式接受残留（写入 handoff open_risks）">接受残留</button>
+                <button class="btn primary sm" id="btn-ws-rework" type="button" hidden title="根据巡检遗漏生成回补波并再巡检">回补并再巡检</button>
+                <button class="btn ghost sm" id="btn-ws-accept-residual" type="button" hidden title="接受当前遗漏并结束本轮">接受遗漏并结束</button>
+                <button class="btn ghost sm" id="btn-ws-finish" type="button" hidden title="结束本轮，回到写计划">结束本轮</button>
                 <button class="btn ghost sm" id="btn-ws-back-chat" type="button" hidden title="回聊天写下一份计划">回聊天</button>
                 <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
                 <button class="btn ghost sm" id="btn-open-monitor-window" type="button" hidden title="在系统级独立窗口打开监视（可拖到另一显示器）">独立监视窗</button>
@@ -267,8 +307,27 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
                 <button id="btn-ws-dismiss-run" type="button" hidden>收起运行</button>
               </div>
             </div>
+            <div id="stall-banner" class="stall-banner" hidden role="status"></div>
             <div id="inspect-loop-strip" class="inspect-loop-strip" hidden></div>
             <div id="error-summary-text" class="task-strip-err" hidden></div>
+            <!-- 结果台正文（终态 · result.js） -->
+            <div id="result-desk" class="result-desk" hidden>
+              <div class="result-desk-section" id="result-desk-summary">
+                <h3 class="result-desk-h">计划要点</h3>
+                <p class="result-desk-text muted" id="result-desk-plan-line"></p>
+              </div>
+              <div class="result-desk-cols">
+                <div class="result-desk-section">
+                  <h3 class="result-desk-h">已完成</h3>
+                  <ul class="result-desk-list" id="result-desk-done"></ul>
+                </div>
+                <div class="result-desk-section">
+                  <h3 class="result-desk-h">遗漏 / 未完成</h3>
+                  <ul class="result-desk-list" id="result-desk-miss"></ul>
+                  <p class="result-desk-honest muted" id="result-desk-honest" hidden></p>
+                </div>
+              </div>
+            </div>
             <div id="task-strip-body" class="task-dash-body">
               <div id="task-strip-list" class="task-dash-grid"></div>
             </div>
@@ -293,16 +352,21 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
             <div class="completion-actions"></div>
           </div>
 
-          <!-- Multi-window execution board -->
-          <div id="monitor" class="monitor board-mode" hidden>
+          <!-- Multi-window execution board（次级 · 日志默认折叠） -->
+          <div id="monitor" class="monitor board-mode logs-secondary" hidden>
             <div id="flow-strip-running" class="flow-strip-host" aria-live="polite"></div>
+            <details class="monitor-logs-fold" id="monitor-logs-fold">
+              <summary class="monitor-logs-summary">
+                <span class="section-label" id="flow-board-label">步骤日志（按需展开）</span>
+                <span class="muted monitor-logs-hint">默认收起 · 点步骤卡也可打开</span>
+              </summary>
             <div class="board-toolbar">
               <div class="row gap">
-                <span class="section-label" id="flow-board-label">执行看板</span>
                 <div class="cli-status-filters" id="cli-status-filters" role="group" aria-label="按状态过滤">
                   <button type="button" class="filter-chip active" data-cli-filter="all" title="显示全部">全部</button>
-                  <button type="button" class="filter-chip" data-cli-filter="run" title="仅运行中">运行中</button>
-                  <button type="button" class="filter-chip" data-cli-filter="wait" title="仅待运行">待运行</button>
+                  <button type="button" class="filter-chip" data-cli-filter="run" title="仅进行中">进行中</button>
+                  <button type="button" class="filter-chip" data-cli-filter="wait" title="仅排队中">排队中</button>
+                  <button type="button" class="filter-chip" data-cli-filter="stall" title="仅已卡住">已卡住</button>
                   <button type="button" class="filter-chip" data-cli-filter="done" title="仅已完成">已完成</button>
                   <button type="button" class="filter-chip" data-cli-filter="fail" title="仅失败">失败</button>
                 </div>
@@ -341,6 +405,7 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
             <div id="cli-shell" class="cli-shell">
               <div id="cli-board" class="cli-board" aria-live="polite"></div>
             </div>
+            </details>
             <!-- offscreen legacy hooks for optional copy/stop APIs -->
             <div id="task-list-pane" hidden></div>
             <div id="task-list" hidden></div>
@@ -355,7 +420,7 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
           </div>
 
           <div id="cli-empty" class="empty-state soft" hidden>
-            <p class="muted">选一份计划 →「执行此计划」→ 自动拆分并执行。</p>
+            <p class="muted">选一份计划 →「拆成步骤」→ 核对波次后「确认并开始」。</p>
             <p class="muted" style="margin-top:.5rem">
               没有计划？
               <button type="button" class="linkish" id="btn-empty-to-chat">和 AI 聊聊先写一份</button>
@@ -372,7 +437,7 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
             <div class="chat-head">
               <!-- 页头单源：顶栏 #page-title/#page-sub；此处只留一句步骤 + C3 会话切换 -->
               <div class="chat-head-row">
-                <p class="muted chat-head-step">先保存计划文档，再「执行此计划」进入拆分 · 项目：<span id="chat-project-label">—</span></p>
+                <p class="muted chat-head-step">先保存计划文档，再「拆成步骤」进入拆分台 · 项目：<span id="chat-project-label">—</span></p>
                 <div class="chat-head-actions">
                   <div class="chat-session-switch" id="chat-session-switch" title="多会话（C3）">
                     <label class="chat-session-label muted" for="chat-session-select">会话</label>
@@ -398,9 +463,9 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
               <span id="chat-ready-fake-note" class="chat-ready-fake-note" hidden>本地模板 · 非真实 AI</span>
               <span id="chat-saved-path" class="chat-ready-path">—</span>
               <div class="chat-ready-actions">
-                <!-- 未保存 primary=保存；已保存 primary=执行此计划（E1） -->
+                <!-- 未保存 primary=保存；已保存 primary=拆成步骤（E1 / F2） -->
                 <button class="btn primary sm" id="btn-chat-save" type="button">保存为计划</button>
-                <button class="btn primary sm" id="btn-chat-assign" type="button" hidden>执行此计划</button>
+                <button class="btn primary sm" id="btn-chat-assign" type="button" hidden>拆成步骤</button>
               </div>
             </div>
             <div id="chat-attach-preview" class="chat-attach-preview" hidden></div>
@@ -459,7 +524,7 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
           <div class="plans-mgmt-body">
             <div class="plans-mgmt-list-col">
               <h3 class="plans-mgmt-col-title">本夹计划</h3>
-              <p class="muted plans-mgmt-hint">选中后点「执行此计划」· 双击编辑文档 · 最新高亮</p>
+              <p class="muted plans-mgmt-hint">选中后点「拆成步骤」· 双击编辑文档 · 最新高亮</p>
               <div id="plans-mgmt-list" class="plans-mgmt-list"></div>
               <p id="plans-mgmt-empty" class="plans-mgmt-empty muted" hidden>暂无计划文件 · 去聊天生成并保存</p>
             </div>
@@ -478,7 +543,7 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
                 <pre id="plans-mgmt-detail-body" class="plans-mgmt-detail-body"></pre>
                 <div class="plans-mgmt-detail-foot">
                   <button class="btn ghost sm" id="btn-plans-preview" type="button">编辑文档</button>
-                  <button class="btn primary sm" id="btn-plans-assign" type="button">执行此计划</button>
+                  <button class="btn primary sm" id="btn-plans-assign" type="button">拆成步骤</button>
                 </div>
               </div>
             </div>
@@ -503,51 +568,24 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
             <button class="btn ghost" id="btn-settings-back" type="button">返回</button>
           </div>
           <div class="settings-grid">
+            <!-- F6 分组：开始与拆分 · 卡住与重试 · 系统收尾 · 外观 -->
             <div class="settings-group">
-              <h3 class="settings-group-title">聊天</h3>
+              <h3 class="settings-group-title">开始与拆分</h3>
               <p class="field-hint" style="margin:0 0 .5rem">
-                聊天记录默认保留约 <strong>2 天</strong>（48 小时），超时自动清理。
-                计划草稿可用就绪条「重新整理」补全结构。附图：png/jpeg/webp/gif，单张 ≤5MB，每条最多 4 张。
+                主路径默认<strong>拆分后停在拆分台</strong>。自动开始、直开拆分、通道与并发属高级。
               </p>
-              <label class="field field-check" title="C3 方案 B：聊天/计划卡「执行此计划」跳过二次确认，直接用当前选项开拆分（仍经 start_plan_job，不跳过 Mode B）">
-                <span>执行时跳过二次确认（方案 B）</span>
+              <label class="field field-check" title="C3：聊天/计划卡「拆成步骤」跳过二次确认">
+                <span>拆成步骤时跳过选项层</span>
                 <input id="s-chat-assign-direct" type="checkbox" />
-                <span class="field-hint">默认关 = 方案 A（打开选项层再点「开始拆分」）。开启后一点执行即拆分，并发等选项沿用当前/上次设置。</span>
+                <span class="field-hint">默认关。开启后一点「拆成步骤」即开拆分（仍经 start_plan_job，不跳过 Mode B）。</span>
               </label>
-            </div>
-            <div class="settings-group">
-              <h3 class="settings-group-title">监视</h3>
-              <label class="field">状态刷新间隔（秒）
-                <input id="s-poll-interval" type="number" min="1" max="60" step="1" placeholder="5" />
-                <span class="field-hint">界面多久问一次「任务跑得怎样」。建议 2–5 秒。</span>
-              </label>
-              <label class="field">日志字号
-                <select id="s-log-font">
-                  <option value="12">12px（紧凑）</option>
-                  <option value="14" selected>14px（推荐）</option>
-                  <option value="16">16px（大）</option>
-                </select>
-                <span class="field-hint">运行监视主日志的默认字号，也可在监视页随时切换。</span>
-              </label>
-            </div>
-            <div class="settings-group">
-              <h3 class="settings-group-title">界面</h3>
-              <label class="field field-check" title="主路径状态旁显示一句短旁白；关闭后只留正经流程说明">
-                <span>趣味流程说明</span>
-                <input id="s-flow-fun" type="checkbox" checked />
-                <span class="field-hint">拆分/执行时的一句旁白（可关）。不影响任务本身。</span>
-              </label>
-            </div>
-            <div class="settings-group">
-              <h3 class="settings-group-title">运行默认值（高级）</h3>
               <label class="field">默认执行通道
                 <select id="s-default-provider">
-                  <!-- options filled or static -->
                   <option value="claude">默认通道</option>
                   <option value="codex">备用通道</option>
                   <option value="fake">演练模式（不调外部）</option>
                 </select>
-                <span class="field-hint">主路径默认不展示通道名；一般保持默认即可。调试界面可选演练模式。</span>
+                <span class="field-hint">主路径默认不展示通道名；调试可用演练模式。</span>
               </label>
               <label class="field">运行方式
                 <select id="s-default-mode">
@@ -559,47 +597,67 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
               <label class="field">最多同时进行几步
                 <input id="s-max-parallel" type="number" min="1" max="32" step="1" placeholder="2" />
               </label>
-              <label class="field" title="同一执行方式最多再试几次（不含首次；0 = 不重试）">卡住/失败后再试几次
-                <input id="s-retry-max" type="number" min="0" max="10" step="1" placeholder="2" />
-                <span class="field-hint">失败或卡住后，用同一种方式最多再试几次（不含首次；0 = 不重试）。上限 10。</span>
-              </label>
-              <label class="field" title="多久没新日志算卡住（秒）；到点会停掉并按上面的次数重试。默认 180">多久没新进展算卡住（秒）
-                <input id="s-stall-secs" type="number" min="30" max="7200" step="30" placeholder="180" />
-                <span class="field-hint">日志这么久没新内容 → 当作卡住，停掉并按上面次数重试。默认 180（3 分钟）。</span>
-              </label>
-              <label class="field field-check" title="同方式重试尽后，是否自动换另一种执行方式再试">
-                <span>卡住后换一种执行方式</span>
-                <input id="s-failover-enabled" type="checkbox" checked />
-                <span class="field-hint" id="s-failover-order-note">会在默认通道与备用通道之间切换；演练模式不参与。关闭后只在同一方式上重试。</span>
-              </label>
-            </div>
-            <div class="settings-group">
-              <h3 class="settings-group-title">系统收尾（拆分后）</h3>
-              <p class="field-hint" id="s-post-tasks-note" style="margin:0 0 .5rem">
-                以下任务<strong>不参与 AI 拆解</strong>，由系统在每次拆分末尾追加为「可选」。
-                默认总开关关闭；开启后，确认屏上对应项<strong>默认勾选</strong>（仍可取消）。
-              </p>
-              <label class="field field-check" title="开启后每次拆分追加「任务巡检」可选任务">
-                <span>拆分后附加：任务巡检</span>
-                <input id="s-post-inspect" type="checkbox" />
-                <span class="field-hint">对照计划写 VERDICT / ISSUES；业务代码只读。</span>
-              </label>
-              <label class="field field-check" title="开启后每次拆分追加「代码提交 Push」可选任务">
-                <span>拆分后附加：代码提交 Push</span>
-                <input id="s-post-git-push" type="checkbox" />
-                <span class="field-hint">开启后自动附带巡检门禁；仅 VERDICT=PASS 后才 commit + push；禁止 force push。</span>
-              </label>
-            </div>
-            <div class="settings-group">
-              <h3 class="settings-group-title">拆分校对（高级）</h3>
-              <label class="field field-check" title="规则校对之后再跑一次短提示 LLM，只删假依赖边并补充 notes；默认关（更慢、有费用）">
+              <label class="field field-check" title="规则校对后再跑智能第二跳；默认关">
                 <span>智能第二跳校对</span>
                 <input id="s-planner-critic" type="checkbox" />
                 <span class="field-hint" id="s-planner-critic-note">
-                  默认关闭。开启后，规则校对之后再请 AI 扫一遍假依赖（也可设环境变量 CCO_PLANNER_CRITIC=1）。
-                  失败则保留规则结果，不影响主路径。
+                  默认关闭。开启后规则校对后再请 AI 扫假依赖（也可 CCO_PLANNER_CRITIC=1）。失败保留规则结果。
                 </span>
               </label>
+            </div>
+            <div class="settings-group">
+              <h3 class="settings-group-title">卡住与重试</h3>
+              <label class="field" title="同一执行方式最多再试几次（不含首次；0 = 不重试）">卡住/失败后再试几次
+                <input id="s-retry-max" type="number" min="0" max="10" step="1" placeholder="2" />
+                <span class="field-hint">失败或卡住后同方式最多再试几次（不含首次；0 = 不重试）。上限 10。</span>
+              </label>
+              <label class="field" title="多久没新日志算卡住（秒）">多久没新进展算卡住（秒）
+                <input id="s-stall-secs" type="number" min="30" max="7200" step="30" placeholder="180" />
+                <span class="field-hint">默认 180（3 分钟）。到点停掉并按上面次数重试。</span>
+              </label>
+              <label class="field field-check" title="同方式重试尽后是否换通道">
+                <span>卡住后换一种执行方式</span>
+                <input id="s-failover-enabled" type="checkbox" checked />
+                <span class="field-hint" id="s-failover-order-note">默认与备用通道间切换；演练不参与。关闭则只同方式重试。</span>
+              </label>
+            </div>
+            <div class="settings-group">
+              <h3 class="settings-group-title">系统收尾</h3>
+              <p class="field-hint" id="s-post-tasks-note" style="margin:0 0 .5rem">
+                不参与 AI 拆解；在拆分末尾追加为「可选」。<strong>默认总开关关闭</strong>；开启后拆分台上默认勾选（仍可取消）。
+              </p>
+              <label class="field field-check" title="开启后每次拆分追加「任务巡检」">
+                <span>拆分后附加：任务巡检</span>
+                <input id="s-post-inspect" type="checkbox" />
+                <span class="field-hint">对照计划写完成/遗漏；业务代码只读。</span>
+              </label>
+              <label class="field field-check" title="开启后每次拆分追加「代码提交 Push」">
+                <span>拆分后附加：代码提交 Push</span>
+                <input id="s-post-git-push" type="checkbox" />
+                <span class="field-hint">会附带巡检门禁；仅通过后才 commit + push；禁止 force push。</span>
+              </label>
+            </div>
+            <div class="settings-group">
+              <h3 class="settings-group-title">外观与聊天</h3>
+              <label class="field">状态刷新间隔（秒）
+                <input id="s-poll-interval" type="number" min="1" max="60" step="1" placeholder="5" />
+                <span class="field-hint">界面多久问一次进度。建议 2–5 秒。</span>
+              </label>
+              <label class="field">日志字号
+                <select id="s-log-font">
+                  <option value="12">12px（紧凑）</option>
+                  <option value="14" selected>14px（推荐）</option>
+                  <option value="16">16px（大）</option>
+                </select>
+              </label>
+              <label class="field field-check" title="主路径状态旁短旁白">
+                <span>趣味流程说明</span>
+                <input id="s-flow-fun" type="checkbox" checked />
+                <span class="field-hint">拆分/执行时的一句旁白（可关）。</span>
+              </label>
+              <p class="field-hint" style="margin:.5rem 0 0">
+                聊天记录约保留 <strong>2 天</strong>。附图：png/jpeg/webp/gif，单张 ≤5MB，每条最多 4 张。
+              </p>
             </div>
           </div>
           <div id="s-save-status" class="save-status" hidden></div>
@@ -615,7 +673,7 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
           <ol>
             <li>点侧栏 <strong>＋</strong> 添加本机项目文件夹</li>
             <li>无运行时默认进<strong>聊天</strong>：说清需求（可附图）→ 保存计划；点<strong>计划管理</strong>选中/编辑文档</li>
-            <li>点<strong>执行此计划</strong> — AI 自动拆分任务并开始执行</li>
+            <li>点<strong>拆成步骤</strong> — AI 拆成波次；默认停在拆分台，核对后点<strong>确认并开始</strong></li>
             <li>每个步骤一个执行窗口，可拖动位置、可关闭；需要时再展开日志</li>
             <li>跑完可「回聊天」写下一份，或按巡检结果回补</li>
           </ol>
@@ -632,6 +690,20 @@ note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高�
           <h3>Claude 路径示例</h3>
           <pre class="log-box">[providers.claude]
 bin = "/Users/你/.local/bin/claude"</pre>
+          <!-- S16: 开源借鉴 R-S10…17 桌面可指认；无第三方 agent 运行时 -->
+          <h3 id="help-rs-checklist">拆分台借鉴清单（桌面可指认）</h3>
+          <p class="muted">只借拆法/闸门/人话，不引入 CrewAI/LangGraph/AutoGen 等运行时。</p>
+          <ul class="help-rs-list">
+            <li><strong>R-S10</strong> Plan-before-execute — 拆分台主按钮<strong>确认并开始</strong>（唯一业务开跑）</li>
+            <li><strong>R-S11</strong> Checklist 粒度 — 步骤<strong>卡片标题</strong>像待办，不是长段落</li>
+            <li><strong>R-S12</strong> 依赖用人话 — 卡片「等待：…」与详情依赖勾选（步骤标题）</li>
+            <li><strong>R-S13</strong> 规模门禁 — 质量条软提示过粗/过碎（不拦死）</li>
+            <li><strong>R-S14</strong> 角色轻标记 — 徽章<strong>做 / 查 / 系统</strong></li>
+            <li><strong>R-S15</strong> 计划文件真源 — <code>plans/*.md</code>；可选<strong>写回步骤摘要</strong></li>
+            <li><strong>R-S16</strong> 完成定义 — 卡片一句话优先「怎样算做完」</li>
+            <li><strong>R-S17</strong> 人改优先 — <strong>重新拆分（保留你的修改）</strong></li>
+          </ul>
+          <p class="muted">冷启动：欢迎页/聊天空态的<strong>出海落地页 · 通用需求大纲</strong>模板 → 落盘 → 可改 → 拆成步骤。</p>
         </div>
       </section>
 
@@ -641,7 +713,7 @@ bin = "/Users/你/.local/bin/claude"</pre>
           <div class="plan-chooser-head">
             <div>
               <h3>执行选项</h3>
-              <p class="muted" id="chooser-sub">确认同时进行几步后点「开始拆分」</p>
+              <p class="muted" id="chooser-sub">确认同时进行几步后点「拆成步骤」</p>
             </div>
             <button class="btn ghost sm" id="btn-chooser-close" type="button">关闭</button>
           </div>
@@ -696,9 +768,9 @@ bin = "/Users/你/.local/bin/claude"</pre>
                 <input id="chooser-max-parallel" type="number" min="1" max="32" step="1" value="2" title="同时运行的任务数；拆分会按此排波次" />
                 <input id="pp-max-parallel" type="hidden" value="2" />
               </label>
-              <label class="field field-check" title="勾选后拆分完成停在确认页，可编辑未执行任务后再开始">
-                <span>规划后暂停确认</span>
-                <input id="pp-pause-confirm" type="checkbox" />
+              <label class="field field-check" title="高级：勾选后拆分完成直接开跑（有业务可选步骤时仍会停在拆分台）">
+                <span>拆分后自动开始</span>
+                <input id="pp-auto-start" type="checkbox" />
               </label>
             </div>
           </div>
@@ -706,7 +778,7 @@ bin = "/Users/你/.local/bin/claude"</pre>
             <div class="chooser-foot-left">
               <span id="chooser-selected-label" class="muted">未选择计划</span>
             </div>
-            <button class="btn primary" id="btn-chooser-assign" type="button" disabled>开始拆分</button>
+            <button class="btn primary" id="btn-chooser-assign" type="button" disabled>拆成步骤</button>
           </div>
         </div>
       </div>
@@ -783,7 +855,7 @@ bin = "/Users/你/.local/bin/claude"</pre>
         <button class="btn ghost" type="button" id="btn-plan-full-save" hidden>保存</button>
         <button class="btn ghost" type="button" id="btn-plan-full-save-as" hidden>另存副本</button>
         <button class="btn ghost" type="button" id="btn-plan-full-cancel-edit" hidden>取消编辑</button>
-        <button class="btn primary" type="button" id="btn-plan-full-assign">执行此计划</button>
+        <button class="btn primary" type="button" id="btn-plan-full-assign">拆成步骤</button>
       </div>
     </div>
   </div>
@@ -799,13 +871,27 @@ bin = "/Users/你/.local/bin/claude"</pre>
   </div>
 
   <div id="toast" hidden></div>
-  <!-- D4: split app.js → web/js/* (order matters; shared globals) -->
+  <!-- 可选：壳 phase 人话标签（A2 AppViewModel 写入；无则忽略） -->
+  <span id="cco-app-phase-label" class="cco-app-phase-label" hidden aria-live="polite"></span>
+  <!--
+    D4 classic scripts (order matters; shared globals) + A2/A3 ESM entry.
+    Script → module map (A2-1 / A3):
+      state.js invoke  → shared/gateway.js（唯一 IPC 出口）
+      state.js state   → shared/store.js + app/AppViewModel
+      chat 发消息/列表  → features/chat/*（经 gateway）
+      plan/monitor/…   → 仍经典；A3+ 再迁 feature（禁止往旧文件堆新功能）
+  -->
   <script src="js/state.js"></script>
   <script src="js/flow.js"></script>
+  <!-- A5-2f D3: split.js removed — ccoSplit (main.js ESM) is sole three-col path -->
+  <script src="js/templates.js"></script>
   <script src="js/plan.js"></script>
   <script src="js/monitor.js"></script>
+  <script src="js/result.js"></script>
   <script src="js/log.js"></script>
   <script src="js/chat.js"></script>
   <script src="js/doctor.js"></script>
+  <!-- A2/A3: ES module 边界；AppViewModel + gateway + features/{chat,split} -->
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

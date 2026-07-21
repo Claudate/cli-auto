@@ -1,17 +1,17 @@
 # cco 桌面主路径简化（易用性）
 
-> 状态：**已落地**（合并选计划弹窗 · task-dash · CLI 再跑 · AI 事件过滤 · PATH 探测 · **D1 规划后暂停确认开关**）；总账 §1.3 冻结  
-> 日期：2026-07-17（状态校正 2026-07-18；**D1 2026-07-18**）  
+> 状态：**已落地**（合并选计划弹窗 · task-dash · CLI 再跑 · AI 事件过滤 · PATH 探测 · D1 开关）；**P2-16/S0 默认翻转**（2026-07-20：默认停拆分台）  
+> 日期：2026-07-17（状态校正 2026-07-18；**D1 2026-07-18**；**S0/F0 2026-07-20**）  
 > 范围：`web/` 计划区 / CLI 看板 / 环境提示；`src/runtime/provider` bin 解析；`src/doctor`  
-> 关联：总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) §1.3 · Mode B 真源 → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md) §4.1  
-> **勿再当缺口**：下列主路径能力已闭环；残差仅「跨屏系统窗口」「CCO.app 重打包目视（P0-4）」  
-> **D1 对齐**：默认 **分配后 auto-start**；高级「规划后暂停确认」可选（与 Mode B §4.1 同一决议，消灭双真相）
+> 关联：总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) · Mode B 真源 → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md) §4.1 · 主路径大改 → [`product-mainpath-optimize-2026-07-20.md`](./product-mainpath-optimize-2026-07-20.md)  
+> **勿再当缺口**：下列主路径能力已闭环；残差见架构 P2-17 / 主路径 P2-16 任务表  
+> **默认句（与 Mode B §4.1 同真）**：桌面默认 **停拆分台**；高级「拆分后自动开始」可选
 
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 
 ## 一句话
 
-用户只做三步：**加项目 → 选一份计划 → 点「分配计划」**。其余（AI 拆分、**默认自动开跑**、监视）自动完成；高级可开「规划后暂停确认」。
+用户主路径：**加项目 → 写/选计划 → 点「拆成步骤」→ 拆分台核对 →「确认并开始」**。AI 拆分默认**给人看**；高级可开「拆分后自动开始」。
 
 ## 主路径
 
@@ -19,9 +19,9 @@
 侧栏选项目
   → 顶部「当前计划」条（只显示选中的那一份）
   → 选择计划（弹层，不常驻列表）
-     可选支路：顶栏「聊天」→ 共建计划 .md 落盘 → 回「分配计划」
-  → 分配计划（AI 拆分 → 自动开始）
-  → CLI 窗口看板（可拖、可关、短日志）
+     可选支路：顶栏「聊天」→ 共建计划 .md 落盘 →「拆成步骤」
+  → 拆成步骤（AI 拆分 → 默认停拆分台）
+  → 确认并开始 → 执行看板（可拖、可关、短日志）
 ```
 
 > 聊天支路真源：[`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)（C0–C2 已落地；不替代选文件）。  
@@ -32,14 +32,14 @@
 | 旧 | 新 |
 |---|---|
 | 常驻列出全部计划 + 空态文案叠在一起 | 默认只显示当前计划；列表进弹层 |
-| 「分析并拆分」+ 确认页 + 开始运行 | 「分配计划」一键：拆完自动开跑 |
+| 「分析并拆分」+ 确认页 + 开始运行 | 「拆成步骤」→ 拆分台 →「确认并开始」（高级可 auto-start） |
 | 黄条永久 `claude bin not found` | 扫 `~/.local/bin` 等常见路径；可「忽略」 |
 | 单列超长终端 | 分区短窗口，内部滚动，可拖可关 |
 
 ## 关键实现
 
 - `web/index.html`：`plan-active-bar` / `plan-chooser` / `cli-board`
-- `web/app.js`：`autoStartAfterPlan`（默认 true）、`#pp-pause-confirm`（高级暂停确认）、`renderCliBoard`、`openPlanChooser`
+- `web/js/state.js`：`autoStartAfterPlan`（默认 **false**）、`#pp-auto-start`（高级拆分后自动开始）、`renderCliBoard`、`openPlanChooser`
 - `web/app.css`：紧凑计划条 + 多窗口看板
 - `src/runtime/provider/mod.rs`：`resolve_bin_on_disk`
 - `src/doctor/mod.rs`：按默认 provider 判定整体失败
@@ -55,20 +55,21 @@
 > 主路径简化本身 **已完成**（总账 §1.3）。下列是独立 backlog / 验证项：
 
 - 跨显示器系统级多窗口 → 总账 **P2-4 ✅ t39**（系统级「独立监视窗」可拖第二屏；非整应用多窗）
-- ~~自动开跑 vs 强制确认~~ → **D1 已收口（P1-7）**：默认 auto-start；高级 `#pp-pause-confirm`；真源 Mode B §4.1
+- ~~自动开跑 vs 强制确认~~ → **D1 已收口**；**S0 2026-07-20 默认翻转**：默认停拆分台；高级 `#pp-auto-start`；真源 Mode B §4.1
 - ~~本机 `CCO.app` 重打包目视清单~~ → 总账 **P0-4 ✅ D3**（`scripts/package-app.sh` + 清单）
 
-## 2026-07-18 D1 产品规则对齐
+## 2026-07-18 D1 → 2026-07-20 S0 产品规则
 
 决议（与 Mode B §4.1 同一）：
 
 | 项 | 值 |
 |----|-----|
-| 桌面默认 | 分配后 **auto-start**（`autoStartAfterPlan: true`） |
-| 高级开关 | 「规划后暂停确认」`#pp-pause-confirm` → 停在确认屏，人工点「开始运行」 |
-| 业务入口 | 仍只走 `confirm_start`（auto-start = UI 自动调用） |
+| 桌面默认 | 拆分后 **停拆分台**（`autoStartAfterPlan: false`） |
+| 高级开关 | 「拆分后自动开始」`#pp-auto-start` → 写 `PAUSE_CONFIRM_KEY=0` 后 UI 自动 `confirm_start` |
+| 业务入口 | 仍只走 `confirm_start`（auto-start = UI 自动调用，非第二套 API） |
+| 主 CTA | 「拆成步骤」→ 拆分台 →「确认并开始」 |
 
-实现：`PAUSE_CONFIRM_KEY` localStorage；勾选 ↔ `!autoStartAfterPlan`。
+实现：`PAUSE_CONFIRM_KEY` localStorage；`=== "0"` 才 auto-start；缺省/「1」= 停台。
 
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 

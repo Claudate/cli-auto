@@ -1,11 +1,10 @@
-//! Shared helpers for CLI command handlers.
+//! Shared helpers for CLI command handlers (A5-1 thin).
 //!
-//! [INPUT]: Config · RunState · PlanIR · ProviderRegistry
-//! [OUTPUT]: plan_then_load_ir · run_scheduler · term/poll helpers
-//! [POS]: cli/commands 内部共用；D4 自 mod.rs 抽出
+//! [INPUT]: Config · plan path · Scheduler
+//! [OUTPUT]: plan_then_load_ir · run_scheduler_loop · term helpers
+//! [POS]: cli/commands 内部共用；调度装配在 `app::run`，本文件只 poll + 打印
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/cli/CLAUDE.md
 
-use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -13,13 +12,12 @@ use anyhow::{bail, Context, Result};
 
 use crate::config::Config;
 use crate::plan::PlanIR;
-use crate::report;
-use crate::runtime::provider::ProviderRegistry;
 use crate::runtime::Scheduler;
-use crate::state::{RunState, RunStatus};
-use crate::terminal::{SessionKind, TerminalManager};
+use crate::terminal::SessionKind;
 
-/// Mode B: plan job → poll → load proposed PlanIR (CLI `run` prose path).
+/// Mode B: plan job → poll → load proposed PlanIR (CLI `run` prose path, display only).
+///
+/// Open-run is **not** here — caller uses [`crate::app::split::confirm_materialize`].
 pub(crate) fn plan_then_load_ir(
     config: &Config,
     project: &std::path::Path,
@@ -29,9 +27,12 @@ pub(crate) fn plan_then_load_ir(
     mode: Option<String>,
     max_parallel: Option<usize>,
 ) -> Result<(PlanIR, String)> {
-    let view = crate::services::start_plan_job(
+    use crate::app::split as split_uc;
+    use crate::plan::planner::StartPlanJobRequest;
+
+    let view = split_uc::start_job(
         config,
-        crate::services::StartPlanJobRequest {
+        StartPlanJobRequest {
             project: project.to_path_buf(),
             plan: plan.to_path_buf(),
             plan_mode: Some(plan_mode.to_string()),
@@ -46,7 +47,7 @@ pub(crate) fn plan_then_load_ir(
         println!("planning… (job {})", view.job_id);
         for _ in 0..600 {
             std::thread::sleep(Duration::from_millis(500));
-            view = crate::services::get_plan_job(config, &view.job_id)?;
+            view = split_uc::get_job(config, &view.job_id)?;
             if view.status != "planning" {
                 break;
             }
@@ -76,12 +77,15 @@ pub(crate) fn plan_then_load_ir(
     for (i, layer) in view.layers.iter().enumerate() {
         println!("wave {}: {}", i + 1, layer.join(", "));
     }
-    let ir = crate::plan::planner::load_proposed(config, &view.job_id)
+    let ir = split_uc::load_proposed_plan(config, &view.job_id)
         .with_context(|| format!("load proposed for job {}", view.job_id))?;
     Ok((ir, view.job_id))
 }
 
-pub(crate) fn task_paths(st: &RunState, task: &str) -> Result<(PathBuf, PathBuf, PathBuf)> {
+pub(crate) fn task_paths(
+    st: &crate::state::RunState,
+    task: &str,
+) -> Result<(PathBuf, PathBuf, PathBuf)> {
     let task_dir = st.task_dir(task);
     let mut cwd = st.project_root.clone();
     let wd = task_dir.join("work_dir.json");
@@ -98,7 +102,6 @@ pub(crate) fn task_paths(st: &RunState, task: &str) -> Result<(PathBuf, PathBuf,
     }
     let stdout = task_dir.join("stdout.json");
     let stderr = task_dir.join("stderr.log");
-    // ensure log files exist so tail -f works
     if !stdout.exists() {
         let _ = std::fs::write(&stdout, "");
     }
@@ -108,15 +111,10 @@ pub(crate) fn task_paths(st: &RunState, task: &str) -> Result<(PathBuf, PathBuf,
     Ok((cwd, stdout, stderr))
 }
 
-pub(crate) fn poll_interval(config: &Config) -> Duration {
-    if std::env::var("CCO_FAST_POLL").is_ok() {
-        Duration::from_millis(50)
-    } else {
-        Duration::from_millis((config.default.poll_interval_secs.max(1) * 1000).min(5_000))
-    }
-}
-
-pub(crate) fn resolve_term_kind(arg: Option<super::super::TermKindArg>, config: &Config) -> SessionKind {
+pub(crate) fn resolve_term_kind(
+    arg: Option<super::super::TermKindArg>,
+    config: &Config,
+) -> SessionKind {
     match arg {
         Some(super::super::TermKindArg::Embedded) => SessionKind::Embedded,
         Some(super::super::TermKindArg::External) => SessionKind::External,
@@ -130,40 +128,15 @@ pub(crate) fn resolve_term_kind(arg: Option<super::super::TermKindArg>, config: 
     }
 }
 
-pub(crate) fn make_terminal_manager(run_dir: &std::path::Path, config: &Config) -> TerminalManager {
-    TerminalManager::for_run(
-        run_dir,
-        &config.terminal.external_launcher,
-        config.terminal.external_command.clone(),
-    )
-    .with_limits(config.terminal.max_embedded, config.terminal.max_external)
-}
-
-pub(crate) fn provider_parallel_caps(config: &Config) -> HashMap<String, usize> {
-    config
-        .providers
-        .iter()
-        .filter_map(|(name, pc)| pc.max_parallel.map(|n| (name.clone(), n)))
-        .collect()
-}
-
-pub(crate) async fn preflight_providers(registry: &ProviderRegistry, ir: &PlanIR) -> Result<()> {
-    let used: HashSet<_> = ir.tasks.iter().map(|t| t.provider.clone()).collect();
-    for name in &used {
-        let p = registry.get(name)?;
-        if let Err(e) = p.preflight().await {
-            bail!("provider {name} preflight failed: {e:#}");
-        }
-    }
-    Ok(())
-}
-
-pub(crate) async fn run_scheduler(
+/// Run scheduler foreground (optional TUI) and finish with reports via app.
+pub(crate) async fn run_scheduler_loop(
     sched: Scheduler,
     config: &Config,
     run_id: &str,
     tui: bool,
 ) -> Result<i32> {
+    use crate::app::run as run_uc;
+
     if tui {
         let run_dir_tui = config.runs_dir().join(run_id);
         let config_tui = config.clone();
@@ -178,47 +151,21 @@ pub(crate) async fn run_scheduler(
         let status = join
             .await
             .map_err(|e| anyhow::anyhow!("scheduler join: {e}"))??;
-        let run_dir = config.runs_dir().join(run_id);
-        let st = RunState::load(&run_dir)?;
-        report::write_reports(&st)?;
         println!("\nstatus: {:?}", status);
-        println!("report: {}", run_dir.join("report.md").display());
-        return Ok(match status {
-            RunStatus::Completed => 0,
-            RunStatus::Paused => 2,
-            _ => 1,
-        });
+        let code = run_uc::finish_with_reports(config, run_id, status)?;
+        println!(
+            "report: {}",
+            config.runs_dir().join(run_id).join("report.md").display()
+        );
+        return Ok(code);
     }
 
     let status = sched.run().await?;
-    let run_dir = config.runs_dir().join(run_id);
-    let st = RunState::load(&run_dir)?;
-    report::write_reports(&st)?;
     println!("\nstatus: {:?}", status);
-    println!("report: {}", run_dir.join("report.md").display());
-    Ok(match status {
-        RunStatus::Completed => 0,
-        RunStatus::Paused => 2,
-        _ => 1,
-    })
+    let code = run_uc::finish_with_reports(config, run_id, status)?;
+    println!(
+        "report: {}",
+        config.runs_dir().join(run_id).join("report.md").display()
+    );
+    Ok(code)
 }
-
-pub(crate) fn kill_pid(pid: u32) {
-    #[cfg(unix)]
-    {
-        unsafe {
-            extern "C" {
-                fn kill(pid: i32, sig: i32) -> i32;
-            }
-            let _ = kill(pid as i32, 15);
-            let _ = kill(pid as i32, 9);
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/F"])
-            .status();
-    }
-}
-

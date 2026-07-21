@@ -1,12 +1,12 @@
-//! TUI app loop and keybindings.
+//! TUI app loop and keybindings (A5-3: observe + light control via app::run).
 //!
 //! [INPUT]: run_dir · Config 派生选项 · 终端 events
-//! [OUTPUT]: 多页切换 · stop/term 操作（不杀 detached run）
-//! [POS]: tui 主循环
+//! [OUTPUT]: 多页切换 · stop/term 操作（不杀 detached run 进程组；stop 经 app）
+//! [POS]: tui 主循环 · Presentation → app::run 查询/stop；TerminalManager 观察适配
 //! note: P2-5 Terminals keys n/p/z cycle+zoom panes (stdout tail grid)
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/tui/CLAUDE.md
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -21,6 +21,7 @@ use ratatui::Terminal;
 
 use super::pages;
 use super::widgets::{help_footer, page_tabs};
+use crate::app::run as run_uc;
 use crate::config::Config;
 use crate::plan::PlanIR;
 use crate::state::RunState;
@@ -62,6 +63,8 @@ impl Page {
 
 pub struct TuiOptions {
     pub run_dir: PathBuf,
+    /// Needed for [`run_uc::stop_task`] (same path as desktop/CLI).
+    pub config: Config,
     pub tick_ms: u64,
     pub launcher: String,
     pub custom_command: Option<String>,
@@ -82,12 +85,13 @@ pub struct App {
     pub message: String,
     pub tm: TerminalManager,
     pub should_quit: bool,
+    config: Config,
 }
 
 impl App {
     pub fn load(opts: &TuiOptions) -> Result<Self> {
-        let state = RunState::load(&opts.run_dir)?;
-        let plan = load_resolved_plan(&opts.run_dir);
+        let state = run_uc::load_by_dir(&opts.run_dir)?;
+        let plan = run_uc::load_resolved_plan(&opts.run_dir);
         let tm = TerminalManager::for_run(
             &opts.run_dir,
             &opts.launcher,
@@ -106,6 +110,7 @@ impl App {
             message: String::new(),
             tm,
             should_quit: false,
+            config: opts.config.clone(),
         };
         app.clamp_selection();
         app.clamp_term_selection();
@@ -114,8 +119,8 @@ impl App {
 
     pub fn reload(&mut self) -> Result<()> {
         let dir = self.state.run_dir.clone();
-        self.state = RunState::load(&dir)?;
-        self.plan = load_resolved_plan(&dir);
+        self.state = run_uc::load_by_dir(&dir)?;
+        self.plan = run_uc::load_resolved_plan(&dir);
         self.term_sessions = self.tm.list().unwrap_or_default();
         self.clamp_selection();
         self.clamp_term_selection();
@@ -219,35 +224,21 @@ impl App {
         self.selected_task_idx = Some(if i == 0 { n - 1 } else { i - 1 });
     }
 
+    /// Light control: same stop path as desktop / `cco stop --task` (A5-3).
     fn stop_selected(&mut self) {
         let Some(id) = self.selected_task_id() else {
             return;
         };
-        if let Some(ts) = self.state.tasks.get(&id) {
-            if let Some(pid) = ts.pid {
-                kill_pid(pid);
+        let run_id = self.state.run_id.clone();
+        match run_uc::stop_task(&self.config, &run_id, Some(&id)) {
+            Ok(()) => {
+                let _ = self.tm.close_task(&id);
+                self.message = format!("stopped task {id}");
+            }
+            Err(e) => {
+                self.message = format!("stop failed: {e:#}");
             }
         }
-        let meta = self.state.task_dir(&id).join("meta.json");
-        if let Ok(text) = std::fs::read_to_string(&meta) {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
-                if let Some(pid) = v.get("pid").and_then(|p| p.as_u64()) {
-                    kill_pid(pid as u32);
-                }
-                if let Some(agent) = v.get("agent_id").and_then(|a| a.as_str()) {
-                    let bin = std::env::var("CCO_CLAUDE_BIN").unwrap_or_else(|_| "claude".into());
-                    let _ = std::process::Command::new(bin).args(["stop", agent]).status();
-                }
-            }
-        }
-        let _ = std::fs::write(self.state.task_dir(&id).join(".done"), "130");
-        if let Some(ts) = self.state.tasks.get_mut(&id) {
-            ts.status = crate::runtime::provider::TaskStatus::Stopped;
-            ts.finished_at = Some(chrono::Utc::now());
-        }
-        let _ = self.state.save();
-        let _ = self.tm.close_task(&id);
-        self.message = format!("stopped task {id}");
         let _ = self.reload();
     }
 
@@ -433,32 +424,11 @@ fn draw(frame: &mut Frame, app: &App) {
     frame.render_widget(help_footer(), chunks[3]);
 }
 
-fn load_resolved_plan(run_dir: &Path) -> Option<PlanIR> {
-    let p = run_dir.join("plan.resolved.json");
-    let text = std::fs::read_to_string(p).ok()?;
-    serde_json::from_str(&text).ok()
-}
-
-fn kill_pid(pid: u32) {
-    #[cfg(unix)]
-    {
-        unsafe {
-            extern "C" {
-                fn kill(pid: i32, sig: i32) -> i32;
-            }
-            let _ = kill(pid as i32, 15);
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = pid;
-    }
-}
-
 /// Build TuiOptions from config + run dir.
 pub fn options_from_config(run_dir: PathBuf, config: &Config) -> TuiOptions {
     TuiOptions {
         run_dir,
+        config: config.clone(),
         tick_ms: config.tui.tick_ms,
         launcher: config.terminal.external_launcher.clone(),
         custom_command: config.terminal.external_command.clone(),

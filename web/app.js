@@ -5,6 +5,6 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
  * 加载顺序（见 index.html）：
- *   js/state.js → js/plan.js → js/monitor.js → js/log.js → js/chat.js → js/doctor.js
+ *   js/state.js → js/flow.js → js/split.js → js/templates.js → js/plan.js → js/monitor.js → js/result.js → js/log.js → js/chat.js → js/doctor.js
  */
 /* cco desktop — entry (logic in web/js/) */

@@ -1,29 +1,27 @@
-//! CLI subcommand handler.
+//! CLI `cco status` — observe via [`crate::app::run`] (A5-1).
 //!
 //! [INPUT]: Config · clap fields
 //! [OUTPUT]: exit code
-//! [POS]: cli/commands；D4 自 mod.rs 抽出；P1-8 per-provider 分栏 + handoff 路径
+//! [POS]: cli/commands；load + handoff_paths；**禁止**碰 handoff 内部类型
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/cli/CLAUDE.md
 
 use anyhow::Result;
 
+use crate::app::run as run_uc;
 use crate::config::Config;
-use crate::report;
-use crate::runtime::handoff::Handoff;
-use crate::state::{self, RunState};
+use crate::state;
 
 pub fn run(config: &Config, run_id: Option<String>) -> Result<i32> {
     let dir = state::resolve_run_dir(&config.runs_dir(), run_id.as_deref())?;
-    let st = RunState::load(&dir)?;
+    // Prefer app query; dir already resolved for "latest" default.
+    let st = run_uc::load_by_dir(&dir)?;
     println!("run_id: {}", st.run_id);
     println!("status: {:?}", st.status);
     println!("project: {}", st.project_root.display());
     println!("plan: {}", st.plan_path.display());
     println!("dir: {}", st.run_dir.display());
-    // P1-8: per-provider rollup (running / done / failed / cost).
-    print!("{}", report::format_status_by_provider(&st.tasks));
-    let handoff_md = Handoff::path_md(&st.run_dir);
-    let handoff_json = Handoff::path_json(&st.run_dir);
+    print!("{}", run_uc::format_status_by_provider(&st));
+    let (handoff_md, handoff_json) = run_uc::handoff_paths(&st.run_dir);
     println!(
         "handoff.md: {} ({})",
         handoff_md.display(),

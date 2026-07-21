@@ -1,4 +1,4 @@
-//! Claude CLI WorkerProvider.
+//! Claude CLI adapter implementing [`crate::ports::WorkerPort`].
 //!
 //! [INPUT]: StartCtx · TaskIR · config bin/auth
 //! [OUTPUT]: spawn/poll/collect · stream-json 解析 · agent_id
