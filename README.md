@@ -25,8 +25,8 @@
 3. 左侧看任务进度，右侧读完整日志；失败会自动聚焦  
 
 ```bash
-# 已打包好：
-open /Users/dbi007/project/mac/claude-auto/dist/CCO.app
+# 已打包好（在仓库根目录）：
+open dist/CCO.app
 
 # 或从源码构建（web/ 为前端资源，改完需重新打包才进 .app）：
 cargo build -p cco-desktop --release
