@@ -487,7 +487,7 @@ TUI：保持 **观察 + 轻控制** 适配器，消费同一 `Run` 查询；不�
 - [x] 删除旧 Tauri 命令别名与旧 `web/js/*.js` 巨石（**A5-2**；序见附录 C · web L2 D1–D8）  
   - classic facade **S8**：`chat.js`/`doctor.js`/`result.js` ≤80 · `plan.js`/`log.js`/`monitor.js` ≤200 · `split.js` 空壳未引用  
   - 真源：`features/{chat,project,split,run,result,settings}` · IPC 只 `shared/gateway`  
-  - **遗留（非 S8 巨石 · 非本刀范围）**：`state.js` 仍厚（D9 未做 · invoke 桥）· `templates.js` 体量可后收 · 部分 feature 文件软超 400 但 ≤600  
+  - **遗留（非 S8 巨石 · 非本刀范围）**：`state.js` 仍厚（D9 未做 · invoke 桥）· **`templates.js` D7 ✅**（`features/templates` · facade ≤80）· 部分 feature 文件软超 400 但 ≤600  
 - [x] TUI 只依赖 app 查询 DTO（**A5-3** · load_by_dir / load_resolved_plan / stop_task · ports::TaskStatus）  
 - [x] 更新 L1/L2、历史计划「非实施真源」、门禁 GIANTS 与地形同构（**A5-4 GEB 2026-07-21**）  
 - [ ] （可选）workspace 拆 crate（**A5-5**）— **本轮明确不做**；2026-07-21 评估延期零 crate diff；见 [`a5-5-workspace-crates-eval-2026-07-21.md`](./a5-5-workspace-crates-eval-2026-07-21.md)  
@@ -672,7 +672,7 @@ ports::Clock             now（可测）
 | `state.js` | **820** | 全局 state + **invoke 桥** | 仅桥：`getInvoke`/`invoke`；优先 gateway | **D9 未做**（非 classic 业务巨石） |
 | `flow.js` | 346 | 流程文案 | 无 | 可长期保留 |
 | `split.js` | 空壳 / index 未挂 | — | 无 | **A5-2f D3 ✅** · `ccoSplit` 单轨 |
-| `templates.js` | 389 | 模板落盘 / 写回 | **无**（A5-2e → ccoChat/gateway） | 体量可后收 |
+| **`templates.js`** | **~44** facade | classic → `ccoTemplates` | **无** | **P-ship-D D7 ✅** · `features/templates/*` |
 | **`plan.js`** | **108** facade | classic → `ccoProject` | **无** | **S8 ✅** · `features/project/*` · confirm→`ccoSplit` |
 | **`monitor.js`** | **198** facade | workspace 壳 | 无 | **S8 ✅** · `ccoRun.renderProgress` |
 | **`result.js`** | **35** facade | 结果壳 | 无 | **S8 ✅** · `ccoResult.*` |
@@ -686,7 +686,7 @@ ports::Clock             now（可测）
 - UI：**无** `start_run` 调用；gateway 不暴露 `startRun`。  
 - Tauri 仍注册 legacy `start_run` → `app::run::start_from_request`（ParseOnly；非 Mode B 主路径）。
 
-**删除序（A5-2 已完成项）**：result/monitor/split 壳 ✅ · log ✅ · plan ✅ · chat ✅ · doctor ✅ · templates IPC ✅ · **state 瘦身 D9 待后** · flow 可选。详见 web L2。
+**删除序（A5-2 / P-ship 已完成项）**：result/monitor/split 壳 ✅ · log ✅ · plan ✅ · chat ✅ · doctor ✅ · templates IPC ✅ · **templates → features/templates D7 ✅** · **state 瘦身 D9 待后** · flow 可选。详见 web L2。
 
 ### C.2 CLI 子命令 ↔ `app::{split,run,chat}`（**A5-1 ✅**）
 

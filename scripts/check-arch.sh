@@ -71,7 +71,8 @@ else
   note "info: GIANTS empty (A5-4 S8 classic facades out of list)"
 fi
 
-# 1b) 厚遗留（非 S8 业务巨石）：state 桥 / 入口装配 — 只软提醒，禁止当新功能堆场
+# 1b) 厚遗留（非 S8 业务巨石）：state 桥 — 只软提醒，禁止当新功能堆场
+# D9（P-ship-C）：state.js ~820→~503（展示 helper → shared/statusUi+markdown）；>HARD 才 warn
 LEGACY_THICK=(
   "web/js/state.js"
 )
@@ -80,6 +81,8 @@ for g in "${LEGACY_THICK[@]}"; do
     n=$(wc -l <"$g" | tr -d ' ')
     if (( n > HARD_LINES )); then
       warn "$g has $n lines (legacy thick / D9; not a business giant — do not add features)"
+    elif (( n > SOFT_LINES )); then
+      note "info: $g has $n lines (D9 under hard $HARD_LINES; keep thinning, no new features)"
     fi
   fi
 done

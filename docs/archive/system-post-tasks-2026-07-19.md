@@ -5,7 +5,7 @@
 > 范围：Mode B 拆分结果**之后**由 host 追加的系统任务；**不**参与 AI/启发式拆解；后续可同表扩展  
 > 角色：可开关的「拆完再干什么」扩展点——与业务任务图解耦  
 > 关联：Mode B · P-loop inspect · 可选任务 `optional/include` · 总账 **D5 / P2-15 · P-sys-post**  
-> GEB：[`/CLAUDE.md`](../CLAUDE.md) · [`./CLAUDE.md`](./CLAUDE.md)
+> GEB：[`/CLAUDE.md`](../../CLAUDE.md) · [`./CLAUDE.md`](../CLAUDE.md)
 
 [PROTOCOL]: 变更时更新此头部；落地后检查 L1/L2
 
@@ -67,12 +67,12 @@ post_git_push_enabled = false
 
 | 层 | 文件 |
 |----|------|
-| 注入 | [`src/plan/system_post.rs`](../src/plan/system_post.rs) |
-| 调用点 | [`src/plan/planner/job.rs`](../src/plan/planner/job.rs) `finish_plan_job` |
-| 配置 | [`src/config/mod.rs`](../src/config/mod.rs) |
-| 设置 API | [`src/services/settings.rs`](../src/services/settings.rs) |
-| 设置 UI | [`web/index.html`](../web/index.html) · [`web/js/doctor.js`](../web/js/doctor.js) |
-| 确认屏徽章 | [`web/js/plan.js`](../web/js/plan.js) · [`web/css/plan.css`](../web/css/plan.css) |
+| 注入 | [`src/plan/system_post.rs`](../../src/plan/system_post.rs) |
+| 调用点 | [`src/plan/planner/job.rs`](../../src/plan/planner/job.rs) `finish_plan_job` |
+| 配置 | [`src/config/mod.rs`](../../src/config/mod.rs) |
+| 设置 API | [`src/services/settings.rs`](../../src/services/settings.rs) |
+| 设置 UI | [`web/index.html`](../../web/index.html) · [`web/js/doctor.js`](../../web/js/doctor.js) |
+| 确认屏徽章 | [`web/js/plan.js`](../../web/js/plan.js) · [`web/css/plan.css`](../../web/css/plan.css) |
 | 任务上限 | `PLANNER_MAX_TASKS=20` · `MAX_TASKS=22`（为 2 个系统位留空） |
 
 ---

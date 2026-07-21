@@ -8,7 +8,7 @@
 > - Mode B → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)（分配后 Planner → 确认 → 执行）
 > - 多 CLI / 检验员 → [`multi-cli-collaboration-2026-07-18.md`](./multi-cli-collaboration-2026-07-18.md)（role/scope/inspect VERDICT · handoff · REWORK_HOOK；本计划**补全「对照计划勾选 + 回补闭环」**，**不**另开第二套 Scheduler）
 > - 总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md)（本计划 → **P-loop / P2-11 已落地**；**勿**回灌 D0–D4）
-> - 反例触发 → [`chat-utf8-fence-panic-2026-07-19.md`](./chat-utf8-fence-panic-2026-07-19.md)（四波 PASS 仍有 I-1 文档滞后 / I-2 验收降级 / inspect 只开单不修）  
+> - 反例触发 → [`chat-utf8-fence-panic-2026-07-19.md`](./archive/chat-utf8-fence-panic-2026-07-19.md)（四波 PASS 仍有 I-1 文档滞后 / I-2 验收降级 / inspect 只开单不修）  
 > GEB 入口：[`/CLAUDE.md`](../CLAUDE.md)（L1）· [`./CLAUDE.md`](./CLAUDE.md)（L2 docs）
 
 > **定稿（t1）**：本前言 + §0–§11 冻结角色、问题、契约、阶段与非目标。  

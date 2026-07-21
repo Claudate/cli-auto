@@ -45,8 +45,8 @@ Cargo.toml — workspace（cco + cco-desktop）
 [`docs/gap-and-landing-plan-2026-07-18.md`](./docs/gap-and-landing-plan-2026-07-18.md) — 历史总账 + D5 池导航（D0–D4 已闭环；**不**新开阶段表）
 [`claude-cli-orchestrator-plan.md`](./claude-cli-orchestrator-plan.md) — 编排器设计（M0–M4 已落地；M5 → D5）
 
-### 历史参考（主线已 ✅ · 文件仍在 docs/ · **勿当缺口 · 勿继承勾选**）
-清单与一行摘要见 [`docs/CLAUDE.md`](./docs/CLAUDE.md)「历史参考」——chat / 桌面 UX / terminal / 计划管理 / sys-post 等已闭环子计划。
+### 历史归档（主线已 ✅ · **`docs/archive/`** · **勿当缺口 · 勿继承勾选**）
+chat / 桌面 UX / terminal / 计划管理 / sys-post 等已迁 [`docs/archive/`](./docs/archive/)；索引 [`docs/archive/README.md`](./docs/archive/README.md) · 总表 [`docs/CLAUDE.md`](./docs/CLAUDE.md)。
 </config>
 
 能力要点: 轻量任务控制台 · Mode B 规划相位 · providers claude/codex/fake · log_events 可读监视 · 计划闭环五步 · 桌面 planSessions/auto-start

@@ -8,11 +8,11 @@
 > - 主路径 → [`ux-simple-mainpath-2026-07-17.md`](./ux-simple-mainpath-2026-07-17.md)（三步已落地；本计划把默认入口从「工作区选计划」收敛为「有跑进执行、无跑进聊天」）
 > - 聊天共建 → [`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)（C0–C2 ✅；本计划扩「主窗 + 右侧计划轨 + 全文弹窗 + 未跑可改」）
 > - 聊天注意力 → [`chat-ux-focus-2026-07-19.md`](./chat-ux-focus-2026-07-19.md)（U0–U2 · P2-10；**可并实施**噪声/CTA，**不**替代本计划路由/计划轨）
-> - 执行闭环 → [`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md)（对照计划巡检 · **P-loop ✅**；**≠** 进程卡死巡检）
-> - 多 CLI 协作 → [`multi-cli-collaboration-2026-07-18.md`](./multi-cli-collaboration-2026-07-18.md)（声明/越界/检验员 · **未实施**；本计划只做 **默认 CLI + 卡死换家** 最小可用，**不**全量 role/scope）
-> - Mode B → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)（`confirm_start` 仍是唯一业务 worker 入口）
-> - 总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md)（本计划 → **D5 / P2-12 · P-chat-home**；**勿**回灌 D0–D4）
-> GEB 入口：[`/CLAUDE.md`](../CLAUDE.md)（L1）· [`./CLAUDE.md`](./CLAUDE.md)（L2 docs）
+> - 执行闭环 → [`plan-execute-inspect-rework-2026-07-19.md`](../plan-execute-inspect-rework-2026-07-19.md)（对照计划巡检 · **P-loop ✅**；**≠** 进程卡死巡检）
+> - 多 CLI 协作 → [`multi-cli-collaboration-2026-07-18.md`](../multi-cli-collaboration-2026-07-18.md)（声明/越界/检验员 · **未实施**；本计划只做 **默认 CLI + 卡死换家** 最小可用，**不**全量 role/scope）
+> - Mode B → [`product-mode-b-ai-planner.md`](../product-mode-b-ai-planner.md)（`confirm_start` 仍是唯一业务 worker 入口）
+> - 总账 → [`gap-and-landing-plan-2026-07-18.md`](../gap-and-landing-plan-2026-07-18.md)（本计划 → **D5 / P2-12 · P-chat-home**；**勿**回灌 D0–D4）
+> GEB 入口：[`/CLAUDE.md`](../../CLAUDE.md)（L1）· [`./CLAUDE.md`](../CLAUDE.md)（L2 docs）
 
 > **定稿（t1）**：本前言 + §0–§10 冻结角色、问题、目标、规格、阶段与非目标。  
 > 实施勾选真源 = **§5**（H0–H4）；**禁止**第二份「聊天主窗总览」；**禁止**把本计划写成 P-chat / P-loop 未完成。  
@@ -331,13 +331,13 @@ P2-10 U0–U2 可在 H0/H1 同迭代顺手，**勾选分列**。
 
 | 区域 | 文件 |
 |------|------|
-| 路由 | [`web/js/plan.js`](../web/js/plan.js) `selectProject` · [`web/js/state.js`](../web/js/state.js) `showPage` |
-| 聊天 UI | [`web/js/chat.js`](../web/js/chat.js) · [`web/index.html`](../web/index.html) · `web/css/chat.css` |
-| 计划列表 | [`web/js/plan.js`](../web/js/plan.js) `renderPlanChooser` · services `list_plans` |
-| 看板时长 | [`web/js/log.js`](../web/js/log.js) · `web/css/monitor.css` |
-| 设置 | [`web/js/doctor.js`](../web/js/doctor.js) · [`src/services/settings.rs`](../src/services/settings.rs) · [`src/config/mod.rs`](../src/config/mod.rs) |
-| Stall / 重试 / failover | [`src/runtime/scheduler.rs`](../src/runtime/scheduler.rs) · [`src/state/mod.rs`](../src/state/mod.rs) · live view |
-| 跑次元数据 | [`src/services/runs.rs`](../src/services/runs.rs) / 新 plan_meta 聚合 |
+| 路由 | [`web/js/plan.js`](../../web/js/plan.js) `selectProject` · [`web/js/state.js`](../../web/js/state.js) `showPage` |
+| 聊天 UI | [`web/js/chat.js`](../../web/js/chat.js) · [`web/index.html`](../../web/index.html) · `web/css/chat.css` |
+| 计划列表 | [`web/js/plan.js`](../../web/js/plan.js) `renderPlanChooser` · services `list_plans` |
+| 看板时长 | [`web/js/log.js`](../../web/js/log.js) · `web/css/monitor.css` |
+| 设置 | [`web/js/doctor.js`](../../web/js/doctor.js) · [`src/services/settings.rs`](../../src/services/settings.rs) · [`src/config/mod.rs`](../../src/config/mod.rs) |
+| Stall / 重试 / failover | [`src/runtime/scheduler.rs`](../../src/runtime/scheduler.rs) · [`src/state/mod.rs`](../../src/state/mod.rs) · live view |
+| 跑次元数据 | [`src/services/runs.rs`](../../src/services/runs.rs) / 新 plan_meta 聚合 |
 
 ---
 

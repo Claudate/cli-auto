@@ -8,9 +8,9 @@
 > - 计划管理主线 → [`ux-plan-mgmt-attach-ttl-2026-07-19.md`](./ux-plan-mgmt-attach-ttl-2026-07-19.md)（G0–G6 **已落地**；本计划**不**回勾其 ☐）
 > - 聊天主窗 → [`chat-home-plan-cli-2026-07-19.md`](./chat-home-plan-cli-2026-07-19.md)（H0–H4 路由/已执行/stall；本计划吃其路由，**不**重做）
 > - 主路径三步 → [`ux-simple-mainpath-2026-07-17.md`](./ux-simple-mainpath-2026-07-17.md)（「分配后默认 auto-start」仍有效）
-> - Mode B → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)（`confirm_start` 唯一业务入口，**不改**）
-> - 总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md)（本计划 → **D5 / P2-14 · P-plan-exec-flow**；**勿**回灌 D0–D4 / P2-12 / P2-13）
-> GEB 入口：[`/CLAUDE.md`](../CLAUDE.md)（L1）· [`./CLAUDE.md`](./CLAUDE.md)（L2 docs）
+> - Mode B → [`product-mode-b-ai-planner.md`](../product-mode-b-ai-planner.md)（`confirm_start` 唯一业务入口，**不改**）
+> - 总账 → [`gap-and-landing-plan-2026-07-18.md`](../gap-and-landing-plan-2026-07-18.md)（本计划 → **D5 / P2-14 · P-plan-exec-flow**；**勿**回灌 D0–D4 / P2-12 / P2-13）
+> GEB 入口：[`/CLAUDE.md`](../../CLAUDE.md)（L1）· [`./CLAUDE.md`](../CLAUDE.md)（L2 docs）
 
 > **定稿（t1）**：对照现网代码 + 用户反馈「从计划管理到执行任务后流程乱」；冻结问题根因、目标心智、规格、阶段、非目标与成功标准。  
 > **实施（t2）**：E0–E2 + E3 大部：`openPlanManagement` 不弹层；`startExecuteFromSelection`；`advancePlannedJob` 强制回 workspace；文案「执行此计划 / 开始拆分 / 编辑文档」。  
@@ -311,12 +311,12 @@ E0（入口止血 + 改名）          ← 当天可验
 
 | 区域 | 文件 |
 |------|------|
-| 管理入口 / 管理页 | [`web/js/chat.js`](../web/js/chat.js) `openPlanManagement` · `assignFromPlansMgmt` · `renderPlansMgmtPage` |
-| 执行/chooser/阶段 | [`web/js/plan.js`](../web/js/plan.js) `openPlanChooser` · `renderPlanPicker` · `analyzePlanFromPicker` · `advancePlannedJob` · `confirmAndStart` |
-| 壳结构 / 文案 | [`web/index.html`](../web/index.html) `#page-plans` · `#plan-chooser` · 顶栏钮 |
-| 样式 | [`web/css/chat.css`](../web/css/chat.css) · [`web/css/plan.css`](../web/css/plan.css) |
-| 列表扫描 | [`src/services/runs.rs`](../src/services/runs.rs) `list_plans` / `list_plan_meta`（E4 若要按 dir 滤） |
-| 保存目录 | [`src/services/chat.rs`](../src/services/chat.rs) `chat_save_plan` `plans_dir` |
+| 管理入口 / 管理页 | [`web/js/chat.js`](../../web/js/chat.js) `openPlanManagement` · `assignFromPlansMgmt` · `renderPlansMgmtPage` |
+| 执行/chooser/阶段 | [`web/js/plan.js`](../../web/js/plan.js) `openPlanChooser` · `renderPlanPicker` · `analyzePlanFromPicker` · `advancePlannedJob` · `confirmAndStart` |
+| 壳结构 / 文案 | [`web/index.html`](../../web/index.html) `#page-plans` · `#plan-chooser` · 顶栏钮 |
+| 样式 | [`web/css/chat.css`](../../web/css/chat.css) · [`web/css/plan.css`](../../web/css/plan.css) |
+| 列表扫描 | [`src/services/runs.rs`](../../src/services/runs.rs) `list_plans` / `list_plan_meta`（E4 若要按 dir 滤） |
+| 保存目录 | [`src/services/chat.rs`](../../src/services/chat.rs) `chat_save_plan` `plans_dir` |
 
 ---
 

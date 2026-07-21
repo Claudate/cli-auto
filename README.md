@@ -34,7 +34,7 @@ cargo build -p cco-desktop --release
 ```
 
 压缩包：`dist/CCO-macos-arm64.zip`  
-UX 改版计划：[`docs/desktop-ux-redesign-plan.md`](./docs/desktop-ux-redesign-plan.md)
+UX 改版计划：[`docs/archive/desktop-ux-redesign-plan.md`](./docs/archive/desktop-ux-redesign-plan.md)
 
 ## 构建
 

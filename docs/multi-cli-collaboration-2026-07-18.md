@@ -8,7 +8,7 @@
 > - 编排器 → [`../claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md)（M0–M4 已落地；Codex 已出池；M5 → D5）
 > - 总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md)（未完善唯一总账；本计划增强项入 **D5 池**，不排期则不碰）
 > - Mode B → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)（confirm_start 唯一业务 worker 入口）
-> - 聊天共建 → [`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)（产出散文计划；本计划约束结构化混部字段）
+> - 聊天共建 → [`chat-plan-builder-2026-07-18.md`](./archive/chat-plan-builder-2026-07-18.md)（产出散文计划；本计划约束结构化混部字段）
 > - 执行闭环 → [`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md)（计划对照巡检 · 遗漏分级 · 回补波 · **P-loop/P2-11 已落地**；扩展本计划 inspect，**不**合并阶段勾选）
 > GEB 入口：[`/CLAUDE.md`](../CLAUDE.md)（L1）· [`./CLAUDE.md`](./CLAUDE.md)（L2 docs）
 

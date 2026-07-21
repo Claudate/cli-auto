@@ -5,13 +5,13 @@
 > 范围：桌面 `web/` 聊天页 + 后端「对话写计划」服务 + 落盘 `.md` 后接入现有「分配计划」  
 > 角色：主路径**增量**子计划——补齐「无合适计划时，用 AI 先聊出一份计划」；**不**另开第二套分配/Scheduler；**不**替代「选已有计划 → 分配」  
 > 关联真源：
-> - 总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md)（未完善唯一总账；**P-chat ✅ C0–C2** · C3→**D5/P2-9**；**勿**回灌已冻 D0–D4）
+> - 总账 → [`gap-and-landing-plan-2026-07-18.md`](../gap-and-landing-plan-2026-07-18.md)（未完善唯一总账；**P-chat ✅ C0–C2** · C3→**D5/P2-9**；**勿**回灌已冻 D0–D4）
 > - 主路径 → [`ux-simple-mainpath-2026-07-17.md`](./ux-simple-mainpath-2026-07-17.md)（三步主路径已落地；本计划为其可选支路）
-> - Mode B → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)（分配/拆分执行真源；聊天只产出散文 `.md`）
+> - Mode B → [`product-mode-b-ai-planner.md`](../product-mode-b-ai-planner.md)（分配/拆分执行真源；聊天只产出散文 `.md`）
 > - UX 壳 → [`desktop-ux-redesign-plan.md`](./desktop-ux-redesign-plan.md)（桌面壳 0–4 已实施；本计划扩 `page=chat`）
 > - 体验修补 → [`chat-ux-focus-2026-07-19.md`](./chat-ux-focus-2026-07-19.md)（注意力/fake/CTA · U0–U2 → **D5/P2-10**；**不**改本计划 C0–C2 勾选与方案 A）
 > - 稳定性热修 → [`chat-utf8-fence-panic-2026-07-19.md`](./chat-utf8-fence-panic-2026-07-19.md)（plan fence UTF-8 · **P-chat-utf8** · F0 已落地；**不**改本计划 C0–C2 / 方案 A）
-> GEB 入口：[`/CLAUDE.md`](../CLAUDE.md)（L1）· [`./CLAUDE.md`](./CLAUDE.md)（L2 docs）  
+> GEB 入口：[`/CLAUDE.md`](../../CLAUDE.md)（L1）· [`./CLAUDE.md`](../CLAUDE.md)（L2 docs）  
 > **不替代**现有「选已有计划 → 分配」；是**补齐**入口
 
 > **定稿（t1）**：本前言冻结**角色 · 范围 · 关联真源四件套 · GEB 入口 · PROTOCOL**。  
@@ -840,11 +840,11 @@ state.phase 仅 workspace 有效：pick | planning | confirm | running | done
 | 文件 | 动作 | 状态 |
 |------|------|------|
 | 本文件 | 阶段勾选 + 状态改「已落地」 | ✅ t12 |
-| [`docs/CLAUDE.md`](./CLAUDE.md) | 成员清单加本计划一行 | ✅ |
-| [`/CLAUDE.md`](../CLAUDE.md) | config 区链到本计划（一句话） | ✅ |
+| [`docs/CLAUDE.md`](../CLAUDE.md) | 成员清单加本计划一行 | ✅ |
+| [`/CLAUDE.md`](../../CLAUDE.md) | config 区链到本计划（一句话） | ✅ |
 | [`ux-simple-mainpath-2026-07-17.md`](./ux-simple-mainpath-2026-07-17.md) | 主路径图增加可选「聊天生成计划」支路 | ✅ |
-| [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md) | §2 前「计划从哪来：文件 \| 聊天落盘」 | ✅ §1.1 |
-| [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) | §2 **P-chat ✅ C0–C2**；C3→**D5/P2-9**；**勿**与已冻 D0–D4 冲突 | ✅ t12 |
+| [`product-mode-b-ai-planner.md`](../product-mode-b-ai-planner.md) | §2 前「计划从哪来：文件 \| 聊天落盘」 | ✅ §1.1 |
+| [`gap-and-landing-plan-2026-07-18.md`](../gap-and-landing-plan-2026-07-18.md) | §2 **P-chat ✅ C0–C2**；C3→**D5/P2-9**；**勿**与已冻 D0–D4 冲突 | ✅ t12 |
 | `web/CLAUDE.md` · `src/services/CLAUDE.md` · `src-tauri/CLAUDE.md` | 成员清单含 chat | ✅ |
 
 ---
@@ -886,7 +886,7 @@ state.phase 仅 workspace 有效：pick | planning | confirm | running | done
 | 「另开 chat-changelog / 第三份修订表」 | **禁止**；只维护本 §11 |
 | 「C3 出池 / 热改不记修订历史」 | **应**追加一行；**不**改 §5 C0–C2 勾选 / §6 / §7 / §8 骨架 |
 | 「把 C3 打磨塞进年表当已完成」 | **否**；C3 = 不排期则不碰，出池实现后才追加 |
-| 「把本表回灌为总账第二份修订史」 | **禁止**；总账变更记 [`gap-and-landing-plan`](./gap-and-landing-plan-2026-07-18.md) §9；本表只记**本子计划** |
+| 「把本表回灌为总账第二份修订史」 | **禁止**；总账变更记 [`gap-and-landing-plan`](../gap-and-landing-plan-2026-07-18.md) §9；本表只记**本子计划** |
 
 ### 11.2 何时本节省略修订
 

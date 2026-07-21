@@ -11,9 +11,9 @@
 > - 聊天共建 → [`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)（C0–C2 ✅ · 方案 A 先 md 再分配）
 > - 聊天主窗 → [`chat-home-plan-cli-2026-07-19.md`](./chat-home-plan-cli-2026-07-19.md)（H0–H4 ✅ · 右轨/全文/已执行/stall/failover **已有**；本计划只改「默认显隐 + 交互语义 + 缺口能力」）
 > - 注意力 → [`chat-ux-focus-2026-07-19.md`](./chat-ux-focus-2026-07-19.md)（U0–U2 · P2-10；**可同迭代顺手**，勾选分列）
-> - Mode B → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)（`confirm_start` 唯一业务入口，**不改**）
-> - 总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md)（本计划 → **D5 / P2-13 · P-plan-mgmt**；**勿**回灌 D0–D4）
-> GEB 入口：[`/CLAUDE.md`](../CLAUDE.md)（L1）· [`./CLAUDE.md`](./CLAUDE.md)（L2 docs）
+> - Mode B → [`product-mode-b-ai-planner.md`](../product-mode-b-ai-planner.md)（`confirm_start` 唯一业务入口，**不改**）
+> - 总账 → [`gap-and-landing-plan-2026-07-18.md`](../gap-and-landing-plan-2026-07-18.md)（本计划 → **D5 / P2-13 · P-plan-mgmt**；**勿**回灌 D0–D4）
+> GEB 入口：[`/CLAUDE.md`](../../CLAUDE.md)（L1）· [`./CLAUDE.md`](../CLAUDE.md)（L2 docs）
 
 > **定稿（t1）**：本前言 + §0–§10 冻结角色、截图根因、用户诉求、规格、阶段与非目标。  
 > **修订（t2）**：采纳「CLI 生成 → CLI 规范化」两段式（§4.0 / G0b）；与单轮 fence 互补，解决草稿过粗、无换行、难拆分。  
@@ -544,12 +544,12 @@ G0（标题爆炸 + 默认藏右栏）     ← 立刻止血截图问题（本地
 
 | 区域 | 文件 |
 |------|------|
-| 标题提取 / 落盘 | [`src/services/chat.rs`](../src/services/chat.rs) `extract_title_from_md` · `chat_save_plan` |
-| **段 2 规范化** | [`src/services/chat.rs`](../src/services/chat.rs) 新增 `chat_normalize_plan` + 模板 prompt；Tauri command 薄封装 |
-| 列表标题 | [`src/services/runs.rs`](../src/services/runs.rs) `plan_title_hint` · `list_plan_meta` |
-| 右轨 UI | [`web/js/chat.js`](../web/js/chat.js) `renderPlanRail` · `openPlanFullView` · 单击双击 · 「重新整理」 |
-| 顶栏 / 路由 | [`web/js/plan.js`](../web/js/plan.js) `#btn-monitor-plan` 文案分流 |
-| 壳 | [`web/index.html`](../web/index.html) · [`web/css/chat.css`](../web/css/chat.css) |
+| 标题提取 / 落盘 | [`src/services/chat.rs`](../../src/services/chat.rs) `extract_title_from_md` · `chat_save_plan` |
+| **段 2 规范化** | [`src/services/chat.rs`](../../src/services/chat.rs) 新增 `chat_normalize_plan` + 模板 prompt；Tauri command 薄封装 |
+| 列表标题 | [`src/services/runs.rs`](../../src/services/runs.rs) `plan_title_hint` · `list_plan_meta` |
+| 右轨 UI | [`web/js/chat.js`](../../web/js/chat.js) `renderPlanRail` · `openPlanFullView` · 单击双击 · 「重新整理」 |
+| 顶栏 / 路由 | [`web/js/plan.js`](../../web/js/plan.js) `#btn-monitor-plan` 文案分流 |
+| 壳 | [`web/index.html`](../../web/index.html) · [`web/css/chat.css`](../../web/css/chat.css) |
 | 会话 TTL | `src/services/chat.rs` session 读写 + 设置 |
 | 附图 | `chat.rs` + `web/js/chat.js` composer + Tauri 读文件 |
 | 项目级 plans_dir | `src/services/projects` 或 `.cco/project.json` |

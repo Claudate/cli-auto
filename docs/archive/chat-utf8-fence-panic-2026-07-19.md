@@ -7,10 +7,10 @@
 > 关联真源：
 > - 聊天共建 → [`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)（C0–C2 ✅；本热修**不**改其方案 A / C3）
 > - 注意力收敛 → [`chat-ux-focus-2026-07-19.md`](./chat-ux-focus-2026-07-19.md)（U0–U2 · **分列**；本热修**不**替代 P2-10）
-> - 总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md)（登记 **P-chat-utf8**；**勿**回灌 D0–D4 / 把 P-chat 勾回 ☐）
-> - 执行闭环（方法论反例触发）→ [`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md)（四波 residual 类问题归 **P-loop**；本热修**不**重开）
+> - 总账 → [`gap-and-landing-plan-2026-07-18.md`](../gap-and-landing-plan-2026-07-18.md)（登记 **P-chat-utf8**；**勿**回灌 D0–D4 / 把 P-chat 勾回 ☐）
+> - 执行闭环（方法论反例触发）→ [`plan-execute-inspect-rework-2026-07-19.md`](../plan-execute-inspect-rework-2026-07-19.md)（四波 residual 类问题归 **P-loop**；本热修**不**重开）
 > - 同类范式 → `src/runtime/log_events.rs` `floor_char_boundary` / `truncate`（live 日志 CJK 安全；chat 应对齐）  
-> GEB 入口：[`/CLAUDE.md`](../CLAUDE.md)（L1）· [`./CLAUDE.md`](./CLAUDE.md)（L2 docs）
+> GEB 入口：[`/CLAUDE.md`](../../CLAUDE.md)（L1）· [`./CLAUDE.md`](../CLAUDE.md)（L2 docs）
 
 > **定稿（t1）**：本前言 + §0–§11 冻结角色、根因、规格、阶段与非目标。  
 > 实施勾选真源 = **§5**（F0–F2）；**禁止**并入 chat-ux-focus 当「体验项」；**禁止**写成「P-chat 未完成」。  
@@ -138,8 +138,8 @@ chars().count() <= max → 原串
 
 | 文件 | 改动 |
 |------|------|
-| [`src/services/chat.rs`](../src/services/chat.rs) | `fence_lang_tag_len` · 重写 `extract_plan_fence` · `truncate_chars` · 历史循环调用 · 单测 |
-| [`src/services/CLAUDE.md`](../src/services/CLAUDE.md) | 成员行注 CJK 安全 |
+| [`src/services/chat.rs`](../../src/services/chat.rs) | `fence_lang_tag_len` · 重写 `extract_plan_fence` · `truncate_chars` · 历史循环调用 · 单测 |
+| [`src/services/CLAUDE.md`](../../src/services/CLAUDE.md) | 成员行注 CJK 安全 |
 | 可选 F2 | `src-tauri` `chat_send_cmd` `catch_unwind` → 业务错误串（**不替代** F0） |
 
 ### 3.4 禁止
@@ -237,10 +237,10 @@ chars().count() <= max → 原串
 | 层 | 动作 |
 |----|------|
 | 本文件 | 状态 / §4 勾选 / §10 修订 |
-| [`docs/CLAUDE.md`](./CLAUDE.md) | 成员一行 |
-| [`/CLAUDE.md`](../CLAUDE.md) | config 指针一行 |
-| [`gap-and-landing-plan`](./gap-and-landing-plan-2026-07-18.md) | 关联真源 · §2 P-chat-utf8 · §9 追加行 |
-| [`src/services/CLAUDE.md`](../src/services/CLAUDE.md) | chat.rs 注 CJK |
+| [`docs/CLAUDE.md`](../CLAUDE.md) | 成员一行 |
+| [`/CLAUDE.md`](../../CLAUDE.md) | config 指针一行 |
+| [`gap-and-landing-plan`](../gap-and-landing-plan-2026-07-18.md) | 关联真源 · §2 P-chat-utf8 · §9 追加行 |
+| [`src/services/CLAUDE.md`](../../src/services/CLAUDE.md) | chat.rs 注 CJK |
 | **禁止** | 把 P-chat 勾回 ☐；与 P2-10 合并 |
 
 ---

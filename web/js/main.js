@@ -1,29 +1,32 @@
 /**
  * [INPUT]: 经典 script 已加载的全局（state/showPage/…）+ DOM
- * [OUTPUT]: window.ccoApp / ccoGateway / ccoChat / ccoSplit / ccoRun / ccoResult / ccoSettings / ccoProject · phase 壳接线
+ * [OUTPUT]: window.ccoApp / ccoGateway / ccoChat / ccoSplit / ccoRun / ccoResult / ccoSettings / ccoProject / ccoTemplates · phase 壳接线
  * [POS]: A2–A5 ESM 入口（type=module）；旧全局仍可用（strangler）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
  * Load order (index.html):
- *   classic: state → flow → templates → plan → monitor → result → log → chat → doctor
+ *   classic: state → flow → templates(facade) → plan → monitor → result → log → chat → doctor
  *   (A5-2f D3: split.js removed; ccoSplit from this module is sole three-col path)
  *   module:  main.js（defer 于经典脚本之后）
  *
  * Target module graph (arch §2.5):
  *   main.js
  *     app/AppViewModel.js + routes.js + wireRunResult.js
- *     shared/{gateway,store}.js
+ *     shared/{gateway,store,statusUi,markdown}.js  ← D9 statusUi/markdown
  *     features/chat/{ChatViewModel,chatApi,installChat,...}.js  ← A5-2a
  *     features/project/{…, installProject}.js  ← A5-2b-fin D5
  *     features/split/{…, splitFillMeta}.js   ← A3 + A5-2b
  *     features/run/{…, loadLive, log*}.js    ← A4 + A5-2b + A5-2c log
  *     features/result/{…}.js                 ← A4
  *     features/settings/{…}.js               ← A5-2d doctor/settings/meta/monitor
- *   window.ccoChat / ccoProject / ccoSplit / ccoLoadLive / ccoRun / ccoResult / ccoSettings / ccoLog
- *   (legacy: chat.js · plan.js · log.js · doctor.js facades)
+ *     features/templates/{…}.js              ← P-ship-D D7 冷启动模板 · 拆分摘要写回
+ *   window.ccoChat / ccoProject / ccoSplit / ccoLoadLive / ccoRun / ccoResult / ccoSettings / ccoLog / ccoTemplates
+ *   (legacy: chat.js · plan.js · log.js · doctor.js · templates.js facades)
  */
 
 import gateway from "./shared/gateway.js";
+import { installStatusUi } from "./shared/statusUi.js";
+import { installMarkdown } from "./shared/markdown.js";
 import { createAppViewModel } from "./app/AppViewModel.js";
 import { wireRunResult } from "./app/wireRunResult.js";
 import { createChatViewModel } from "./features/chat/ChatViewModel.js";
@@ -40,10 +43,19 @@ import {
 } from "./features/run/loadLive.js";
 import { createLogDesk } from "./features/run/logDesk.js";
 import { installSettingsHost } from "./features/settings/installSettings.js";
+import { installTemplatesHost } from "./features/templates/installTemplates.js";
 import { PHASE_TITLE } from "./app/routes.js";
+
+/** D9: pure display helpers on window before boot renders lists/badges. */
+installStatusUi(window);
+installMarkdown(window);
 
 /** IPC hub first — classic requireGateway() + settings boot wait on it. */
 window.ccoGateway = gateway;
+
+/** P-ship-D D7: plan templates + split summary write-back (classic templates.js is facade). */
+const templatesDesk = installTemplatesHost();
+window.ccoTemplates = templatesDesk;
 
 /** A5-2d: settings/doctor/meta/open_monitor + UI event table + cold boot via gateway. */
 const settingsDesk = installSettingsHost({ autoBoot: true });

@@ -8,9 +8,9 @@
 > - 聊天共建 → [`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)（C0–C2 ✅ · C3→D5/P2-9；本计划**不**改其 §1.4 / §3.3 方案 A / §6 非目标）
 > - 稳定性热修 → [`chat-utf8-fence-panic-2026-07-19.md`](./chat-utf8-fence-panic-2026-07-19.md)（fence UTF-8 · **P-chat-utf8**；与本计划**分列**，**不**并入 U0–U2）
 > - 主路径 → [`ux-simple-mainpath-2026-07-17.md`](./ux-simple-mainpath-2026-07-17.md)（三步主路径；聊天为可选支路）
-> - Mode B → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)（分配后 phase；本计划只约束**离开 workspace 时**如何提示）
-> - 总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md)（未完善唯一总账；本计划 → **D5/P2-10**；**勿**回灌 D0–D4 / 把 P-chat 勾回 ☐）
-> GEB 入口：[`/CLAUDE.md`](../CLAUDE.md)（L1）· [`./CLAUDE.md`](./CLAUDE.md)（L2 docs）
+> - Mode B → [`product-mode-b-ai-planner.md`](../product-mode-b-ai-planner.md)（分配后 phase；本计划只约束**离开 workspace 时**如何提示）
+> - 总账 → [`gap-and-landing-plan-2026-07-18.md`](../gap-and-landing-plan-2026-07-18.md)（未完善唯一总账；本计划 → **D5/P2-10**；**勿**回灌 D0–D4 / 把 P-chat 勾回 ☐）
+> GEB 入口：[`/CLAUDE.md`](../../CLAUDE.md)（L1）· [`./CLAUDE.md`](../CLAUDE.md)（L2 docs）
 
 > **定稿（t1）**：本前言 + §0–§11 冻结角色、问题、规格、阶段与非目标。  
 > 实施勾选真源 = **§5**（U0–U2）；**禁止**第二份「聊天 UX 总览」；**禁止**把本计划写成「P-chat 未完成」。  
@@ -350,9 +350,9 @@ ChatSendResponse.fake 已有
 
 | 文件 | 动作 |
 |------|------|
-| [`docs/CLAUDE.md`](./CLAUDE.md) | 成员清单 + 本文件一行 |
-| [`/CLAUDE.md`](../CLAUDE.md) | config 指针 + 一句状态 |
-| [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) | §2.1 **P2-10** · §4 D5 池行；**勿**改 D0–D4 勾选 |
+| [`docs/CLAUDE.md`](../CLAUDE.md) | 成员清单 + 本文件一行 |
+| [`/CLAUDE.md`](../../CLAUDE.md) | config 指针 + 一句状态 |
+| [`gap-and-landing-plan-2026-07-18.md`](../gap-and-landing-plan-2026-07-18.md) | §2.1 **P2-10** · §4 D5 池行；**勿**改 D0–D4 勾选 |
 | [`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md) | 头部或 §3 末 **追加**指针「体验修补见 chat-ux-focus」；**禁止**改写已冻 t 行语义 |
 | [`ux-simple-mainpath-2026-07-17.md`](./ux-simple-mainpath-2026-07-17.md) | 可选一句：聊天支路体验 → 本文件 |
 

@@ -3,7 +3,7 @@
 > 状态：**A 路径 P0 已落地**；**P1 主项已闭环**；**P2 打磨已闭环**（事件过滤 · 轻量 ANSI · 导出 MD · **虚拟列表 t34**）  
 > 日期：2026-07-17（P1 闭环 2026-07-18；D5 池 t15）  
 > 范围：桌面监视日志（主）+ Tauri/服务层日志 API + Claude stream-json 呈现；不重写 scheduler  
-> 关联：[`desktop-ux-redesign-plan.md`](./desktop-ux-redesign-plan.md)、[`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) §1.3 / §4 D5、`web/`、`src/services.rs`、`src/runtime/log_events.rs`、`src/terminal/`  
+> 关联：[`desktop-ux-redesign-plan.md`](./desktop-ux-redesign-plan.md)、[`product-mode-b-ai-planner.md`](../product-mode-b-ai-planner.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](../gap-and-landing-plan-2026-07-18.md) §1.3 / §4 D5、`web/`、`src/services.rs`、`src/runtime/log_events.rs`、`src/terminal/`  
 > **勿再当缺口**：worker 监视 A 路径 P0（总账 §1.3）；「Planner 日志复用 LogConsole」属 **P1 / 总账 P1-3**，不是 P0 未完成；P2 打磨不阻塞 ship
 
 [PROTOCOL]: 变更时更新此头部与阶段勾选，然后检查相关 CLAUDE.md / 本目录索引。

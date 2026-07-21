@@ -60,7 +60,7 @@ export function renderChatMessages() {
   ensureChatState();
   const msgs = state.chatSession.messages || [];
   if (!msgs.length && !state.chatBusy) {
-    // T2: empty state + 模板入口委托 templates.js（不在此堆功能）
+    // T2: empty state + 模板入口委托 ccoTemplates / planTemplateChatEmptyHtml（不在此堆功能）
     list.innerHTML =
       typeof planTemplateChatEmptyHtml === "function"
         ? planTemplateChatEmptyHtml()

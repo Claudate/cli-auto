@@ -3,7 +3,7 @@
 > 状态：**B0/B1 主线已落地**；B2 主项已落地；**B3 已闭环**（D1/D3）；可选编辑 **P2-1/P2-2 已落地**（t30：删任务/改依赖 · replan 保人工修改）  
 > 日期：2026-07-17（状态校正 2026-07-18；**D1 决议 · D3 边界 · D5 池 t15**）  
 > 决议：用户明确选择 **B**（真·AI 规划定序），不是 A（仅解析计划里已有任务图）  
-> 关联：[`desktop-ux-redesign-plan.md`](./desktop-ux-redesign-plan.md)、[`claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md)、监视日志 → [`terminal-console-plan.md`](./terminal-console-plan.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) §1.3 / §4 D5、执行闭环 → [`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md)（拆分·巡检·回补 · D5/P2-11；**不**改 confirm_start）  
+> 关联：[`desktop-ux-redesign-plan.md`](./archive/desktop-ux-redesign-plan.md)、[`claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md)、监视日志 → [`terminal-console-plan.md`](./archive/terminal-console-plan.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) §1.3 / §4 D5、执行闭环 → [`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md)（拆分·巡检·回补 · D5/P2-11；**不**改 confirm_start）  
 > **勿再当缺口**：B0–B3 主线见总账 §1.3 / D3；B2 可选编辑 **P2-1/P2-2 已落地**（t30）
 
 [PROTOCOL]: 变更本文件时更新状态与阶段勾选；与 UX 计划冲突时以本文件的「主流程」与 §4 默认规则为准。
@@ -36,13 +36,13 @@
 | 来源 | 说明 |
 |------|------|
 | 已有文件 | 用户「选择计划」/ 指定 `.md`（主路径） |
-| 聊天落盘 | 桌面「聊天」共建散文计划 → 保存 `plans/chat-*.md` 后再「分配计划」（见 [`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)） |
+| 聊天落盘 | 桌面「聊天」共建散文计划 → 保存 `plans/chat-*.md` 后再「分配计划」（见 [`chat-plan-builder-2026-07-18.md`](./archive/chat-plan-builder-2026-07-18.md)） |
 
 聊天**只写计划文档**，不 spawn worker；分配之后仍走本节 Planner → `confirm_start`。
 
 ## 2. 目标用户流程（主路径）
 
-> 计划来源：① 已有 `.md` 文件；② 桌面「聊天」共建后落盘（见 [`chat-plan-builder-2026-07-18.md`](./chat-plan-builder-2026-07-18.md)）。二者分配后同一 Mode B 链。
+> 计划来源：① 已有 `.md` 文件；② 桌面「聊天」共建后落盘（见 [`chat-plan-builder-2026-07-18.md`](./archive/chat-plan-builder-2026-07-18.md)）。二者分配后同一 Mode B 链。
 
 ```text
 ① 添加/选择项目

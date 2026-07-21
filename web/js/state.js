@@ -1,12 +1,12 @@
 /**
  * [INPUT]: 依赖 window 全局（顺序加载）；Tauri invoke 桥
- * [OUTPUT]: state UI 片段 · 全局 invoke/requireGateway（A2/A5-2e）
- * [POS]: web/js D4 自 app.js 纵切；A2 ESM 入口 main.js 后挂 ccoGateway
- * note: invoke/getInvoke = 迁移期桥；业务 classic 用 requireGateway()→ccoGateway；
+ * [OUTPUT]: state · $ · toast · pages · projects · invoke/requireGateway 兜底
+ * [POS]: web/js D9 桥/瘦身；纯展示 → shared/statusUi + shared/markdown（main install）
+ * note: invoke/getInvoke = 迁移期 pre-main 兜底；业务 classic 用 requireGateway()→ccoGateway；
  *       feature 内禁止直接 invoke/__TAURI__（只经 shared/gateway.js）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
-/* cco desktop — state */
+/* cco desktop — state (D9: bridge + session, not display dump) */
 
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -56,7 +56,7 @@ const state = {
   cliStatusFilter: "all", // all | run | wait | stall | done | fail
   planCollapsed: true, // 默认只显示当前计划条
   planChooserOpen: false,
-    doctorCache: null, // { ok, at, lines }
+  doctorCache: null, // { ok, at, lines }
   doctorDismissedKey: null, // 用户点忽略后隐藏同类警告
   /** 默认 false：拆完停拆分台；仅当用户显式开「拆分后自动开始」(存 "0") 才 auto confirm_start */
   autoStartAfterPlan: localStorage.getItem(PAUSE_CONFIRM_KEY) === "0",
@@ -126,69 +126,6 @@ if (typeof window !== "undefined") {
   window.state = state;
   window.PAUSE_CONFIRM_KEY = PAUSE_CONFIRM_KEY;
 }
-// Helpers assigned after definition (toast/esc/badge) — see bottom bridge
-
-/* ── Status labels (人话 · R2 五态优先) ── */
-const STATUS_LABEL = {
-  completed: "已完成",
-  done: "已完成",
-  ok: "已完成",
-  running: "进行中",
-  starting: "进行中",
-  queued: "排队中",
-  validated: "进行中",
-  init: "进行中",
-  paused: "排队中",
-  resuming: "进行中",
-  failed: "失败",
-  aborted: "失败",
-  timeout: "失败",
-  stopped: "失败",
-  pending: "排队中",
-  waiting: "排队中",
-  ready: "排队中",
-  skipped: "已完成",
-  idle: "排队中",
-  err: "失败",
-  stall: "已卡住",
-  stalled: "已卡住",
-};
-
-/** R2 product five states */
-const FIVE_STATE_LABEL = {
-  wait: "排队中",
-  run: "进行中",
-  done: "已完成",
-  stall: "已卡住",
-  fail: "失败",
-};
-
-function statusLabel(status) {
-  const s = String(status || "").toLowerCase();
-  return STATUS_LABEL[s] || status || "—";
-}
-
-function fiveStateLabel(bucket) {
-  return FIVE_STATE_LABEL[bucket] || "排队中";
-}
-
-/** True when live task is past half stall threshold (or last retry was stall). */
-function isStalledTask(t) {
-  if (!t) return false;
-  const st = String(t.status || "").toLowerCase();
-  const live =
-    typeof isLiveStatus === "function"
-      ? isLiveStatus(st)
-      : ["running", "starting", "queued", "validated", "init", "resuming"].includes(st);
-  if (!live) return false;
-  const thr =
-    t.stall_threshold_secs != null ? Number(t.stall_threshold_secs) : null;
-  const idle = t.stall_idle_secs != null ? Number(t.stall_idle_secs) : null;
-  if (idle != null && thr != null && thr > 0 && idle >= Math.max(15, thr * 0.5)) {
-    return true;
-  }
-  return String(t.last_retry_reason || "").toLowerCase() === "stall" && live;
-}
 
 function toast(msg) {
   const t = $("#toast");
@@ -204,13 +141,17 @@ function toast(msg) {
   }, 3200);
 }
 
+/**
+ * pre-main 兜底：main 挂上 ccoGateway 后业务应走 requireGateway()。
+ * 与 shared/gateway.js getInvoke 同形，仅 classic 冷启动 / 桥接用。
+ */
 function getInvoke() {
   const w = window;
-  // Tauri 2 多种全局形态，全部兜底
   const candidates = [
     w.__TAURI__?.core?.invoke && w.__TAURI__.core.invoke.bind(w.__TAURI__.core),
     w.__TAURI__?.tauri?.invoke && w.__TAURI__.tauri.invoke.bind(w.__TAURI__.tauri),
-    w.__TAURI_INTERNALS__?.invoke && w.__TAURI_INTERNALS__.invoke.bind(w.__TAURI_INTERNALS__),
+    w.__TAURI_INTERNALS__?.invoke &&
+      w.__TAURI_INTERNALS__.invoke.bind(w.__TAURI_INTERNALS__),
     typeof w.__TAURI_INVOKE__ === "function" && w.__TAURI_INVOKE__,
   ];
   for (const c of candidates) {
@@ -251,275 +192,24 @@ async function openNativeDialog(opts) {
     return window.ccoGateway.dialogOpen(opts);
   }
   const d =
-    window.__TAURI__?.dialog ||
-    window.__TAURI__?.plugins?.dialog ||
-    null;
+    window.__TAURI__?.dialog || window.__TAURI__?.plugins?.dialog || null;
   if (d?.open) return d.open(opts);
   try {
     if (getInvoke()) {
-      // plugin command 需 { options } 包装（含 defaultPath）
       return await invoke("plugin:dialog|open", { options: opts });
     }
   } catch (_) {}
   throw new Error("对话框不可用");
 }
 
-function esc(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-/** 轻量 Markdown → 安全 HTML（无外部依赖；确认屏/计划说明用） */
-function renderMarkdown(src) {
-  const raw = String(src ?? "");
-  if (!raw.trim()) return '<p class="md-empty">（无任务说明）</p>';
-
-  // 1) 抽出 fenced code，避免内部被二次处理
-  const fences = [];
-  let text = raw.replace(/```([\w-]+)?\n([\s\S]*?)```/g, (_, lang, code) => {
-    const i = fences.length;
-    fences.push({ lang: (lang || "").trim(), code: code.replace(/\n$/, "") });
-    return `\n\n%%FENCE${i}%%\n\n`;
-  });
-
-  // 2) 按行做块级解析
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
-  const blocks = [];
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (!line.trim()) {
-      i++;
-      continue;
-    }
-    // fence placeholder
-    const fm = line.trim().match(/^%%FENCE(\d+)%%$/);
-    if (fm) {
-      blocks.push({ type: "fence", idx: Number(fm[1]) });
-      i++;
-      continue;
-    }
-    // hr
-    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line.trim())) {
-      blocks.push({ type: "hr" });
-      i++;
-      continue;
-    }
-    // heading
-    const hm = line.match(/^(#{1,6})\s+(.+)$/);
-    if (hm) {
-      blocks.push({ type: "h", level: hm[1].length, text: hm[2].trim() });
-      i++;
-      continue;
-    }
-    // blockquote
-    if (/^>\s?/.test(line)) {
-      const qs = [];
-      while (i < lines.length && /^>\s?/.test(lines[i])) {
-        qs.push(lines[i].replace(/^>\s?/, ""));
-        i++;
-      }
-      blocks.push({ type: "quote", text: qs.join("\n") });
-      continue;
-    }
-    // table
-    if (
-      line.includes("|") &&
-      i + 1 < lines.length &&
-      /^\s*\|?\s*:?-{3,}/.test(lines[i + 1])
-    ) {
-      const rows = [];
-      while (i < lines.length && lines[i].includes("|")) {
-        if (/^\s*\|?\s*:?-{3,}/.test(lines[i])) {
-          i++;
-          continue; // skip separator
-        }
-        const cells = lines[i]
-          .trim()
-          .replace(/^\|/, "")
-          .replace(/\|$/, "")
-          .split("|")
-          .map((c) => c.trim());
-        rows.push(cells);
-        i++;
-      }
-      blocks.push({ type: "table", rows });
-      continue;
-    }
-    // ul
-    if (/^\s*[-*+]\s+/.test(line)) {
-      const items = [];
-      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*[-*+]\s+/, ""));
-        i++;
-      }
-      blocks.push({ type: "ul", items });
-      continue;
-    }
-    // ol
-    if (/^\s*\d+\.\s+/.test(line)) {
-      const items = [];
-      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*\d+\.\s+/, ""));
-        i++;
-      }
-      blocks.push({ type: "ol", items });
-      continue;
-    }
-    // paragraph
-    const paras = [line];
-    i++;
-    while (
-      i < lines.length &&
-      lines[i].trim() &&
-      !/^#{1,6}\s/.test(lines[i]) &&
-      !/^>\s?/.test(lines[i]) &&
-      !/^\s*[-*+]\s+/.test(lines[i]) &&
-      !/^\s*\d+\.\s+/.test(lines[i]) &&
-      !/^%%FENCE\d+%%$/.test(lines[i].trim()) &&
-      !/^(-{3,}|\*{3,}|_{3,})$/.test(lines[i].trim()) &&
-      !(lines[i].includes("|") && i + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(lines[i + 1] || ""))
-    ) {
-      paras.push(lines[i]);
-      i++;
-    }
-    blocks.push({ type: "p", text: paras.join("\n") });
-  }
-
-  function inlineMd(s) {
-    let x = esc(s);
-    // code
-    x = x.replace(/`([^`]+)`/g, "<code>$1</code>");
-    // bold
-    x = x.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    x = x.replace(/__([^_]+)__/g, "<strong>$1</strong>");
-    // italic (avoid matching bold leftovers)
-    x = x.replace(/(^|[^*])\*([^*]+)\*(?![*])/g, "$1<em>$2</em>");
-    x = x.replace(/(^|[^_])_([^_]+)_(?!_)/g, "$1<em>$2</em>");
-    // links [t](url)
-    x = x.replace(
-      /\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
-    );
-    // auto newline inside paragraph → <br>
-    x = x.replace(/\n/g, "<br>");
-    return x;
-  }
-
-  const html = blocks
-    .map((b) => {
-      if (b.type === "fence") {
-        const f = fences[b.idx] || { lang: "", code: "" };
-        const lang = f.lang ? ` data-lang="${esc(f.lang)}"` : "";
-        return `<pre class="md-code"${lang}><code>${esc(f.code)}</code></pre>`;
-      }
-      if (b.type === "hr") return "<hr class=\"md-hr\">";
-      if (b.type === "h") {
-        const lv = Math.min(6, Math.max(1, b.level));
-        return `<h${lv} class="md-h">${inlineMd(b.text)}</h${lv}>`;
-      }
-      if (b.type === "quote") {
-        return `<blockquote class="md-quote">${inlineMd(b.text)}</blockquote>`;
-      }
-      if (b.type === "ul") {
-        return `<ul class="md-ul">${b.items
-          .map((it) => `<li>${inlineMd(it)}</li>`)
-          .join("")}</ul>`;
-      }
-      if (b.type === "ol") {
-        return `<ol class="md-ol">${b.items
-          .map((it) => `<li>${inlineMd(it)}</li>`)
-          .join("")}</ol>`;
-      }
-      if (b.type === "table") {
-        if (!b.rows.length) return "";
-        const head = b.rows[0];
-        const body = b.rows.slice(1);
-        return `<table class="md-table"><thead><tr>${head
-          .map((c) => `<th>${inlineMd(c)}</th>`)
-          .join("")}</tr></thead><tbody>${body
-          .map(
-            (r) =>
-              `<tr>${r.map((c) => `<td>${inlineMd(c)}</td>`).join("")}</tr>`
-          )
-          .join("")}</tbody></table>`;
-      }
-      if (b.type === "p") return `<p class="md-p">${inlineMd(b.text)}</p>`;
-      return "";
-    })
-    .join("\n");
-
-  return html || `<p class="md-p">${inlineMd(raw)}</p>`;
-}
-
-
-function shortPath(p) {
-  if (!p) return "—";
-  const parts = String(p).split("/").filter(Boolean);
-  return parts.length > 3 ? "…/" + parts.slice(-3).join("/") : p;
-}
-
-
-/** 把绝对路径收成项目相对路径，便于列表匹配与预览 */
-function normalizePlanPath(planPath, projectRoot = state.selectedPath) {
-  if (!planPath) return null;
-  let p = String(planPath).trim();
-  if (!p) return null;
-  if (projectRoot) {
-    const root = String(projectRoot).replace(/\/+$/, "");
-    if (p === root) return null;
-    if (p.startsWith(root + "/")) p = p.slice(root.length + 1);
-  }
-  // 兼容 file:// 与重复项目前缀
-  p = p.replace(/^file:\/\//, "");
-  return p;
-}
-
-function planDisplayName(path) {
-  if (!path) return "—";
-  const parts = String(path).split("/").filter(Boolean);
-  return parts[parts.length - 1] || path;
-}
-
-function badge(status) {
-  const s = String(status || "").toLowerCase();
-  let cls = "muted";
-  if (["completed", "done", "ok", "skipped"].includes(s)) cls = "ok";
-  else if (["running", "starting", "queued", "validated", "init", "paused", "resuming", "pending"].includes(s))
-    cls = "warn";
-  else if (["failed", "aborted", "timeout", "stopped", "err"].includes(s)) cls = "err";
-  return `<span class="badge ${cls}">${esc(statusLabel(status))}</span>`;
-}
-
-/** @param {string} status @param {object} [task] for stall tint */
-function statusDot(status, task) {
-  if (task && typeof isStalledTask === "function" && isStalledTask(task)) return "warn";
-  const s = String(status || "").toLowerCase();
-  if (["running", "starting", "queued", "validated", "init"].includes(s)) return "live";
-  if (["paused", "resuming", "pending"].includes(s)) return "warn";
-  if (["failed", "aborted", "timeout", "stopped"].includes(s)) return "err";
-  if (["completed", "done", "ok", "skipped"].includes(s)) return "ok";
-  return "";
-}
-
-function isLiveStatus(s) {
-  return ["running", "starting", "queued", "validated", "init", "resuming"].includes(
-    String(s || "").toLowerCase()
-  );
-}
-
-function isPausedStatus(s) {
-  return String(s || "").toLowerCase() === "paused";
-}
+/* ── Run-lock helpers (read state.live · display-only) ── */
 
 /** True when the currently selected project has a live run.
  *  Locks plan/edit actions inside that project only — other projects
  *  may still be switched to and run in parallel (no global single-run lock). */
 function hasActiveRun() {
   // Paused is not "active" for lock purposes: user may edit pending tasks.
+  // isLiveStatus from shared/statusUi (main install → window)
   return !!(state.live?.run_id && isLiveStatus(state.live?.run_status));
 }
 
@@ -527,15 +217,13 @@ function isRunPaused() {
   return !!(state.live?.run_id && isPausedStatus(state.live?.run_status));
 }
 
-/** Task may be edited only when not yet executed (pending/queued). */
-function isTaskPendingStatus(s) {
-  const v = String(s || "").toLowerCase();
-  return !v || v === "pending" || v === "queued" || v === "waiting" || v === "ready";
-}
-
 function liveTaskById(taskId) {
   if (!taskId) return null;
-  return (state.live?.tasks || []).find((t) => t.task_id === taskId || t.id === taskId) || null;
+  return (
+    (state.live?.tasks || []).find(
+      (t) => t.task_id === taskId || t.id === taskId
+    ) || null
+  );
 }
 
 /**
@@ -555,40 +243,6 @@ function canEditSelectedTask(taskId = state.confirmTaskId) {
 
 function toastRunLocked(action = "此操作") {
   toast(`计划运行中，请先停止后再${action}`);
-}
-
-function isFailedStatus(s) {
-  return ["failed", "aborted", "timeout", "stopped"].includes(String(s || "").toLowerCase());
-}
-
-function isDoneStatus(s) {
-  return ["completed", "done", "ok", "skipped"].includes(String(s || "").toLowerCase());
-}
-
-function formatElapsed(startedAt, finishedAt) {
-  if (!startedAt) return "—";
-  const start = Date.parse(startedAt);
-  if (Number.isNaN(start)) return "—";
-  const end = finishedAt ? Date.parse(finishedAt) : state.now;
-  if (Number.isNaN(end)) return "—";
-  let sec = Math.max(0, Math.floor((end - start) / 1000));
-  const h = Math.floor(sec / 3600);
-  sec %= 3600;
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
-function taskErrorSummary(t) {
-  if (!t) return "";
-  if (t.error) return String(t.error).split("\n")[0].slice(0, 160);
-  if (isFailedStatus(t.status) && t.log_tail) {
-    const lines = String(t.log_tail).trim().split("\n").filter(Boolean);
-    return (lines[lines.length - 1] || "").slice(0, 160);
-  }
-  return "";
 }
 
 function applyLogFontSize(px) {
@@ -613,13 +267,21 @@ function showPage(name) {
     } catch (_) {}
   }
   state.page = name;
-  try { updateTopPlanInfo(); } catch (_) {}
-  try { updateBgPlanBanner(); } catch (_) {}
+  try {
+    updateTopPlanInfo();
+  } catch (_) {}
+  try {
+    updateBgPlanBanner();
+  } catch (_) {}
   // 切走工作区时先缓存当前规划，保证后台可续
   if (name !== "workspace" && state.selectedPath && isPlanSessionActive()) {
-    try { stashPlanSession(state.selectedPath); } catch (_) {}
+    try {
+      stashPlanSession(state.selectedPath);
+    } catch (_) {}
   }
-  $$(".page").forEach((p) => p.classList.toggle("active", p.id === `page-${name}`));
+  $$(".page").forEach((p) =>
+    p.classList.toggle("active", p.id === `page-${name}`)
+  );
   const sub = $("#page-sub");
   // F3：body 上标记主区角色，便于 CSS 互斥噪音
   try {
@@ -645,7 +307,9 @@ function showPage(name) {
     $("#page-title").textContent = "共建计划";
     if (sub) {
       sub.hidden = false;
-      const proj = (state.projects || []).find((p) => p.path === state.selectedPath);
+      const proj = (state.projects || []).find(
+        (p) => p.path === state.selectedPath
+      );
       const label =
         proj?.name ||
         (state.selectedPath
@@ -661,7 +325,9 @@ function showPage(name) {
     $("#page-title").textContent = "计划管理";
     if (sub) {
       sub.hidden = false;
-      const proj = (state.projects || []).find((p) => p.path === state.selectedPath);
+      const proj = (state.projects || []).find(
+        (p) => p.path === state.selectedPath
+      );
       const label =
         proj?.name ||
         (state.selectedPath
@@ -713,7 +379,9 @@ function goHome() {
   state.selectedTaskId = null;
   // 不清 planJobId/phase：全局 poll 继续；悬浮条可点回
   renderProjectList();
-  try { updateBgPlanBanner(); } catch (_) {}
+  try {
+    updateBgPlanBanner();
+  } catch (_) {}
   if (state.projects.length === 0) {
     showPage("welcome");
   } else {
@@ -761,7 +429,10 @@ async function loadProjects() {
     ? (await g.getProjects()) || []
     : (await invoke("get_projects")) || [];
   renderProjectList();
-  if (state.selectedPath && !state.projects.some((p) => p.path === state.selectedPath)) {
+  if (
+    state.selectedPath &&
+    !state.projects.some((p) => p.path === state.selectedPath)
+  ) {
     state.selectedPath = null;
     state.live = null;
   }
@@ -774,6 +445,7 @@ function renderProjectList() {
     return;
   }
   // 各项目状态独立展示；允许多项目并行运行，不因当前项目在跑而锁其它项
+  // statusLabel / statusDot / esc / shortPath / isLiveStatus ← shared/statusUi (window)
   el.innerHTML = state.projects
     .map((p) => {
       const st = p.active_status || p.last_status || "";
@@ -805,16 +477,27 @@ function renderProjectList() {
   });
 }
 
-// A5-2d: expose helpers for features/settings ESM (classic const/function not on window)
+// Expose bridge + session helpers for ESM hosts (classic function decl also on window)
 if (typeof window !== "undefined") {
   window.toast = toast;
-  window.esc = esc;
-  window.badge = badge;
   window.chatAssignDirectEnabled = chatAssignDirectEnabled;
   window.setChatAssignDirectEnabled = setChatAssignDirectEnabled;
   window.applyLogFontSize = applyLogFontSize;
-  window.isLiveStatus = isLiveStatus;
-  if (typeof PAUSE_CONFIRM_KEY !== "undefined") {
-    window.PAUSE_CONFIRM_KEY = PAUSE_CONFIRM_KEY;
-  }
+  window.hasActiveRun = hasActiveRun;
+  window.isRunPaused = isRunPaused;
+  window.liveTaskById = liveTaskById;
+  window.canEditSelectedTask = canEditSelectedTask;
+  window.toastRunLocked = toastRunLocked;
+  window.showPage = showPage;
+  window.goHome = goHome;
+  window.openModal = openModal;
+  window.closeModal = closeModal;
+  window.loadProjects = loadProjects;
+  window.renderProjectList = renderProjectList;
+  window.requireGateway = requireGateway;
+  window.getInvoke = getInvoke;
+  window.invoke = invoke;
+  window.isTauriReady = isTauriReady;
+  window.openNativeDialog = openNativeDialog;
+  window.PAUSE_CONFIRM_KEY = PAUSE_CONFIRM_KEY;
 }

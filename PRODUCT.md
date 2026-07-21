@@ -167,4 +167,4 @@
 | 历史编排设计（M0–M4 已落地） | [`claude-cli-orchestrator-plan.md`](./claude-cli-orchestrator-plan.md) |
 | 规划/确认/开跑业务规则 | [`docs/product-mode-b-ai-planner.md`](./docs/product-mode-b-ai-planner.md) |
 | 还缺什么、排不排期 | [`docs/gap-and-landing-plan-2026-07-18.md`](./docs/gap-and-landing-plan-2026-07-18.md) |
-| 某一屏怎么改的历史 | `docs/` 下各落地计划（历史与规格，不是方向） |
+| 某一屏怎么改的历史 | [`docs/archive/`](./docs/archive/) 已闭环子计划（规格考古，不是方向） |

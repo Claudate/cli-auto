@@ -150,7 +150,7 @@ project_root = "/absolute/path/to/target-repo"
 ### 2.4 桌面 App（Tauri）UX
 
 桌面 App 入口：`open dist/CCO.app`（或 `cargo build -p cco-desktop --release`）。  
-改版规格与阶段任务：[`docs/desktop-ux-redesign-plan.md`](./docs/desktop-ux-redesign-plan.md)。
+改版规格与阶段任务：[`docs/archive/desktop-ux-redesign-plan.md`](./docs/archive/desktop-ux-redesign-plan.md)。
 
 ```
 我的项目（侧栏）

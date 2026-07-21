@@ -711,7 +711,7 @@ mod tests {
 
     #[test]
     fn golden_landed_chat_home_header_is_regression() {
-        // Shape of docs/chat-home-plan-cli-2026-07-19.md header
+        // Shape of docs/archive/chat-home-plan-cli-2026-07-19.md header
         let md = r#"# cco 聊天主窗 · 计划可改 · CLI 不卡死
 
 > 状态：**方案已定稿 · H0–H4 已落地**（终检 t9：S1–S8 全 PASS；**不阻塞** D0–D4）
@@ -817,19 +817,19 @@ mod tests {
         let cases: &[(&str, PlanModeKind)] = &[
             // 已落地 / 已闭环
             (
-                "docs/chat-home-plan-cli-2026-07-19.md",
+                "docs/archive/chat-home-plan-cli-2026-07-19.md",
                 PlanModeKind::Regression,
             ),
             (
-                "docs/system-post-tasks-2026-07-19.md",
+                "docs/archive/system-post-tasks-2026-07-19.md",
                 PlanModeKind::Regression,
             ),
             (
-                "docs/ux-plan-mgmt-attach-ttl-2026-07-19.md",
+                "docs/archive/ux-plan-mgmt-attach-ttl-2026-07-19.md",
                 PlanModeKind::Regression,
             ),
             (
-                "docs/chat-plan-builder-2026-07-18.md",
+                "docs/archive/chat-plan-builder-2026-07-18.md",
                 PlanModeKind::Regression,
             ),
             (
@@ -837,15 +837,15 @@ mod tests {
                 PlanModeKind::Regression,
             ),
             (
-                "docs/plan-mgmt-to-exec-flow-2026-07-19.md",
+                "docs/archive/plan-mgmt-to-exec-flow-2026-07-19.md",
                 PlanModeKind::Regression,
             ),
             (
-                "docs/chat-utf8-fence-panic-2026-07-19.md",
+                "docs/archive/chat-utf8-fence-panic-2026-07-19.md",
                 PlanModeKind::Regression,
             ),
             (
-                "docs/ux-simple-mainpath-2026-07-17.md",
+                "docs/archive/ux-simple-mainpath-2026-07-17.md",
                 PlanModeKind::Regression,
             ),
             (
@@ -854,7 +854,7 @@ mod tests {
             ),
             // U0–U2 已落地 → regression
             (
-                "docs/chat-ux-focus-2026-07-19.md",
+                "docs/archive/chat-ux-focus-2026-07-19.md",
                 PlanModeKind::Regression,
             ),
             // P0–P1 全绿 · P2 主线已落地 → regression（状态句含「已落地」）

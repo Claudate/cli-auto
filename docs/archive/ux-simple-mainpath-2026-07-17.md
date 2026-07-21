@@ -3,7 +3,7 @@
 > 状态：**已落地**（合并选计划弹窗 · task-dash · CLI 再跑 · AI 事件过滤 · PATH 探测 · D1 开关）；**P2-16/S0 默认翻转**（2026-07-20：默认停拆分台）  
 > 日期：2026-07-17（状态校正 2026-07-18；**D1 2026-07-18**；**S0/F0 2026-07-20**）  
 > 范围：`web/` 计划区 / CLI 看板 / 环境提示；`src/runtime/provider` bin 解析；`src/doctor`  
-> 关联：总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) · Mode B 真源 → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md) §4.1 · 主路径大改 → [`product-mainpath-optimize-2026-07-20.md`](./product-mainpath-optimize-2026-07-20.md)  
+> 关联：总账 → [`gap-and-landing-plan-2026-07-18.md`](../gap-and-landing-plan-2026-07-18.md) · Mode B 真源 → [`product-mode-b-ai-planner.md`](../product-mode-b-ai-planner.md) §4.1 · 主路径大改 → [`product-mainpath-optimize-2026-07-20.md`](../product-mainpath-optimize-2026-07-20.md)  
 > **勿再当缺口**：下列主路径能力已闭环；残差见架构 P2-17 / 主路径 P2-16 任务表  
 > **默认句（与 Mode B §4.1 同真）**：桌面默认 **停拆分台**；高级「拆分后自动开始」可选
 
