@@ -18,9 +18,9 @@ mod types;
 mod validate;
 
 pub use cco_split::{
-    from_plan_ir, recompute_waves, run_gate_ok, soft_accept_split, split_topo_layers, to_plan_ir,
-    CcoSplitJob, CcoSplitSource, CcoSplitStatus, CcoSplitTask, CcoTaskKind, CcoTaskStatus,
-    CCO_SPLIT_SCHEMA,
+    from_plan_ir, recompute_waves, run_gate_ok, sanitize_cco_split_deps, soft_accept_split,
+    split_topo_layers, to_plan_ir, CcoSplitJob, CcoSplitSource, CcoSplitStatus, CcoSplitTask,
+    CcoTaskKind, CcoTaskStatus, CCO_SPLIT_SCHEMA,
 };
 pub use materialize::{materialize_role_defaults, materialize_selected_tasks};
 pub use optional::{normalize_optional_title, title_is_meta_heading, title_looks_optional};

@@ -224,3 +224,53 @@ pub fn split_topo_layers(doc: &CcoSplitJob) -> Vec<Vec<String>> {
     }
     by_wave.into_values().collect()
 }
+
+/// Drop unmotivated depends_on edges on a CcoSplit graph (confirm-screen 「让可并行」).
+///
+/// Keep edge only if dependent **body** mentions dep id/title or an explicit depend-reason line.
+/// Returns number of edges removed; recomputes waves when any drop.
+pub fn sanitize_cco_split_deps(doc: &mut CcoSplitJob) -> usize {
+    let ids: Vec<String> = doc.tasks.iter().map(|t| t.task_id.clone()).collect();
+    let titles: Vec<(String, String)> = doc
+        .tasks
+        .iter()
+        .map(|t| (t.task_id.clone(), t.title.clone()))
+        .collect();
+
+    let before: usize = doc.tasks.iter().map(|t| t.depends_on.len()).sum();
+    for t in doc.tasks.iter_mut() {
+        let body_l = t.body.to_ascii_lowercase();
+        let body_raw = t.body.clone();
+        t.depends_on.retain(|dep| {
+            if !ids.iter().any(|id| id == dep) {
+                return false;
+            }
+            if body_raw.contains(dep) {
+                return true;
+            }
+            if let Some((_, title)) = titles.iter().find(|(id, _)| id == dep) {
+                if title.chars().count() >= 4 && body_raw.contains(title) {
+                    return true;
+                }
+            }
+            if body_raw.contains("依赖原因")
+                || body_raw.contains("等待产物")
+                || body_raw.contains("depends on")
+                || body_l.contains("blocked by")
+            {
+                return body_raw.lines().any(|line| {
+                    let l = line.trim();
+                    (l.contains("依赖") || l.contains("depend") || l.contains("等待"))
+                        && l.contains(dep.as_str())
+                });
+            }
+            false
+        });
+    }
+    let after: usize = doc.tasks.iter().map(|t| t.depends_on.len()).sum();
+    let removed = before.saturating_sub(after);
+    if removed > 0 {
+        recompute_waves(doc);
+    }
+    removed
+}

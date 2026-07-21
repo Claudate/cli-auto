@@ -8,7 +8,7 @@
 //! Modes:
 //! - `parse` — existing adapters (structured / serial-prompts / raw-single)
 //! - `fake`  — fixed multi-task DAG for demos without API
-//! - `ai`    — LLM planner (print/stream-json → plan JSON) with heuristic fallback
+//! - `ai`    — ModelSplitAgent (cco-split/v1) → legacy LLM PlanIR → heuristic fallback
 //!
 //! Limits: `PLANNER_MAX_TASKS`（拆解软上限）· `MAX_TASKS`（含系统收尾后硬上限）；
 //! stream-json 从最终 `type=result` 取 plan，勿取 init 事件的首个 `{`。
@@ -17,6 +17,7 @@ mod digest;
 mod heuristic;
 mod job;
 mod llm;
+mod sanitize;
 mod task_edit;
 mod view;
 
@@ -24,11 +25,13 @@ pub use job::{
     get_plan_job, job_dir, latest_plan_job_for_project, plan_jobs_dir, start_plan_job, PlanJob,
     PlanJobStatus, StartPlanJobRequest,
 };
+/// Crate-internal planner log (split_agent / llm).
+pub(crate) use job::append_log;
+pub use sanitize::{sanitize_proposed_deps, SanitizeDepsResult};
 pub use view::{
     apply_user_edits_to_ir, job_view, load_proposed, load_proposed_for_exec, load_user_edits,
-    mark_confirmed, planner_cost_for_run, remove_proposed_task, sanitize_proposed_deps,
-    update_proposed_task, write_user_edits, PlanJobView, PlanTaskView, PlanUserEdits,
-    SanitizeDepsResult, TaskUserEdit,
+    mark_confirmed, planner_cost_for_run, remove_proposed_task, update_proposed_task,
+    write_user_edits, PlanJobView, PlanTaskView, PlanUserEdits, TaskUserEdit,
 };
 
 #[cfg(test)]
@@ -274,7 +277,8 @@ mod tests {
 
     #[test]
     fn sanitize_proposed_deps_drops_unmotivated_edges() {
-        use super::view::{load_proposed, sanitize_proposed_deps, write_proposed};
+        use super::sanitize::sanitize_proposed_deps;
+        use super::view::{load_proposed, write_proposed};
 
         let dir = tempdir().unwrap();
         let project = dir.path().to_path_buf();

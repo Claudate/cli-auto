@@ -117,10 +117,18 @@ where
     F: FnOnce(&Connection) -> Result<T>,
 {
     let mut guard = DB.lock().unwrap_or_else(|e| e.into_inner());
-    if guard.is_none() {
+    let path = db_path(config);
+    let need_open = match guard.as_ref() {
+        None => true,
+        // Tests / multi-root: reopen when state_root (db path) changes.
+        Some(conn) => conn
+            .path()
+            .map(|p| PathBuf::from(p) != path)
+            .unwrap_or(true),
+    };
+    if need_open {
         std::fs::create_dir_all(&config.state_root)
             .with_context(|| format!("mkdir {}", config.state_root.display()))?;
-        let path = db_path(config);
         let conn = Connection::open(&path)
             .with_context(|| format!("open sqlite {}", path.display()))?;
         ensure_schema(&conn)?;

@@ -151,7 +151,8 @@ impl PlanJob {
     }
 }
 
-pub(super) fn append_log(config: &Config, job_id: &str, line: &str) {
+/// Planner job log (also used by split_agent / llm paths).
+pub(crate) fn append_log(config: &Config, job_id: &str, line: &str) {
     let path = job_dir(config, job_id).join("planner.log");
     let _ = std::fs::create_dir_all(job_dir(config, job_id));
     use std::io::Write;
@@ -318,6 +319,10 @@ fn planner_should_try_llm(config: &Config, provider_name: &str) -> bool {
     {
         return false;
     }
+    // Fixture / Messages-capable split agent can run without a local claude bin.
+    if split_agent_can_run_without_cli() {
+        return true;
+    }
     let bin_cfg = config
         .provider("claude")
         .map(|p| p.bin.clone())
@@ -325,6 +330,19 @@ fn planner_should_try_llm(config: &Config, provider_name: &str) -> bool {
     let bin = crate::runtime::provider::resolve_provider_bin(&bin_cfg, "CCO_CLAUDE_BIN");
     let p = std::path::Path::new(&bin);
     p.is_file() || which::which(&bin).is_ok()
+}
+
+fn split_agent_can_run_without_cli() -> bool {
+    for key in ["CCO_SPLIT_AGENT_JSON", "CCO_SPLIT_AGENT_FIXTURE"] {
+        if std::env::var(key)
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false)
+        {
+            return true;
+        }
+    }
+    // Messages HTTP path when API key is present.
+    crate::runtime::provider::sdk_http::resolve_api_key().is_some()
 }
 
 /// Mark other in-flight planning jobs for this project cancelled and kill planner PID (C6).
@@ -894,11 +912,45 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
                 _ => {}
             }
 
-            // 1) Try real Claude planner (skip when demo/fake or forced heuristic)
+            // 1) ModelSplitAgent → cco-split/v1 → SQLite SoT (OpenHands Plan Mode)
+            //    then legacy PlanIR LLM, then heuristic.
             let force_heuristic = std::env::var("CCO_PLANNER_HEURISTIC")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false)
                 || job.provider == "fake";
+            let skip_split_agent = std::env::var("CCO_SPLIT_AGENT")
+                .map(|v| v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off"))
+                .unwrap_or(false);
+            if !force_heuristic && !skip_split_agent {
+                match crate::plan::split_agent::build_split_agent_plan(config, job) {
+                    Ok(ir) => {
+                        append_log(
+                            config,
+                            &job.job_id,
+                            &format!(
+                                "ModelSplitAgent path ok (adapter={})",
+                                ir.adapter
+                            ),
+                        );
+                        return Ok(ir);
+                    }
+                    Err(e) => {
+                        append_log(
+                            config,
+                            &job.job_id,
+                            &format!(
+                                "ModelSplitAgent failed ({e:#}); trying legacy LLM PlanIR planner"
+                            ),
+                        );
+                    }
+                }
+            } else if skip_split_agent {
+                append_log(
+                    config,
+                    &job.job_id,
+                    "skipping ModelSplitAgent (CCO_SPLIT_AGENT=off)",
+                );
+            }
             if !force_heuristic {
                 match build_llm_plan(config, job) {
                     Ok(mut ir) => {

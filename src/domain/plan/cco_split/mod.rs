@@ -11,7 +11,9 @@ mod accept;
 mod convert;
 mod types;
 
-pub use accept::{recompute_waves, run_gate_ok, soft_accept_split, split_topo_layers};
+pub use accept::{
+    recompute_waves, run_gate_ok, sanitize_cco_split_deps, soft_accept_split, split_topo_layers,
+};
 pub use convert::{from_plan_ir, to_plan_ir};
 pub use types::{
     CcoSplitJob, CcoSplitSource, CcoSplitStatus, CcoSplitTask, CcoTaskKind, CcoTaskStatus,
@@ -192,5 +194,44 @@ mod tests {
         assert!(run_gate_ok(&doc).is_err());
         doc.tasks[0].enabled = true;
         assert!(run_gate_ok(&doc).is_ok());
+    }
+
+    #[test]
+    fn sanitize_cco_split_drops_bare_edges() {
+        let mut doc = CcoSplitJob {
+            job_id: "j1".into(),
+            project: PathBuf::from("/p"),
+            plan_path: PathBuf::from("docs/x.md"),
+            status: CcoSplitStatus::Ready,
+            title: "x".into(),
+            max_parallel: 2,
+            source: CcoSplitSource::Llm,
+            error: None,
+            run_id: None,
+            created_at: "t0".into(),
+            updated_at: "t0".into(),
+            tasks: vec![
+                sample_task("t1", &[]),
+                {
+                    let mut t = sample_task("t2", &["t1"]);
+                    // Body does not mention t1 → bare edge should drop.
+                    t.body = "独立做第二步".into();
+                    t
+                },
+                {
+                    let mut t = sample_task("t3", &["t1"]);
+                    t.body = "依赖原因：等待产物来自 t1\n做第三步".into();
+                    t
+                },
+            ],
+        };
+        soft_accept_split(&mut doc);
+        let removed = sanitize_cco_split_deps(&mut doc);
+        assert_eq!(removed, 1);
+        assert!(doc.tasks[1].depends_on.is_empty());
+        assert_eq!(doc.tasks[2].depends_on, vec!["t1".to_string()]);
+        // After drop, t2 can share wave 0 with t1.
+        assert_eq!(doc.tasks[0].wave, 0);
+        assert_eq!(doc.tasks[1].wave, 0);
     }
 }

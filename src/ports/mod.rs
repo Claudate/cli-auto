@@ -6,8 +6,8 @@
 //! [PROTOCOL]: 禁止再发明 XxxManager；组合在 app 用例内
 //!
 //! Target (architecture-redesign 附录 B):
-//! WorkerPort ✅ A1-4 · HandoffStore ✅ A1-5 · PlanJobStore · RunStore · ChatStore ·
-//! PlannerPort · ProcessPort · WorktreePort · Clock
+//! WorkerPort ✅ A1-4 · HandoffStore ✅ A1-5 · SplitAgentPort ✅ (openhands landing) ·
+//! PlanJobStore · RunStore · ChatStore · PlannerPort · ProcessPort · WorktreePort · Clock
 
 /// Multi-CLI worker bus (start/poll/stop/collect/preflight/capabilities).
 pub mod worker;
@@ -15,7 +15,11 @@ pub mod worker;
 /// Host-owned handoff ledger (board · fragments · task/run end).
 pub mod handoff;
 
+/// Dedicated plan-split agent (cco-split/v1 · Plan Mode).
+pub mod split_agent;
+
 pub use handoff::HandoffStore;
+pub use split_agent::{SplitAgentPort, SplitRequest};
 pub use worker::{
     Capabilities, StartCtx, TaskResult, TaskStatus, WorkerHandle, WorkerPort, WorkerStatus,
 };

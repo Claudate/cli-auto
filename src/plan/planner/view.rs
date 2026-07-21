@@ -2,9 +2,9 @@
 //!
 //! [INPUT]: PlanJob · PlanIR · Config
 //! [OUTPUT]: PlanJobView · load_proposed · update_proposed_task · remove_proposed_task ·
-//!           sanitize_proposed_deps · user_edits(P2-1/P2-2) · mark_confirmed · load_proposed_for_exec
+//!           user_edits(P2-1/P2-2) · mark_confirmed · load_proposed_for_exec
 //! [POS]: planner 子模块；桌面/CLI 确认屏消费
-//! note: sanitize_proposed_deps 复用 digest::sanitize_task_deps；确认屏可删任务/改依赖；
+//! note: sanitize_proposed_deps → planner/sanitize.rs（P3-4 CcoSplit SoT）；确认屏可删任务/改依赖；
 //!       replan 经 preserve_from_job_id 应用 plan.user_edits.json
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/plan/CLAUDE.md
 
@@ -923,70 +923,7 @@ pub fn remove_proposed_task(
     job_view(config, &job, 48_000)
 }
 
-/// Drop unmotivated depends_on edges on the proposed plan (confirm-screen action).
-/// Same rules as planner post-process: edge kept only if the dependent prompt
-/// mentions the dep id/title or an explicit depend-reason line.
-pub fn sanitize_proposed_deps(config: &Config, job_id: &str) -> Result<SanitizeDepsResult> {
-    let mut job = PlanJob::load(config, job_id)?;
-    if !matches!(
-        job.status,
-        PlanJobStatus::Planned | PlanJobStatus::Confirmed
-    ) {
-        bail!(
-            "计划任务状态为 {}，仅 planned/confirmed 可清理依赖",
-            job.status.as_str()
-        );
-    }
-    let mut ir = load_proposed(config, job_id).or_else(|_| {
-        let path = job_dir(config, job_id).join("plan.resolved.json");
-        let text = std::fs::read_to_string(&path)
-            .with_context(|| format!("read {}", path.display()))?;
-        let ir: PlanIR = serde_json::from_str(&text)
-            .with_context(|| format!("parse {}", path.display()))?;
-        Ok::<PlanIR, anyhow::Error>(ir)
-    })?;
-
-    let before: usize = ir.tasks.iter().map(|t| t.depends_on.len()).sum();
-    super::digest::sanitize_task_deps(&mut ir.tasks);
-    let after: usize = ir.tasks.iter().map(|t| t.depends_on.len()).sum();
-    let removed = before.saturating_sub(after);
-
-    ir.validate()?;
-    write_proposed(config, job_id, &ir)?;
-    job.plan_name = Some(ir.name.clone());
-    job.task_count = Some(ir.tasks.len());
-    job.max_parallel = Some(ir.max_parallel);
-    // Refresh hygiene strip so confirm UI shows latest cleanup result.
-    job.critic_summary = Some(if removed > 0 {
-        format!("拆分校对：手动清理 · 去掉 {removed} 条可疑依赖")
-    } else {
-        "拆分校对：手动清理 · 未发现可疑依赖".into()
-    });
-    job.critic_edges_removed = Some(removed);
-    // Manual sanitize does not rewrite titles/prompts.
-    job.critic_titles_rewritten = job.critic_titles_rewritten.or(Some(0));
-    job.critic_prompts_tagged = job.critic_prompts_tagged.or(Some(0));
-    job.updated_at = Utc::now();
-    if matches!(job.status, PlanJobStatus::Confirmed) {
-        job.status = PlanJobStatus::Planned;
-        job.run_id = None;
-    }
-    job.save(config)?;
-    append_log(
-        config,
-        job_id,
-        &format!("sanitize deps: removed {removed} edge(s) (before={before} after={after})"),
-    );
-    let view = job_view(config, &job, 48_000)?;
-    Ok(SanitizeDepsResult { removed, view })
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct SanitizeDepsResult {
-    /// Number of depends_on edges dropped.
-    pub removed: usize,
-    pub view: PlanJobView,
-}
+// sanitize_proposed_deps → planner/sanitize.rs (P3-4 CcoSplit SoT; keep view thin)
 
 /// Mark job confirmed after exec run was spawned (called from services).
 pub fn mark_confirmed(config: &Config, job_id: &str, run_id: &str, ir: &PlanIR) -> Result<()> {

@@ -85,10 +85,15 @@ function flowJoinSeriousFun(serious, fun) {
 /** Planning phase subtitle (no Claude/CLI brand). */
 function flowPlanningSub(elapsedSec) {
   const sec = Math.max(0, Number(elapsedSec) || 0);
-  const serious =
-    sec > 0
-      ? `正在把计划拆成可执行步骤（已等待 ${sec}s）…`
-      : "正在把计划拆成可执行步骤…";
+  let serious;
+  if (sec >= 60) {
+    // P4-1: long wait — human copy + cancel affordance (btn-cancel-planning).
+    serious = `正在用 AI 拆分计划（已等待 ${sec}s）…可点「取消回计划」停止等待`;
+  } else if (sec > 0) {
+    serious = `正在把计划拆成可执行步骤（已等待 ${sec}s）…`;
+  } else {
+    serious = "正在把计划拆成可执行步骤…";
+  }
   return flowJoinSeriousFun(serious, flowPickBlurb("planning", String(sec)));
 }
 
@@ -102,7 +107,8 @@ function flowPlanningStaticHint() {
 /** How the plan was split — product words. */
 function flowPlanHowLabel(adapter) {
   const a = String(adapter || "");
-  if (a.includes("heuristic")) return "本地规则拆分";
+  if (a.includes("heuristic") || a.includes("fast")) return "本地规则拆分";
+  if (a.includes("split-agent") || a.includes("cco-split/llm")) return "智能拆分";
   if (a.includes("llm") || a.includes("ai")) return "智能拆分";
   if (a.includes("fake")) return "演练拆分";
   return "拆分完成";
