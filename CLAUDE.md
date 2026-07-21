@@ -19,7 +19,7 @@ Rust + Tokio + Clap + ratatui + Tauri 2 + 原生 web（HTML/CSS/JS）
   · [`tui/`](./src/tui/CLAUDE.md) ratatui 多页观察层
   · [`services/`](./src/services/) CLI/桌面共用服务层（迁移期 facade）
 [`src-tauri/`](./src-tauri/CLAUDE.md) — 桌面壳（Tauri 2 commands → cco::app / services）
-[`web/`](./web/CLAUDE.md) — 桌面前端（**A2–A5 ✅** `js/main.js` module · `shared/gateway` · `app/AppViewModel` · `features/{chat,project,split,run,result,settings}`；classic **S8 facade** chat/doctor/result ≤80 · plan/log/monitor ≤200；**state.js D9 遗留**；IPC 只 gateway）
+[`web/`](./web/CLAUDE.md) — 桌面前端（**A2–A5 ✅** `js/main.js` module · `shared/gateway` · `app/AppViewModel` · `features/{chat,project,split,run,result,settings}`；classic **S8 facade** chat/doctor/result ≤80 · plan/log/monitor ≤200；**state.js D9+ 桥/瘦 ~230**；IPC 只 gateway；split **S-role** role/scope 可写）
 [`docs/`](./docs/CLAUDE.md) — **规范根**（真源 · 业务规则参考 · 历史计划索引）
 [`examples/`](./examples/CLAUDE.md) — 示例计划
 [`tests/`](./tests/CLAUDE.md) — 集成与金样
@@ -87,7 +87,7 @@ chat / 桌面 UX / terminal / 计划管理 / sys-post 等已迁 [`docs/archive/`
 15. 业务源文件：软上限 **400** 行，硬上限 **600** 行；超硬上限必须先拆再加功能。  
 16. 单函数：软 **40** 行，硬 **80** 行。  
 17. 业务路径自定义封装深度 **≤ 4**（Presentation→App→Domain→Adapter）。  
-18. **禁止**往已知厚文件继续堆功能（只删/抽/一行委托）。**S8 已出榜**（facade ≤200）：`plan.js` · `chat.js` · `log.js` · `doctor.js` · `monitor.js` · `result.js`（真源 `features/*`）。**仍厚待后收**：`state.js`（D9 · invoke 桥，非业务策略）。Rust 侧 A1 已出榜：`plan/mod` · `scheduler/*` · `handoff/*` · `services/chat/*`。
+18. **禁止**往已知厚文件继续堆功能（只删/抽/一行委托）。**S8 已出榜**（facade ≤200）：`plan.js` · `chat.js` · `log.js` · `doctor.js` · `monitor.js` · `result.js`（真源 `features/*`）。`state.js` **D9+ ✅ 桥/瘦 ~230**（invoke 桥/state 对象，非业务策略；禁止再堆）。Rust 侧 A1 已出榜：`plan/mod` · `scheduler/*` · `handoff/*` · `services/chat/*`。
 
 ### 前端（桌面）
 

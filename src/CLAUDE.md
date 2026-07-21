@@ -26,7 +26,7 @@ report/: report.md+json
 3. **Scheduler / 编排循环**不得内嵌 VERDICT 文本解析；inspect 规则在 domain/inspect + handoff adapter。  
 4. **Worker**：claude/codex/fake 只实现 port；failover/isolation 策略对象化，不写死在调度 `if provider`。  
 5. **体积**：业务文件软 400 / 硬 600 行；函数软 40 / 硬 80 行。  
-6. **禁止**往厚文件**继续堆功能**（只拆/委托）。Rust A1 已出榜：`plan/mod` · `scheduler/*` · `handoff/*` · `services/chat/*`。前端 S8 facade 已出榜（plan/chat/log/doctor/monitor/result）；`state.js` D9 遗留见 web L2。  
+6. **禁止**往厚文件**继续堆功能**（只拆/委托）。Rust A1 已出榜：`plan/mod` · `scheduler/*` · `handoff/*` · `services/chat/*`。前端 S8 facade 已出榜（plan/chat/log/doctor/monitor/result）；`state.js` **D9+ 桥/瘦 ~230** 见 web L2。  
 7. 新模块优先 `domain/` `app/` `ports/` `adapters/`（A1 骨架起），避免再胀 `services/`。  
 8. CLI 与桌面调用同一 app 路径；策略不写在 `cli/commands/*`。
 
