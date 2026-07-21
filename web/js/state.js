@@ -26,11 +26,15 @@ const LOG_FONT_KEY = "cco.logFontSize";
  * 未写入过键 → 默认停台（与 D1 旧默认 true 翻转）。
  */
 const PAUSE_CONFIRM_KEY = "cco.pauseConfirmAfterPlan";
-/** C3 方案 B：聊天/计划卡「拆成步骤」是否直开 analyze（默认关 = 方案 A） */
+/**
+ * A2：聊天/计划卡「拆成步骤」是否跳过选项层直开 analyze。
+ * 默认开（无键或 ≠"0"）；仅显式 "0" = 先确认选项。
+ * 与 autoStartAfterPlan 无关：跳过选项层 ≠ 自动 confirm_start。
+ */
 const CHAT_ASSIGN_DIRECT_KEY = "cco.chatAssignDirect";
 
 function chatAssignDirectEnabled() {
-  return localStorage.getItem(CHAT_ASSIGN_DIRECT_KEY) === "1";
+  return localStorage.getItem(CHAT_ASSIGN_DIRECT_KEY) !== "0";
 }
 
 function setChatAssignDirectEnabled(on) {

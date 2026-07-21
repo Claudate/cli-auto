@@ -1612,6 +1612,36 @@
   justify-content: flex-end;
   max-width: min(100%, 36rem);
 }
+/* A3：调整… 菜单（sanitize / 写回等） */
+.split-more-actions {
+  position: relative;
+}
+.split-more-actions > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.split-more-actions > summary::-webkit-details-marker {
+  display: none;
+}
+.split-more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.25rem);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 11rem;
+  padding: 0.4rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg2, var(--panel, #1e1e24));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.split-more-menu .btn {
+  justify-content: flex-start;
+  width: 100%;
+}
 /* 拆分台头：动作与标题并排时，窄屏允许动作整行下沉，避免与标题横向挤叠 */
 #plan-phase-confirm .split-head {
   align-items: flex-start;

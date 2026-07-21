@@ -7,7 +7,7 @@
 > 架构边界（**不重开 A0–A5**）：[`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)  
 > 交互意图参考（**不继承其 ✅**）：[`product-mainpath-optimize-2026-07-20.md`](./product-mainpath-optimize-2026-07-20.md)  
 > 范围：`web/` 为主 · 设置文案/默认值 · 帮助页；**不**换栈 · **不**旁路 `confirm_start` · **不**改 Scheduler 内核  
-> 状态：░ 波次 A 进行中（A1 + 本轮 live 绑定 + 僵尸 planning supersede 已落地）
+> 状态：**波次 A ✅**（A1–A6 · 默认直拆 · 拆分台/顶栏减法 · 帮助三步 · package）
 
 [PROTOCOL]: **勾选只认本文件 §3 任务表**。诊断文 `ux-nondev-mainpath` 保留为背景，不再双轨勾选。落地后回写 PRODUCT / docs L2 / web L2。每波结束必须跑 §5 非开发脚本，不得以 `cargo test` 或 facade 行数代替。
 
@@ -97,7 +97,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **A2** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.5 d |
 | **依赖** | 无（可与 A1 并行） |
 | **文件** | [`web/js/state.js`](../web/js/state.js)（`CHAT_ASSIGN_DIRECT_KEY` / `chatAssignDirectEnabled`）<br>[`web/js/features/project/projectPicker.js`](../web/js/features/project/projectPicker.js)（`startExecuteFromSelection`）<br>[`web/index.html`](../web/index.html) 设置 `#s-chat-assign-direct` 文案<br>[`web/js/features/settings/settingsForm.js`](../web/js/features/settings/settingsForm.js) 绑定说明 |
@@ -111,7 +111,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **A3** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.5 d |
 | **依赖** | 无 |
 | **文件** | [`web/index.html`](../web/index.html) `#plan-phase-confirm` `.split-actions`<br>[`web/js/features/split/splitFillMeta.js`](../web/js/features/split/splitFillMeta.js) / [`SplitView.js`](../web/js/features/split/SplitView.js) 若控制按钮显隐<br>[`web/css/plan.css`](../web/css/plan.css) 顶栏布局（可薄） |
@@ -125,7 +125,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **A4** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.5 d |
 | **依赖** | A1（confirm 落地后 chip 逻辑） |
 | **文件** | [`web/js/features/project/shellChrome.js`](../web/js/features/project/shellChrome.js)<br>[`web/index.html`](../web/index.html) `#top-actions` / `#top-more` |
@@ -138,7 +138,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **A5** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.3 d |
 | **依赖** | A2 |
 | **文件** | [`web/index.html`](../web/index.html) `#page-settings` · `#page-help` 主路径段落<br>[`web/js/flow.js`](../web/js/flow.js) 若有 chooser 文案键 |
@@ -151,7 +151,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **A6** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.5 d |
 | **依赖** | A1–A5 |
 | **步骤** | 1. `node --check` 改过的 js<br>2. §5 脚本项 1–5（至少）真人走<br>3. `scripts/package-app.sh` 出包目视<br>4. 本文件 A1–A5 勾 ✅ + 修订记录 |
@@ -412,3 +412,4 @@
 | 2026-07-21 | **planner 热修**：对本文件 `#### A1`… 拆分时，heuristic 原先认不出任务 ID，回落「读懂目标→拆包→落地→巡检」空壳四波；`extract_work_phases` 已优先识别 `#### A1/B2/U1-1` 与 `### 波次`（`src/plan/planner/heuristic.rs`）。**这与 UI 波次 A 无关**；重拆本计划应出 A1/A2… 真任务。 |
 | 2026-07-21 | **原则落地**：识别失败不得静默换成空壳。路径改为 diagnose（规划日志写原因）→ recover（从文档真标题/可实施正文恢复任务）→ 仅无结构时 last-resort meta，且 meta 第一步 prompt 写明失败原因。 |
 | 2026-07-21 | **A1 + 本轮状态收口**：`resolveEntryRoute` planned/confirmed → workspace 拆分台；`selectProject` 双保险放宽；历史 `project_live` completed 不抢 phase/KPI/结果台（`liveBelongsToOpenPlan`）；新开 plan job `supersede` 同项目 planning；`latest_plan_job` 跳过超时 planning 僵尸（>30min），其余仍按 `updated_at`。 |
+| 2026-07-21 | **波次 A 收口 A2–A6**：`chatAssignDirect` 默认开（仅 `"0"` 关）；设置「拆成步骤前先确认选项」语义翻转；拆分台顶栏仅重新拆分+确认，sanitize/写回进「调整…」；chat 待确认顶栏「继续核对拆分」；计划管理仅更多且永不 primary；帮助「三步上手」去 Mode B/R-S 首屏；`node --check` + `package-app`。 |

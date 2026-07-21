@@ -59,11 +59,12 @@ export async function loadSettings() {
     if ($("#s-flow-fun") && typeof window.flowFunEnabled === "function") {
       $("#s-flow-fun").checked = window.flowFunEnabled();
     }
+    // A2：勾选「先确认选项」= 关直拆（!chatAssignDirectEnabled）
     if (
       $("#s-chat-assign-direct") &&
       typeof window.chatAssignDirectEnabled === "function"
     ) {
-      $("#s-chat-assign-direct").checked = window.chatAssignDirectEnabled();
+      $("#s-chat-assign-direct").checked = !window.chatAssignDirectEnabled();
     }
     const fontEl = $("#s-log-font");
     const st = state();
@@ -89,11 +90,12 @@ export async function saveSettings() {
   if ($("#s-flow-fun") && typeof window.setFlowFunEnabled === "function") {
     window.setFlowFunEnabled(!!$("#s-flow-fun").checked);
   }
+  // A2：勾选「先确认选项」→ setChatAssignDirectEnabled(false)
   if (
     $("#s-chat-assign-direct") &&
     typeof window.setChatAssignDirectEnabled === "function"
   ) {
-    window.setChatAssignDirectEnabled(!!$("#s-chat-assign-direct").checked);
+    window.setChatAssignDirectEnabled(!$("#s-chat-assign-direct").checked);
   }
   const pollVal = parseInt($("#s-poll-interval")?.value, 10);
   const modeVal = parseInt($("#s-default-mode")?.value, 10);

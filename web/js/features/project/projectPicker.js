@@ -149,8 +149,7 @@ export async function startExecuteFromSelection(planPath, opts = {}) {
     toast(String(e?.message || e));
     return;
   }
-  // C3 方案 B（可选）：跳过二次确认，沿用当前/上次并发等选项直开拆分。
-  // 仍走 analyzePlanFromPicker → start_plan_job → confirm_start；禁止 start_run 旁路。
+  // A2：默认跳过选项层直开拆分（仍走 analyze → start_plan_job → confirm_start；禁止 start_run）。
   const direct =
     opts.direct === true ||
     (opts.direct !== false &&
@@ -162,11 +161,11 @@ export async function startExecuteFromSelection(planPath, opts = {}) {
     renderPlanPicker();
     const name =
       typeof planDisplayName === "function" ? planDisplayName(path) : path;
-    toast(`将执行：${name} · 直接拆分（方案 B）`);
+    toast(`正在拆成步骤…「${name}」`);
     await host.analyzePlanFromPicker();
     return;
   }
-  // 方案 A：始终在 workspace 打开选项层
+  // 设置「先确认选项」或 opts.direct===false：打开选项层
   if (state.page !== "workspace") showPage("workspace");
   openPlanChooser(true, { fromExecute: true, expandList: false });
   try {
@@ -370,53 +369,59 @@ export function renderPlanPicker() {
     btnChat.title = "与 AI 共建计划文档";
   }
 
-  // 计划管理 = 独立页面（page=plans），不是聊天右栏
-  // E2：running/confirm 时弱化为 ghost，不与「返回执行/继续确认」抢 primary
+  // A4：计划管理只在「更多」里，永不 primary（主路径不抢戏）
   if (btnPlanMgmt) {
-    const runOrConfirm =
-      runActive ||
-      state.phase === "planning" ||
-      state.phase === "confirm";
     const showMgmt =
       !!state.selectedPath &&
       state.page !== "welcome" &&
       state.page !== "plans";
     btnPlanMgmt.hidden = !showMgmt;
     btnPlanMgmt.disabled = false;
-    btnPlanMgmt.textContent = "计划管理";
-    btnPlanMgmt.title = "进入计划管理：选中 / 预览 / 编辑文档 / 执行";
-    const makePrimary = inChat && !runOrConfirm;
-    btnPlanMgmt.classList.toggle("primary", makePrimary);
-    btnPlanMgmt.classList.toggle("ghost", !makePrimary);
+    btnPlanMgmt.textContent = "管理计划文件";
+    btnPlanMgmt.title = "进阶：选中 / 预览 / 编辑计划文件";
+    btnPlanMgmt.classList.remove("primary");
+    btnPlanMgmt.classList.add("ghost");
   }
 
-  // 顶栏「返回执行/继续确认」：仅有可监视活动时；chat 页与「计划管理」分钮（≠ 计划管理）
-  // 与 banner 互斥（updateBgPlanBanner 见 topMonVisible），避免三连噪声
+  // A4：有待确认且在 chat →「继续核对拆分」；有活动 run →「返回执行」
   if (btnMonitor) {
+    const pendingSplit =
+      hasSplit &&
+      !runActive &&
+      ["planned", "confirmed"].includes(
+        String(state.planJob?.status || "").toLowerCase()
+      );
     const showMon =
       !!state.selectedPath &&
       state.page !== "workspace" &&
       state.page !== "welcome" &&
-      host.hasMonitorableActivity();
+      (host.hasMonitorableActivity() || pendingSplit || host.isPlanSessionActive());
     btnMonitor.hidden = !showMon;
     if (showMon) {
-      // 活动 run / 待确认：primary 更显眼；其它 ghost（chat 有计划管理时保持 ghost 不抢）
-      const urgent =
-        (runActive || (host.isPlanSessionActive() && !!state.planJobId)) && !inChat;
-      btnMonitor.classList.toggle("primary", urgent);
-      btnMonitor.classList.toggle("ghost", !urgent);
+      const urgent = runActive || pendingSplit || state.phase === "planning";
+      btnMonitor.classList.toggle("primary", urgent && !inChat);
+      // chat 页：待确认时用 ghost 主文案，避免双 primary
+      if (inChat && pendingSplit) {
+        btnMonitor.classList.remove("primary");
+        btnMonitor.classList.add("ghost");
+      } else {
+        btnMonitor.classList.toggle("ghost", !urgent || inChat);
+      }
       if (runActive) {
         btnMonitor.textContent = "返回执行";
         btnMonitor.title =
-      typeof flowRunningMonitorTitle === "function"
-        ? flowRunningMonitorTitle()
-        : "返回工作区查看执行进度";
+          typeof flowRunningMonitorTitle === "function"
+            ? flowRunningMonitorTitle()
+            : "返回工作区查看执行进度";
       } else if (isRunPaused()) {
         btnMonitor.textContent = "返回执行";
         btnMonitor.title = "返回工作区查看已暂停的计划";
+      } else if (pendingSplit || state.phase === "confirm") {
+        btnMonitor.textContent = "继续核对拆分";
+        btnMonitor.title = "回到拆分台核对波次后确认并开始";
       } else if (host.isPlanSessionActive()) {
         btnMonitor.textContent =
-          state.phase === "planning" ? "查看规划" : "继续确认";
+          state.phase === "planning" ? "查看规划" : "继续核对拆分";
         btnMonitor.title =
           state.phase === "planning"
             ? "返回工作区查看拆分进度"
@@ -437,14 +442,14 @@ export function renderPlanPicker() {
     btnChoose.disabled = !!runActive;
     btnChoose.title = runActive ? "运行中，请先停止后再切换计划" : "选择计划";
   }
-  // 顶栏主 CTA「拆成步骤」：仅 workspace 且未在拆分中；F5 ≤2 实心
+  // 顶栏主 CTA「拆成步骤」：仅 workspace 且未在拆分中；主路径最多 1 个 primary
   if (btnAssign) {
     btnAssign.hidden = !inWorkspace || hideForPhase;
     if (!hideForPhase && !state.assigning) {
       btnAssign.textContent = runActive ? "运行中…" : "拆成步骤";
       btnAssign.title = runActive
         ? "运行中，请先停止后再拆分新计划"
-        : "打开选项并将计划拆成步骤";
+        : "把当前计划拆成可执行步骤";
     }
   }
   // F5：更多菜单在无次要入口时隐藏

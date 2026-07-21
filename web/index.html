@@ -52,7 +52,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
         <div class="top-actions" id="top-actions">
           <button class="btn ghost sm chat-top-btn" id="btn-open-chat" type="button" hidden title="与 AI 共建计划文档">聊天</button>
           <button class="btn primary sm" id="btn-pp-analyze" type="button" hidden disabled>拆成步骤</button>
-          <button class="btn ghost sm" id="btn-monitor-plan" type="button" hidden title="返回执行或继续确认拆分">返回执行</button>
+          <button class="btn ghost sm" id="btn-monitor-plan" type="button" hidden title="回到拆分台或执行进度">继续核对拆分</button>
           <div id="split-plan-chip" class="split-plan-chip" hidden title="点击查看拆分结果">
             <span class="split-plan-chip-label">拆分</span>
             <strong id="split-plan-chip-name">—</strong>
@@ -82,8 +82,8 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
           <p class="muted">添加项目后和 AI 写计划，或选已有文档。默认会停在<strong>拆分台</strong>看清波次，再点「确认并开始」。</p>
           <ol class="welcome-steps muted">
             <li>添加本机项目文件夹</li>
-            <li>聊天写计划、从模板开始，或从计划管理选一份</li>
-            <li>点「拆成步骤」→ 核对 →「确认并开始」</li>
+            <li>聊天写计划或从模板开始</li>
+            <li>点「拆成步骤」→ 看清波次 →「确认并开始」</li>
           </ol>
           <div class="welcome-actions">
             <button class="btn primary" id="btn-welcome-add" type="button">添加项目文件夹</button>
@@ -213,13 +213,18 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                 </details>
               </div>
               <div class="plan-actions split-actions">
-                <button class="btn ghost sm" id="btn-confirm-back" type="button" hidden>返回监视</button>
-                <button class="btn ghost sm" id="btn-sanitize-deps" type="button" title="让可并行的步骤真正并行">让可并行的真正并行</button>
-                <button class="btn ghost sm" id="btn-replan" type="button" title="重新拆分（保留你的修改）">重新拆分（保留你的修改）</button>
-                <!-- S14: 可选写回步骤摘要到计划文末；默认不自动 -->
-                <button class="btn ghost sm" id="btn-split-writeback" type="button" title="把步骤标题追加到计划文末（不覆盖正文）">写回步骤摘要</button>
-                <button class="btn ghost sm" id="btn-skip-confirm" type="button" hidden>跳过预览</button>
+                <!-- A3：主路径仅「重新拆分」+「确认并开始」；其余进调整 -->
+                <button class="btn ghost sm" id="btn-replan" type="button" title="重新拆分（保留你的修改）">重新拆分</button>
                 <button class="btn primary" id="btn-confirm-start" type="button">确认并开始</button>
+                <details class="split-more-actions" id="split-more-actions">
+                  <summary class="btn ghost sm">调整…</summary>
+                  <div class="split-more-menu" role="menu">
+                    <button class="btn ghost sm" id="btn-sanitize-deps" type="button" title="让可并行的步骤真正并行">让可并行的真正并行</button>
+                    <button class="btn ghost sm" id="btn-split-writeback" type="button" title="把步骤标题追加到计划文末（不覆盖正文）">写回步骤摘要</button>
+                    <button class="btn ghost sm" id="btn-skip-confirm" type="button" hidden>跳过预览</button>
+                    <button class="btn ghost sm" id="btn-confirm-back" type="button" hidden>返回监视</button>
+                  </div>
+                </details>
               </div>
             </div>
             <div class="confirm-layout split-layout split-layout-merged">
@@ -580,12 +585,13 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
             <div class="settings-group">
               <h3 class="settings-group-title">开始与拆分</h3>
               <p class="field-hint" style="margin:0 0 .5rem">
-                主路径默认<strong>拆分后停在拆分台</strong>。自动开始、直开拆分、通道与并发属高级。
+                主路径默认：一点「拆成步骤」即开拆，<strong>拆完停在拆分台</strong>核对后再开始。
+                通道、自动开跑、选项层属高级。
               </p>
-              <label class="field field-check" title="C3：聊天/计划卡「拆成步骤」跳过二次确认">
-                <span>拆成步骤时跳过选项层</span>
+              <label class="field field-check" title="A2：勾选后「拆成步骤」先弹出通道/并发等选项">
+                <span>拆成步骤前先确认选项</span>
                 <input id="s-chat-assign-direct" type="checkbox" />
-                <span class="field-hint">默认关。开启后一点「拆成步骤」即开拆分（仍经 start_plan_job，不跳过 Mode B）。</span>
+                <span class="field-hint">默认不勾。勾选后每次先选通道/并发再拆（仍经确认台开跑，不会旁路）。</span>
               </label>
               <label class="field">默认执行通道
                 <select id="s-default-provider">
@@ -682,41 +688,37 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
           <div class="row gap" style="margin-bottom:.75rem">
             <button class="btn ghost" id="btn-help-back" type="button">返回</button>
           </div>
-          <h2>上手（模式 B）</h2>
+          <h2>三步上手</h2>
           <ol>
-            <li>点侧栏 <strong>＋</strong> 添加本机项目文件夹</li>
-            <li>无运行时默认进<strong>聊天</strong>：说清需求（可附图）→ 保存计划；点<strong>计划管理</strong>选中/编辑文档</li>
-            <li>点<strong>拆成步骤</strong> — AI 拆成波次；默认停在拆分台，核对后点<strong>确认并开始</strong></li>
-            <li>每个步骤一个执行窗口，可拖动位置、可关闭；需要时再展开日志</li>
-            <li>跑完可「回聊天」写下一份，或按巡检结果回补</li>
+            <li>点侧栏 <strong>＋</strong> 添加本机工作文件夹</li>
+            <li>在<strong>聊天</strong>里说清目标（或点欢迎页模板），生成计划</li>
+            <li>点<strong>拆成步骤</strong> → 看清波次 → 点<strong>确认并开始</strong></li>
           </ol>
+          <p class="muted">默认会停在拆分台，不会自动开跑。可选步骤需你勾选才会执行。</p>
           <h3>计划是什么？</h3>
-          <p>计划 = 给 AI 的任务说明书。优先用 <code>.md</code>；已有结构化任务表也可用「解析已有结构」跳过启发式拆分。也可在<strong>聊天</strong>页用自然语言共建计划并保存后再执行。</p>
+          <p>计划 = 用大白话写的「要干什么」。优先 <code>.md</code> 文档；也可先聊天共建，再拆成步骤并行推进。</p>
           <h3>常见操作</h3>
           <ul>
-            <li><strong>重新规划</strong>：回到选计划，改高级选项后再拆一次</li>
+            <li><strong>重新拆分</strong>：保留你在拆分台上的修改，再拆一次</li>
             <li><strong>全部停止</strong>：结束当前运行中的全部任务</li>
-            <li><strong>继续未完成任务</strong>：在暂停/失败后尝试 resume</li>
-            <li><strong>高级选项</strong>：规划方式、执行通道、运行方式</li>
-            <li><strong>环境检查</strong>：确认本机执行环境是否就绪</li>
+            <li><strong>继续未完成任务</strong>：暂停/失败后尝试接着做</li>
+            <li><strong>设置 · 环境检查</strong>：通道、并发、本机环境（进阶）</li>
           </ul>
-          <h3>Claude 路径示例</h3>
-          <pre class="log-box">[providers.claude]
+          <details class="help-advanced">
+            <summary>给进阶用户</summary>
+            <p class="muted">本机 CLI 路径、TOML 配置、拆分台借鉴清单等。</p>
+            <h3>CLI 路径示例</h3>
+            <pre class="log-box">[providers.claude]
 bin = "/Users/你/.local/bin/claude"</pre>
-          <!-- S16: 开源借鉴 R-S10…17 桌面可指认；无第三方 agent 运行时 -->
-          <h3 id="help-rs-checklist">拆分台借鉴清单（桌面可指认）</h3>
-          <p class="muted">只借拆法/闸门/人话，不引入 CrewAI/LangGraph/AutoGen 等运行时。</p>
-          <ul class="help-rs-list">
-            <li><strong>R-S10</strong> Plan-before-execute — 拆分台主按钮<strong>确认并开始</strong>（唯一业务开跑）</li>
-            <li><strong>R-S11</strong> Checklist 粒度 — 步骤<strong>卡片标题</strong>像待办，不是长段落</li>
-            <li><strong>R-S12</strong> 依赖用人话 — 卡片「等待：…」与详情依赖勾选（步骤标题）</li>
-            <li><strong>R-S13</strong> 规模门禁 — 质量条软提示过粗/过碎（不拦死）</li>
-            <li><strong>R-S14</strong> 角色轻标记 — 徽章<strong>做 / 查 / 系统</strong></li>
-            <li><strong>R-S15</strong> 计划文件真源 — <code>plans/*.md</code>；可选<strong>写回步骤摘要</strong></li>
-            <li><strong>R-S16</strong> 完成定义 — 卡片一句话优先「怎样算做完」</li>
-            <li><strong>R-S17</strong> 人改优先 — <strong>重新拆分（保留你的修改）</strong></li>
-          </ul>
-          <p class="muted">冷启动：欢迎页/聊天空态的<strong>出海落地页 · 通用需求大纲</strong>模板 → 落盘 → 可改 → 拆成步骤。</p>
+            <h3 id="help-rs-checklist">拆分台借鉴清单</h3>
+            <ul class="help-rs-list">
+              <li><strong>确认并开始</strong> — 唯一业务开跑（人闸）</li>
+              <li>步骤标题像待办；卡片「等待：…」用人话写依赖</li>
+              <li>计划文件真源 <code>plans/*.md</code>；可「调整…」里写回步骤摘要</li>
+              <li>人改优先 — 重新拆分会尽量保留你的修改</li>
+            </ul>
+          </details>
+          <p class="muted">冷启动：欢迎页模板「出海落地页 · 通用需求大纲」→ 落盘 → 可改 → 拆成步骤。</p>
         </div>
       </section>
 
