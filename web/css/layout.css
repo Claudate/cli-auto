@@ -494,20 +494,25 @@ body.cco-run-active[data-cco-page="chat"] #chat-ready-bar .btn.primary {
   color: var(--muted);
   font-size: 0.85rem;
 }
-.field input, .field select {
+.field input {
   display: block;
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 0.55rem 0.7rem;
   font-size: 0.95rem;
 }
-.field input:focus, .field select:focus {
+.field input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0,113,227,.15);
+  box-shadow: var(--focus-ring, 0 0 0 3px rgba(0,113,227,.15));
+}
+/* select 视觉真源 → css/select.css（含 .field select / 自定义包装） */
+.field select,
+.field .cco-select {
+  width: 100%;
 }
 .field-row {
   display: grid;
@@ -520,7 +525,13 @@ body.cco-run-active[data-cco-page="chat"] #chat-ready-bar .btn.primary {
   gap: 0.4rem;
   align-items: center;
 }
-.input-row input, .input-row select { margin-top: 0; flex: 1; }
+.input-row input,
+.input-row select,
+.input-row .cco-select {
+  margin-top: 0;
+  flex: 1;
+  min-width: 0;
+}
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -678,21 +689,26 @@ th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
   border-bottom: 1px solid var(--border);
 }
 .settings-group .field { gap: 0.35rem; margin-bottom: 0; }
-.settings-group input[type="number"],
-.settings-group select {
-  background: var(--bg);
+.settings-group input[type="number"] {
+  background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 10px;
   color: var(--text);
-  padding: 0.45rem 0.6rem;
-  font-size: 0.88rem;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.9rem;
   width: 100%;
+  min-height: 2.25rem;
+  box-shadow: 0 1px 1px rgba(0,0,0,.03);
 }
-.settings-group input:focus,
-.settings-group select:focus {
+.settings-group input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0,113,227,.15);
+  box-shadow: var(--focus-ring, 0 0 0 3px rgba(0,113,227,.15));
+}
+/* select → css/select.css */
+.settings-group select,
+.settings-group .cco-select {
+  width: 100%;
 }
 .field-hint { font-size: 0.75rem; color: var(--muted); }
 .save-status {

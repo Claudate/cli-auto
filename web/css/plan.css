@@ -596,23 +596,12 @@
   align-items: center;
   gap: 0.25rem;
 }
+/* 确认台通道下拉：视觉真源 css/select.css（sm）；此处只限宽 */
 .confirm-task-provider-field select,
+.confirm-task-provider-field .cco-select,
 #confirm-task-provider {
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0.28rem 0.45rem;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: #fff;
-  color: var(--text, #111);
   max-width: 7.5rem;
-  cursor: pointer;
-}
-.confirm-task-provider-field select:disabled,
-#confirm-task-provider:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+  font-weight: 600;
 }
 .wave-task-provider {
   display: inline-block;
@@ -1811,7 +1800,8 @@
 .split-route-provider-field {
   margin: 0;
 }
-.split-route-provider-field select {
+.split-route-provider-field select,
+.split-route-provider-field .cco-select {
   width: 100%;
   max-width: 16rem;
 }

@@ -6,8 +6,8 @@ index.html: 桌面壳结构；经典 `js/*.js` 顺序加载 + **A2–A5** `type=
 app.js: 入口说明（逻辑在 js/）
 app.css: @import 聚合 css/*（含 chat · tokens CTA）
 js/: **A5 S8 facade** state（**D9 桥/瘦 ~230**）· flow · **templates≤80**（**P-ship-D D7 ✅**）· plan≤200 · monitor≤200 · result≤80 · split 空壳 · log≤200 · chat≤80 · doctor≤80（**禁止堆新功能**；**A5-0/2 清单**见下文 · **A5-4 收口**）
-js/main.js: **ESM 入口** — AppViewModel + gateway + **installStatusUi/markdown/shellUi（D9）** + **chat/settings/project/templates desk** + split + run + result · `window.ccoChat` / **`ccoProject`** / `ccoRun` / `ccoResult` / **`ccoSettings`** / `ccoLog` / `ccoSplit` / **`ccoTemplates`**
-js/shared/: **gateway.js**（IPC 唯一出口）· **store.js**（可订阅薄 store）· **statusUi.js**（D9 人话/badge/elapsed）· **markdown.js**（D9 确认屏 md）· **shellUi.js**（D9 pages/projects/run-lock）
+js/main.js: **ESM 入口** — AppViewModel + gateway + **installStatusUi/markdown/shellUi（D9）** + **installSelectUi** + **chat/settings/project/templates desk** + split + run + result · `window.ccoChat` / **`ccoProject`** / `ccoRun` / `ccoResult` / **`ccoSettings`** / `ccoLog` / `ccoSplit` / **`ccoTemplates`** / **`ccoSelectUi`**
+js/shared/: **gateway.js**（IPC 唯一出口）· **store.js**（可订阅薄 store）· **statusUi.js**（D9 人话/badge/elapsed）· **markdown.js**（D9 确认屏 md）· **shellUi.js**（D9 pages/projects/run-lock）· **selectUi.js**（原生 select 增强为 macOS 风下拉；保留 `.value`/`change`）
 js/app/: **AppViewModel.js** · **routes.js**（phase author|split|run|result ↔ page）· **wireRunResult.js**（A4 壳接线）
 js/features/chat/: **A5-2a ✅ · P-ship-D 软超纵切** chatApi · ChatViewModel · chatState · chatSessions · chatActions · **chatRender** · **chatPlanOps** · chatFormat · chatAttachments · planDir · planRail · planFull · plansMgmt · installChat · legacy/host · index（经 gateway；**无** confirm/start_run）
 js/features/project/: **A5-2b-fin D5 ✅** projectApi · ProjectViewModel · sessionEntry · shellChrome · projectCrud · planMeta · projectPicker · planSelect · jobPoll · confirmActions · loadLiveBridge · installProject · legacy/host · index（picker/H0/job 轮询/optional 门；confirm→ccoSplit；**无** invoke/start_run）
@@ -16,7 +16,7 @@ js/features/run/: **A4 ✅ · A5-2b · A5-2c · P-ship-D** runApi · runBuckets 
 js/features/result/: **A4 ✅** resultApi · inspectCopy · ResultViewModel · ResultView · index（摘要·回补·inspect 人话）
 js/features/settings/: **A5-2d ✅ · P-ship-D** settingsApi · settingsForm · doctorPage · shellBoot · uiActions · bindUi · **bindUiClick** · installSettings（settings/doctor/meta/open_monitor 经 gateway；事件表只绑意图）
 js/features/templates/: **P-ship-D D7 ✅** catalog · splitSummary · templatesApi · templatesActions · installTemplates · index（冷启动模板落盘 · S14 拆分摘要写回；经 chatApi/gateway；**无** confirm/start_run）
-css/: tokens（A2-3 主 CTA 变量）· layout · plan（含 split-route-advanced）· monitor · log · chat
+css/: tokens（A2-3 主 CTA 变量）· layout · **select**（统一下拉 closed/open）· plan（含 split-route-advanced）· monitor · log · chat
 
 ## 硬规则（继承 L1 · 本层加严）
 
@@ -36,7 +36,7 @@ index.html
   classic scripts (strangler globals; chat.js / plan.js = thin facade)
   type=module js/main.js
     → app/AppViewModel + routes
-    → shared/gateway + store
+    → shared/gateway + store + selectUi
     → features/chat/{api,VM,sessions,actions,rail,full,installChat}  ← A5-2a
     → features/project/{api,VM,sessionEntry,picker,jobPoll,confirmActions,installProject}  ← A5-2b-fin D5
     → features/split/{api,VM,Render,Detail,View}

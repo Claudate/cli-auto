@@ -74,20 +74,17 @@
   font-size: 0.75rem;
   white-space: nowrap;
 }
-.chat-session-select {
+/* 会话下拉：视觉真源 css/select.css（cco-select--sm / --inline / --menu-end） */
+.chat-session-select,
+#chat-session-select.cco-select__native,
+.cco-select:has(#chat-session-select) {
   min-width: 7.5rem;
   max-width: 12rem;
-  height: 1.85rem;
-  padding: 0 0.4rem;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg, #fff);
-  color: var(--fg, #111);
-  font-size: 0.8rem;
 }
-.chat-session-select:focus {
-  outline: 2px solid color-mix(in srgb, var(--accent, #2563eb) 45%, transparent);
-  outline-offset: 1px;
+.chat-session-switch .cco-select {
+  min-width: 7.5rem;
+  max-width: 12rem;
+  vertical-align: middle;
 }
 .chat-session-switch .btn {
   min-width: 1.85rem;

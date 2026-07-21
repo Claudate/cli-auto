@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 经典 script 已加载的全局（state/showPage/…）+ DOM
- * [OUTPUT]: window.ccoApp / ccoGateway / ccoChat / ccoSplit / ccoRun / ccoResult / ccoSettings / ccoProject / ccoTemplates · phase 壳接线
+ * [OUTPUT]: window.ccoApp / ccoGateway / ccoChat / ccoSplit / ccoRun / ccoResult / ccoSettings / ccoProject / ccoTemplates / ccoSelectUi · phase 壳接线
  * [POS]: A2–A5 ESM 入口（type=module）；旧全局仍可用（strangler）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
@@ -12,7 +12,7 @@
  * Target module graph (arch §2.5):
  *   main.js
  *     app/AppViewModel.js + routes.js + wireRunResult.js
- *     shared/{gateway,store,statusUi,markdown,shellUi}.js  ← D9 statusUi/markdown/shellUi
+ *     shared/{gateway,store,statusUi,markdown,shellUi,selectUi}.js  ← D9 + selectUi
  *     features/chat/{ChatViewModel,chatApi,installChat,...}.js  ← A5-2a
  *     features/project/{…, installProject}.js  ← A5-2b-fin D5
  *     features/split/{…, splitFillMeta}.js   ← A3 + A5-2b
@@ -20,7 +20,7 @@
  *     features/result/{…}.js                 ← A4
  *     features/settings/{…}.js               ← A5-2d doctor/settings/meta/monitor
  *     features/templates/{…}.js              ← P-ship-D D7 冷启动模板 · 拆分摘要写回
- *   window.ccoChat / ccoProject / ccoSplit / ccoLoadLive / ccoRun / ccoResult / ccoSettings / ccoLog / ccoTemplates
+ *   window.ccoChat / ccoProject / ccoSplit / ccoLoadLive / ccoRun / ccoResult / ccoSettings / ccoLog / ccoTemplates / ccoSelectUi
  *   (legacy: chat.js · plan.js · log.js · doctor.js · templates.js facades)
  */
 
@@ -28,6 +28,7 @@ import gateway from "./shared/gateway.js";
 import { installStatusUi } from "./shared/statusUi.js";
 import { installMarkdown } from "./shared/markdown.js";
 import { installShellUi } from "./shared/shellUi.js";
+import { installSelectUi } from "./shared/selectUi.js";
 import { createAppViewModel } from "./app/AppViewModel.js";
 import { wireRunResult } from "./app/wireRunResult.js";
 import { createChatViewModel } from "./features/chat/ChatViewModel.js";
@@ -51,6 +52,8 @@ import { PHASE_TITLE } from "./app/routes.js";
 installStatusUi(window);
 installMarkdown(window);
 installShellUi(window);
+/** Shared form control: macOS-style selects (keep native .value / change). */
+installSelectUi();
 
 /** IPC hub first — classic requireGateway() + settings boot wait on it. */
 window.ccoGateway = gateway;

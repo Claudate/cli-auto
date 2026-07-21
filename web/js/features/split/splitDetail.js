@@ -22,6 +22,20 @@ function $(id) {
   return document.getElementById(id);
 }
 
+/** Avoid clobbering select while custom dropdown is open/focused. */
+function selectBusy(el) {
+  if (!el) return false;
+  const api = g("ccoSelectUi");
+  if (api && typeof api.isSelectBusy === "function") return api.isSelectBusy(el);
+  if (document.activeElement === el) return true;
+  const root = el.closest?.(".cco-select");
+  if (root?.classList.contains("is-open")) return true;
+  if (root && document.activeElement && root.contains(document.activeElement)) {
+    return true;
+  }
+  return false;
+}
+
 function toast(msg) {
   const fn = g("toast");
   if (typeof fn === "function") fn(msg);
@@ -202,7 +216,7 @@ export function paintDetail(ctx) {
       if (promptInput && document.activeElement !== promptInput) {
         promptInput.value = full;
       }
-      if (editProv && document.activeElement !== editProv) {
+      if (editProv && !selectBusy(editProv)) {
         editProv.value = curProvider;
       }
       if (depsBox && depsBox.dataset.forTask !== cur.id) {
@@ -274,7 +288,7 @@ export function paintDetail(ctx) {
     providerField.hidden = !cur || editing;
   }
   if (providerSel) {
-    if (document.activeElement !== providerSel) {
+    if (!selectBusy(providerSel)) {
       providerSel.value = cur ? curProvider : "claude";
     }
     providerSel.disabled = !cur || !taskEditable || editing || !!runLocked;
@@ -344,7 +358,7 @@ function paintAdvancedRoute(cur, job, ctx) {
     scopeEl.classList.toggle("muted", !route.hasExplicitScope);
   }
   if (advSel) {
-    if (document.activeElement !== advSel) {
+    if (!selectBusy(advSel)) {
       advSel.value = route.provider;
     }
     advSel.disabled =
