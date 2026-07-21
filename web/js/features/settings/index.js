@@ -10,7 +10,8 @@
  *   doctorPage    → 环境检查页 + warn bar
  *   shellBoot     → 冷启动 / 轮询 / 监视窗
  *   uiActions      → 事件表只绑意图
- *   bindUi        → 全局委托
+ *   bindUi        → 全局委托壳（resize/key/paste/change）
+ *   bindUiClick   → document click 意图委托（P-ship-D 纵切）
  *   installSettings → window.ccoSettings
  */
 
