@@ -1,0 +1,398 @@
+/**
+ * [INPUT]: window.state · $ · statusUi helpers · classic stash/banner globals
+ * [OUTPUT]: showPage · goHome · loadProjects · renderProjectList · run-lock · modal
+ * [POS]: D9 自 state.js 抽出；classic 经 installShellUi → window；features 仍读 window
+ * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ *
+ * note: 不写 Mode B / confirm / soft-fill / optional 策略；纯壳导航 + 列表渲染
+ */
+
+function g(name) {
+  return typeof window !== "undefined" ? window[name] : undefined;
+}
+
+function call(name, ...args) {
+  const fn = g(name);
+  if (typeof fn === "function") return fn(...args);
+  return undefined;
+}
+
+function $el(s, el = document) {
+  const $ = g("$");
+  if (typeof $ === "function") return $(s, el);
+  return (el || document).querySelector(s);
+}
+
+function $$el(s, el = document) {
+  const $$ = g("$$");
+  if (typeof $$ === "function") return $$(s, el);
+  return [...(el || document).querySelectorAll(s)];
+}
+
+function st() {
+  return g("state") || {};
+}
+
+/* ── Run-lock helpers (read state.live · display-only) ── */
+
+/** True when the currently selected project has a live run (not paused). */
+export function hasActiveRun() {
+  const state = st();
+  const isLive = g("isLiveStatus");
+  if (typeof isLive !== "function") return !!(state.live?.run_id);
+  return !!(state.live?.run_id && isLive(state.live?.run_status));
+}
+
+export function isRunPaused() {
+  const state = st();
+  const isPaused = g("isPausedStatus");
+  if (typeof isPaused !== "function") {
+    return !!(
+      state.live?.run_id &&
+      String(state.live?.run_status || "").toLowerCase() === "paused"
+    );
+  }
+  return !!(state.live?.run_id && isPaused(state.live?.run_status));
+}
+
+export function liveTaskById(taskId) {
+  const state = st();
+  if (!taskId) return null;
+  return (
+    (state.live?.tasks || []).find(
+      (t) => t.task_id === taskId || t.id === taskId
+    ) || null
+  );
+}
+
+/**
+ * Edit allowed when:
+ * - confirming a fresh split (no run yet), or
+ * - run is paused, and the selected task has not started.
+ */
+export function canEditSelectedTask(taskId) {
+  const state = st();
+  const id = taskId != null ? taskId : state.confirmTaskId;
+  if (!id) return false;
+  if (hasActiveRun()) return false;
+  if (state.phase === "confirm" && !state.live?.run_id) return true;
+  if (!isRunPaused()) return false;
+  const t = liveTaskById(id);
+  if (!t) return true;
+  const isPending = g("isTaskPendingStatus");
+  if (typeof isPending === "function") return isPending(t.status);
+  const v = String(t.status || "").toLowerCase();
+  return !v || v === "pending" || v === "queued" || v === "waiting" || v === "ready";
+}
+
+export function toastRunLocked(action = "此操作") {
+  call("toast", `计划运行中，请先停止后再${action}`);
+}
+
+/* ── Pages ── */
+
+export function showPage(name) {
+  const state = st();
+  // 离开聊天前先缓存会话，避免切页把内存历史冲掉
+  if (state.page === "chat" && name !== "chat") {
+    try {
+      call("stashChatSession", state.chatProjectPath || state.selectedPath);
+    } catch (_) {}
+  }
+  state.page = name;
+  try {
+    call("updateTopPlanInfo");
+  } catch (_) {}
+  try {
+    call("updateBgPlanBanner");
+  } catch (_) {}
+  // 切走工作区时先缓存当前规划，保证后台可续
+  if (name !== "workspace" && state.selectedPath) {
+    try {
+      if (call("isPlanSessionActive")) {
+        call("stashPlanSession", state.selectedPath);
+      }
+    } catch (_) {}
+  }
+  $$el(".page").forEach((p) =>
+    p.classList.toggle("active", p.id === `page-${name}`)
+  );
+  const sub = $el("#page-sub");
+  // F3：body 上标记主区角色，便于 CSS 互斥噪音
+  try {
+    document.body.dataset.ccoPage = name;
+    document.body.dataset.ccoPhase = state.phase || "pick";
+    document.body.classList.toggle("cco-run-active", hasActiveRun());
+  } catch (_) {}
+  try {
+    call("refreshFlowStrips");
+  } catch (_) {}
+  if (name === "welcome") {
+    const title = $el("#page-title");
+    if (title) title.textContent = "欢迎";
+    if (sub) {
+      sub.hidden = false;
+      sub.textContent = "添加项目 → 写计划 → 拆成步骤 → 确认并开始";
+    }
+  } else if (name === "workspace") {
+    updateWorkspaceTitle();
+  } else if (name === "chat") {
+    const title = $el("#page-title");
+    if (title) title.textContent = "共建计划";
+    if (sub) {
+      sub.hidden = false;
+      const proj = (state.projects || []).find(
+        (p) => p.path === state.selectedPath
+      );
+      const label =
+        proj?.name ||
+        (state.selectedPath
+          ? String(state.selectedPath).split(/[/\\]/).filter(Boolean).pop()
+          : "");
+      // 后台 Mode B 态只走顶栏监控 ghost / 可关 banner，副标题不再夹「待确认/返回确认」
+      sub.textContent = label ? `与 AI 写计划 · ${label}` : "与 AI 写计划文档";
+    }
+    try {
+      call("renderPlanPicker");
+    } catch (_) {}
+  } else if (name === "plans") {
+    const title = $el("#page-title");
+    if (title) title.textContent = "计划管理";
+    if (sub) {
+      sub.hidden = false;
+      const proj = (state.projects || []).find(
+        (p) => p.path === state.selectedPath
+      );
+      const label =
+        proj?.name ||
+        (state.selectedPath
+          ? String(state.selectedPath).split(/[/\\]/).filter(Boolean).pop()
+          : "");
+      sub.textContent = label
+        ? `选中 · 预览 · 编辑 · 拆成步骤 · ${label}`
+        : "选中计划后预览、编辑或拆成步骤";
+    }
+    try {
+      call("renderPlanPicker");
+    } catch (_) {}
+  } else if (name === "doctor") {
+    const title = $el("#page-title");
+    if (title) title.textContent = "环境检查";
+    if (sub) {
+      sub.hidden = false;
+      sub.textContent = "确认本机 CLI 与依赖就绪";
+    }
+  } else if (name === "help") {
+    const title = $el("#page-title");
+    if (title) title.textContent = "帮助";
+    if (sub) {
+      sub.hidden = false;
+      sub.textContent = "";
+    }
+  } else if (name === "settings") {
+    const title = $el("#page-title");
+    if (title) title.textContent = "设置";
+    if (sub) {
+      sub.hidden = false;
+      sub.textContent = "";
+    }
+  }
+}
+
+export function updateWorkspaceTitle() {
+  // 工作区标题只展示计划，交给 updateTopPlanInfo
+  try {
+    call("updateTopPlanInfo");
+  } catch (_) {}
+}
+
+export function goHome() {
+  const state = st();
+  // 多项目可并行：离开工作区不停止运行；规划/确认先缓存，回项目可接上
+  if (state.selectedPath) {
+    state.lastWorkspacePath = state.selectedPath;
+    try {
+      if (call("isPlanSessionActive")) {
+        call("stashPlanSession", state.selectedPath);
+      }
+    } catch (_) {}
+  }
+  state.selectedPath = null;
+  state.live = null;
+  state.selectedTaskId = null;
+  // 不清 planJobId/phase：全局 poll 继续；悬浮条可点回
+  renderProjectList();
+  try {
+    call("updateBgPlanBanner");
+  } catch (_) {}
+  if (!state.projects || state.projects.length === 0) {
+    showPage("welcome");
+  } else {
+    // 有项目但未选中：欢迎页提示选项目
+    showPage("welcome");
+    const title = $el("#page-title");
+    const sub = $el("#page-sub");
+    if (title) title.textContent = "我的项目";
+    if (sub) sub.textContent = "从左侧选择一个项目（可多项目同时运行）";
+    const we = $el("#welcome-empty");
+    if (!we) return;
+    const tplHtml =
+      typeof g("planTemplateWelcomeHtml") === "function"
+        ? call("planTemplateWelcomeHtml")
+        : "";
+    we.innerHTML = `
+      <p class="welcome-kicker muted">本机任务控制台</p>
+      <h2>选择左侧项目，或添加新项目</h2>
+      <p class="muted">进入项目后写计划、从模板开始或选已有 →「拆成步骤」→ 拆分台确认后开跑。多项目可并行。</p>
+      <div class="welcome-actions">
+        <button class="btn primary" id="btn-welcome-add2" type="button">添加项目文件夹</button>
+      </div>
+      ${tplHtml || ""}`;
+    // 点击由全局委托处理 btn-welcome-add2 / data-plan-template
+  }
+}
+
+/* ── Modal（仅添加项目） ── */
+
+export function openModal() {
+  const m = $el("#modal");
+  if (m) m.hidden = false;
+  const p = $el("#m-project-path");
+  const n = $el("#m-project-name");
+  if (p) p.value = "";
+  if (n) n.value = "";
+}
+
+export function closeModal() {
+  const m = $el("#modal");
+  if (m) m.hidden = true;
+}
+
+/* ── Projects ── */
+
+/**
+ * Load project list. Prefer gateway (post-main); invoke bridge only pre-main.
+ */
+export async function loadProjects() {
+  const state = st();
+  const gw = typeof window !== "undefined" ? window.ccoGateway : null;
+  if (gw?.getProjects) {
+    state.projects = (await gw.getProjects()) || [];
+  } else {
+    // pre-main classic bridge only
+    const inv = g("invoke");
+    if (typeof inv !== "function") {
+      throw new Error("请通过 CCO.app 启动（gateway 未就绪）");
+    }
+    state.projects = (await inv("get_projects")) || [];
+  }
+  renderProjectList();
+  if (
+    state.selectedPath &&
+    !state.projects.some((p) => p.path === state.selectedPath)
+  ) {
+    state.selectedPath = null;
+    state.live = null;
+  }
+}
+
+export function renderProjectList() {
+  const state = st();
+  const el = $el("#project-list");
+  if (!el) return;
+  if (!state.projects || !state.projects.length) {
+    el.innerHTML = `<p class="muted empty-hint">尚未添加项目<br/>点 ＋ 添加</p>`;
+    return;
+  }
+  // 各项目状态独立展示；允许多项目并行运行，不因当前项目在跑而锁其它项
+  // statusLabel / statusDot / esc / shortPath / isLiveStatus ← shared/statusUi (window)
+  const statusLabel = g("statusLabel") || ((s) => s || "—");
+  const statusDot = g("statusDot") || (() => "");
+  const esc =
+    g("esc") ||
+    ((s) =>
+      String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;"));
+  const shortPath = g("shortPath") || ((p) => p || "—");
+  const isLiveStatus =
+    g("isLiveStatus") ||
+    ((s) =>
+      ["running", "starting", "queued", "validated", "init", "resuming"].includes(
+        String(s || "").toLowerCase()
+      ));
+
+  el.innerHTML = state.projects
+    .map((p) => {
+      const stt = p.active_status || p.last_status || "";
+      const live = p.running_tasks > 0 || isLiveStatus(p.active_status);
+      const isCurrent = p.path === state.selectedPath;
+      let meta;
+      if (live) {
+        meta = `${p.running_tasks || 0}/${p.total_tasks || "?"} 任务 · 运行中`;
+      } else if (p.last_status) {
+        meta = `最近: ${statusLabel(p.last_status)}`;
+      } else if (p.exists) {
+        meta = "无活动运行";
+      } else {
+        meta = "路径不存在";
+      }
+      return `<button type="button" class="project-item ${
+        isCurrent ? "active" : ""
+      }" data-path="${esc(p.path)}">
+        <div class="name"><span class="dot ${statusDot(stt) || (live ? "live" : "")}"></span>${esc(
+          p.name
+        )}</div>
+        <div class="path" title="${esc(p.path)}">${esc(shortPath(p.path))}</div>
+        <div class="meta">${esc(meta)}</div>
+      </button>`;
+    })
+    .join("");
+  $$el(".project-item", el).forEach((b) => {
+    b.onclick = () => call("selectProject", b.dataset.path);
+  });
+}
+
+/**
+ * Bridge shell helpers onto window for classic scripts + legacy.js hosts.
+ * @param {typeof globalThis} [target]
+ */
+export function installShellUi(
+  target = typeof window !== "undefined" ? window : globalThis
+) {
+  if (!target) return;
+  Object.assign(target, {
+    hasActiveRun,
+    isRunPaused,
+    liveTaskById,
+    canEditSelectedTask,
+    toastRunLocked,
+    showPage,
+    updateWorkspaceTitle,
+    goHome,
+    openModal,
+    closeModal,
+    loadProjects,
+    renderProjectList,
+  });
+}
+
+const shellUi = {
+  hasActiveRun,
+  isRunPaused,
+  liveTaskById,
+  canEditSelectedTask,
+  toastRunLocked,
+  showPage,
+  updateWorkspaceTitle,
+  goHome,
+  openModal,
+  closeModal,
+  loadProjects,
+  renderProjectList,
+  installShellUi,
+};
+
+export default shellUi;

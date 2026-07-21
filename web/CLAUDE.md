@@ -5,16 +5,16 @@
 index.html: 桌面壳结构；经典 `js/*.js` 顺序加载 + **A2–A5** `type=module` → `js/main.js`
 app.js: 入口说明（逻辑在 js/）
 app.css: @import 聚合 css/*（含 chat · tokens CTA）
-js/: **A5 S8 facade** state（**D9 桥/瘦 ~503**）· flow · **templates≤80**（**P-ship-D D7 ✅**）· plan≤200 · monitor≤200 · result≤80 · split 空壳 · log≤200 · chat≤80 · doctor≤80（**禁止堆新功能**；**A5-0/2 清单**见下文 · **A5-4 收口**）
-js/main.js: **ESM 入口** — AppViewModel + gateway + **installStatusUi/markdown（D9）** + **chat/settings/project/templates desk** + split + run + result · `window.ccoChat` / **`ccoProject`** / `ccoRun` / `ccoResult` / **`ccoSettings`** / `ccoLog` / `ccoSplit` / **`ccoTemplates`**
-js/shared/: **gateway.js**（IPC 唯一出口）· **store.js**（可订阅薄 store）· **statusUi.js**（D9 人话/badge/elapsed）· **markdown.js**（D9 确认屏 md）
+js/: **A5 S8 facade** state（**D9 桥/瘦 ~230**）· flow · **templates≤80**（**P-ship-D D7 ✅**）· plan≤200 · monitor≤200 · result≤80 · split 空壳 · log≤200 · chat≤80 · doctor≤80（**禁止堆新功能**；**A5-0/2 清单**见下文 · **A5-4 收口**）
+js/main.js: **ESM 入口** — AppViewModel + gateway + **installStatusUi/markdown/shellUi（D9）** + **chat/settings/project/templates desk** + split + run + result · `window.ccoChat` / **`ccoProject`** / `ccoRun` / `ccoResult` / **`ccoSettings`** / `ccoLog` / `ccoSplit` / **`ccoTemplates`**
+js/shared/: **gateway.js**（IPC 唯一出口）· **store.js**（可订阅薄 store）· **statusUi.js**（D9 人话/badge/elapsed）· **markdown.js**（D9 确认屏 md）· **shellUi.js**（D9 pages/projects/run-lock）
 js/app/: **AppViewModel.js** · **routes.js**（phase author|split|run|result ↔ page）· **wireRunResult.js**（A4 壳接线）
-js/features/chat/: **A5-2a ✅** chatApi · ChatViewModel · chatState · chatSessions · chatActions · chatFormat · chatAttachments · planDir · planRail · planFull · plansMgmt · installChat · legacy/host · index（经 gateway；**无** confirm/start_run）
+js/features/chat/: **A5-2a ✅ · P-ship-D 软超纵切** chatApi · ChatViewModel · chatState · chatSessions · chatActions · **chatRender** · chatFormat · chatAttachments · planDir · planRail · planFull · plansMgmt · installChat · legacy/host · index（经 gateway；**无** confirm/start_run）
 js/features/project/: **A5-2b-fin D5 ✅** projectApi · ProjectViewModel · sessionEntry · shellChrome · projectCrud · planMeta · projectPicker · planSelect · jobPoll · confirmActions · loadLiveBridge · installProject · legacy/host · index（picker/H0/job 轮询/optional 门；confirm→ccoSplit；**无** invoke/start_run）
 js/features/split/: **A3 ✅ · A5-2b** splitApi · SplitViewModel · splitRender · splitDetail · SplitView · **splitFillMeta** · index
-js/features/run/: **A4 ✅ · A5-2b · A5-2c** runApi · runBuckets · RunViewModel · RunView · logPanel · **loadLive** · **log\*** · index（进度·stall·停/续；日志次级；workspace 轮询壳）
+js/features/run/: **A4 ✅ · A5-2b · A5-2c · P-ship-D** runApi · runBuckets · RunViewModel · RunView · logPanel · **loadLive** · **log\*** · **logBoardCard** · **logBoardEvents** · index（进度·stall·停/续；日志次级；workspace 轮询壳）
 js/features/result/: **A4 ✅** resultApi · inspectCopy · ResultViewModel · ResultView · index（摘要·回补·inspect 人话）
-js/features/settings/: **A5-2d ✅** settingsApi · settingsForm · doctorPage · shellBoot · uiActions · bindUi · installSettings（settings/doctor/meta/open_monitor 经 gateway；事件表只绑意图）
+js/features/settings/: **A5-2d ✅ · P-ship-D** settingsApi · settingsForm · doctorPage · shellBoot · uiActions · bindUi · **bindUiClick** · installSettings（settings/doctor/meta/open_monitor 经 gateway；事件表只绑意图）
 js/features/templates/: **P-ship-D D7 ✅** catalog · splitSummary · templatesApi · templatesActions · installTemplates · index（冷启动模板落盘 · S14 拆分摘要写回；经 chatApi/gateway；**无** confirm/start_run）
 css/: tokens（A2-3 主 CTA 变量）· layout · plan（含 split-route-advanced）· monitor · log · chat
 
@@ -25,9 +25,9 @@ css/: tokens（A2-3 主 CTA 变量）· layout · plan（含 split-route-advance
 3. **主区 phase**：`author | split | run | result`（`AppViewModel`）；一屏主焦点；日志次级。  
 4. **禁止**在 JS 复制 `confirm_start` / optional / provider soft-fill / stall 策略。  
 5. **禁止** UI 旁路开跑（`start_run` 不得替代 Split 确认）；回补只经 `start_rework` / `resultApi.startRework`。  
-6. **禁止**往 classic facade（plan/chat/monitor/result/log/doctor）与 `state.js` **继续堆功能**（只抽离/删除/一行委托）；新功能进 `features/*`。S8 facade 已出业务巨石榜；`state.js` = **D9 桥/瘦**（~503 · 展示 helper 在 `shared/statusUi`+`markdown`）。  
+6. **禁止**往 classic facade（plan/chat/monitor/result/log/doctor）与 `state.js` **继续堆功能**（只抽离/删除/一行委托）；新功能进 `features/*`。S8 facade 已出业务巨石榜；`state.js` = **D9 桥/瘦**（~230 · 展示→`shared/statusUi`+`markdown` · 壳导航→`shared/shellUi`）。  
 7. 主路径文案人话；`VERDICT` / 引擎名 / run_id **不进第一句**。  
-8. 文件体量：软 400 / 硬 600 行（与 L1 同；`check-arch.sh` GIANTS 业务榜已空 · LEGACY_THICK 提醒 state.js ~503 · **D9 已降**）。
+8. 文件体量：软 400 / 硬 600 行（与 L1 同；`check-arch.sh` GIANTS 业务榜已空 · LEGACY_THICK 对 state.js **D9 已 ≤400** 仅 info）。
 
 ## A2–A4 模块图（源码边界 · 非第二套阶段表）
 
@@ -92,7 +92,7 @@ invoke 散落 → gateway 方法表：见 `js/shared/gateway.js`（命令名 1:1
 
 | 文件 | 行数 | 职责（一行） | 仍直接 `invoke` 的命令 | 已有 feature 委托点 |
 |------|------|--------------|------------------------|---------------------|
-| [`state.js`](./js/state.js) | ~~820~~ → **~503**（**D9**） | 全局 state · `$` · **invoke 桥** · pages · projects · run-lock | 仅桥：`getInvoke`/`invoke`；pre-main `get_projects` + dialog 兜底 | 展示 helper → `shared/statusUi`+`markdown`（main install）；`requireGateway()`；`loadProjects` 优先 gateway |
+| [`state.js`](./js/state.js) | ~~820~~ → ~~503~~ → **~230**（**D9+**） | 全局 state · `$` · **invoke 桥** · prefs · toast | 仅桥：`getInvoke`/`invoke`；dialog pre-main 兜底 | 展示→`shared/statusUi`+`markdown`；pages/projects/run-lock→`shared/shellUi`（main install）；`requireGateway()`；`loadProjects` 单路径 gateway优先 |
 | [`flow.js`](./js/flow.js) | ~340 | 主路径流程文案 / 趣味旁白 | **无** | 无（纯文案 helper，可长期保留） |
 | [`split.js`](./js/split.js) | ~~305~~ → **≤50 空壳**（**A5-2f D3 ✅**；index **已去 script**） | 无逻辑；三栏真源 `ccoSplit` | **无** | `window.ccoSplit`（A3/A5-2b）；禁止双轨 |
 | [`templates.js`](./js/templates.js) | ~~389~~ → **≤80 facade**（**P-ship-D D7 ✅**） | classic 全局名 → `window.ccoTemplates` | **无** | `ccoTemplates.*` · 真源 `features/templates/*`（catalog/summary/api/actions） |
@@ -123,8 +123,8 @@ invoke 散落 → gateway 方法表：见 `js/shared/gateway.js`（命令名 1:1
 | **D6** | `chat.js` 全量 → `features/chat`（session/stream/rail/assign） | **A5-2a ✅**：facade ≤80；IPC 经 gateway；**无** confirm/start_run | **高**（✅ 2a） |
 | **D7** | `templates.js` → `features/templates` | **P-ship-D D7 ✅**：facade ≤80；`ccoTemplates`；IPC 经 chatApi/gateway；**无** confirm/start_run | 中（✅） |
 | **D8** | `doctor.js` settings/轮询 → `features/settings` + app 轮询收口 | **A5-2d ✅** facade ≤80；IPC 经 gateway；事件表只绑意图 | 中（✅ 2d） |
-| **D9** | `state.js` 桥/瘦身（展示 helper → `shared/statusUi`+`markdown`） | **P-ship-C ✅** · ~820→~503（硬≤600）· 仍 LEGACY_THICK 提醒 | 已做桥/瘦；**不**一次清全局 |
-| **D9+** | 继续抽 pages/projects 或 seed `store`（可选） | 全局 `$`/state 引用图 | 低优先 · 非 P-ship 阻塞 |
+| **D9** | `state.js` 桥/瘦身（展示 helper → `shared/statusUi`+`markdown`） | **P-ship-C ✅** · ~820→~503（硬≤600） | 已做；不一次清全局 |
+| **D9+** | pages/projects/run-lock → `shared/shellUi`；state ≤400 | **P-ship-C ✅** · ~503→~230；`installShellUi`；loadProjects gateway 单路径 | 仍留：state 对象 · invoke 桥 · toast · prefs；**不**一次清全局 |
 | **D10** | `flow.js` 可迁 `shared/flowCopy` 或保留（无 invoke） | 文案键 | 低 |
 
 **禁止**：一次 PR 清空 plan+chat；未先迁 invoke→gateway 就删 classic fallback。

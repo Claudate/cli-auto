@@ -12,7 +12,7 @@
  * Target module graph (arch §2.5):
  *   main.js
  *     app/AppViewModel.js + routes.js + wireRunResult.js
- *     shared/{gateway,store,statusUi,markdown}.js  ← D9 statusUi/markdown
+ *     shared/{gateway,store,statusUi,markdown,shellUi}.js  ← D9 statusUi/markdown/shellUi
  *     features/chat/{ChatViewModel,chatApi,installChat,...}.js  ← A5-2a
  *     features/project/{…, installProject}.js  ← A5-2b-fin D5
  *     features/split/{…, splitFillMeta}.js   ← A3 + A5-2b
@@ -27,6 +27,7 @@
 import gateway from "./shared/gateway.js";
 import { installStatusUi } from "./shared/statusUi.js";
 import { installMarkdown } from "./shared/markdown.js";
+import { installShellUi } from "./shared/shellUi.js";
 import { createAppViewModel } from "./app/AppViewModel.js";
 import { wireRunResult } from "./app/wireRunResult.js";
 import { createChatViewModel } from "./features/chat/ChatViewModel.js";
@@ -46,9 +47,10 @@ import { installSettingsHost } from "./features/settings/installSettings.js";
 import { installTemplatesHost } from "./features/templates/installTemplates.js";
 import { PHASE_TITLE } from "./app/routes.js";
 
-/** D9: pure display helpers on window before boot renders lists/badges. */
+/** D9: display + shell chrome on window before boot renders lists/pages. */
 installStatusUi(window);
 installMarkdown(window);
+installShellUi(window);
 
 /** IPC hub first — classic requireGateway() + settings boot wait on it. */
 window.ccoGateway = gateway;

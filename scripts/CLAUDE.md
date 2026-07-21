@@ -9,7 +9,7 @@ check-arch.sh: **架构硬规则门禁**（文件行数 · GIANTS 哨兵 · LEGA
 ## 硬规则
 
 1. `check-arch.sh` 与根 `CLAUDE.md`「工程硬规则」同步；改阈值须改 L1 + 本脚本。  
-2. **A5-4**：classic 业务 GIANTS 已空（S8 facade ≤200）；`state.js` 走 LEGACY_THICK 软提醒（D9）；默认非 STRICT。
+2. **A5-4**：classic 业务 GIANTS 已空（S8 facade ≤200）；`state.js` 走 LEGACY_THICK 软提醒（**D9+ ~230** · shellUi/statusUi/markdown）；默认非 STRICT。
 
 法则: 成员完整·一行一文件·父级链接·技术词前置
 

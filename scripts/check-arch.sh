@@ -72,7 +72,7 @@ else
 fi
 
 # 1b) 厚遗留（非 S8 业务巨石）：state 桥 — 只软提醒，禁止当新功能堆场
-# D9（P-ship-C）：state.js ~820→~503（展示 helper → shared/statusUi+markdown）；>HARD 才 warn
+# D9/D9+（P-ship-C）：state.js ~820→~503→~230（statusUi+markdown+shellUi）；>SOFT 才 note，>HARD 才 warn
 LEGACY_THICK=(
   "web/js/state.js"
 )
@@ -83,6 +83,8 @@ for g in "${LEGACY_THICK[@]}"; do
       warn "$g has $n lines (legacy thick / D9; not a business giant — do not add features)"
     elif (( n > SOFT_LINES )); then
       note "info: $g has $n lines (D9 under hard $HARD_LINES; keep thinning, no new features)"
+    else
+      note "info: $g has $n lines (D9 ≤ soft $SOFT_LINES — bridge only; no new features)"
     fi
   fi
 done
