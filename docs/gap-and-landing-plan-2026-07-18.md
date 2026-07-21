@@ -928,6 +928,7 @@ D0 文档同构（半天，降低所有后续返工）
 | 2026-07-21 | **t60 / P2-7 单项 SDK provider S0（勿整包 M5）**：设计 [`p2-7-sdk-provider-2026-07-21.md`](./p2-7-sdk-provider-2026-07-21.md)；`runtime/provider/sdk.rs` `SdkProvider`+`InlineSdkBackend` 实现 `WorkerPort`（**无** agent CLI spawn）；`ProviderId::Sdk`；registry **opt-in**（`providers.sdk.enabled` 默认 false）；task_dir 同契约；单测 start/poll/collect + registry 默认不含；**不**做 S1 HTTP / 自动 PR / 旁路 confirm；**不**回灌 D0–D4 |
 | 2026-07-21 | **t61 / S-role 拆分台 role/scope 可写**：`PlanTaskView` 暴露 `role`/`scope`；`update_proposed_task`/`edit_task`/`update_plan_task_cmd` 增 `role`+`scope_paths`；`planner/task_edit.rs` 补丁纯辅助；高级折叠可改角色/可写范围；user_edits 可 replan preserve；JS 只透传不 soft-fill；confirm 唯一开跑不变；lib+A0+mode_b 绿；**不**回灌 D0–D4 |
 | 2026-07-21 | **t62 / S-PR 仅自动开 PR（P2-7 单项 · 勿整包 M5）**：`post_open_pr_enabled`（默认 false）+ `sys-post-open-pr`；开 PR 强制附带 inspect+push；设置「系统收尾」第三勾选；worker 用本机 `gh pr create`（禁止 force-push/merge）；MAX_TASKS=23；确认屏可选可取消；**不**进主路径第一屏；**不**做 SDK/Windows PR 路径；confirm 唯一开跑不变；lib+A0+mode_b 绿；**不**回灌 D0–D4 |
+| 2026-07-21 | **t63 / S-run `app/run` 纵切 ≤400**：`src/app/run.rs`（463）→ `app/run/{mod,materialize,foreground,route}.rs` 多文件（单文件 ≤400）；`pub use` 保 `app::run::*` 对外路径；零语义 diff；L2 app/src 成员表；check-arch app 软超清零 WARN=0；lib+A0+mode_b 绿；**不**旁路 Mode B；**不**改 run_dir/session/plan job；**不做** A5-5 / FE 产品；**不**回灌 D0–D4 |
 
 ### 9.1 边界（防与产品变更混淆）
 

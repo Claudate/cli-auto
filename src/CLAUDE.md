@@ -5,7 +5,7 @@
 lib.rs: 库根；re-export plan/runtime/services/state/terminal/tui；挂载 **domain/app/ports**
 main.rs: cco 二进制入口；clap → cli::execute
 domain/: **A1** 纯模型 — [`domain/CLAUDE.md`](./domain/CLAUDE.md) · `plan/`（A1-1 ✅）· `run/`（A1-3 ✅）· `worker/`（A1-4 ✅）· `inspect/`（A1-5 ✅）· `chat/`（fence/title/normalize；A1-6 ✅）
-app/: **A1 ✅** 用例 — [`app/CLAUDE.md`](./app/CLAUDE.md) · `split`（confirm 唯一开跑；A1-2/A1-7）· `run`（list/stop/resume/soft-fill；A1-3/A1-7）· `chat`（会话/send/save_plan；A1-6/A1-7）
+app/: **A1 ✅** 用例 — [`app/CLAUDE.md`](./app/CLAUDE.md) · `split`（confirm 唯一开跑；A1-2/A1-7）· `run/`（**S-run** 多文件 · list/stop/resume/materialize/foreground/route；A1-3/A1-7）· `chat`（会话/send/save_plan；A1-6/A1-7）
 ports/: **WorkerPort ✅ A1-4 · HandoffStore ✅ A1-5** — [`ports/CLAUDE.md`](./ports/CLAUDE.md) · trait + DTO；ChatStore 未建（A1-6 free-fn）
 services/: **deprecated facade**（A1-7；Presentation → app；`confirm_start` → `app::split::confirm`；IO 仍住此）
 cli/: clap 命令面 + commands/（**A5-1** 1:1 表见 [`cli/CLAUDE.md`](./cli/CLAUDE.md)；Mode B `confirm_materialize`；ParseOnly `materialize_run`；soft-fill 真源 domain/worker）
