@@ -109,7 +109,8 @@ pub fn load_proposed_plan(config: &Config, job_id: &str) -> Result<PlanIR> {
     load_proposed(config, job_id)
 }
 
-/// Patch one proposed task (title/prompt/include/provider/depends_on).
+/// Patch one proposed task (title/prompt/include/provider/depends_on/role/scope_paths).
+/// Soft-fill is **not** applied here — only explicit user fields.
 pub fn edit_task(
     config: &Config,
     job_id: &str,
@@ -119,9 +120,20 @@ pub fn edit_task(
     include: Option<bool>,
     provider: Option<String>,
     depends_on: Option<Vec<String>>,
+    role: Option<String>,
+    scope_paths: Option<Vec<String>>,
 ) -> Result<PlanJobView> {
     update_proposed_task(
-        config, job_id, task_id, title, prompt, include, provider, depends_on,
+        config,
+        job_id,
+        task_id,
+        title,
+        prompt,
+        include,
+        provider,
+        depends_on,
+        role,
+        scope_paths,
     )
 }
 

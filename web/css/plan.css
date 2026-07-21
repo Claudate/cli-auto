@@ -1797,13 +1797,26 @@
   align-items: baseline;
   flex-wrap: wrap;
 }
-.split-route-provider-field {
-  margin: 0;
+.split-route-provider-field,
+.split-route-role-field,
+.split-route-scope-field {
+  margin: 0.35rem 0 0;
 }
 .split-route-provider-field select,
-.split-route-provider-field .cco-select {
+.split-route-provider-field .cco-select,
+.split-route-role-field select,
+.split-route-role-field .cco-select {
   width: 100%;
   max-width: 16rem;
+}
+.split-route-scope-field textarea {
+  width: 100%;
+  max-width: 22rem;
+  min-height: 2.6rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  resize: vertical;
 }
 
 @media (max-width: 1100px) {

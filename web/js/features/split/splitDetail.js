@@ -82,11 +82,11 @@ export function ensureAdvancedRouteDom() {
   fold.innerHTML =
     `<summary class="split-route-summary muted">高级 · 执行通道与路由</summary>` +
     `<div class="split-route-body">` +
-    `<p class="muted split-route-hint" id="split-route-hint">智能建议可改；不会静默覆盖你已改过的通道。</p>` +
+    `<p class="muted split-route-hint" id="split-route-hint">智能建议可改；不会静默覆盖你已改过的通道 / 角色 / 范围。</p>` +
     `<div class="split-route-grid">` +
     `<div class="split-route-row"><span class="muted">通道</span> <strong id="split-route-provider-label">—</strong></div>` +
-    `<div class="split-route-row"><span class="muted">角色</span> <span id="split-route-role">—</span></div>` +
-    `<div class="split-route-row"><span class="muted">范围</span> <span id="split-route-scope">—</span></div>` +
+    `<div class="split-route-row"><span class="muted">角色</span> <span id="split-route-role-label">—</span></div>` +
+    `<div class="split-route-row"><span class="muted">范围</span> <span id="split-route-scope-label">—</span></div>` +
     `</div>` +
     `<label class="field split-route-provider-field" id="split-route-provider-field">` +
     `<span>本步骤执行通道</span>` +
@@ -95,6 +95,20 @@ export function ensureAdvancedRouteDom() {
     `<option value="codex">备用通道</option>` +
     `<option value="fake">演练</option>` +
     `</select>` +
+    `</label>` +
+    `<label class="field split-route-role-field" id="split-route-role-field">` +
+    `<span>协作角色</span>` +
+    `<select id="split-route-role">` +
+    `<option value="">未指定（按计划）</option>` +
+    `<option value="scout">探查 scout</option>` +
+    `<option value="implement">实现 implement</option>` +
+    `<option value="integrate">整合 integrate</option>` +
+    `<option value="inspect">巡检 inspect</option>` +
+    `</select>` +
+    `</label>` +
+    `<label class="field split-route-scope-field" id="split-route-scope-field">` +
+    `<span>可写范围（每行一个路径，如 src/web/**）</span>` +
+    `<textarea id="split-route-scope" rows="2" spellcheck="false" placeholder="留空 = 不单独限制可写路径"></textarea>` +
     `</label>` +
     `</div>`;
   const detail = document.querySelector(".confirm-detail.split-detail");
@@ -337,6 +351,27 @@ export function paintDetail(ctx) {
   if (saveBtn) saveBtn.hidden = !editing;
 }
 
+function currentRoleValue(cur) {
+  const raw = String(cur?.role || cur?.worker_role || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw.includes("scout")) return "scout";
+  if (raw.includes("implement") || raw === "impl") return "implement";
+  if (raw.includes("integrate")) return "integrate";
+  if (raw.includes("inspect") || raw.includes("review") || raw.includes("check"))
+    return "inspect";
+  return raw;
+}
+
+function currentScopePathsText(cur) {
+  const scope = cur?.scope || cur?.scope_paths || cur?.scopePaths || null;
+  if (Array.isArray(scope)) return scope.join("\n");
+  if (scope && typeof scope === "object") {
+    const paths = scope.paths || scope.Paths || [];
+    return Array.isArray(paths) ? paths.join("\n") : "";
+  }
+  return "";
+}
+
 function paintAdvancedRoute(cur, job, ctx) {
   ensureAdvancedRouteDom();
   const fold = $("split-route-advanced");
@@ -348,21 +383,23 @@ function paintAdvancedRoute(cur, job, ctx) {
   fold.hidden = !!ctx.editing;
   const route = routeSummary(cur, job);
   const provLabel = $("split-route-provider-label");
-  const roleEl = $("split-route-role");
-  const scopeEl = $("split-route-scope");
+  const roleLabelEl = $("split-route-role-label");
+  const scopeLabelEl = $("split-route-scope-label");
   const advSel = $("split-route-provider");
+  const roleSel = $("split-route-role");
+  const scopeTa = $("split-route-scope");
+  const locked = !ctx.taskEditable || ctx.editing || !!ctx.runLocked;
   if (provLabel) provLabel.textContent = route.providerLabel;
-  if (roleEl) roleEl.textContent = route.roleLabel;
-  if (scopeEl) {
-    scopeEl.textContent = route.scopeText;
-    scopeEl.classList.toggle("muted", !route.hasExplicitScope);
+  if (roleLabelEl) roleLabelEl.textContent = route.roleLabel;
+  if (scopeLabelEl) {
+    scopeLabelEl.textContent = route.scopeText;
+    scopeLabelEl.classList.toggle("muted", !route.hasExplicitScope);
   }
   if (advSel) {
     if (!selectBusy(advSel)) {
       advSel.value = route.provider;
     }
-    advSel.disabled =
-      !ctx.taskEditable || ctx.editing || !!ctx.runLocked;
+    advSel.disabled = locked;
     advSel.onchange = async () => {
       if (
         !cur ||
@@ -383,6 +420,86 @@ function paintAdvancedRoute(cur, job, ctx) {
         ctx.render();
       } catch (e) {
         advSel.value = ctx.curProvider;
+        toast(String(e?.message || e));
+      }
+    };
+  }
+  const curRole = currentRoleValue(cur);
+  if (roleSel) {
+    if (!selectBusy(roleSel)) {
+      roleSel.value = curRole;
+    }
+    roleSel.disabled = locked;
+    roleSel.onchange = async () => {
+      if (
+        !cur ||
+        !ctx.taskEditable ||
+        hasActiveRun() ||
+        ctx.vm.getSnapshot().editing
+      ) {
+        roleSel.value = curRole;
+        return;
+      }
+      const next = String(roleSel.value || "").toLowerCase();
+      if (next === curRole) return;
+      try {
+        await ctx.vm.setRole(cur.id, next);
+        ctx.pushSelection();
+        toast(
+          next
+            ? `已设「${cur.title || cur.id}」角色 → ${next}`
+            : `已清除「${cur.title || cur.id}」角色`
+        );
+        ctx.afterMutate();
+        ctx.render();
+      } catch (e) {
+        roleSel.value = curRole;
+        toast(String(e?.message || e));
+      }
+    };
+  }
+  const scopeText = currentScopePathsText(cur);
+  if (scopeTa) {
+    if (document.activeElement !== scopeTa) {
+      scopeTa.value = scopeText;
+    }
+    scopeTa.disabled = locked;
+    scopeTa.onchange = async () => {
+      if (
+        !cur ||
+        !ctx.taskEditable ||
+        hasActiveRun() ||
+        ctx.vm.getSnapshot().editing
+      ) {
+        scopeTa.value = scopeText;
+        return;
+      }
+      const nextPaths = String(scopeTa.value || "")
+        .split(/[\n,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const prevPaths = scopeText
+        .split(/[\n,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (
+        nextPaths.length === prevPaths.length &&
+        nextPaths.every((p, i) => p === prevPaths[i])
+      ) {
+        return;
+      }
+      try {
+        await ctx.vm.setScopePaths(cur.id, nextPaths);
+        ctx.pushSelection();
+        toast(
+          nextPaths.length
+            ? `已设「${cur.title || cur.id}」范围 ${nextPaths.length} 条`
+            : `已清除「${cur.title || cur.id}」范围`
+        );
+        ctx.afterMutate();
+        ctx.render();
+      } catch (e) {
+        scopeTa.value = scopeText;
         toast(String(e?.message || e));
       }
     };

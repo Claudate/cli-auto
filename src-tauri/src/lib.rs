@@ -282,6 +282,10 @@ fn update_plan_task_cmd(
     include: Option<bool>,
     provider: Option<String>,
     #[allow(non_snake_case)] dependsOn: Option<Vec<String>>,
+    /// S-role: scout|implement|integrate|inspect; empty clears.
+    role: Option<String>,
+    /// S-role: writable scope path globs (empty clears paths).
+    #[allow(non_snake_case)] scopePaths: Option<Vec<String>>,
 ) -> Result<PlanJobView, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
     split_uc::edit_task(
@@ -293,6 +297,8 @@ fn update_plan_task_cmd(
         include,
         provider,
         dependsOn,
+        role,
+        scopePaths,
     )
     .map_err(map_err)
 }

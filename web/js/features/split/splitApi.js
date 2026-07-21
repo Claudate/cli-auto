@@ -30,8 +30,8 @@ export function startJob(args) {
 }
 
 /**
- * Patch one proposed task — title/prompt/include/provider/dependsOn only.
- * 不复制 soft-fill；不在 JS 改 role 路由策略。
+ * Patch one proposed task — title/prompt/include/provider/dependsOn/role/scopePaths.
+ * 不复制 soft-fill；role/scope 只透传用户输入，路由策略在 Rust。
  * @param {{
  *   jobId: string,
  *   taskId: string,
@@ -40,6 +40,8 @@ export function startJob(args) {
  *   include?: boolean|null,
  *   provider?: string|null,
  *   dependsOn?: string[]|null,
+ *   role?: string|null,
+ *   scopePaths?: string[]|null,
  * }} args
  */
 export function updateTask(args) {
@@ -51,6 +53,8 @@ export function updateTask(args) {
     include: args.include ?? null,
     provider: args.provider ?? null,
     dependsOn: args.dependsOn ?? null,
+    role: args.role ?? null,
+    scopePaths: args.scopePaths ?? null,
   });
 }
 

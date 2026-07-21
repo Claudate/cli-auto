@@ -11,7 +11,7 @@ js/shared/: **gateway.js**（IPC 唯一出口）· **store.js**（可订阅薄 s
 js/app/: **AppViewModel.js** · **routes.js**（phase author|split|run|result ↔ page）· **wireRunResult.js**（A4 壳接线）
 js/features/chat/: **A5-2a ✅ · P-ship-D 软超纵切** chatApi · ChatViewModel · chatState · chatSessions · chatActions · **chatRender** · **chatPlanOps** · chatFormat · chatAttachments · planDir · planRail · planFull · plansMgmt · installChat · legacy/host · index（经 gateway；**无** confirm/start_run）
 js/features/project/: **A5-2b-fin D5 ✅** projectApi · ProjectViewModel · sessionEntry · shellChrome · projectCrud · planMeta · projectPicker · planSelect · jobPoll · confirmActions · loadLiveBridge · installProject · legacy/host · index（picker/H0/job 轮询/optional 门；confirm→ccoSplit；**无** invoke/start_run）
-js/features/split/: **A3 ✅ · A5-2b** splitApi · SplitViewModel · splitRender · splitDetail · SplitView · **splitFillMeta** · index
+js/features/split/: **A3 ✅ · A5-2b · S-role** splitApi · SplitViewModel · splitRender · splitDetail（高级折叠可改 provider/**role/scope paths**）· SplitView · **splitFillMeta** · index
 js/features/run/: **A4 ✅ · A5-2b · A5-2c · P-ship-D** runApi · runBuckets · RunViewModel · RunView · logPanel · **loadLive** · **log\*** · **logBoardCard** · **logBoardEvents** · index（进度·stall·停/续；日志次级；workspace 轮询壳）
 js/features/result/: **A4 ✅** resultApi · inspectCopy · ResultViewModel · ResultView · index（摘要·回补·inspect 人话）
 js/features/settings/: **A5-2d ✅ · P-ship-D** settingsApi · settingsForm · doctorPage · shellBoot · uiActions · bindUi · **bindUiClick** · installSettings（settings/doctor/meta/open_monitor 经 gateway；事件表只绑意图）

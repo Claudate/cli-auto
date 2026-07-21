@@ -178,6 +178,72 @@ export function createSplitViewModel(deps = {}) {
     },
 
     /**
+     * Task-level collaboration role (S-role)。空串清除。不复制 soft-fill。
+     * @param {string} taskId
+     * @param {string} role
+     */
+    async setRole(taskId, role) {
+      const s = snap();
+      if (!s.jobId) throw new Error("没有可编辑的拆分");
+      if (s.editing) throw new Error("请先保存或取消当前编辑");
+      const nextRole = String(role ?? "").trim().toLowerCase();
+      setPatch({ busy: true, lastError: null });
+      try {
+        const view = await splitApi.updateTask({
+          jobId: s.jobId,
+          taskId,
+          role: nextRole,
+        });
+        const next = setPatch({
+          busy: false,
+          job: view,
+          jobId: jobIdOf(view, s.jobId),
+          lastToast: nextRole ? `已更新角色` : `已清除角色`,
+        });
+        notifyJob(view);
+        return next;
+      } catch (e) {
+        const msg = e?.message || String(e);
+        setPatch({ busy: false, lastError: msg });
+        throw e;
+      }
+    },
+
+    /**
+     * Writable scope paths (S-role)。空数组清除 paths。不复制 soft-fill。
+     * @param {string} taskId
+     * @param {string[]} paths
+     */
+    async setScopePaths(taskId, paths) {
+      const s = snap();
+      if (!s.jobId) throw new Error("没有可编辑的拆分");
+      if (s.editing) throw new Error("请先保存或取消当前编辑");
+      const list = Array.isArray(paths)
+        ? paths.map((p) => String(p || "").trim()).filter(Boolean)
+        : [];
+      setPatch({ busy: true, lastError: null });
+      try {
+        const view = await splitApi.updateTask({
+          jobId: s.jobId,
+          taskId,
+          scopePaths: list,
+        });
+        const next = setPatch({
+          busy: false,
+          job: view,
+          jobId: jobIdOf(view, s.jobId),
+          lastToast: list.length ? `已更新范围` : `已清除范围`,
+        });
+        notifyJob(view);
+        return next;
+      } catch (e) {
+        const msg = e?.message || String(e);
+        setPatch({ busy: false, lastError: msg });
+        throw e;
+      }
+    },
+
+    /**
      * Save title/prompt/provider/dependsOn from edit form.
      * @param {{ title: string, prompt: string, provider?: string, dependsOn?: string[] }} input
      */

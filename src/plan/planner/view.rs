@@ -23,6 +23,16 @@ use crate::runtime::log_events::{self, LogEvent};
 use super::job::{append_log, apply_worker_defaults, job_dir, read_log_tail, PlanJob, PlanJobStatus};
 use super::llm::read_planner_cost;
 
+/// Scope paths exposed on the confirm DTO (S-role).
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskScopeView {
+    pub paths: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub readonly: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub forbid: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct PlanTaskView {
     pub id: String,
@@ -31,6 +41,12 @@ pub struct PlanTaskView {
     pub group: Option<String>,
     /// Worker engine for this task (confirm screen may override; H4).
     pub provider: String,
+    /// Collaboration role wire name (`scout`|`implement`|…); absent = unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    /// Path contract for advanced fold (S-role).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<TaskScopeView>,
     /// Full worker prompt (confirm screen needs complete text).
     pub prompt: String,
     /// Short one-line summary for lists / tooltips.
@@ -97,12 +113,19 @@ fn task_view(t: &TaskIR) -> PlanTaskView {
     } else {
         preview
     };
+    let scope = t.scope.as_ref().map(|s| TaskScopeView {
+        paths: s.paths.clone(),
+        readonly: s.readonly.clone(),
+        forbid: s.forbid.clone(),
+    });
     PlanTaskView {
         id: t.id.clone(),
         title: t.title.clone(),
         depends_on: t.depends_on.clone(),
         group: t.group.clone(),
         provider: t.provider.clone(),
+        role: super::task_edit::role_wire(t.role),
+        scope,
         prompt: t.prompt.clone(),
         prompt_preview: preview,
         optional: t.optional,
@@ -203,7 +226,7 @@ pub fn normalize_task_title_key(title: &str) -> String {
         .join(" ")
 }
 
-/// Per-task manual edits captured on the confirm screen (P2-1 / P2-2).
+/// Per-task manual edits captured on the confirm screen (P2-1 / P2-2 / S-role).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TaskUserEdit {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -217,6 +240,12 @@ pub struct TaskUserEdit {
     /// When set, deps were explicitly edited; values are normalized titles of dependencies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub depends_on_titles: Option<Vec<String>>,
+    /// Wire role name, or empty string meaning "cleared".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    /// Writable scope paths when user edited advanced fold (S-role).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope_paths: Option<Vec<String>>,
 }
 
 /// Sidecar next to plan.proposed.json so replan can re-apply human patches by title.
@@ -315,6 +344,22 @@ fn record_task_edit(
     if patch.include.is_some() {
         entry.include = Some(if task.optional { task.include } else { true });
     }
+    if patch.role.is_some() {
+        // Empty string = user cleared role (preserve as clear on replan).
+        entry.role = Some(
+            task.role
+                .map(|r| r.as_str().to_string())
+                .unwrap_or_default(),
+        );
+    }
+    if patch.scope_paths.is_some() {
+        entry.scope_paths = Some(
+            task.scope
+                .as_ref()
+                .map(|s| s.paths.clone())
+                .unwrap_or_default(),
+        );
+    }
     if let Some(deps) = dep_titles {
         entry.depends_on_titles = Some(deps);
     }
@@ -387,6 +432,24 @@ pub fn apply_user_edits_to_ir(ir: &mut PlanIR, edits: &PlanUserEdits) -> (usize,
                 applied += 1;
             }
         }
+        if let Some(ref role_raw) = edit.role {
+            if let Ok(changed) =
+                super::task_edit::apply_role_patch(t, Some(role_raw.clone()))
+            {
+                if changed {
+                    applied += 1;
+                }
+            }
+        }
+        if let Some(ref paths) = edit.scope_paths {
+            if let Ok(changed) =
+                super::task_edit::apply_scope_paths_patch(t, Some(paths.clone()))
+            {
+                if changed {
+                    applied += 1;
+                }
+            }
+        }
         if let Some(ref dep_titles) = edit.depends_on_titles {
             let mut deps: Vec<String> = Vec::new();
             for dt in dep_titles {
@@ -432,8 +495,9 @@ fn touch_job_after_edit(job: &mut PlanJob, ir: &PlanIR) {
     }
 }
 
-/// Patch one task in the proposed plan (title/prompt/include/provider/depends_on)
+/// Patch one task in the proposed plan (title/prompt/include/provider/depends_on/role/scope)
 /// while still planned/confirmed. P2-1: depends_on is optional explicit edge list.
+/// S-role: `role` / `scope_paths` optional; empty role clears; empty paths clears writable scope.
 pub fn update_proposed_task(
     config: &Config,
     job_id: &str,
@@ -443,6 +507,8 @@ pub fn update_proposed_task(
     include: Option<bool>,
     provider: Option<String>,
     depends_on: Option<Vec<String>>,
+    role: Option<String>,
+    scope_paths: Option<Vec<String>>,
 ) -> Result<PlanJobView> {
     let mut job = PlanJob::load(config, job_id)?;
     if !matches!(
@@ -495,20 +561,37 @@ pub fn update_proposed_task(
         patch.include = Some(task.include);
     }
     if let Some(p) = provider {
-        let p = p.trim().to_string();
-        if p.is_empty() {
-            bail!("provider 不能为空");
-        }
-        let ok = matches!(
-            p.to_ascii_lowercase().as_str(),
-            "claude" | "codex" | "fake"
-        );
-        if !ok {
-            bail!("不支持的 provider: {p}（可选 claude / codex / fake）");
-        }
-        ir.tasks[task_idx].provider = p.to_ascii_lowercase();
+        let p = super::task_edit::validate_provider_name(&p)?;
+        ir.tasks[task_idx].provider = p;
         patch.provider = Some(ir.tasks[task_idx].provider.clone());
     }
+    if role.is_some() {
+        let changed = super::task_edit::apply_role_patch(&mut ir.tasks[task_idx], role)?;
+        if changed {
+            // Marker so record_task_edit stores role (including clear → "").
+            patch.role = Some(
+                ir.tasks[task_idx]
+                    .role
+                    .map(|r| r.as_str().to_string())
+                    .unwrap_or_default(),
+            );
+        }
+    }
+    if scope_paths.is_some() {
+        let changed =
+            super::task_edit::apply_scope_paths_patch(&mut ir.tasks[task_idx], scope_paths)?;
+        if changed {
+            patch.scope_paths = Some(
+                ir.tasks[task_idx]
+                    .scope
+                    .as_ref()
+                    .map(|s| s.paths.clone())
+                    .unwrap_or_default(),
+            );
+        }
+    }
+    // Role=inspect defaults (tools/scope/prompt) — idempotent; only affects inspect.
+    crate::plan::materialize_role_defaults(&mut ir);
     if let Some(deps) = depends_on {
         let ids: std::collections::HashSet<_> =
             ir.tasks.iter().map(|t| t.id.as_str()).collect();
@@ -568,12 +651,21 @@ pub fn update_proposed_task(
     touch_job_after_edit(&mut job, &ir);
     job.save(config)?;
     let provider_note = ir.tasks[task_idx].provider.as_str();
+    let role_note = ir.tasks[task_idx]
+        .role
+        .map(|r| r.as_str())
+        .unwrap_or("-");
     let deps_n = ir.tasks[task_idx].depends_on.len();
+    let scope_n = ir.tasks[task_idx]
+        .scope
+        .as_ref()
+        .map(|s| s.paths.len())
+        .unwrap_or(0);
     append_log(
         config,
         job_id,
         &format!(
-            "updated task {task_id} (title/prompt/include/provider={provider_note}/deps={deps_n})",
+            "updated task {task_id} (title/prompt/include/provider={provider_note}/role={role_note}/scope_paths={scope_n}/deps={deps_n})",
         ),
     );
     job_view(config, &job, 48_000)

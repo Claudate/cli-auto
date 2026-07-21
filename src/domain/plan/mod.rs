@@ -20,7 +20,7 @@ pub use optional::{normalize_optional_title, title_is_meta_heading, title_looks_
 pub use routing::apply_tag_routing;
 pub use system_ids::{is_system_post_task, SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID};
 pub use types::{
-    OnFailure, PlanIR, TaskIR, TaskRole, TaskScope, INSPECT_DEFAULT_ALLOWED_TOOLS,
+    parse_role_input, OnFailure, PlanIR, TaskIR, TaskRole, TaskScope, INSPECT_DEFAULT_ALLOWED_TOOLS,
     INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_SYSTEM_PROMPT, INSPECT_SYSTEM_PROMPT_MARKER,
     MAX_PROMPT_CHARS, MAX_TASKS, MAX_TIMEOUT_SECS, PLANNER_MAX_BUDGET_USD, PLANNER_MAX_TASKS,
 };

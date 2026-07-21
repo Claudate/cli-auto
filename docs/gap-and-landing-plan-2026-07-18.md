@@ -926,6 +926,7 @@ D0 文档同构（半天，降低所有后续返工）
 | 2026-07-21 | **t58 / P2-17 A5 收口（A5-4 GEB）**：A0–A5 主线 ✅（A5-1 CLI · A5-2 facade 绞杀 · A5-3 TUI · A5-4 文档/门禁）；§7/§11 勾满；L1/L2 巨石名单出榜 chat/log/doctor/result/plan/monitor facade；`check-arch.sh` GIANTS 空经典业务巨石；S1–S8 自检（S8 classic ≤200；`state.js` D9 遗留）；**A5-5 本轮明确不做**（评估 docs only）；**零**产品行为 diff · **不**再迁 plan 大块/改调度；**不**回灌 D0–D4 |
 | 2026-07-21 | **t59 / P2-7 单项 Windows 外部终端 launcher（勿整包 M5）**：`ExternalLauncher::{WindowsTerminal,PowerShell,Cmd}`；auto 探测 `WT_SESSION`/`wt`/`powershell`/`cmd`；`open_window` + `follow_logs`/`shell_in_dir` 平台分支；`windows_cmdline_preview` 单测 dry-run；config 模板补 wt/ps/cmd 注释；**不**做 SDK provider / 自动 PR / 安装器 MSI；**不**回灌 D0–D4 |
 | 2026-07-21 | **t60 / P2-7 单项 SDK provider S0（勿整包 M5）**：设计 [`p2-7-sdk-provider-2026-07-21.md`](./p2-7-sdk-provider-2026-07-21.md)；`runtime/provider/sdk.rs` `SdkProvider`+`InlineSdkBackend` 实现 `WorkerPort`（**无** agent CLI spawn）；`ProviderId::Sdk`；registry **opt-in**（`providers.sdk.enabled` 默认 false）；task_dir 同契约；单测 start/poll/collect + registry 默认不含；**不**做 S1 HTTP / 自动 PR / 旁路 confirm；**不**回灌 D0–D4 |
+| 2026-07-21 | **t61 / S-role 拆分台 role/scope 可写**：`PlanTaskView` 暴露 `role`/`scope`；`update_proposed_task`/`edit_task`/`update_plan_task_cmd` 增 `role`+`scope_paths`；`planner/task_edit.rs` 补丁纯辅助；高级折叠可改角色/可写范围；user_edits 可 replan preserve；JS 只透传不 soft-fill；confirm 唯一开跑不变；lib+A0+mode_b 绿；**不**回灌 D0–D4 |
 
 ### 9.1 边界（防与产品变更混淆）
 

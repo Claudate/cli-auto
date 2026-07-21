@@ -17,6 +17,7 @@ mod digest;
 mod heuristic;
 mod job;
 mod llm;
+mod task_edit;
 mod view;
 
 pub use job::{
@@ -908,6 +909,8 @@ t1
             None,
             None,
             Some(vec![a.clone()]),
+            None,
+            None,
         )
         .unwrap();
         let ir = load_proposed(&cfg, &view.job_id).unwrap();
@@ -924,10 +927,87 @@ t1
             None,
             None,
             Some(vec![b.clone()]),
+            None,
+            None,
         )
         .unwrap_err()
         .to_string();
         assert!(err.contains("自己") || err.contains("itself") || err.contains("依赖"), "{err}");
+    }
+
+    /// S-role: confirm-screen can patch role + scope.paths; DTO exposes them.
+    #[test]
+    fn update_proposed_task_sets_role_and_scope() {
+        use super::view::{load_proposed, update_proposed_task};
+        use crate::plan::TaskRole;
+
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let plan = project.join("idea.md");
+        std::fs::write(&plan, "# x\n\ny\n").unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let view = start_plan_job(
+            &cfg,
+            StartPlanJobRequest {
+                project: project.clone(),
+                plan: PathBuf::from("idea.md"),
+                plan_mode: Some("fake".into()),
+                provider: Some("fake".into()),
+                mode: Some("print".into()),
+                max_parallel: None,
+                preserve_from_job_id: None,
+            },
+        )
+        .unwrap();
+        let a = view.tasks[0].id.clone();
+        let view2 = update_proposed_task(
+            &cfg,
+            &view.job_id,
+            &a,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("implement".into()),
+            Some(vec!["src/web/**".into(), " src/web/** ".into()]),
+        )
+        .unwrap();
+        let tv = view2.tasks.iter().find(|t| t.id == a).unwrap();
+        assert_eq!(tv.role.as_deref(), Some("implement"));
+        assert_eq!(
+            tv.scope.as_ref().map(|s| s.paths.clone()),
+            Some(vec!["src/web/**".into()])
+        );
+
+        let ir = load_proposed(&cfg, &view.job_id).unwrap();
+        let ta = ir.tasks.iter().find(|t| t.id == a).unwrap();
+        assert_eq!(ta.role, Some(TaskRole::Implement));
+        assert_eq!(
+            ta.scope.as_ref().map(|s| s.paths.clone()),
+            Some(vec!["src/web/**".into()])
+        );
+
+        // Clear role.
+        update_proposed_task(
+            &cfg,
+            &view.job_id,
+            &a,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("".into()),
+            None,
+        )
+        .unwrap();
+        let ir2 = load_proposed(&cfg, &view.job_id).unwrap();
+        let ta2 = ir2.tasks.iter().find(|t| t.id == a).unwrap();
+        assert_eq!(ta2.role, None);
     }
 
     /// P2-2: replan with preserve_from_job_id re-applies title/prompt/deps/removals.
@@ -973,6 +1053,8 @@ t1
             None,
             Some("fake".into()),
             None,
+            None,
+            None,
         )
         .unwrap();
         // After rename, t1 still matched by original key; set t2 deps by ids.
@@ -985,6 +1067,8 @@ t1
             None,
             None,
             Some(vec![t1.clone()]),
+            None,
+            None,
         )
         .unwrap();
         if let Some(ref id) = t3 {

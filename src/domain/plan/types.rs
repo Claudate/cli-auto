@@ -47,6 +47,66 @@ pub enum TaskRole {
     Inspect,
 }
 
+impl TaskRole {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Scout => "scout",
+            Self::Implement => "implement",
+            Self::Integrate => "integrate",
+            Self::Inspect => "inspect",
+        }
+    }
+
+    /// Parse `scout|implement|integrate|inspect` (case-insensitive).
+    /// Empty / `none` / `auto` / `-` → clear (returns `Ok(None)` when used via
+    /// [`parse_role_input`]); this method only accepts known role names.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "scout" => Some(Self::Scout),
+            "implement" | "impl" => Some(Self::Implement),
+            "integrate" | "integration" => Some(Self::Integrate),
+            "inspect" | "review" | "check" => Some(Self::Inspect),
+            _ => None,
+        }
+    }
+}
+
+/// Parse confirm-screen role input: known role, or clear tokens → `Ok(None)`.
+/// Unknown non-empty values → `Err`.
+pub fn parse_role_input(raw: &str) -> Result<Option<TaskRole>, String> {
+    let s = raw.trim();
+    if s.is_empty()
+        || matches!(
+            s.to_ascii_lowercase().as_str(),
+            "none" | "auto" | "-" | "clear" | "默认" | "自动"
+        )
+    {
+        return Ok(None);
+    }
+    TaskRole::parse(s)
+        .map(Some)
+        .ok_or_else(|| format!("不支持的角色: {s}（可选 scout / implement / integrate / inspect，或留空）"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn task_role_parse_and_as_str() {
+        assert_eq!(TaskRole::parse("IMPLEMENT"), Some(TaskRole::Implement));
+        assert_eq!(TaskRole::parse("check"), Some(TaskRole::Inspect));
+        assert_eq!(TaskRole::as_str(TaskRole::Scout), "scout");
+        assert_eq!(parse_role_input("").unwrap(), None);
+        assert_eq!(parse_role_input("none").unwrap(), None);
+        assert_eq!(
+            parse_role_input("integrate").unwrap(),
+            Some(TaskRole::Integrate)
+        );
+        assert!(parse_role_input("wizard").is_err());
+    }
+}
+
 /// Per-task path contract (P1-1). All globs relative to project/worktree root.
 ///
 /// - `paths`: writable whitelist (implement/integrate should set)
