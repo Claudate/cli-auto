@@ -138,6 +138,8 @@ impl PlanJob {
         let path = dir.join("job.json");
         std::fs::write(&path, serde_json::to_string_pretty(self)?)
             .with_context(|| format!("write {}", path.display()))?;
+        // Dual-write index for UI/query (best-effort; JSON remains source of truth).
+        crate::state::sqlite::try_upsert_plan_job(config, self);
         Ok(())
     }
 
@@ -179,8 +181,11 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         .unwrap_or("parse")
         .trim()
         .to_ascii_lowercase();
-    if !matches!(plan_mode.as_str(), "parse" | "fake" | "ai") {
-        bail!("未知 plan_mode: {plan_mode}（支持 parse|fake|ai）");
+    if !matches!(
+        plan_mode.as_str(),
+        "parse" | "fake" | "ai" | "fast" | "heuristic"
+    ) {
+        bail!("未知 plan_mode: {plan_mode}（支持 parse|fake|ai|fast）");
     }
     let provider = req
         .provider
@@ -262,6 +267,8 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
             req.plan.display()
         ),
     );
+    // 同项目旧 planning 标 cancelled，避免 latest/UI 串到僵尸 job（CLI 线程可能仍跑完但不再晋升 planned）
+    supersede_planning_jobs(config, &project, &job_id);
 
     // `ai` may call Claude CLI (print) and take minutes — background + UI poll.
     // 若本机解析不到 claude bin，则同步跑启发式，避免 UI 空等异步轮询。
@@ -320,10 +327,85 @@ fn planner_should_try_llm(config: &Config, provider_name: &str) -> bool {
     p.is_file() || which::which(&bin).is_ok()
 }
 
+/// Mark other in-flight planning jobs for this project cancelled and kill planner PID (C6).
+fn supersede_planning_jobs(config: &Config, project: &Path, keep_job_id: &str) {
+    let root = plan_jobs_dir(config);
+    if !root.is_dir() {
+        return;
+    }
+    let project = project
+        .canonicalize()
+        .unwrap_or_else(|_| project.to_path_buf());
+    let Ok(entries) = std::fs::read_dir(&root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let job_path = entry.path().join("job.json");
+        if !job_path.is_file() {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&job_path) else {
+            continue;
+        };
+        let Ok(mut other) = serde_json::from_str::<PlanJob>(&text) else {
+            continue;
+        };
+        if other.job_id == keep_job_id {
+            continue;
+        }
+        if !matches!(other.status, PlanJobStatus::Planning) {
+            continue;
+        }
+        let jp = other
+            .project
+            .canonicalize()
+            .unwrap_or_else(|_| other.project.clone());
+        if jp != project {
+            continue;
+        }
+        // Kill leftover planner CLI so it cannot keep spinning after cancel.
+        kill_planner_pid(config, &other.job_id);
+        other.status = PlanJobStatus::Cancelled;
+        other.error = Some("superseded by newer plan job".into());
+        other.updated_at = Utc::now();
+        let _ = other.save(config);
+        append_log(
+            config,
+            &other.job_id,
+            &format!("cancelled: superseded by {keep_job_id} (planner pid kill attempted)"),
+        );
+    }
+}
+
+fn job_marked_cancelled(config: &Config, job_id: &str) -> bool {
+    PlanJob::load(config, job_id)
+        .map(|j| matches!(j.status, PlanJobStatus::Cancelled))
+        .unwrap_or(false)
+}
+
 pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
     let job_id = job.job_id.clone();
+    if matches!(job.status, PlanJobStatus::Cancelled) || job_marked_cancelled(config, &job_id) {
+        append_log(
+            config,
+            &job_id,
+            "finish skipped: job cancelled/superseded",
+        );
+        return;
+    }
     match run_planner(config, job) {
         Ok(mut ir) => {
+            if job_marked_cancelled(config, &job_id) {
+                append_log(
+                    config,
+                    &job_id,
+                    "finish aborted after planner: job cancelled/superseded",
+                );
+                return;
+            }
             // Split-time concurrency wins over planner defaults / document values.
             if let Some(n) = job.max_parallel {
                 ir.max_parallel = n.clamp(1, 32);
@@ -418,12 +500,28 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
                     }
                 }
             }
+            if job_marked_cancelled(config, &job_id) {
+                append_log(
+                    config,
+                    &job_id,
+                    "finish aborted before write: job cancelled/superseded",
+                );
+                return;
+            }
             if let Err(e) = write_proposed(config, &job_id, &ir) {
                 job.status = PlanJobStatus::PlanFailed;
                 job.error = Some(e.to_string());
                 job.updated_at = Utc::now();
                 let _ = job.save(config);
                 append_log(config, &job_id, &format!("write proposed failed: {e:#}"));
+                return;
+            }
+            if job_marked_cancelled(config, &job_id) {
+                append_log(
+                    config,
+                    &job_id,
+                    "finish aborted after write: job cancelled/superseded (proposed left on disk)",
+                );
                 return;
             }
             job.status = PlanJobStatus::Planned;
@@ -478,12 +576,168 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
 }
 
 pub fn get_plan_job(config: &Config, job_id: &str) -> Result<PlanJobView> {
-    let job = PlanJob::load(config, job_id)?;
+    let mut job = PlanJob::load(config, job_id)?;
+    if let Some(reaped) = try_reap_zombie_planning(config, &mut job) {
+        job = reaped;
+    }
     job_view(config, &job, 96_000)
+}
+
+/// Absolute wall clock since job created — cap so desk does not fake-spin for 10+ min (C6).
+/// LLM worker may still use ~600s internally; we fail the job status sooner for UI.
+const PLANNING_HARD_TIMEOUT_SECS: i64 = 5 * 60;
+/// No planner.log growth / no alive pid after this → fail (UI stop spinning).
+const PLANNING_DEAD_PID_GRACE_SECS: i64 = 30;
+/// 卡住的 planning 超过此时长：latest 不恢复；reap 标 plan_failed。
+const STALE_PLANNING_SECS: i64 = 6 * 60;
+
+/// If `planning` but worker process is gone / timed out → `plan_failed` + log.
+/// Returns updated job when reaped; `None` if still live or not planning.
+pub(super) fn try_reap_zombie_planning(
+    config: &Config,
+    job: &mut PlanJob,
+) -> Option<PlanJob> {
+    if !matches!(job.status, PlanJobStatus::Planning) {
+        return None;
+    }
+    let now = Utc::now();
+    let age_created = now.signed_duration_since(job.created_at).num_seconds();
+    let age_updated = now.signed_duration_since(job.updated_at).num_seconds();
+
+    let dir = job_dir(config, &job.job_id);
+    let meta_pid = read_planner_meta_pid(&dir);
+    let pid_dead = match meta_pid {
+        Some(pid) => !process_alive(pid),
+        None => false, // no pid yet (not started) or fake — don't reap on pid alone
+    };
+    let log_stale = planner_log_stale(&dir, PLANNING_DEAD_PID_GRACE_SECS);
+
+    let reason = if age_created > PLANNING_HARD_TIMEOUT_SECS {
+        Some(format!(
+            "planning hard timeout ({}s since create; planner worker did not finish)",
+            age_created
+        ))
+    } else if meta_pid.is_some()
+        && pid_dead
+        && age_created > PLANNING_DEAD_PID_GRACE_SECS
+    {
+        Some(format!(
+            "planner process gone (pid={:?}); job left in planning",
+            meta_pid
+        ))
+    } else if log_stale && age_updated > STALE_PLANNING_SECS {
+        Some(format!(
+            "planning stale (no progress {}s; log quiet)",
+            age_updated
+        ))
+    } else if age_updated > STALE_PLANNING_SECS && age_created > STALE_PLANNING_SECS {
+        // No heartbeat ever updated job.json (old builds) — still reap
+        Some(format!(
+            "planning stale ({}s without status update)",
+            age_updated
+        ))
+    } else {
+        None
+    };
+
+    let Some(reason) = reason else {
+        return None;
+    };
+
+    // C6: kill planner process so CLI cannot zombie after status flip.
+    kill_planner_pid(config, &job.job_id);
+
+    job.status = PlanJobStatus::PlanFailed;
+    job.error = Some(reason.clone());
+    job.updated_at = now;
+    let _ = job.save(config);
+    append_log(
+        config,
+        &job.job_id,
+        &format!("reaped zombie planning → plan_failed: {reason}"),
+    );
+    Some(job.clone())
+}
+
+/// Best-effort SIGTERM (then SIGKILL) of planner meta.pid under job llm_work.
+fn kill_planner_pid(config: &Config, job_id: &str) {
+    let dir = job_dir(config, job_id);
+    let Some(pid) = read_planner_meta_pid(&dir) else {
+        return;
+    };
+    if pid == 0 || !process_alive(pid) {
+        return;
+    }
+    #[cfg(unix)]
+    {
+        // Same pattern as services::util / process_alive — no libc crate dep.
+        unsafe {
+            extern "C" {
+                fn kill(pid: i32, sig: i32) -> i32;
+            }
+            let _ = kill(pid as i32, 15); // SIGTERM
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            if process_alive(pid) {
+                let _ = kill(pid as i32, 9); // SIGKILL
+            }
+        }
+        append_log(config, job_id, &format!("killed planner pid={pid}"));
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .output();
+        append_log(config, job_id, &format!("taskkill planner pid={pid}"));
+    }
+}
+
+fn read_planner_meta_pid(job_dir: &std::path::Path) -> Option<u32> {
+    let meta = job_dir
+        .join("llm_work")
+        .join("tasks")
+        .join("__planner__")
+        .join("meta.json");
+    let text = std::fs::read_to_string(meta).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    v.get("pid")
+        .and_then(|p| p.as_u64())
+        .map(|p| p as u32)
+        .filter(|p| *p > 0)
+}
+
+fn planner_log_stale(job_dir: &std::path::Path, quiet_secs: i64) -> bool {
+    let path = job_dir.join("planner.log");
+    let Ok(meta) = std::fs::metadata(&path) else {
+        return true;
+    };
+    let Ok(modified) = meta.modified() else {
+        return false;
+    };
+    let Ok(elapsed) = modified.elapsed() else {
+        return false;
+    };
+    elapsed.as_secs() as i64 > quiet_secs
+}
+
+fn process_alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        extern "C" {
+            fn kill(pid: i32, sig: i32) -> i32;
+        }
+        unsafe { kill(pid as i32, 0) == 0 }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        true // unknown — don't reap on pid alone
+    }
 }
 
 /// 查找项目最近可恢复的规划会话（planning / planned / confirmed 且有任务图）。
 /// 用于进项目时接上「上次拆分结果」，避免每次重拆。
+/// 排序：仅 `updated_at` 最新；**跳过**超时仍 planning 的僵尸 job。
 pub fn latest_plan_job_for_project(
     config: &Config,
     project: &Path,
@@ -495,6 +749,7 @@ pub fn latest_plan_job_for_project(
     let project = project
         .canonicalize()
         .unwrap_or_else(|_| project.to_path_buf());
+    let now = Utc::now();
 
     let mut best: Option<PlanJob> = None;
     for entry in std::fs::read_dir(&root)? {
@@ -506,7 +761,7 @@ pub fn latest_plan_job_for_project(
         if !job_path.is_file() {
             continue;
         }
-        let job: PlanJob = match std::fs::read_to_string(&job_path)
+        let mut job: PlanJob = match std::fs::read_to_string(&job_path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
         {
@@ -525,7 +780,17 @@ pub fn latest_plan_job_for_project(
             PlanJobStatus::Planning | PlanJobStatus::Planned | PlanJobStatus::Confirmed => {}
             PlanJobStatus::PlanFailed | PlanJobStatus::Cancelled => continue,
         }
-        // confirmed 必须仍有图文件
+        // Reap or skip zombie planning (process gone / timeout)
+        if matches!(job.status, PlanJobStatus::Planning) {
+            if try_reap_zombie_planning(config, &mut job).is_some() {
+                continue; // now plan_failed
+            }
+            let age = now.signed_duration_since(job.updated_at).num_seconds();
+            if age > STALE_PLANNING_SECS {
+                continue;
+            }
+        }
+        // confirmed/planned 必须仍有图文件
         if matches!(job.status, PlanJobStatus::Confirmed | PlanJobStatus::Planned) {
             let dir = entry.path();
             if !dir.join("plan.proposed.json").is_file()
@@ -560,6 +825,17 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
         "fake" => {
             append_log(config, &job.job_id, "using fake multi-task demo DAG");
             Ok(build_fake_plan(config, job)?)
+        }
+        // C6 fast path: local heuristic only — no Claude CLI wait.
+        "fast" | "heuristic" => {
+            append_log(
+                config,
+                &job.job_id,
+                "using fast local splitter (heuristic; no LLM)",
+            );
+            let mut ir = build_heuristic_ai_plan(config, job)?;
+            apply_worker_defaults(&mut ir, &job.provider, &job.exec_mode);
+            Ok(ir)
         }
         "ai" => {
             // Prefer structured parse when the document already has a real work graph.

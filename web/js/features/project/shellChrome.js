@@ -103,29 +103,33 @@ export function refreshFlowStrips(phaseOverride) {
   const globalPh =
     phaseOverride != null ? phaseOverride : resolveFlowPhaseForStrip();
   const hostGlobal = $("#flow-strip-global");
+  const hasGlobal = !!hostGlobal;
   if (hostGlobal) {
-    // 有项目或已进入主路径时显示；欢迎无项目可仍显示「写计划」
+    // 顶栏：唯一完整阶段点（写计划→拆分→执行→结果）
     hostGlobal.innerHTML = flowStageStripHtml(globalPh, { compact: true });
     hostGlobal.hidden = false;
   }
-  // 页内条在有全局条时弱化：planning/confirm 仍保留副文案，避免双条时重复阶段点
+  // 页内条：有全局条时只留副文案（lineOnly），禁止再画一遍阶段点
+  const pageOpts = hasGlobal
+    ? { lineOnly: true }
+    : { compact: false };
   const hostPlan = $("#flow-strip-planning");
   const hostConfirm = $("#flow-strip-confirm");
   const hostRun = $("#flow-strip-running");
   if (hostPlan) {
     if (ph === "planning") {
-      hostPlan.innerHTML = flowStageStripHtml("planning", { compact: !!hostGlobal });
-      hostPlan.hidden = false;
+      const html = flowStageStripHtml("planning", pageOpts);
+      hostPlan.innerHTML = html;
+      hostPlan.hidden = !html;
     } else {
       hostPlan.hidden = true;
     }
   }
   if (hostConfirm) {
     if (ph === "confirm") {
-      hostConfirm.innerHTML = flowStageStripHtml("confirm", {
-        compact: !!hostGlobal,
-      });
-      hostConfirm.hidden = false;
+      const html = flowStageStripHtml("confirm", pageOpts);
+      hostConfirm.innerHTML = html;
+      hostConfirm.hidden = !html;
     } else {
       hostConfirm.hidden = true;
     }
@@ -140,11 +144,12 @@ export function refreshFlowStrips(phaseOverride) {
         ["completed", "done", "success"].includes(liveSt) ||
         (state.live && !runActive);
       const fail = ["failed", "aborted", "error"].includes(liveSt);
-      hostRun.innerHTML = flowStageStripHtml(
+      const html = flowStageStripHtml(
         fail ? "fail" : done ? "done" : "running",
-        { compact: !!hostGlobal }
+        pageOpts
       );
-      hostRun.hidden = false;
+      hostRun.innerHTML = html;
+      hostRun.hidden = !html;
     } else {
       hostRun.hidden = true;
     }
@@ -220,11 +225,13 @@ export function updateSplitPlanChip() {
   const inWorkspace = !!state.selectedPath && state.page === "workspace";
   const job = state.planJob;
   const st = String(job?.status || "").toLowerCase();
+  // 已在拆分台时不显示 chip（标题/meta 已在页内；chip 只作他页回跳）
+  const onConfirmDesk = state.phase === "confirm";
   const show =
     inWorkspace &&
+    !onConfirmDesk &&
     job &&
-    (state.phase === "confirm" ||
-      state.phase === "running" ||
+    (state.phase === "running" ||
       state.phase === "done" ||
       st === "planned" ||
       st === "confirmed");
@@ -257,14 +264,20 @@ export function updateBudgetChip() {
   const inWorkspace = !!state.selectedPath && state.page === "workspace";
   const live = state.live;
   const job = state.planJob;
+  const liveOk =
+    !state.planJobId ||
+    (typeof host.liveBelongsToOpenPlan === "function"
+      ? host.liveBelongsToOpenPlan()
+      : true);
   const planCost =
-    live?.planner_cost_usd != null
+    liveOk && live?.planner_cost_usd != null
       ? Number(live.planner_cost_usd)
       : job?.planner_cost_usd != null
         ? Number(job.planner_cost_usd)
         : null;
-  const execCost =
-    live?.exec_cost_usd != null
+  const execCost = !liveOk
+    ? null
+    : live?.exec_cost_usd != null
       ? Number(live.exec_cost_usd)
       : live?.tasks
         ? live.tasks.reduce((s, t) => s + (t.cost_usd != null ? Number(t.cost_usd) : 0), 0)
@@ -288,9 +301,17 @@ export function updateTopPlanInfo() {
   const title = $("#page-title");
   const sub = $("#page-sub");
   const proj = (state.projects || []).find((p) => p.path === state.selectedPath);
+  // 打开拆分会话时以 job 计划为准，勿被项目历史 live.plan_path 顶替
+  const jobPlan = state.planJob?.plan_path || state.planJob?.planPath || null;
+  const allowLivePlan =
+    !state.planJobId ||
+    (typeof host.liveBelongsToOpenPlan === "function"
+      ? host.liveBelongsToOpenPlan()
+      : true);
   let plan =
     state.selectedPlan ||
-    normalizePlanPath(state.live?.plan_path) ||
+    normalizePlanPath(jobPlan) ||
+    (allowLivePlan ? normalizePlanPath(state.live?.plan_path) : null) ||
     normalizePlanPath(proj?.default_plan) ||
     normalizePlanPath(proj?.last_plan) ||
     null;

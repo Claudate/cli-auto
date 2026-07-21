@@ -5,7 +5,7 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
-import { cardsHtml, timelineHtml } from "./splitRender.js";
+import { cardsHtml } from "./splitRender.js";
 import {
   ensureAdvancedRouteDom,
   paintDetail,
@@ -77,26 +77,16 @@ export function bindSplitView(vm, bridge = {}) {
       }
     }
 
-    const layers = job.layers || [];
     const tasks = job.tasks || [];
     const byId = Object.fromEntries(tasks.map((t) => [t.id, t]));
     const runLocked = hasActiveRun();
     const selectedId = s.selectedTaskId;
 
+    // 波次轨已并入步骤列表（按执行顺序 + 并行外框）；左侧栏隐藏
     const tl = $("split-timeline");
     if (tl) {
-      tl.innerHTML = timelineHtml(layers, byId, selectedId);
-      tl.querySelectorAll(".split-tl-cell").forEach((b) => {
-        b.onclick = () => {
-          if (vm.getSnapshot().editing) {
-            toast("请先保存或取消当前编辑");
-            return;
-          }
-          vm.selectTask(b.dataset.id);
-          pushSelection();
-          render();
-        };
-      });
+      tl.hidden = true;
+      tl.innerHTML = "";
     }
 
     const waves = $("confirm-waves");

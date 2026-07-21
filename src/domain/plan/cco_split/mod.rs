@@ -1,0 +1,196 @@
+//! cco-native split document (independent of PlanIR wire).
+//!
+//! [INPUT]: 无 IO — 纯模型
+//! [OUTPUT]: CcoSplitJob/Task · soft_accept · waves · from/to PlanIR
+//! [POS]: domain/plan — 拆分 SoT 形状；SQLite 适配器在 state/
+//! [PROTOCOL]: 变更时更新此头部与 domain/CLAUDE.md · docs/cco-split-format-sqlite-2026-07-21.md
+//!
+//! Product: split desk + SQLite own this shape; PlanIR is materialized only at confirm.
+
+mod accept;
+mod convert;
+mod types;
+
+pub use accept::{recompute_waves, run_gate_ok, soft_accept_split, split_topo_layers};
+pub use convert::{from_plan_ir, to_plan_ir};
+pub use types::{
+    CcoSplitJob, CcoSplitSource, CcoSplitStatus, CcoSplitTask, CcoTaskKind, CcoTaskStatus,
+    CCO_SPLIT_SCHEMA,
+};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::plan::types::{OnFailure, PlanIR, TaskIR, TaskRole, TaskScope};
+    use std::path::PathBuf;
+
+    fn sample_task(id: &str, deps: &[&str]) -> CcoSplitTask {
+        CcoSplitTask {
+            task_id: id.into(),
+            ord: 0,
+            title: id.into(),
+            summary: String::new(),
+            body: format!("do {id}"),
+            depends_on: deps.iter().map(|s| (*s).to_string()).collect(),
+            wave: 0,
+            enabled: true,
+            optional: false,
+            done_when: None,
+            plan_ref: None,
+            kind: CcoTaskKind::Do,
+            status: CcoTaskStatus::Pending,
+            provider: None,
+            role: None,
+            scope_paths: vec![],
+            meta_json: None,
+        }
+    }
+
+    #[test]
+    fn soft_accept_fills_and_waves() {
+        let mut doc = CcoSplitJob {
+            job_id: "j1".into(),
+            project: PathBuf::from("/p"),
+            plan_path: PathBuf::from("docs/x.md"),
+            status: CcoSplitStatus::Ready,
+            title: "x".into(),
+            max_parallel: 2,
+            source: CcoSplitSource::Heuristic,
+            error: None,
+            run_id: None,
+            created_at: "t0".into(),
+            updated_at: "t0".into(),
+            tasks: vec![
+                sample_task("t1", &[]),
+                sample_task("t2", &["t1"]),
+                sample_task("t3", &["t1"]),
+            ],
+        };
+        soft_accept_split(&mut doc);
+        assert_eq!(doc.tasks[0].wave, 0);
+        assert_eq!(doc.tasks[1].wave, 1);
+        assert_eq!(doc.tasks[2].wave, 1);
+        let layers = split_topo_layers(&doc);
+        assert_eq!(layers.len(), 2);
+        assert_eq!(layers[0], vec!["t1".to_string()]);
+    }
+
+    #[test]
+    fn soft_accept_breaks_cycle() {
+        let mut doc = CcoSplitJob {
+            job_id: "j1".into(),
+            project: PathBuf::from("/p"),
+            plan_path: PathBuf::from("docs/x.md"),
+            status: CcoSplitStatus::Ready,
+            title: "x".into(),
+            max_parallel: 1,
+            source: CcoSplitSource::Import,
+            error: None,
+            run_id: None,
+            created_at: "t0".into(),
+            updated_at: "t0".into(),
+            tasks: vec![sample_task("a", &["b"]), sample_task("b", &["a"])],
+        };
+        soft_accept_split(&mut doc);
+        let mut indeg = 0;
+        for t in &doc.tasks {
+            indeg += t.depends_on.len();
+        }
+        assert!(indeg < 2);
+        recompute_waves(&mut doc);
+        assert!(run_gate_ok(&doc).is_ok());
+    }
+
+    #[test]
+    fn roundtrip_plan_ir_preserves_core() {
+        let ir = PlanIR {
+            schema: "cco-plan/v1".into(),
+            name: "demo".into(),
+            adapter: "test".into(),
+            source_path: PathBuf::from("docs/x.md"),
+            max_parallel: 2,
+            on_failure: OnFailure::Pause,
+            retry_max: 0,
+            default_provider: "claude".into(),
+            default_mode: "print".into(),
+            worktree: false,
+            require_inspect: false,
+            tasks: vec![TaskIR {
+                id: "t1".into(),
+                title: "First".into(),
+                depends_on: vec![],
+                group: Some("A".into()),
+                provider: "claude".into(),
+                mode: "print".into(),
+                prompt: "body one\nmore".into(),
+                acceptance: Some("file exists".into()),
+                timeout_secs: None,
+                worktree: Some(false),
+                provider_opts: serde_json::json!({}),
+                optional: true,
+                include: false,
+                role: Some(TaskRole::Implement),
+                scope: Some(TaskScope {
+                    paths: vec!["src/".into()],
+                    readonly: vec![],
+                    forbid: vec![],
+                }),
+                outputs: vec![],
+                tags: vec!["frontend".into()],
+            }],
+        };
+        let doc = from_plan_ir(
+            "plan-1",
+            PathBuf::from("/p"),
+            PathBuf::from("docs/x.md"),
+            &ir,
+            CcoSplitSource::Llm,
+            CcoSplitStatus::Ready,
+            "t0",
+            "t0",
+        );
+        assert_eq!(doc.tasks.len(), 1);
+        assert!(!doc.tasks[0].enabled);
+        assert_eq!(doc.tasks[0].done_when.as_deref(), Some("file exists"));
+        let back = to_plan_ir(&doc, "claude", "print");
+        assert_eq!(back.tasks[0].id, "t1");
+        assert_eq!(back.tasks[0].prompt, "body one\nmore");
+        assert!(!back.tasks[0].include);
+        assert!(back.tasks[0].optional);
+        assert_eq!(
+            back.tasks[0]
+                .scope
+                .as_ref()
+                .map(|s| s.paths.clone())
+                .unwrap_or_default(),
+            vec!["src/".to_string()]
+        );
+    }
+
+    #[test]
+    fn run_gate_requires_enabled() {
+        let mut doc = CcoSplitJob {
+            job_id: "j".into(),
+            project: PathBuf::from("/p"),
+            plan_path: PathBuf::from("p.md"),
+            status: CcoSplitStatus::Ready,
+            title: "t".into(),
+            max_parallel: 1,
+            source: CcoSplitSource::Manual,
+            error: None,
+            run_id: None,
+            created_at: "t".into(),
+            updated_at: "t".into(),
+            tasks: vec![{
+                let mut t = sample_task("t1", &[]);
+                t.optional = true;
+                t.enabled = false;
+                t
+            }],
+        };
+        soft_accept_split(&mut doc);
+        assert!(run_gate_ok(&doc).is_err());
+        doc.tasks[0].enabled = true;
+        assert!(run_gate_ok(&doc).is_ok());
+    }
+}

@@ -20,7 +20,7 @@ use crate::config::Config;
 use crate::plan::adapters::raw_single::default_provider_opts;
 use crate::plan::{OnFailure, PlanIR, TaskIR, PLANNER_MAX_TASKS, PLANNER_MAX_BUDGET_USD};
 
-use super::job::{append_log, apply_worker_defaults, job_dir, PlanJob};
+use super::job::{append_log, apply_worker_defaults, job_dir, PlanJob, PlanJobStatus};
 // PlanJob used when persisting digest_mode mid-plan
 
 /// Call Claude CLI (print) to produce a cco-plan/v1 JSON task graph.
@@ -159,6 +159,13 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
                                 stdout_bytes
                             ),
                         );
+                        // Touch job.updated_at so UI/reaper know this planning is alive.
+                        if let Ok(mut j) = PlanJob::load(config, &job.job_id) {
+                            if matches!(j.status, PlanJobStatus::Planning) {
+                                j.updated_at = Utc::now();
+                                let _ = j.save(config);
+                            }
+                        }
                     }
                     tokio::time::sleep(Duration::from_millis(400)).await;
                 }
@@ -218,11 +225,33 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
     crate::plan::materialize_role_defaults(&mut ir);
     ir.adapter = "planner-ai-llm".into();
     ir.source_path = abs;
-    ir.validate()?;
+    // Soft accept: order / waves / optional for UI+run — auto-fix collab strictness
+    // instead of discarding the whole LLM graph (scope overlap → heuristic waste).
+    let soft_notes = crate::domain::plan::soften_plan_for_accept(&mut ir);
+    for n in &soft_notes {
+        append_log(config, &job.job_id, &format!("soften: {n}"));
+    }
+    if let Err(e) = ir.validate() {
+        // Still broken after soften → caller falls back to heuristic.
+        append_log(
+            config,
+            &job.job_id,
+            &format!("LLM plan still invalid after soften ({e:#})"),
+        );
+        return Err(e);
+    }
     append_log(
         config,
         &job.job_id,
-        &format!("LLM plan ok: {} tasks", ir.tasks.len()),
+        &format!(
+            "LLM plan ok: {} tasks{}",
+            ir.tasks.len(),
+            if soft_notes.is_empty() {
+                String::new()
+            } else {
+                format!(" (softened {})", soft_notes.len())
+            }
+        ),
     );
     Ok(ir)
 }

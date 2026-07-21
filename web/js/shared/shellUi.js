@@ -67,7 +67,7 @@ export function liveTaskById(taskId) {
 
 /**
  * Edit allowed when:
- * - confirming a fresh split (no run yet), or
+ * - confirming a split (desk open; historical project live must not lock), or
  * - run is paused, and the selected task has not started.
  */
 export function canEditSelectedTask(taskId) {
@@ -75,7 +75,17 @@ export function canEditSelectedTask(taskId) {
   const id = taskId != null ? taskId : state.confirmTaskId;
   if (!id) return false;
   if (hasActiveRun()) return false;
-  if (state.phase === "confirm" && !state.live?.run_id) return true;
+  // A1：拆分台可改任务图；勿用「项目最近一次 completed live」当本轮已开跑
+  if (state.phase === "confirm") {
+    const job = state.planJob;
+    const jrid = job?.run_id || job?.runId || null;
+    // 本 job 尚未 spawn，或 live 不是本 job 的 run → 可编辑
+    if (!jrid) return true;
+    if (!state.live?.run_id || String(state.live.run_id) !== String(jrid)) {
+      return true;
+    }
+    // 本 job 已确认且 live 就是该 run → 只读（paused 未开跑任务走下方）
+  }
   if (!isRunPaused()) return false;
   const t = liveTaskById(id);
   if (!t) return true;
@@ -323,15 +333,23 @@ export function renderProjectList() {
       ["running", "starting", "queued", "validated", "init", "resuming"].includes(
         String(s || "").toLowerCase()
       ));
+  const isPausedStatus =
+    g("isPausedStatus") ||
+    ((s) => String(s || "").toLowerCase() === "paused");
 
   el.innerHTML = state.projects
     .map((p) => {
       const stt = p.active_status || p.last_status || "";
       const live = p.running_tasks > 0 || isLiveStatus(p.active_status);
+      // Paused is last-run desk state (not active_* after projects.rs fix)
+      const paused = isPausedStatus(p.last_status);
       const isCurrent = p.path === state.selectedPath;
       let meta;
       if (live) {
         meta = `${p.running_tasks || 0}/${p.total_tasks || "?"} 任务 · 运行中`;
+      } else if (paused) {
+        // stop_task 后 run 常为 paused（尚有 pending 可续）；勿显示成「排队中」
+        meta = "已暂停 · 可续跑";
       } else if (p.last_status) {
         meta = `最近: ${statusLabel(p.last_status)}`;
       } else if (p.exists) {

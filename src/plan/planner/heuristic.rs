@@ -174,15 +174,15 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
     }
 
     // Spec / contract docs:
-    // 1) Prefer real work phases (W0/W1… / 阶段 / 分期窗) carved from the plan.
-    // 2) Only fall back to the meta "scope→breakdown→implement→inspect" template
-    //    when the MD is pure product chrome with no work windows (old multi-cli
-    //    style). Landing plans like StoryForge W0–W5 must become those windows,
-    //    not a second meta loop.
+    // 1) Prefer real work phases (#### A1 / W0/W1… / 波次 / 阶段) carved from the plan.
+    // 2) If phase extract misses → **diagnose why**, then **recover from plan headings**
+    //    (non-meta ##/### with body). Do NOT skip solving by jumping to meta template.
+    // 3) Meta "scope→breakdown→implement→inspect" only when the MD is pure product
+    //    chrome with no recoverable work structure — and always log the failure reason.
     let mut force_serial = false;
     let sections = if looks_like_spec_document(&text) {
         let phases = extract_work_phases(&text);
-        if phases.len() >= 2 {
+        if !phases.is_empty() {
             append_log(
                 config,
                 &job.job_id,
@@ -194,16 +194,36 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
             force_serial = true;
             phases
         } else {
+            // Failure path: find cause, then solve with document content if any.
+            let diag = diagnose_phase_extraction_miss(&text, sections.len());
             append_log(
                 config,
                 &job.job_id,
-                &format!(
-                    "heuristic: product/spec MD ({} leftover heading section(s), no work phases) → work-order template",
-                    sections.len()
-                ),
+                &format!("heuristic: work-phase extract failed — {diag}"),
             );
-            force_serial = true;
-            work_order_template_from_spec(&text)
+            let recovered = recover_actionable_sections(&text);
+            if !recovered.is_empty() {
+                append_log(
+                    config,
+                    &job.job_id,
+                    &format!(
+                        "heuristic: recovered {} task(s) from plan headings (solved extract miss; not meta template)",
+                        recovered.len()
+                    ),
+                );
+                force_serial = true;
+                recovered
+            } else {
+                append_log(
+                    config,
+                    &job.job_id,
+                    &format!(
+                        "heuristic: no recoverable work structure ({diag}) → last-resort work-order template"
+                    ),
+                );
+                force_serial = true;
+                work_order_template_from_spec(&text)
+            }
         }
     } else if sections.len() <= 1 {
         // Fall back to chunking long prose into up to 3 sequential tasks.
@@ -452,11 +472,241 @@ pub(super) fn looks_like_spec_document(text: &str) -> bool {
     score >= 3
 }
 
-/// Pull real work windows from a landing / phase plan (W0/W1…, 阶段, 窗).
-/// Returns empty when the doc has no actionable phases — caller falls back to
-/// the meta work-order template (product chrome only).
+/// Explain why `extract_work_phases` returned empty — for planner log / operators.
+/// Does not invent tasks; diagnosis only.
+fn diagnose_phase_extraction_miss(text: &str, leftover_heading_sections: usize) -> String {
+    let task_ids = extract_task_id_headings(text);
+    let mut h3 = split_sections_level(text, /*include_h3=*/ true);
+    h3.retain(|(t, b)| !b.trim().is_empty() && !crate::plan::title_is_meta_heading(t));
+    let phase_like: Vec<_> = h3
+        .iter()
+        .filter(|(t, _)| title_looks_like_work_phase(t))
+        .map(|(t, _)| t.clone())
+        .collect();
+    let wave_like: Vec<_> = h3
+        .iter()
+        .filter(|(t, _)| title_looks_like_wave_slice(t))
+        .map(|(t, _)| t.clone())
+        .collect();
+    let non_meta_n = h3.len();
+    let meta_only = leftover_heading_sections == 0 && non_meta_n == 0;
+
+    let mut bits = Vec::new();
+    if meta_only {
+        bits.push("document is mostly chrome (no non-meta heading with body)".into());
+    }
+    if !task_ids.is_empty() {
+        bits.push(format!(
+            "found {} #### task-id heading(s) but extract discarded them (unexpected)",
+            task_ids.len()
+        ));
+    } else {
+        // Count #### lines that did not pass title_looks_like_task_id
+        let mut hash4 = 0usize;
+        let mut hash4_non_task = 0usize;
+        for line in text.lines() {
+            if let Some(rest) = line.trim_start().strip_prefix("#### ") {
+                hash4 += 1;
+                if !title_looks_like_task_id(rest.trim()) {
+                    hash4_non_task += 1;
+                }
+            }
+        }
+        if hash4 > 0 {
+            bits.push(format!(
+                "{hash4} #### heading(s), {hash4_non_task} not matching task-id pattern (A1/B2/U1-1…)"
+            ));
+        } else {
+            bits.push("no #### task-id headings (A1/B2/…)".into());
+        }
+    }
+    if phase_like.is_empty() {
+        bits.push("no W0/阶段/窗-style phase titles".into());
+    } else {
+        bits.push(format!(
+            "{} phase-like title(s) present but not selected: {}",
+            phase_like.len(),
+            phase_like.into_iter().take(4).collect::<Vec<_>>().join(" · ")
+        ));
+    }
+    if wave_like.is_empty() {
+        bits.push("no ### 波次 / Wave slices".into());
+    } else {
+        bits.push(format!(
+            "{} wave-like title(s): {}",
+            wave_like.len(),
+            wave_like.into_iter().take(3).collect::<Vec<_>>().join(" · ")
+        ));
+    }
+    if non_meta_n > 0 {
+        bits.push(format!(
+            "{non_meta_n} non-meta heading section(s) available for recovery"
+        ));
+    }
+    bits.join("; ")
+}
+
+/// After phase extract fails: use remaining plan headings as tasks (solve, don't abandon).
+/// Drops meta chrome; only keeps sections that look like real work (title or body).
+/// Pure product chrome (一句话 / 账本 / 非目标 only) returns empty so caller can use
+/// last-resort meta template — still after logging the failure reason.
+fn recover_actionable_sections(text: &str) -> Vec<(String, String)> {
+    let mut sections = split_sections_level(text, /*include_h3=*/ true);
+    sections.retain(|(title, body)| {
+        !body.trim().is_empty()
+            && !crate::plan::title_is_meta_heading(title)
+            && !title_is_recover_chrome(title)
+    });
+
+    let workish: Vec<_> = sections
+        .iter()
+        .filter(|(t, b)| {
+            title_looks_like_work_phase(t)
+                || title_looks_like_wave_slice(t)
+                || title_looks_like_task_id(t)
+                || title_looks_like_implement_heading(t)
+                || section_body_looks_actionable(b)
+        })
+        .cloned()
+        .collect();
+    if !workish.is_empty() {
+        return trim_phase_bodies(workish);
+    }
+
+    // Coarser ## with actionable body (no ###).
+    let mut coarse = split_sections_level(text, /*include_h3=*/ false);
+    coarse.retain(|(title, body)| {
+        !body.trim().is_empty()
+            && !crate::plan::title_is_meta_heading(title)
+            && !title_is_recover_chrome(title)
+            && (title_looks_like_work_phase(title)
+                || title_looks_like_implement_heading(title)
+                || section_body_looks_actionable(body))
+    });
+    if !coarse.is_empty() {
+        return trim_phase_bodies(coarse);
+    }
+    Vec::new()
+}
+
+/// Body suggests implementable work (not a table-only chrome blurb).
+fn section_body_looks_actionable(body: &str) -> bool {
+    let b = body.trim();
+    if b.chars().count() < 40 {
+        return false;
+    }
+    // Pipe-heavy tables alone (Board / 勾选表) are not work packages.
+    let lines: Vec<&str> = b.lines().filter(|l| !l.trim().is_empty()).collect();
+    let pipe_lines = lines
+        .iter()
+        .filter(|l| l.matches('|').count() >= 2)
+        .count();
+    if !lines.is_empty() && pipe_lines * 2 >= lines.len() {
+        return false;
+    }
+    for needle in [
+        "改法",
+        "文件",
+        "完成定义",
+        "自测",
+        "依赖",
+        "**ID**",
+        "sessionEntry",
+        "index.html",
+        "web/js",
+        "src/",
+        "- [ ]",
+        "- [x]",
+        "实现",
+        "修复",
+        "落地",
+        "confirm_start",
+        "resolveEntryRoute",
+    ] {
+        if b.contains(needle) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Extra chrome titles that must not be recovered as work (even if not in title_is_meta).
+fn title_is_recover_chrome(title: &str) -> bool {
+    let t = title.trim();
+    let lower = t.to_ascii_lowercase();
+    t.contains("账本")
+        || t.contains("一句话")
+        || t.contains("为什么做")
+        || t.contains("问题陈述")
+        || lower.contains("overview")
+        || (t.contains("阶段") && t.contains("勾选"))
+}
+
+/// Verb / implement-style section titles when not W/A1 patterned.
+fn title_looks_like_implement_heading(title: &str) -> bool {
+    let t = title.trim();
+    if t.is_empty() || crate::plan::title_is_meta_heading(t) {
+        return false;
+    }
+    let lower = t.to_ascii_lowercase();
+    // Numbered chrome like "3.5 账本" is NOT implement work.
+    if t.contains("账本")
+        || lower.contains("board")
+        || lower.contains("timeline")
+        || t.contains("勾选表")
+        || t.contains("决策")
+    {
+        return false;
+    }
+    for needle in [
+        "实现",
+        "修复",
+        "改造",
+        "接入",
+        "落地",
+        "拆分",
+        "确认",
+        "路由",
+        "顶栏",
+        "入口",
+        "聊天",
+        "结果",
+        "验收",
+        "回归",
+        "implement",
+        "fix",
+        "add ",
+        "wire",
+        "refactor",
+    ] {
+        if t.contains(needle) || lower.contains(needle) {
+            return true;
+        }
+    }
+    // "步骤 3 · 改入口" ok; bare "3.5 账本" / "6. 阶段切分" alone is not.
+    if t.contains("步骤") || t.contains("任务") {
+        return true;
+    }
+    false
+}
+
+/// Pull real work windows from a landing / phase plan (W0/W1…, 阶段, 窗, #### A1).
+/// Returns empty when the doc has no actionable phases — caller diagnoses + recovers,
+/// and only then may use the meta work-order template (product chrome only).
 pub(super) fn extract_work_phases(text: &str) -> Vec<(String, String)> {
-    // Prefer ### (W0/W1 under ## 分期) then ##; drop meta chrome.
+    // 0) Task-id headings first (#### A1 · … / #### B2 · … / #### U1-1 · …).
+    // Landing/派工 plans write implementation as #### tasks under ### 波次 — not W0 windows.
+    // Without this, looks_like_spec_document docs fall into the meta 4-wave template
+    // (读懂目标 → 拆包 → 落地 → 巡检) and ignore the real checklist.
+    let task_ids = extract_task_id_headings(text);
+    if task_ids.len() >= 2 {
+        return trim_phase_bodies(task_ids);
+    }
+    if task_ids.len() == 1 {
+        return trim_phase_bodies(task_ids);
+    }
+
+    // 1) Prefer ### (W0/W1 under ## 分期) then ##; drop meta chrome.
     let mut candidates = split_sections_level(text, /*include_h3=*/ true);
     candidates.retain(|(title, body)| {
         !body.trim().is_empty()
@@ -483,7 +733,154 @@ pub(super) fn extract_work_phases(text: &str) -> Vec<(String, String)> {
     if coarse.len() == 1 {
         return trim_phase_bodies(coarse);
     }
+
+    // 2) ### 波次 A/B/C as coarser work slices when no #### task ids and no W-windows.
+    let waves = extract_wave_headings(text);
+    if waves.len() >= 2 {
+        return trim_phase_bodies(waves);
+    }
+    if waves.len() == 1 {
+        return trim_phase_bodies(waves);
+    }
     Vec::new()
+}
+
+/// `#### A1 · title` / `#### B2 · …` / `#### U1-1 · …` / `#### PR1 · …` / `#### S0 · …`
+/// Body = lines until next #### or ### / ## heading.
+fn extract_task_id_headings(text: &str) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    let mut cur_title: Option<String> = None;
+    let mut cur_body = String::new();
+
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("#### ") {
+            let title = rest.trim().to_string();
+            if let Some(prev) = cur_title.take() {
+                let body = cur_body.trim().to_string();
+                if !body.is_empty() {
+                    out.push((prev, body));
+                }
+                cur_body.clear();
+            } else {
+                cur_body.clear();
+            }
+            if title_looks_like_task_id(&title) && !crate::plan::title_is_meta_heading(&title) {
+                cur_title = Some(title);
+            } else {
+                cur_title = None;
+            }
+            continue;
+        }
+        // Higher-level headings close the current #### task body.
+        if trimmed.starts_with("### ") || trimmed.starts_with("## ") {
+            if let Some(prev) = cur_title.take() {
+                let body = cur_body.trim().to_string();
+                if !body.is_empty() {
+                    out.push((prev, body));
+                }
+                cur_body.clear();
+            }
+            continue;
+        }
+        if cur_title.is_some() {
+            cur_body.push_str(line);
+            cur_body.push('\n');
+        }
+    }
+    if let Some(prev) = cur_title {
+        let body = cur_body.trim().to_string();
+        if !body.is_empty() {
+            out.push((prev, body));
+        }
+    }
+    out
+}
+
+/// True for landing-plan task titles: `A1 · …`, `B2`, `U1-1 ·`, `S0 ·`, `PR1 ·`, `D3 ·`, `C5 ·`.
+fn title_looks_like_task_id(title: &str) -> bool {
+    let t = title.trim();
+    if t.is_empty() {
+        return false;
+    }
+    // Strip optional leading checkbox / bullet noise.
+    let t = t
+        .trim_start_matches(['-', '*', '☐', '✅', '░', '[', ']', ' '])
+        .trim();
+    let chars: Vec<char> = t.chars().collect();
+    if chars.is_empty() {
+        return false;
+    }
+    // Leading letters (A–Z / a–z), at least one digit, optional -digit groups, then sep or end.
+    // Examples: A1, A10, B2, U1-1, S0, PR1, D4, C5, F0, X3
+    let mut i = 0;
+    let mut letters = 0;
+    while i < chars.len() && chars[i].is_ascii_alphabetic() {
+        letters += 1;
+        i += 1;
+        if letters > 4 {
+            return false;
+        }
+    }
+    if letters == 0 || i >= chars.len() || !chars[i].is_ascii_digit() {
+        return false;
+    }
+    while i < chars.len() && chars[i].is_ascii_digit() {
+        i += 1;
+    }
+    // optional -N (U1-1)
+    if i < chars.len() && chars[i] == '-' {
+        i += 1;
+        if i >= chars.len() || !chars[i].is_ascii_digit() {
+            return false;
+        }
+        while i < chars.len() && chars[i].is_ascii_digit() {
+            i += 1;
+        }
+    }
+    // Must end or be followed by separator before human title
+    if i >= chars.len() {
+        return true;
+    }
+    matches!(
+        chars[i],
+        '·' | '•' | '—' | '–' | '-' | ' ' | '：' | ':' | '（' | '(' | '|' | '/' | '　'
+    )
+}
+
+/// `### 波次 A — …` / `### 波次 B` as coarse implementation slices.
+fn extract_wave_headings(text: &str) -> Vec<(String, String)> {
+    let mut sections = split_sections_level(text, /*include_h3=*/ true);
+    sections.retain(|(title, body)| {
+        !body.trim().is_empty()
+            && !crate::plan::title_is_meta_heading(title)
+            && title_looks_like_wave_slice(title)
+    });
+    sections
+}
+
+fn title_looks_like_wave_slice(title: &str) -> bool {
+    let t = title.trim();
+    if t.is_empty() {
+        return false;
+    }
+    let lower = t.to_ascii_lowercase();
+    // 波次 A / 波次1 / Wave A / Wave 1
+    if t.contains("波次") {
+        return true;
+    }
+    if lower.starts_with("wave ") || lower.starts_with("wave") {
+        return lower.chars().any(|c| c.is_ascii_digit())
+            || lower.contains(" a")
+            || lower.contains(" b")
+            || lower.contains(" c")
+            || lower.contains(" d")
+            || lower.ends_with('a')
+            || lower.ends_with('b')
+            || lower.ends_with('c')
+            || lower.ends_with('d');
+    }
+    false
 }
 
 /// W0 / 阶段1 / 窗 / Phase 2 / Sprint — actionable implementation slices.
@@ -592,17 +989,22 @@ fn trim_phase_bodies(mut sections: Vec<(String, String)>) -> Vec<(String, String
     sections
 }
 
-/// When the MD is pure product chrome (no W-windows), emit the meta work-order
-/// (scope → breakdown with plan_ref → implement with evidence → inspect checklist).
+/// When the MD is pure product chrome (no recoverable work structure), emit the
+/// meta work-order (scope → breakdown → implement → inspect).
 /// See `docs/plan-execute-inspect-rework-2026-07-19.md` §3 / L0.
-/// **Do not** use this when `extract_work_phases` already found real phases.
+/// **Last resort only** — caller must have logged why extract+recover failed.
+/// **Do not** use this when phases/recovery already found real work.
 fn work_order_template_from_spec(text: &str) -> Vec<(String, String)> {
     let excerpt: String = text.chars().take(2_500).collect();
+    let reason = diagnose_phase_extraction_miss(text, 0);
     vec![
         (
             "读懂目标与范围".into(),
             format!(
-                "阅读下列计划/方案摘要，对齐**计划勾选真源**（§ 阶段表 / 成功标准 S* / 验证 V*）。\n\
+                "【规划器说明 · 最后手段】未能从计划中识别可派工标题，原因：{reason}。\n\
+                 这不是「忽略你的任务表」的成功路径；若文档里其实有 #### A1 / W0 / 波次 等任务，\
+                 请改标题后点「重新拆分」，或检查规划日志。\n\n\
+                 阅读下列计划/方案摘要，对齐**计划勾选真源**（§ 阶段表 / 成功标准 S* / 验证 V*）。\n\
                  用中文写入 `.cco-out/scope/SUMMARY.md`：\n\
                  - 目标\n\
                  - 范围内 / 范围外（引用计划非目标）\n\

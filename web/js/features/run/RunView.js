@@ -311,10 +311,12 @@ export function bindRunView(vm, bridge = {}) {
   function renderProgress() {
     pullFromLegacy();
     const s = vm.getSnapshot();
-    const live = s.live;
+    const rawLive = s.live;
     const L = legacy();
+    const ctx = runContext(rawLive, { phase: L.phase });
+    // 拆分台/规划中：勿用历史 completed 填 KPI / 结果台（顶栏计划与本轮脱节）
+    const live = ctx.belongs === false ? null : rawLive;
     const tasks = live?.tasks || [];
-    const ctx = runContext(live, { phase: L.phase });
     const counts = countBuckets(tasks);
 
     // Phase panels / doctor / picker still classic — only progress + logs fold here.

@@ -224,14 +224,16 @@ export async function pickPlanFileForPicker() {
       return;
     }
     const root = String(proj).replace(/[/\\]+$/, "");
-    // 默认打开当前项目目录，避免系统文件框落在上次其它项目路径
+    // 默认落到当前项目根；管理页「打开文件」同源
     const selected = await openNativeDialog({
       multiple: false,
+      directory: false,
       defaultPath: root,
-      title: "选择计划文件（当前项目内）",
+      title: "打开计划文件（须在当前项目内）",
       filters: [{ name: "Plan", extensions: ["md", "yaml", "yml", "json"] }],
     });
-    if (!selected) return;
+    // 取消：dialog 返回 null / undefined / "" / []
+    if (selected == null || selected === false || selected === "") return;
     const abs = String(Array.isArray(selected) ? selected[0] : selected || "").trim();
     if (!abs) return;
     if (!host.isPlanUnderProject(abs, root)) {
@@ -245,13 +247,25 @@ export async function pickPlanFileForPicker() {
     }
     if (!state.plans.includes(rel)) state.plans = [rel, ...state.plans];
     await selectPlan(rel);
+    state.planRailSelected = rel;
+    state.chatDraftPlan = rel;
     // 留在弹窗内，方便直接点「开始拆分」
     if (state.planChooserOpen) {
       host.renderPlanChooser();
       host.updateChooserAssignState();
     }
+    // 计划管理页：刷新列表与详情
+    if (state.page === "plans" && typeof renderPlansMgmtPage === "function") {
+      try {
+        await loadPlanRail();
+      } catch (_) {}
+      try {
+        if (typeof selectPlanRailItem === "function") selectPlanRailItem(rel);
+      } catch (_) {}
+      renderPlansMgmtPage();
+    }
   } catch (e) {
-    toast(String(e));
+    toast(String(e?.message || e));
   }
 }
 

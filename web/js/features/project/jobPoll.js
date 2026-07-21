@@ -70,7 +70,8 @@ export async function analyzePlanFromPicker() {
     return;
   }
 
-  const planMode = $("#pp-plan-mode")?.value || "ai";
+  // C6: default fast local split — avoid multi-minute Claude CLI planning spin.
+  const planMode = $("#pp-plan-mode")?.value || "fast";
   const provider = $("#pp-provider")?.value || "claude";
   const mode = $("#pp-mode")?.value || "print";
   // Commit any in-progress concurrency edit before reading.

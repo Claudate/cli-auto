@@ -78,6 +78,8 @@ export function createProjectDesk(opts = {}) {
     hasMonitorableActivity: host.hasMonitorableActivity,
     isBgBannerDismissed: host.isBgBannerDismissed,
     isPlanSessionActive: host.isPlanSessionActive,
+    liveBelongsToOpenPlan: host.liveBelongsToOpenPlan,
+    hasCurrentRoundLive: host.hasCurrentRoundLive,
     isPlanUnderProject: host.isPlanUnderProject,
     isSystemPostTask: host.isSystemPostTask,
     loadLive: host.loadLive,
@@ -168,6 +170,8 @@ export function installProjectHostGlobals(opts = {}) {
   window.hasMonitorableActivity = host.hasMonitorableActivity;
   window.isBgBannerDismissed = host.isBgBannerDismissed;
   window.isPlanSessionActive = host.isPlanSessionActive;
+  window.liveBelongsToOpenPlan = host.liveBelongsToOpenPlan;
+  window.hasCurrentRoundLive = host.hasCurrentRoundLive;
   window.isPlanUnderProject = host.isPlanUnderProject;
   window.isSystemPostTask = host.isSystemPostTask;
   window.loadLive = host.loadLive;

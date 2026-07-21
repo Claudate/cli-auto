@@ -51,6 +51,21 @@ pub struct PlanTaskView {
     pub prompt: String,
     /// Short one-line summary for lists / tooltips.
     pub prompt_preview: String,
+    /// Card one-liner from cco split SoT (falls back to prompt_preview).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// Done criteria (cco split / acceptance).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub done_when: Option<String>,
+    /// Concurrent wave (0-based) from cco split SoT / topo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wave: Option<i32>,
+    /// List order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ord: Option<i32>,
+    /// do | check | system
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
     /// Optional tasks are user-selectable on the confirm screen.
     pub optional: bool,
     /// Whether this task will run (optional defaults false until checked).
@@ -118,6 +133,13 @@ fn task_view(t: &TaskIR) -> PlanTaskView {
         readonly: s.readonly.clone(),
         forbid: s.forbid.clone(),
     });
+    let kind = if t.id.starts_with("sys-post-") {
+        Some("system".into())
+    } else if t.role == Some(crate::plan::TaskRole::Inspect) {
+        Some("check".into())
+    } else {
+        Some("do".into())
+    };
     PlanTaskView {
         id: t.id.clone(),
         title: t.title.clone(),
@@ -127,9 +149,67 @@ fn task_view(t: &TaskIR) -> PlanTaskView {
         role: super::task_edit::role_wire(t.role),
         scope,
         prompt: t.prompt.clone(),
-        prompt_preview: preview,
+        prompt_preview: preview.clone(),
+        summary: Some(preview),
+        done_when: t.acceptance.clone(),
+        wave: None,
+        ord: None,
+        kind,
         optional: t.optional,
         include: if t.optional { t.include } else { true },
+    }
+}
+
+fn task_view_from_cco(t: &crate::plan::CcoSplitTask) -> PlanTaskView {
+    let preview: String = if !t.summary.is_empty() {
+        t.summary.clone()
+    } else {
+        let p: String = t.body.chars().take(120).collect();
+        if t.body.chars().count() > 120 {
+            format!("{p}…")
+        } else {
+            p
+        }
+    };
+    let scope = if t.scope_paths.is_empty() {
+        None
+    } else {
+        Some(TaskScopeView {
+            paths: t.scope_paths.clone(),
+            readonly: vec![],
+            forbid: vec![],
+        })
+    };
+    PlanTaskView {
+        id: t.task_id.clone(),
+        title: t.title.clone(),
+        depends_on: t.depends_on.clone(),
+        group: t.plan_ref.clone().or_else(|| {
+            t.meta_json
+                .as_ref()
+                .and_then(|m| m.get("group"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        }),
+        provider: t
+            .provider
+            .clone()
+            .unwrap_or_else(|| "claude".into()),
+        role: t.role.clone(),
+        scope,
+        prompt: t.body.clone(),
+        prompt_preview: preview.clone(),
+        summary: Some(if t.summary.is_empty() {
+            preview
+        } else {
+            t.summary.clone()
+        }),
+        done_when: t.done_when.clone(),
+        wave: Some(t.wave),
+        ord: Some(t.ord),
+        kind: Some(t.kind.as_str().to_string()),
+        optional: t.optional,
+        include: if t.optional { t.enabled } else { true },
     }
 }
 
@@ -137,17 +217,34 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
     let mut layers = Vec::new();
     let mut tasks = Vec::new();
     if matches!(job.status, PlanJobStatus::Planned | PlanJobStatus::Confirmed) {
-        let ir_loaded = load_proposed(config, &job.job_id).or_else(|_| {
-            let path = job_dir(config, &job.job_id).join("plan.resolved.json");
-            let text = std::fs::read_to_string(&path)
-                .with_context(|| format!("read {}", path.display()))?;
-            let ir: PlanIR = serde_json::from_str(&text)
-                .with_context(|| format!("parse {}", path.display()))?;
-            Ok::<PlanIR, anyhow::Error>(ir)
-        });
-        if let Ok(ir) = ir_loaded {
-            layers = topo_layers(&ir);
-            tasks = ir.tasks.iter().map(task_view).collect();
+        // Prefer cco split SoT (full desk fields: summary/wave/done_when/body).
+        if let Ok(Some(doc)) = crate::state::cco_split_store::load_cco_split(config, &job.job_id) {
+            layers = crate::plan::split_topo_layers(&doc);
+            tasks = doc.tasks.iter().map(task_view_from_cco).collect();
+        } else {
+            let ir_loaded = load_proposed(config, &job.job_id).or_else(|_| {
+                let path = job_dir(config, &job.job_id).join("plan.resolved.json");
+                let text = std::fs::read_to_string(&path)
+                    .with_context(|| format!("read {}", path.display()))?;
+                let ir: PlanIR = serde_json::from_str(&text)
+                    .with_context(|| format!("parse {}", path.display()))?;
+                Ok::<PlanIR, anyhow::Error>(ir)
+            });
+            if let Ok(ir) = ir_loaded {
+                layers = topo_layers(&ir);
+                tasks = ir.tasks.iter().map(task_view).collect();
+                // Annotate waves from topo layers for desk.
+                for (wi, layer) in layers.iter().enumerate() {
+                    for id in layer {
+                        if let Some(tv) = tasks.iter_mut().find(|t| t.id == *id) {
+                            tv.wave = Some(wi as i32);
+                        }
+                    }
+                }
+                for (i, tv) in tasks.iter_mut().enumerate() {
+                    tv.ord = Some(i as i32);
+                }
+            }
         }
     }
     // Single read: structured events + compact raw for IPC (P1-1 / P1-3)
@@ -194,10 +291,59 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
 }
 
 pub fn load_proposed(config: &Config, job_id: &str) -> Result<PlanIR> {
+    // C4: prefer cco split SQLite SoT → materialize PlanIR.
+    if let Ok(Some(doc)) = crate::state::cco_split_store::load_cco_split(config, job_id) {
+        let job = PlanJob::load(config, job_id).ok();
+        let provider = job
+            .as_ref()
+            .map(|j| j.provider.as_str())
+            .unwrap_or("claude");
+        let mode = job
+            .as_ref()
+            .map(|j| j.exec_mode.as_str())
+            .unwrap_or("print");
+        let mut ir = crate::plan::to_plan_ir(&doc, provider, mode);
+        // Soft: do not hard-fail collab on desk load; validate best-effort.
+        if ir.validate().is_err() {
+            crate::plan::soften_plan_for_accept(&mut ir);
+            let _ = ir.validate();
+        }
+        return Ok(ir);
+    }
+
+    // C7: import plan.proposed.json once into SoT, then return.
     let path = job_dir(config, job_id).join("plan.proposed.json");
     let text = std::fs::read_to_string(&path)
         .with_context(|| format!("missing plan.proposed.json for {job_id}"))?;
     let ir: PlanIR = serde_json::from_str(&text)?;
+    // Import into SoT (best-effort) so next load hits SQLite.
+    if let Ok(job) = PlanJob::load(config, job_id) {
+        let source = crate::plan::CcoSplitSource::Import;
+        let status = match job.status {
+            PlanJobStatus::Confirmed => crate::plan::CcoSplitStatus::Confirmed,
+            PlanJobStatus::Planned => crate::plan::CcoSplitStatus::Ready,
+            PlanJobStatus::Planning => crate::plan::CcoSplitStatus::Drafting,
+            PlanJobStatus::PlanFailed => crate::plan::CcoSplitStatus::Failed,
+            PlanJobStatus::Cancelled => crate::plan::CcoSplitStatus::Cancelled,
+        };
+        let mut doc = crate::plan::from_plan_ir(
+            job_id,
+            job.project.clone(),
+            job.plan_path.clone(),
+            &ir,
+            source,
+            status,
+            &job.created_at.to_rfc3339(),
+            &job.updated_at.to_rfc3339(),
+        );
+        doc.run_id = job.run_id.clone();
+        crate::state::cco_split_store::try_save_cco_split(config, &doc);
+    }
+    // Soften then validate for legacy hard graphs.
+    let mut ir = ir;
+    if ir.validate().is_err() {
+        crate::plan::soften_plan_for_accept(&mut ir);
+    }
     ir.validate()?;
     Ok(ir)
 }
@@ -206,6 +352,62 @@ pub(super) fn write_proposed(config: &Config, job_id: &str, ir: &PlanIR) -> Resu
     let path = job_dir(config, job_id).join("plan.proposed.json");
     std::fs::write(&path, serde_json::to_string_pretty(ir)?)
         .with_context(|| format!("write {}", path.display()))?;
+    // Dual-write task rows (order · wave · optional/include) for SQLite consumers.
+    crate::state::sqlite::try_replace_plan_tasks(config, job_id, ir);
+    // C2/C3: cco-native split SoT (full fields) — primary store for desk/confirm.
+    if let Ok(job) = PlanJob::load(config, job_id) {
+        let source = match job.plan_mode.as_str() {
+            "ai" => {
+                if ir.adapter.starts_with("cco-split/llm") || ir.adapter.contains("llm") {
+                    crate::plan::CcoSplitSource::Llm
+                } else if ir.adapter.contains("heuristic") {
+                    crate::plan::CcoSplitSource::Heuristic
+                } else {
+                    crate::plan::CcoSplitSource::Llm
+                }
+            }
+            "parse" => crate::plan::CcoSplitSource::Parse,
+            "fake" => crate::plan::CcoSplitSource::Fake,
+            _ => crate::plan::CcoSplitSource::Heuristic,
+        };
+        // Refine source from adapter tag written by producers.
+        let source = if ir.adapter.starts_with("cco-split/") {
+            crate::plan::CcoSplitSource::parse(
+                ir.adapter.strip_prefix("cco-split/").unwrap_or("heuristic"),
+            )
+        } else if ir.adapter.contains("heuristic") {
+            crate::plan::CcoSplitSource::Heuristic
+        } else {
+            source
+        };
+        // write_proposed means the graph is desk-ready (even if job.json still Planning mid-finish).
+        let status = match job.status {
+            PlanJobStatus::Confirmed => crate::plan::CcoSplitStatus::Confirmed,
+            PlanJobStatus::PlanFailed => crate::plan::CcoSplitStatus::Failed,
+            PlanJobStatus::Cancelled => crate::plan::CcoSplitStatus::Cancelled,
+            _ => crate::plan::CcoSplitStatus::Ready,
+        };
+        let mut doc = crate::plan::from_plan_ir(
+            job_id,
+            job.project.clone(),
+            job.plan_path.clone(),
+            ir,
+            source,
+            status,
+            &job.created_at.to_rfc3339(),
+            &Utc::now().to_rfc3339(),
+        );
+        doc.run_id = job.run_id.clone();
+        let notes = crate::plan::soft_accept_split(&mut doc);
+        if !notes.is_empty() {
+            append_log(
+                config,
+                job_id,
+                &format!("cco_split soft_accept: {}", notes.join("; ")),
+            );
+        }
+        crate::state::cco_split_store::try_save_cco_split(config, &doc);
+    }
     Ok(())
 }
 
@@ -803,6 +1005,30 @@ pub fn mark_confirmed(config: &Config, job_id: &str, run_id: &str, ir: &PlanIR) 
     job.updated_at = Utc::now();
     job.save(config)?;
     append_log(config, job_id, &format!("confirmed run_id={run_id}"));
+    // SoT: mark confirmed (C4).
+    crate::state::cco_split_store::try_mark_cco_split_confirmed(
+        config,
+        job_id,
+        run_id,
+        &job.updated_at.to_rfc3339(),
+    );
+    // Keep SoT tasks in sync with final IR (optional drop already applied on ir).
+    let mut doc = crate::plan::from_plan_ir(
+        job_id,
+        job.project.clone(),
+        job.plan_path.clone(),
+        ir,
+        crate::plan::CcoSplitSource::parse(
+            ir.adapter
+                .strip_prefix("cco-split/")
+                .unwrap_or("merge"),
+        ),
+        crate::plan::CcoSplitStatus::Confirmed,
+        &job.created_at.to_rfc3339(),
+        &job.updated_at.to_rfc3339(),
+    );
+    doc.run_id = Some(run_id.to_string());
+    crate::state::cco_split_store::try_save_cco_split(config, &doc);
     let _ = std::fs::write(
         job_dir(config, job_id).join("plan.resolved.json"),
         serde_json::to_string_pretty(ir)?,
@@ -843,6 +1069,12 @@ pub fn load_proposed_for_exec(config: &Config, job_id: &str) -> Result<(PlanJob,
             job.status.as_str()
         );
     }
+    // C4: hard run-gate on cco split SoT when present.
+    if let Ok(Some(doc)) = crate::state::cco_split_store::load_cco_split(config, job_id) {
+        if let Err(msg) = crate::plan::run_gate_ok(&doc) {
+            bail!("{msg}");
+        }
+    }
     let mut ir = load_proposed(config, job_id).or_else(|_| {
         // 回落 resolved（确认后写的冻结图）
         let path = job_dir(config, job_id).join("plan.resolved.json");
@@ -853,6 +1085,8 @@ pub fn load_proposed_for_exec(config: &Config, job_id: &str) -> Result<(PlanJob,
             .with_context(|| format!("parse plan.resolved.json for {job_id}"))?;
         Ok::<PlanIR, anyhow::Error>(ir)
     })?;
+    // Soft collab fixes before hard materialize validate (align with split accept layer).
+    let _ = crate::plan::soften_plan_for_accept(&mut ir);
     apply_worker_defaults(&mut ir, &job.provider, &job.exec_mode);
     // Drop unselected optional tasks before validate / spawn.
     let before = ir.tasks.len();

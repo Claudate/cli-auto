@@ -77,13 +77,12 @@ export function renderConfirmPanel() {
   // Pre-module fallback: keep title readable; no start_run / no duplicate desk
   const st = String(job.status || "").toLowerCase();
   const reused = st === "confirmed";
+  // 与 splitFillMeta 一致：计划名只在顶栏，不在 h3 再叠一遍
   const titleEl = $("#confirm-title");
   if (titleEl) {
-    titleEl.textContent = job.plan_name
-      ? `${reused ? "历史拆分" : "拆分结果"} · ${job.plan_name}`
-      : reused
-        ? "历史拆分（可再次确认并开始）"
-        : "拆分结果";
+    titleEl.textContent = reused
+      ? "历史拆分（可再次确认并开始）"
+      : "拆分结果";
   }
   const waves = $("#confirm-waves");
   if (waves && !waves.dataset.ccoAwaitSplit) {

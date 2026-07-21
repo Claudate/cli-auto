@@ -282,9 +282,9 @@ fn update_plan_task_cmd(
     include: Option<bool>,
     provider: Option<String>,
     #[allow(non_snake_case)] dependsOn: Option<Vec<String>>,
-    /// S-role: scout|implement|integrate|inspect; empty clears.
+    // S-role: scout|implement|integrate|inspect; empty clears.
     role: Option<String>,
-    /// S-role: writable scope path globs (empty clears paths).
+    // S-role: writable scope path globs (empty clears paths).
     #[allow(non_snake_case)] scopePaths: Option<Vec<String>>,
 ) -> Result<PlanJobView, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
@@ -391,8 +391,13 @@ fn accept_residual_cmd(
 
 #[tauri::command]
 fn open_path(path: String) -> Result<(), String> {
-    let p = std::path::PathBuf::from(&path);
-    if path.ends_with('/') || path.ends_with('\\') || (!p.exists() && p.extension().is_none()) {
+    // Normalize trailing slashes for existence checks (macOS open tolerates them).
+    let trimmed = path.trim_end_matches(['/', '\\']);
+    let p = std::path::PathBuf::from(if trimmed.is_empty() { &path } else { trimmed });
+    let want_dir = path.ends_with('/')
+        || path.ends_with('\\')
+        || (!p.exists() && p.extension().is_none());
+    if want_dir {
         if !p.exists() {
             std::fs::create_dir_all(&p).map_err(map_err)?;
         }
@@ -401,10 +406,19 @@ fn open_path(path: String) -> Result<(), String> {
             std::fs::create_dir_all(parent).map_err(map_err)?;
         }
     }
-    std::process::Command::new("open")
-        .arg(&path)
+    // Prefer path without trailing slash for `open` when it's a directory on disk.
+    let open_arg = if p.is_dir() {
+        p.as_os_str()
+    } else {
+        std::ffi::OsStr::new(&path)
+    };
+    let status = std::process::Command::new("open")
+        .arg(open_arg)
         .status()
         .map_err(map_err)?;
+    if !status.success() {
+        return Err(format!("open failed: {path} (exit {status})"));
+    }
     Ok(())
 }
 

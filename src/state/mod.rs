@@ -1,9 +1,12 @@
-//! Run state on disk: run.json, events.jsonl, per-task files.
+//! Run state on disk: run.json, events.jsonl, per-task files · SQLite dual-write.
 //!
 //! [INPUT]: runs_root · PlanIR（初始化）
-//! [OUTPUT]: RunState/TaskState(attempt/failover_used) · save/load · event append
+//! [OUTPUT]: RunState/TaskState(attempt/failover_used) · save/load · event append · sqlite
 //! [POS]: 运行状态落盘；scheduler 与 services 读写
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/state/CLAUDE.md
+
+pub mod cco_split_store;
+pub mod sqlite;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

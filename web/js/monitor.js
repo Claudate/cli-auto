@@ -9,9 +9,12 @@
 function renderWorkspace() {
   updateWorkspaceTitle();
   const live = state.live;
-  const runStatus = live?.run_status;
-  const hasRun = !!live?.run_id;
-  const active = isLiveStatus(runStatus);
+  // 拆分会话打开时，项目历史 completed live 不算本轮
+  const belongs =
+    typeof liveBelongsToOpenPlan === "function" ? liveBelongsToOpenPlan() : true;
+  const runStatus = belongs ? live?.run_status : null;
+  const hasRun = belongs && !!live?.run_id;
+  const active = hasRun && isLiveStatus(runStatus);
   const finished =
     hasRun &&
     !active &&
@@ -39,7 +42,7 @@ function renderWorkspace() {
   renderDoctorWarn();
   renderPhasePanels();
   if (state.phase === "pick" || state.phase === "done" || state.phase === "running") {
-    if (!state.selectedPlan && state.live?.plan_path) {
+    if (!state.selectedPlan && belongs && state.live?.plan_path) {
       state.selectedPlan =
         normalizePlanPath(state.live.plan_path) || state.live.plan_path;
     }

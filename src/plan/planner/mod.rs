@@ -355,6 +355,138 @@ mod tests {
     }
 
     #[test]
+    fn latest_job_skips_stale_planning_zombie() {
+        use super::job::{job_dir, PlanJob, PlanJobStatus};
+        use chrono::{Duration, Utc};
+
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let plan = project.join("idea.md");
+        std::fs::write(&plan, "# x\n\n## a\n\ndo a\n").unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let planned = start_plan_job(
+            &cfg,
+            StartPlanJobRequest {
+                project: project.clone(),
+                plan: PathBuf::from("idea.md"),
+                plan_mode: Some("fake".into()),
+                provider: Some("fake".into()),
+                mode: Some("print".into()),
+                max_parallel: Some(2),
+                preserve_from_job_id: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(planned.status, "planned");
+
+        // 更晚但已超时的 zombie planning 不得盖住 planned
+        let zombie_id = "plan-zombie-planning-test";
+        let zombie_dir = job_dir(&cfg, zombie_id);
+        std::fs::create_dir_all(&zombie_dir).unwrap();
+        let zombie = PlanJob {
+            job_id: zombie_id.into(),
+            status: PlanJobStatus::Planning,
+            project: project.clone(),
+            plan_path: PathBuf::from("idea.md"),
+            plan_mode: "ai".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: None,
+            run_id: None,
+            created_at: Utc::now() - Duration::hours(2),
+            updated_at: Utc::now() - Duration::minutes(45),
+            plan_name: None,
+            task_count: None,
+            max_parallel: Some(2),
+            adapter: None,
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+        };
+        zombie.save(&cfg).unwrap();
+
+        let latest = latest_plan_job_for_project(&cfg, &project)
+            .unwrap()
+            .expect("should find latest");
+        assert_eq!(latest.job_id, planned.job_id);
+        assert_eq!(latest.status, "planned");
+    }
+
+    #[test]
+    fn get_plan_job_reaps_stale_planning_zombie() {
+        use super::job::{get_plan_job, job_dir, PlanJob, PlanJobStatus};
+        use chrono::{Duration, Utc};
+
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let zombie_id = "plan-reap-zombie-test";
+        let zombie_dir = job_dir(&cfg, zombie_id);
+        std::fs::create_dir_all(zombie_dir.join("llm_work/tasks/__planner__")).unwrap();
+        // Dead pid (unlikely to be alive)
+        // High unused pid — process_alive should be false
+        std::fs::write(
+            zombie_dir.join("llm_work/tasks/__planner__/meta.json"),
+            r#"{"pid": 999999, "opaque_id": "pid:999999"}"#,
+        )
+        .unwrap();
+        std::fs::write(zombie_dir.join("planner.log"), "started\n").unwrap();
+        // Touch log mtime old? reap uses age_created > 45s with dead pid
+        let zombie = PlanJob {
+            job_id: zombie_id.into(),
+            status: PlanJobStatus::Planning,
+            project: project.clone(),
+            plan_path: PathBuf::from("idea.md"),
+            plan_mode: "ai".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: None,
+            run_id: None,
+            created_at: Utc::now() - Duration::minutes(5),
+            updated_at: Utc::now() - Duration::minutes(5),
+            plan_name: None,
+            task_count: None,
+            max_parallel: Some(2),
+            adapter: None,
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+        };
+        zombie.save(&cfg).unwrap();
+
+        let view = get_plan_job(&cfg, zombie_id).unwrap();
+        assert_eq!(view.status, "plan_failed", "err={:?}", view.error);
+        assert!(
+            view.error
+                .as_deref()
+                .map(|e| e.contains("process gone") || e.contains("timeout") || e.contains("stale"))
+                .unwrap_or(false),
+            "expected reap reason, got {:?}",
+            view.error
+        );
+    }
+
+    #[test]
     fn extract_json_from_stream_json_result_not_init() {
         // Repro: first `{` is system init (no tasks). Plan lives in final result.
         let plan_body = r#"{
@@ -666,6 +798,143 @@ t1
         assert!(
             ir.tasks.iter().any(|t| t.prompt.contains("plan_ref")),
             "work-order prompts should require plan_ref"
+        );
+
+        // Spec with implement ## titles but no W0/A1 — must RECOVER, not silent meta.
+        let recover_plan = project.join("recover-headings.md");
+        let recover_md = r#"# 某功能落地
+
+> 关联真源 · PROTOCOL · 非目标 · 成功标准
+
+## 0. 一句话
+
+做入口路由。
+
+## 8. 非目标
+
+不做 IDE。
+
+## 实现 resolveEntryRoute
+
+改 sessionEntry.js，planned 落拆分台。
+
+完成定义：杀进程重开仍见拆分台。
+
+## 实现 chatAssignDirect 默认
+
+改 state.js 默认直拆。
+
+文件：web/js/state.js
+
+自测：清 localStorage 后拆。
+
+## 10. 成功标准
+
+S1
+
+## 12. 修订历史
+
+t1
+"#;
+        std::fs::write(&recover_plan, recover_md).unwrap();
+        assert!(looks_like_spec_document(recover_md));
+        let job_r = PlanJob {
+            job_id: "plan-test-recover".into(),
+            plan_path: PathBuf::from("recover-headings.md"),
+            ..job.clone()
+        };
+        std::fs::create_dir_all(job_dir(&cfg, &job_r.job_id)).unwrap();
+        let ir_r = build_heuristic_ai_plan(&cfg, &job_r).expect("recover heuristic");
+        let titles_r: Vec<_> = ir_r.tasks.iter().map(|t| t.title.clone()).collect();
+        assert!(
+            titles_r.iter().any(|t| t.contains("resolveEntryRoute") || t.contains("实现")),
+            "must recover implement headings, got {titles_r:?}"
+        );
+        assert!(
+            titles_r.iter().all(|t| !t.contains("读懂目标与范围")),
+            "must not abandon to meta template when headings recoverable, got {titles_r:?}"
+        );
+
+        // 派工/落地计划 #### A1 · … must become those tasks — NOT the meta 4-wave.
+        let dispatch = project.join("ux-nondev-landing.md");
+        let dispatch_md = r#"# cco 非开发主路径 · 落地实施计划
+
+> 角色：体验落地实施真源 · 不排期则不碰 · PROTOCOL
+
+## 0. 目标 / 非目标
+
+给 PM 用。
+
+## 3. 任务表
+
+### 波次 A — 入口与减法（P0 · MVP Ship）
+
+#### A1 · 待确认强制进拆分台
+
+| 项 | 内容 |
+|----|------|
+| **文件** | sessionEntry.js |
+| **改法** | resolveEntryRoute planned → workspace |
+
+#### A2 · 主路径默认跳过「执行选项」层
+
+state.js chatAssignDirect 默认开。
+
+#### A3 · 拆分台顶栏只留主路径控件
+
+index.html 藏 sanitize / writeback。
+
+### 波次 B — 写计划顺滑
+
+#### B1 · 聊天空态引导
+
+空态三句示例。
+
+#### B2 · 主 CTA：保存与拆分意图合并
+
+静默 save 再 assign。
+
+## 9. 与现有文档关系
+
+参考。
+
+## 10. 修订记录
+
+t1
+"#;
+        std::fs::write(&dispatch, dispatch_md).unwrap();
+        assert!(
+            looks_like_spec_document(dispatch_md),
+            "dispatch plan scores as spec MD (chrome keywords)"
+        );
+        let job_dispatch = PlanJob {
+            job_id: "plan-test-dispatch".into(),
+            plan_path: PathBuf::from("ux-nondev-landing.md"),
+            ..job.clone()
+        };
+        std::fs::create_dir_all(job_dir(&cfg, &job_dispatch.job_id)).unwrap();
+        let ir_d = build_heuristic_ai_plan(&cfg, &job_dispatch).expect("dispatch heuristic");
+        let titles_d: Vec<_> = ir_d.tasks.iter().map(|t| t.title.clone()).collect();
+        assert!(
+            titles_d.iter().any(|t| t.contains("A1") || t.contains("待确认")),
+            "dispatch plan must split into #### A1… tasks, got {titles_d:?}"
+        );
+        assert!(
+            titles_d.iter().any(|t| t.contains("A2") || t.contains("执行选项")),
+            "expected A2 task, got {titles_d:?}"
+        );
+        assert!(
+            titles_d.iter().all(|t| {
+                !t.contains("读懂目标与范围")
+                    && !t.contains("拆出可执行工作包")
+                    && !t.contains("专门巡检")
+            }),
+            "must NOT use meta work-order titles for #### task plans, got {titles_d:?}"
+        );
+        assert!(
+            ir_d.tasks.len() >= 4,
+            "expected several #### tasks, got {} {titles_d:?}",
+            ir_d.tasks.len()
         );
 
         // Landing plan with W0/W1… must become those phases — NOT the meta 4-wave.

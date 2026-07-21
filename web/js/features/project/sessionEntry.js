@@ -1,8 +1,8 @@
 /**
  * [INPUT]: legacy host + gateway via requireGateway
- * [OUTPUT]: plan session stash + H0 entry route + selectProject + bg banner
+ * [OUTPUT]: plan session stash + entry route (A1 confirm desk) + selectProject + bg banner
  * [POS]: A5-2b-fin features/project/sessionEntry.js
- * note: plan session stash + H0 entry route + selectProject + bg banner
+ * note: planned/confirmed → workspace 拆分台；历史 live 不抢本轮 phase/结果
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -52,6 +52,29 @@ import { host } from "./host.js";
 
 export function isPlanSessionActive(phase = state.phase) {
   return phase === "planning" || phase === "confirm";
+}
+
+/**
+ * project_live 返回的是「项目最近一次 run」（含历史 completed）。
+ * 打开拆分会话且尚未/不匹配本 job 的 run 时，不得把旧 run 当成「本轮结果」。
+ */
+export function liveBelongsToOpenPlan() {
+  const live = state.live;
+  if (!live?.run_id) return false;
+  const job = state.planJob;
+  if (!job) return true;
+  const st = String(job.status || "").toLowerCase();
+  if (st !== "planning" && st !== "planned" && st !== "confirmed") return true;
+  const jrid = job.run_id || job.runId || null;
+  if (!jrid) return false;
+  return String(jrid) === String(live.run_id);
+}
+
+/** 历史 live 仅作项目档案，不驱动 phase / 本轮结果台 */
+export function hasCurrentRoundLive() {
+  if (typeof hasActiveRun === "function" && hasActiveRun()) return true;
+  if (typeof isRunPaused === "function" && isRunPaused()) return true;
+  return liveBelongsToOpenPlan();
 }
 
 export function stashPlanSession(projectPath = state.selectedPath) {
@@ -129,11 +152,10 @@ export async function tryRestorePersistedPlanJob(projectPath) {
     if (status === "planning") {
       toast("已接上未完成的规划任务");
     } else if (status === "planned" || status === "confirmed") {
-      // 不暗示「已进入执行页」：H0 仍落 chat；顶栏可「返回确认」
       toast(
         n
-          ? `已记住上次拆分（${n} 任务）· 顶栏「返回确认」可继续执行`
-          : "已记住上次拆分 · 顶栏「返回确认」可继续执行"
+          ? `已回到拆分台（${n} 任务），核对后可确认并开始`
+          : "已回到拆分台，核对后可确认并开始"
       );
     }
     return true;
@@ -152,12 +174,12 @@ export function hasMonitorableActivity() {
 }
 
 /**
- * H0 入口路由（对齐用户主路径）：
+ * 入口路由（A1 · 对齐 PRODUCT「拆分必须看见」）：
  * 1. 有活动 run → workspace 执行面板
  * 2. AI 正在拆分中（planning）→ workspace 看规划进度
- * 3. 其它一律 chat 主窗（含 planned/confirmed 待确认、done、无 live）
+ * 3. 待确认 planned/confirmed → workspace 拆分台（须核对后 confirm_start）
+ * 4. 其它 → chat 主窗（done / 无 job / 冷启动）
  *
- * 待确认不抢主窗：planJob 仍保留在内存，顶栏「返回确认」/ banner 可进 workspace。
  * 不改 Mode B confirm_start。
  */
 export function resolveEntryRoute() {
@@ -165,33 +187,49 @@ export function resolveEntryRoute() {
   if (typeof hasActiveRun === "function" && hasActiveRun()) {
     return { page: "workspace", phaseHint: "running" };
   }
-  // 2) 仅 AI 拆分「进行中」→ 看规划进度；planned/confirmed/failed 不抢主窗
   const st = String(state.planJob?.status || "").toLowerCase();
+  // 2) AI 拆分进行中
   if (state.planJobId && (state.phase === "planning" || st === "planning") && st === "planning") {
     return { page: "workspace", phaseHint: "planning" };
   }
-  // 3) 默认聊天主窗（打开软件 / 选项目 / 待确认 / 已结束）
+  // 3) 待确认拆分台（phase 或磁盘 job 任一命中）
+  if (
+    state.planJobId &&
+    (state.phase === "confirm" || st === "planned" || st === "confirmed")
+  ) {
+    return { page: "workspace", phaseHint: "confirm" };
+  }
+  // 4) 默认聊天主窗
   return { page: "chat", phaseHint: null };
 }
 
 /**
  * 按 resolveEntryRoute 落地页面。
- * workspace：渲染看板/规划相位；chat：走 openChatPage（主窗）。
+ * workspace：渲染看板/规划/拆分台；chat：走 openChatPage。
  */
 export async function applyEntryRoute() {
   const route = resolveEntryRoute();
 
   if (route.page === "workspace") {
     if (route.phaseHint === "running") {
-      // 活动 run：看板优先；confirm 会话可 stash，顶栏「返回确认」仍可回
       state.phase = "running";
       state.planCollapsed = true;
     } else if (route.phaseHint === "planning") {
       state.phase = "planning";
+    } else if (route.phaseHint === "confirm") {
+      state.phase = "confirm";
+      if (!state.confirmTaskId && state.planJob?.tasks?.length) {
+        state.confirmTaskId = state.planJob.tasks[0].id;
+      }
     }
     showPage("workspace");
     host.renderPhasePanels();
     host.renderPlanPicker();
+    if (state.phase === "confirm" && typeof host.renderConfirmPanel === "function") {
+      try {
+        host.renderConfirmPanel();
+      } catch (_) {}
+    }
     renderWorkspace();
     host.updateTopPlanInfo();
     updateBgPlanBanner();
@@ -201,8 +239,7 @@ export async function applyEntryRoute() {
     return route;
   }
 
-  // 默认聊天主窗（H0）
-  // 保留 planJob 内存态（planned/confirmed），便于顶栏「返回确认」；不 showPage workspace
+  // 默认聊天主窗；planJob 仍可保留在内存
   if (typeof openChatPage === "function") {
     await openChatPage();
   } else {
@@ -329,6 +366,7 @@ export function updateBgPlanBanner() {
     !paused &&
     !planning &&
     !!state.live?.run_id &&
+    liveBelongsToOpenPlan() &&
     (state.phase === "running" || state.phase === "done");
   // 顶栏已有监控入口时隐藏 banner，避免 chat/设置 双入口抢注意力
   const topMonVisible =
@@ -410,6 +448,8 @@ export async function selectProject(path) {
   state.planJob = null;
   state.confirmTaskId = null;
   state.phase = "pick";
+  // 计划管理页作用域随项目重置
+  state.plansMgmtScopeDir = null;
   // 聊天按项目隔离：先 stash 旧项目，再切到新项目缓存（或空会话）
   try {
     if (typeof stashChatSession === "function" && state.chatProjectPath) {
@@ -445,26 +485,19 @@ export async function selectProject(path) {
     if (state.phase === "planning" && state.planJobId) {
       await host.refreshPlanJob().catch(() => {});
     }
-    // 仅在真的落在 workspace 规划中时提示；chat 主窗用顶栏「返回确认」即可
+    // workspace 规划/拆分台已落地；不 toast 冲回 chat
     if (
       state.page === "workspace" &&
       state.phase === "planning" &&
       !hasActiveRun()
     ) {
       toast("已回到后台规划");
-    } else if (
-      state.page === "chat" &&
-      isPlanSessionActive() &&
-      state.phase === "confirm" &&
-      !hasActiveRun()
-    ) {
-      toast("有待确认的拆分 · 点顶栏「返回确认」可继续执行");
     }
     return;
   }
 
   // 内存无会话 → 从磁盘接上该项目最近一次拆分（避免每次重拆）
-  // 活动 run 优先；planned/confirmed 会恢复到内存，但 H0 仍落 chat
+  // 活动 run 优先；planned/confirmed 恢复后 A1 落拆分台
   const activeRun = hasActiveRun();
   if (!activeRun) {
     const restoredDisk = await tryRestorePersistedPlanJob(path);
@@ -472,16 +505,6 @@ export async function selectProject(path) {
       await applyEntryRoute();
       if (state.phase === "planning" && state.planJobId) {
         await host.refreshPlanJob().catch(() => {});
-      }
-      if (
-        state.page === "chat" &&
-        state.phase === "confirm" &&
-        state.planJobId
-      ) {
-        const n = state.planJob?.task_count || state.planJob?.tasks?.length || 0;
-        if (n) {
-          toast(`已恢复历史拆分（${n} 任务）· 聊天主窗可改计划，顶栏「返回确认」可执行`);
-        }
       }
       return;
     }
@@ -494,13 +517,27 @@ export async function selectProject(path) {
     state.live?.run_id &&
     ["completed", "done", "failed", "aborted", "stopped", "paused"].includes(
       String(state.live?.run_status || "").toLowerCase()
-    )
+    ) &&
+    liveBelongsToOpenPlan()
   ) {
+    // 仅本轮（或无打开拆分会话）终态才进结果台；旧 completed 不抢 phase
     state.phase = "done";
   }
   const proj = state.projects.find((p) => p.path === path);
-  const rawCandidate =
-    state.live?.plan_path || proj?.default_plan || proj?.last_plan || state.plans[0] || null;
+  // 打开拆分会话时顶栏计划跟 job，勿被历史 live.plan_path 冲掉
+  const preferLivePlan =
+    !state.planJobId || liveBelongsToOpenPlan() || !state.selectedPlan;
+  const rawCandidate = preferLivePlan
+    ? state.live?.plan_path ||
+      proj?.default_plan ||
+      proj?.last_plan ||
+      state.plans[0] ||
+      null
+    : state.selectedPlan ||
+      proj?.default_plan ||
+      proj?.last_plan ||
+      state.plans[0] ||
+      null;
   const candidate = normalizePlanPath(rawCandidate, path) || rawCandidate;
   if (candidate) {
     try {
@@ -510,15 +547,21 @@ export async function selectProject(path) {
       state.selectedPlan = candidate;
     }
   }
-  // H0 最终落点：有活动 run / 拆分中 → workspace；否则 chat
+  // 最终落点：活动 run / planning / confirm → workspace；否则 chat
   await applyEntryRoute();
-  // 双保险：无活动 run 且不在 planning 时绝不能停在 workspace（防历史分支漏改）
+  // 双保险：无活动 run 且非规划/拆分台时不得停在 workspace
   if (
     state.page === "workspace" &&
     !(typeof hasActiveRun === "function" && hasActiveRun())
   ) {
     const st2 = String(state.planJob?.status || "").toLowerCase();
-    if (state.phase !== "planning" && st2 !== "planning") {
+    const allowPlanDesk =
+      state.phase === "planning" ||
+      state.phase === "confirm" ||
+      st2 === "planning" ||
+      st2 === "planned" ||
+      st2 === "confirmed";
+    if (!allowPlanDesk) {
       if (typeof openChatPage === "function") await openChatPage();
       else showPage("chat");
       try {

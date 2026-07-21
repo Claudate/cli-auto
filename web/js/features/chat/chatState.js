@@ -42,13 +42,15 @@ export function ensureChatState() {
     state.planRailOpen = localStorage.getItem(key) === "1";
   }
   if (state.planRailSelected == null) state.planRailSelected = null;
-  // G1: default plans dir (project-relative), persisted per project
+  // G1: default plans dir (project-relative), persisted per project — 仅聊天落盘
   if (state.plansDir == null) {
     const k = state.selectedPath
       ? `cco.plansDir:${state.selectedPath}`
       : "cco.plansDir";
     state.plansDir = localStorage.getItem(k) || "plans";
   }
+  // 管理页列表作用域（选中的文件夹；null = 项目全量）
+  if (state.plansMgmtScopeDir === undefined) state.plansMgmtScopeDir = null;
   // G4: pending image files before send [{name,mime,dataUrl,size}]
   if (!Array.isArray(state.chatPendingAttachments)) state.chatPendingAttachments = [];
   if (state.showExecutedPlans == null) {

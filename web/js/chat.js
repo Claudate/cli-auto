@@ -49,9 +49,10 @@ function setPlanRailOpen(...a) { return _chatCall("setPlanRailOpen", ...a); }
 function getPlansDir(...a) { return _chatCall("getPlansDir", ...a); }
 function setPlansDir(...a) { return _chatCall("setPlansDir", ...a); }
 function promptPlansDir(...a) { return _chatCall("promptPlansDir", ...a); }
-function openPlansDirInFinder(...a) { return _chatCall("openPlansDirInFinder", ...a); }
-function showOtherPlansLocations(...a) { return _chatCall("showOtherPlansLocations", ...a); }
+function pickPlansFolderForMgmt(...a) { return _chatCall("pickPlansFolderForMgmt", ...a); }
 function pickPlanFileForMgmt(...a) { return _chatCall("pickPlanFileForMgmt", ...a); }
+function getPlansMgmtScopeDir(...a) { return _chatCall("getPlansMgmtScopeDir", ...a); }
+function setPlansMgmtScopeDir(...a) { return _chatCall("setPlansMgmtScopeDir", ...a); }
 function isPathInPlansDir(...a) { return _chatCall("isPathInPlansDir", ...a); }
 function openPlanManagement(...a) { return _chatCall("openPlanManagement", ...a); }
 function renderPlansMgmtPage(...a) { return _chatCall("renderPlansMgmtPage", ...a); }

@@ -142,6 +142,7 @@
   align-items: center;
   gap: 0.4rem;
   font-size: 0.85rem;
+  flex-wrap: wrap;
 }
 .plans-mgmt-actions {
   display: inline-flex;
@@ -194,29 +195,6 @@
   margin: 1rem 0.35rem;
   font-size: 0.8rem;
   text-align: center;
-}
-.plans-mgmt-empty-card {
-  margin: 0.75rem 0.25rem;
-  padding: 0.85rem 0.7rem;
-  border: 1px dashed var(--border);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--bg, #fff) 92%, #eef2ff);
-  text-align: center;
-}
-.plans-mgmt-empty-msg {
-  margin: 0 0 0.75rem;
-  font-size: 0.82rem;
-  color: var(--muted, #64748b);
-  line-height: 1.45;
-}
-.plans-mgmt-empty-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  justify-content: center;
-}
-.plans-mgmt-empty-actions .btn {
-  min-height: 2rem;
 }
 .plans-mgmt-item {
   display: flex;

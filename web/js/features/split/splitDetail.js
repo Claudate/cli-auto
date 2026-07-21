@@ -297,33 +297,17 @@ export function paintDetail(ctx) {
     }
   }
 
+  // 顶栏「默认通道」与「高级·执行通道」双控件叠层：通道只留高级折叠一处
   const providerField = $("confirm-provider-field");
   if (providerField) {
-    providerField.hidden = !cur || editing;
+    providerField.hidden = true;
   }
   if (providerSel) {
     if (!selectBusy(providerSel)) {
       providerSel.value = cur ? curProvider : "claude";
     }
-    providerSel.disabled = !cur || !taskEditable || editing || !!runLocked;
-    providerSel.onchange = async () => {
-      if (!cur || !taskEditable || hasActiveRun() || vm.getSnapshot().editing) {
-        providerSel.value = curProvider;
-        return;
-      }
-      const next = (providerSel.value || "claude").toLowerCase();
-      if (next === curProvider) return;
-      try {
-        await vm.setProvider(cur.id, next);
-        pushSelection();
-        toast(`已设「${cur.title || cur.id}」→ ${engineLabel(next)}`);
-        afterMutate();
-        render();
-      } catch (e) {
-        providerSel.value = curProvider;
-        toast(String(e?.message || e));
-      }
-    };
+    providerSel.disabled = true;
+    providerSel.onchange = null;
   }
 
   paintAdvancedRoute(cur, job, {

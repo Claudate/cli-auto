@@ -354,36 +354,16 @@ export function createUiActions() {
       typeof g("openChatPage") === "function"
         ? call("openChatPage")
         : call("showPage", "chat"),
-    "btn-plans-set-dir": () =>
-      typeof g("promptPlansDir") === "function" ? call("promptPlansDir") : null,
-    "btn-plans-open-dir": () =>
-      typeof g("openPlansDirInFinder") === "function"
-        ? call("openPlansDirInFinder")
+    // 选中文件夹 → 加载夹内计划列表
+    "btn-plans-pick-folder": () =>
+      typeof g("pickPlansFolderForMgmt") === "function"
+        ? call("pickPlansFolderForMgmt")
         : null,
+    // 选中文件 → 加载到列表并选中
     "btn-plans-pick-file": () =>
       typeof g("pickPlanFileForMgmt") === "function"
         ? call("pickPlanFileForMgmt")
         : null,
-    "btn-plans-empty-show-other": () =>
-      typeof g("showOtherPlansLocations") === "function"
-        ? call("showOtherPlansLocations")
-        : null,
-    "btn-plans-hint-show-other": () =>
-      typeof g("showOtherPlansLocations") === "function"
-        ? call("showOtherPlansLocations")
-        : null,
-    "btn-plans-empty-pick": () =>
-      typeof g("pickPlanFileForMgmt") === "function"
-        ? call("pickPlanFileForMgmt")
-        : null,
-    "btn-plans-empty-open-dir": () =>
-      typeof g("openPlansDirInFinder") === "function"
-        ? call("openPlansDirInFinder")
-        : null,
-    "btn-plans-empty-to-chat": () =>
-      typeof g("openChatPage") === "function"
-        ? call("openChatPage")
-        : call("showPage", "chat"),
     "btn-plans-preview": () => {
       const st = state();
       const p =

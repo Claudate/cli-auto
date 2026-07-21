@@ -1,11 +1,10 @@
 /**
- * [INPUT]: legacy · gateway.openPath · host rail/mgmt
- * [OUTPUT]: rail visibility · plansDir · partition
+ * [INPUT]: legacy · host rail/mgmt
+ * [OUTPUT]: rail visibility · plansDir · mgmt scope · partition
  * [POS]: A5-2a features/chat/planDir.js
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 import { state, $, toast, openNativeDialog, normalizePlanPath, pickPlanFileForPicker } from "./legacy.js";
-import gateway from "../../shared/gateway.js";
 import { host } from "./host.js";
 import { ensureChatState } from "./chatState.js";
 
@@ -52,12 +51,23 @@ export function toggleChatPlanRail() {
 }
 
 export function syncPlansDirLabels() {
+  // 保存目录仅用于聊天落盘；管理页已改「选中文件夹/文件」，不再展示 dir 标签
   const d = getPlansDir();
   const text = d.endsWith("/") ? d : `${d}/`;
-  for (const id of ["plan-rail-dir-label", "plans-mgmt-dir-label"]) {
-    const el = $(id);
-    if (el) el.textContent = text;
-  }
+  const el = $("plan-rail-dir-label");
+  if (el) el.textContent = text;
+}
+
+/** 管理页：当前列表作用域（选中的文件夹相对路径；null = 项目全量）— 不展示 UI 标签 */
+export function getPlansMgmtScopeDir() {
+  ensureChatState();
+  return state.plansMgmtScopeDir || null;
+}
+
+export function setPlansMgmtScopeDir(dir) {
+  ensureChatState();
+  const d = dir == null || dir === "" ? null : String(dir).replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  state.plansMgmtScopeDir = d || null;
 }
 
 /** G1: project-relative plans directory (default plans). */
@@ -75,7 +85,7 @@ export function setPlansDir(dir) {
   ensureChatState();
   let d = String(dir || "plans").trim().replace(/\\/g, "/");
   d = d.replace(/^\/+|\/+$/g, "");
-  if (!d || d.includes("..") || d.startsWith("/")) {
+  if (!d || d.includes("..") || d.startsWith("/") || /^[A-Za-z]:\//.test(d)) {
     toast("计划目录必须是项目内相对路径，例如 plans 或 docs/plans");
     return false;
   }
@@ -84,8 +94,8 @@ export function setPlansDir(dir) {
     localStorage.setItem(`cco.plansDir:${state.selectedPath}`, d);
   }
   syncPlansDirLabels();
-  toast(`新计划将保存到 ${d}/ · 列表已按此夹刷新`);
-  // E4：换夹后立刻重扫管理页 / 右栏
+  toast(`新计划将保存到 ${d}/ · 列表已按此目录刷新`);
+  // 更换目录后立刻重扫管理页 / 右栏
   Promise.resolve(host.loadPlanRail())
     .then(() => {
       if (state.page === "plans") {
@@ -99,8 +109,8 @@ export function setPlansDir(dir) {
 }
 
 /**
- * 换夹：优先系统选目录（项目内），回退 prompt。
- * 选完立刻刷新列表。
+ * 更换聊天落盘目录（高级；管理页不再暴露）。
+ * 仅当原生对话框不可用时才回退到文本输入。
  */
 export async function promptPlansDir() {
   const cur = getPlansDir();
@@ -110,47 +120,43 @@ export async function promptPlansDir() {
     return;
   }
   const rootNorm = String(root).replace(/[/\\]+$/, "");
-  // 1) 系统文件夹选择
+  let dialogOk = false;
   try {
     if (typeof openNativeDialog === "function") {
+      dialogOk = true;
       const selected = await openNativeDialog({
         directory: true,
         multiple: false,
-        defaultPath: rootNorm,
-        title: "选择计划文件夹（须在当前项目内）",
+        defaultPath: `${rootNorm}/${cur}`.replace(/\/+/g, "/"),
+        title: "选择计划保存目录（须在当前项目内）",
       });
-      if (selected) {
-        const abs = String(Array.isArray(selected) ? selected[0] : selected || "").trim();
-        if (abs) {
-          let rel =
-            typeof normalizePlanPath === "function"
-              ? normalizePlanPath(abs, rootNorm) || abs
-              : abs;
-          rel = String(rel || "").replace(/\\/g, "/").replace(/^\.\//, "");
-          // 若用户选的是项目根，提示用子目录
-          if (!rel || rel === rootNorm || rel === ".") {
-            toast("请选择项目内的子文件夹，例如 plans 或 docs");
-            return;
-          }
-          // strip absolute if still abs
-          if (rel.startsWith(rootNorm + "/") || rel.startsWith(rootNorm + "\\")) {
-            rel = rel.slice(rootNorm.length + 1);
-          }
-          if (rel.includes("..") || rel.startsWith("/")) {
-            toast("计划目录必须在项目内");
-            return;
-          }
-          setPlansDir(rel);
-          return;
-        }
+      if (selected == null || selected === false || selected === "") return;
+      const abs = String(Array.isArray(selected) ? selected[0] : selected || "").trim();
+      if (!abs) return;
+      let rel =
+        typeof normalizePlanPath === "function"
+          ? normalizePlanPath(abs, rootNorm) || abs
+          : abs;
+      rel = String(rel || "").replace(/\\/g, "/").replace(/^\.\//, "");
+      if (rel.startsWith(rootNorm + "/") || rel.startsWith(rootNorm + "\\")) {
+        rel = rel.slice(rootNorm.length + 1);
       }
-      // user cancelled folder dialog — fall through only if they want typed path
-      // 取消不算失败；再给 prompt 一次
+      if (!rel || rel === rootNorm || rel === ".") {
+        toast("请选择项目内的子文件夹，例如 plans 或 docs");
+        return;
+      }
+      if (rel.includes("..") || rel.startsWith("/") || /^[A-Za-z]:\//.test(rel)) {
+        toast("计划目录必须在项目内");
+        return;
+      }
+      setPlansDir(rel);
+      return;
     }
   } catch (e) {
     console.warn("promptPlansDir dialog", e);
+    dialogOk = false;
   }
-  // 2) 文本回退
+  if (dialogOk) return;
   const next = window.prompt(
     "默认计划文件夹（相对项目根，例如 plans 或 docs）",
     cur
@@ -159,67 +165,88 @@ export async function promptPlansDir() {
   setPlansDir(next);
 }
 
-/** 在访达中打开当前 plans_dir（或项目根） */
-export async function openPlansDirInFinder() {
-  if (!state.selectedPath) {
+/**
+ * 管理页：选中项目内文件夹 → 列表只显示该夹下的计划。
+ * 不改聊天落盘目录；取消对话框则无操作。
+ */
+export async function pickPlansFolderForMgmt() {
+  const root = state.selectedPath;
+  if (!root) {
     toast("请先选择项目");
     return;
   }
-  const root = String(state.selectedPath).replace(/[/\\]+$/, "");
-  const dir = getPlansDir();
-  // 尾斜杠提示 open_path 按目录创建
-  const abs = `${root}/${dir}/`.replace(/\/+/g, "/");
+  const rootNorm = String(root).replace(/[/\\]+$/, "");
   try {
-    await gateway.openPath(abs );
-    toast(`已打开 ${dir}/`);
-  } catch (e1) {
-    try {
-      await gateway.openPath(root );
-      toast("已打开项目根（计划夹创建失败）");
-    } catch (e) {
-      toast(String(e?.message || e || e1 || "无法打开文件夹"));
-    }
-  }
-}
-
-/** 空态一键：勾选「显示其它位置」并刷新 */
-export function showOtherPlansLocations() {
-  const cb = $("#plans-mgmt-show-other");
-  if (cb) {
-    cb.checked = true;
-  }
-  try {
-    host.renderPlansMgmtPage();
-  } catch (_) {}
-  toast("已显示其它位置的计划");
-}
-
-/** 管理页：选一个计划文件并选中（可跨 plans_dir） */
-export async function pickPlanFileForMgmt() {
-  try {
-    if (typeof pickPlanFileForPicker === "function") {
-      await pickPlanFileForPicker();
-      // 手动选中后并入列表扫描；必要时打开「其它位置」
-      try {
-        await host.loadPlanRail();
-      } catch (_) {}
-      const path = state.selectedPlan;
-      if (path) {
-        if (typeof selectPlanRailItem === "function") host.selectPlanRailItem(path);
-        const root = state.selectedPath;
-        if (
-          typeof isPathInPlansDir === "function" &&
-          !isPathInPlansDir(path, getPlansDir(), root)
-        ) {
-          const cb = $("#plans-mgmt-show-other");
-          if (cb) cb.checked = true;
-        }
-        if (state.page === "plans") host.renderPlansMgmtPage();
-        toast("已选中计划");
-      }
+    if (typeof openNativeDialog !== "function") {
+      toast("选中文件夹不可用");
       return;
     }
-    toast("选择文件不可用");
+    const selected = await openNativeDialog({
+      directory: true,
+      multiple: false,
+      defaultPath: rootNorm,
+      title: "选择计划文件夹（须在当前项目内）",
+    });
+    if (selected == null || selected === false || selected === "") return;
+    const abs = String(Array.isArray(selected) ? selected[0] : selected || "").trim();
+    if (!abs) return;
+    let rel =
+      typeof normalizePlanPath === "function"
+        ? normalizePlanPath(abs, rootNorm) || abs
+        : abs;
+    rel = String(rel || "").replace(/\\/g, "/").replace(/^\.\//, "");
+    if (rel.startsWith(rootNorm + "/") || rel.startsWith(rootNorm + "\\")) {
+      rel = rel.slice(rootNorm.length + 1);
+    }
+    if (!rel || rel === rootNorm || rel === ".") {
+      // 选中项目根 = 全量列表
+      setPlansMgmtScopeDir(null);
+    } else if (rel.includes("..") || rel.startsWith("/") || /^[A-Za-z]:\//.test(rel)) {
+      toast("请选择当前项目内的文件夹");
+      return;
+    } else {
+      setPlansMgmtScopeDir(rel);
+    }
+    try {
+      await host.loadPlanRail();
+    } catch (_) {}
+    if (state.page === "plans" && typeof host.renderPlansMgmtPage === "function") {
+      host.renderPlansMgmtPage();
+    }
+    const scope = getPlansMgmtScopeDir();
+    toast(scope ? `已加载「${scope}/」下的计划` : "已显示项目内全部计划");
+  } catch (e) {
+    toast(String(e?.message || e || "无法选中文件夹"));
+  }
+}
+
+/** 管理页：选中一份计划文件并加载到列表 / 详情 */
+export async function pickPlanFileForMgmt() {
+  try {
+    if (typeof pickPlanFileForPicker !== "function") {
+      toast("选中文件不可用");
+      return;
+    }
+    const before = state.selectedPlan;
+    await pickPlanFileForPicker();
+    const path = state.selectedPlan;
+    if (!path || path === before) {
+      return;
+    }
+    // 单文件加载：解除文件夹作用域限制，保证能看见刚选的文件
+    setPlansMgmtScopeDir(null);
+    try {
+      await host.loadPlanRail();
+    } catch (_) {}
+    if (typeof host.selectPlanRailItem === "function") {
+      host.selectPlanRailItem(path);
+    }
+    state.planRailSelected = path;
+    state.chatDraftPlan = path;
+    if (state.page === "plans" && typeof host.renderPlansMgmtPage === "function") {
+      host.renderPlansMgmtPage();
+    }
+    toast("已加载计划");
   } catch (e) {
     toast(String(e?.message || e));
   }

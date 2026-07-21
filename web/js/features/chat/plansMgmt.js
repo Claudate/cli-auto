@@ -1,6 +1,6 @@
 /**
  * [INPUT]: legacy · planDir · chatFormat · host rail/full
- * [OUTPUT]: 计划管理页
+ * [OUTPUT]: 计划管理页（列表 + 详情；选中文件夹/文件加载）
  * [POS]: A5-2a features/chat/plansMgmt.js
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -12,7 +12,9 @@ import {
 import { host } from "./host.js";
 import { ensureChatState, stashChatSession, sanitizePlanTitle } from "./chatState.js";
 import {
-  getPlansDir, syncPlansDirLabels, partitionByPlansDir, promptPlansDir,
+  syncPlansDirLabels,
+  getPlansMgmtScopeDir,
+  partitionByPlansDir,
 } from "./planDir.js";
 import { chatEsc } from "./chatFormat.js";
 import * as chatApi from "./chatApi.js";
@@ -26,17 +28,6 @@ export async function openPlanManagement() {
     try {
       stashChatSession(state.chatProjectPath || state.selectedPath);
     } catch (_) {}
-  }
-  // First open: confirm default plans dir once per project
-  const flagKey = `cco.plansDirPrompted:${state.selectedPath}`;
-  if (localStorage.getItem(flagKey) !== "1") {
-    localStorage.setItem(flagKey, "1");
-    const ok = window.confirm(
-      `新计划默认保存到项目下的「${getPlansDir()}/」。\n\n确定使用此目录？\n（可在计划管理页点「换夹」修改）`
-    );
-    if (!ok) {
-      promptPlansDir();
-    }
   }
   const selected =
     state.planRailSelected ||
@@ -97,55 +88,27 @@ export function renderPlansMgmtPage() {
       typeof normalizePlanPath === "function" ? normalizePlanPath(p, root) || p : p
     );
 
-  // E4：默认只显示 plans_dir；勾选「显示其它位置」展开全量
-  const showOther = !!$("#plans-mgmt-show-other")?.checked;
-  const dirParts = partitionByPlansDir(state.planRailItems || [], {
-    plansDir: getPlansDir(),
-    root,
-    pinPaths,
-    showOther,
-  });
-  const dirItems = dirParts.primary;
-  const otherCount = dirParts.otherCount || 0;
-
-  // 空态：可点按钮（显示其它 / 选文件 / 打开夹 / 聊天）
-  const emptyActionsHtml = (opts = {}) => {
-    const { otherN = 0, dirLabel = "plans/" } = opts;
-    const otherBtn =
-      otherN > 0
-        ? `<button type="button" class="btn primary sm" id="btn-plans-empty-show-other">显示其它位置（${otherN}）</button>`
-        : "";
-    return (
-      `<div class="plans-mgmt-empty-card">` +
-      `<p class="plans-mgmt-empty-msg">本夹「${chatEsc(dirLabel)}」暂无计划` +
-      (otherN > 0
-        ? ` · 另有 <strong>${otherN}</strong> 份在其它位置`
-        : " · 可新建或从磁盘选择") +
-      `</p>` +
-      `<div class="plans-mgmt-empty-actions">` +
-      otherBtn +
-      `<button type="button" class="btn ghost sm" id="btn-plans-empty-pick">选择计划文件…</button>` +
-      `<button type="button" class="btn ghost sm" id="btn-plans-empty-open-dir">打开此夹</button>` +
-      `<button type="button" class="btn ghost sm" id="btn-plans-empty-to-chat">用聊天写计划</button>` +
-      `</div></div>`
-    );
-  };
-
-  if (!(state.planRailItems || []).length) {
-    list.innerHTML = emptyActionsHtml({
-      otherN: 0,
-      dirLabel: getPlansDir() + "/",
+  // 选中文件夹 → 严格过滤到该夹（不带 pin 外溢）；未选则项目内全量
+  const scopeDir = getPlansMgmtScopeDir();
+  let dirItems = state.planRailItems || [];
+  if (scopeDir) {
+    const dirParts = partitionByPlansDir(dirItems, {
+      plansDir: scopeDir,
+      root,
+      pinPaths: [],
+      showOther: false,
     });
-    if (empty) empty.hidden = true;
-    renderPlansMgmtDetail(null);
-    return;
+    dirItems = dirParts.primary;
   }
+
   if (!dirItems.length) {
-    list.innerHTML = emptyActionsHtml({
-      otherN: otherCount,
-      dirLabel: getPlansDir() + "/",
-    });
-    if (empty) empty.hidden = true;
+    list.innerHTML = "";
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = scopeDir
+        ? `「${scopeDir}/」暂无计划 · 换文件夹或选中文件`
+        : "暂无计划 · 用上方「选中文件夹」或「选中文件」加载";
+    }
     renderPlansMgmtDetail(null);
     return;
   }
@@ -167,6 +130,11 @@ export function renderPlansMgmtPage() {
 
   const rows = parts.visible.map((it) => {
     const path = it.path || "";
+    const fileName =
+      String(path)
+        .split("/")
+        .filter(Boolean)
+        .pop() || path;
     const rawTitle = it.title || host.planRailTitleFromPath(path);
     const title = sanitizePlanTitle(rawTitle) || host.planRailTitleFromPath(path);
     const badge = host.planRailBadgeInfo(it);
@@ -182,7 +150,7 @@ export function renderPlansMgmtPage() {
     return (
       `<button type="button" class="plans-mgmt-item${selected}${isLatest}" data-plans-mgmt="${chatEsc(path)}" title="${chatEsc(path)}">` +
       `<div class="plans-mgmt-item-title">${chatEsc(title)}${latestMark}</div>` +
-      `<div class="plans-mgmt-item-path">${chatEsc(path)}</div>` +
+      `<div class="plans-mgmt-item-path" title="${chatEsc(path)}">${chatEsc(fileName)}</div>` +
       `<div class="plans-mgmt-item-meta"><span class="plan-rail-badge ${badge.cls}">${chatEsc(badge.label)}</span></div>` +
       `</button>`
     );
@@ -192,17 +160,9 @@ export function renderPlansMgmtPage() {
       `<div class="plan-history-hint muted" role="note">已隐藏 ${parts.historyCount} 份已执行 · 勾选「显示已执行」</div>`
     );
   }
-  if (!showOther && otherCount > 0) {
-    rows.push(
-      `<div class="plan-history-hint muted" role="note">` +
-        `另有 ${otherCount} 份在其它位置 · ` +
-        `<button type="button" class="linkish" id="btn-plans-hint-show-other">点此显示</button>` +
-        `</div>`
-    );
-  }
   list.innerHTML = rows.join("");
 
-  const pool = dirItems.length ? dirItems : state.planRailItems || [];
+  const pool = dirItems;
   const selItem =
     pool.find((it) => {
       const p = it.path || "";
@@ -249,12 +209,26 @@ export async function renderPlansMgmtDetail(item) {
   const badge = host.planRailBadgeInfo(item);
 
   if (titleEl) titleEl.textContent = title || "—";
-  if (pathEl) pathEl.textContent = path || "—";
+  // 路径 + 文件名并排，避免只靠中文标题找不到 ux-nondev-*.md
+  if (pathEl) {
+    const base = String(path || "")
+      .split("/")
+      .filter(Boolean)
+      .pop();
+    pathEl.textContent =
+      base && base !== path ? `${path}  ·  ${base}` : path || "—";
+    pathEl.title = path || "";
+  }
   if (badgeEl) {
     badgeEl.textContent = badge.label;
     badgeEl.className = `plan-rail-badge ${badge.cls}`;
   }
-  if (bodyEl) bodyEl.textContent = String(markdown || "").slice(0, 12000);
+  // 全文展示：勿再 slice(12000)——中长计划（如 ux-nondev-landing）会被砍掉后半
+  if (bodyEl) {
+    const full = String(markdown || "");
+    bodyEl.textContent = full;
+    bodyEl.dataset.chars = String(full.length);
+  }
   if (btnAssign) {
     btnAssign.disabled = !path;
     btnAssign.dataset.plan = path;

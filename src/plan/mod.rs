@@ -9,14 +9,17 @@ pub mod adapters;
 pub mod planner;
 pub mod system_post;
 
-// Domain pure model (A1 extraction).
+// Domain pure model (A1 extraction + CcoSplit SoT shape).
 pub use crate::domain::plan::{
-    apply_tag_routing, is_system_post_task, materialize_role_defaults, materialize_selected_tasks,
-    normalize_optional_title, parse_role_input, title_is_meta_heading, title_looks_optional,
-    OnFailure, PlanIR, TaskIR, TaskRole, TaskScope, INSPECT_DEFAULT_ALLOWED_TOOLS,
-    INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_SYSTEM_PROMPT, INSPECT_SYSTEM_PROMPT_MARKER,
-    MAX_PROMPT_CHARS, MAX_TASKS, MAX_TIMEOUT_SECS, PLANNER_MAX_BUDGET_USD, PLANNER_MAX_TASKS,
-    SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID, SYS_POST_OPEN_PR_ID,
+    apply_tag_routing, from_plan_ir, is_system_post_task, materialize_role_defaults,
+    materialize_selected_tasks, normalize_optional_title, parse_role_input, recompute_waves,
+    run_gate_ok, soft_accept_split, soften_plan_for_accept, split_topo_layers,
+    title_is_meta_heading, title_looks_optional, to_plan_ir, CcoSplitJob, CcoSplitSource,
+    CcoSplitStatus, CcoSplitTask, CcoTaskKind, CcoTaskStatus, OnFailure, PlanIR, TaskIR, TaskRole,
+    TaskScope, CCO_SPLIT_SCHEMA, INSPECT_DEFAULT_ALLOWED_TOOLS, INSPECT_DEFAULT_WRITE_SCOPE,
+    INSPECT_SYSTEM_PROMPT, INSPECT_SYSTEM_PROMPT_MARKER, MAX_PROMPT_CHARS, MAX_TASKS,
+    MAX_TIMEOUT_SECS, PLANNER_MAX_BUDGET_USD, PLANNER_MAX_TASKS, SYS_POST_GIT_PUSH_ID,
+    SYS_POST_INSPECT_ID, SYS_POST_OPEN_PR_ID,
 };
 
 // System post inject (config-aware host side).

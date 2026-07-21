@@ -212,11 +212,6 @@ export function bindGlobalUI() {
         }
       }
     }
-    if (t.id === "plans-mgmt-show-other") {
-      if (typeof g("renderPlansMgmtPage") === "function") {
-        call("renderPlansMgmtPage");
-      }
-    }
   });
 
   document.addEventListener("focusin", (e) => {

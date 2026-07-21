@@ -1,6 +1,6 @@
 /**
  * [INPUT]: PlanJobView DTO · selectedId · live helpers
- * [OUTPUT]: 三栏 HTML 片段（波次 · 卡片 · 不写 IPC）
+ * [OUTPUT]: 步骤列 HTML（按波次顺序 · 并行外框 · 不写 IPC）
  * [POS]: A3-1 features/split 纯渲染；策略在 Rust
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -25,6 +25,7 @@ export function oneLiner(task) {
   const fn = g("splitOneLiner");
   if (typeof fn === "function") return fn(task);
   const full =
+    task?.summary ||
     task?.prompt ||
     task?.prompt_preview ||
     task?.promptPreview ||
@@ -161,7 +162,10 @@ export function routeSummary(task, job) {
   };
 }
 
-/** Left wave timeline HTML. */
+/**
+ * Legacy left-rail timeline (kept for callers; desk now uses cardsHtml wave groups).
+ * Prefer cardsHtml — wave + cards are merged into one ordered column.
+ */
 export function timelineHtml(layers, byId, selectedId) {
   if (!layers?.length) {
     return '<p class="muted split-timeline-empty">暂无波次</p>';
@@ -190,111 +194,132 @@ export function timelineHtml(layers, byId, selectedId) {
     .join("");
 }
 
-function cardGroupHtml(title, tasks, byId, opts = {}) {
-  if (!tasks?.length) return "";
+/** Single step card row (shared by wave groups). */
+function taskCardHtml(t, byId, opts = {}) {
   const { runLocked, selectedId, liveTask } = opts;
-  const rows = tasks
-    .map((t) => {
-      const id = t.id;
-      const sel = selectedId === id ? " selected" : "";
-      const live =
-        typeof liveTask === "function"
-          ? liveTask(id)
-          : typeof g("liveTaskById") === "function"
-            ? g("liveTaskById")(id)
-            : null;
-      const liveSt = live?.status || "";
-      const pending =
-        !live ||
-        (typeof g("isTaskPendingStatus") === "function"
-          ? g("isTaskPendingStatus")(liveSt)
-          : true);
-      const isOpt = !!t.optional;
-      const included = isOpt ? t.include !== false : true;
-      const optClass = isOpt
-        ? included
-          ? " optional-on"
-          : " optional-off"
-        : "";
-      const role = roleBadge(t);
-      const wait = waitLine(t, byId);
-      const one = oneLiner(t);
-      const statusHint = liveSt
-        ? typeof g("statusLabel") === "function"
-          ? g("statusLabel")(liveSt)
-          : liveSt
-        : "";
-      const checkHtml = isOpt
-        ? `<label class="wave-task-check" title="${
-            role.kind === "sys"
-              ? "系统收尾：默认勾选；取消则本次不跑"
-              : "可选：勾选后才会执行"
-          }" data-check-for="${esc(id)}">
+  const id = t.id;
+  const sel = selectedId === id ? " selected" : "";
+  const live =
+    typeof liveTask === "function"
+      ? liveTask(id)
+      : typeof g("liveTaskById") === "function"
+        ? g("liveTaskById")(id)
+        : null;
+  const liveSt = live?.status || "";
+  const pending =
+    !live ||
+    (typeof g("isTaskPendingStatus") === "function"
+      ? g("isTaskPendingStatus")(liveSt)
+      : true);
+  const isOpt = !!t.optional;
+  const included = isOpt ? t.include !== false : true;
+  const optClass = isOpt
+    ? included
+      ? " optional-on"
+      : " optional-off"
+    : "";
+  const role = roleBadge(t);
+  const wait = waitLine(t, byId);
+  const one = oneLiner(t);
+  const statusHint = liveSt
+    ? typeof g("statusLabel") === "function"
+      ? g("statusLabel")(liveSt)
+      : liveSt
+    : "";
+  const checkHtml = isOpt
+    ? `<label class="wave-task-check" title="${
+        role.kind === "sys"
+          ? "系统收尾：默认勾选；取消则本次不跑"
+          : "可选：勾选后才会执行"
+      }" data-check-for="${esc(id)}">
             <input type="checkbox" class="wave-opt-check" data-id="${esc(id)}" ${
               included ? "checked" : ""
             } ${runLocked || !pending ? "disabled" : ""} />
           </label>`
-        : `<span class="wave-task-req muted" title="必选">必</span>`;
-      return (
-        `<div class="wave-task-row split-card${sel}${pending ? "" : " done-ish"}${optClass}" data-id="${esc(id)}">` +
-        checkHtml +
-        `<button type="button" class="wave-task" data-id="${esc(id)}">` +
-        `<div class="split-card-top">` +
-        `<span class="split-role split-role-${role.kind}">${role.label}</span>` +
-        (isOpt
-          ? role.kind === "sys"
-            ? `<span class="opt-badge opt-badge-sys">系统</span>`
-            : `<span class="opt-badge">可选</span>`
-          : "") +
-        `<div class="wave-task-title">${esc(t.title || id)}</div>` +
-        `</div>` +
-        `<div class="split-card-one muted">${esc(one)}</div>` +
-        `<div class="wave-task-meta muted">${esc(wait)}${
-          statusHint ? " · " + esc(statusHint) : ""
-        }</div>` +
-        `</button></div>`
-      );
-    })
-    .join("");
+    : `<span class="wave-task-req muted" title="必选">必</span>`;
   return (
-    `<div class="split-group">` +
-    `<div class="split-group-label">${esc(title)} · ${tasks.length}</div>` +
-    rows +
-    `</div>`
+    `<div class="wave-task-row split-card${sel}${pending ? "" : " done-ish"}${optClass}" data-id="${esc(id)}">` +
+    checkHtml +
+    `<button type="button" class="wave-task" data-id="${esc(id)}">` +
+    `<div class="split-card-top">` +
+    `<span class="split-role split-role-${role.kind}">${role.label}</span>` +
+    (isOpt
+      ? role.kind === "sys"
+        ? `<span class="opt-badge opt-badge-sys">系统</span>`
+        : `<span class="opt-badge">可选</span>`
+      : "") +
+    `<div class="wave-task-title">${esc(t.title || id)}</div>` +
+    `</div>` +
+    `<div class="split-card-one muted">${esc(one)}</div>` +
+    `<div class="wave-task-meta muted">${esc(wait)}${
+      statusHint ? " · " + esc(statusHint) : ""
+    }</div>` +
+    `</button></div>`
   );
 }
 
-/** Middle column: 必做 / 可选 / 系统. */
-export function cardsHtml(job, byId, opts = {}) {
+/**
+ * Build ordered wave layers from job.layers + orphan tasks.
+ * Returns Task[][] in execution order.
+ */
+export function orderedWaveTasks(job, byId) {
   const tasks = job?.tasks || [];
   const layers = job?.layers || [];
-  if (!tasks.length) return '<p class="muted">暂无步骤</p>';
-  const { required, optional, system } = partitionTasks(tasks);
-  const order = [];
   const seen = new Set();
+  const waves = [];
   for (const layer of layers) {
+    const wave = [];
     for (const id of layer || []) {
-      if (!seen.has(id)) {
-        seen.add(id);
-        order.push(id);
-      }
+      if (seen.has(id)) continue;
+      const t = byId[id];
+      if (!t) continue;
+      seen.add(id);
+      wave.push(t);
     }
+    if (wave.length) waves.push(wave);
   }
+  // Orphans (not in layers): each alone in order of tasks array
   for (const t of tasks) {
-    if (!seen.has(t.id)) {
-      seen.add(t.id);
-      order.push(t.id);
-    }
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    waves.push([t]);
   }
-  const sortByOrder = (list) => {
-    const idx = Object.fromEntries(order.map((id, i) => [id, i]));
-    return [...list].sort((a, b) => (idx[a.id] ?? 999) - (idx[b.id] ?? 999));
-  };
-  return (
-    cardGroupHtml("必做", sortByOrder(required), byId, opts) +
-    cardGroupHtml("可选", sortByOrder(optional), byId, opts) +
-    cardGroupHtml("系统", sortByOrder(system), byId, opts)
-  );
+  return waves;
+}
+
+/**
+ * Cards column: 按执行波次顺序；可并行的波用外框 + 色条区分。
+ * 左侧波次轨已并入此列，不再分两栏展示。
+ */
+export function cardsHtml(job, byId, opts = {}) {
+  const tasks = job?.tasks || [];
+  if (!tasks.length) return '<p class="muted">暂无步骤</p>';
+  const waves = orderedWaveTasks(job, byId);
+  if (!waves.length) return '<p class="muted">暂无步骤</p>';
+
+  return waves
+    .map((waveTasks, i) => {
+      const n = waveTasks.length;
+      const parallel = n > 1;
+      const tone = i % 6; // 0..5 色循环
+      const kindClass = parallel ? " is-parallel" : " is-serial";
+      const label = parallel
+        ? `第 ${i + 1} 波 · ${n} 步可并行`
+        : `第 ${i + 1} 波 · 顺序`;
+      const rows = waveTasks.map((t) => taskCardHtml(t, byId, opts)).join("");
+      return (
+        `<div class="split-wave-group tone-${tone}${kindClass}" data-wave="${i + 1}">` +
+        `<div class="split-wave-group-head">` +
+        `<span class="split-wave-group-label">${esc(label)}</span>` +
+        (parallel
+          ? `<span class="split-wave-parallel-tag">并行</span>`
+          : "") +
+        `</div>` +
+        `<div class="split-wave-group-body">${rows}</div>` +
+        `</div>`
+      );
+    })
+    .join("");
 }
 
 export { esc };

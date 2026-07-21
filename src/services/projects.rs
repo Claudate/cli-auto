@@ -47,12 +47,15 @@ pub fn list_projects(config: &Config) -> Result<Vec<ProjectSummary>> {
             .collect();
         // already newest-first from list_runs
         let last = for_proj.first().copied();
+        // Live only: do NOT promote an older `paused` run over a newer completed one.
+        // Paused is a terminal-ish desk state of the *latest* run (stop_task left
+        // pending siblings); surface it via last_status, not active_*.
         let active = for_proj
             .iter()
             .find(|r| {
                 matches!(
                     r.status.as_str(),
-                    "running" | "validated" | "init" | "paused"
+                    "running" | "validated" | "init"
                 )
             })
             .copied();

@@ -68,13 +68,12 @@ export function fillSplitMeta(job, ctx = {}) {
 
   const st = String(job.status || "").toLowerCase();
   const reused = st === "confirmed";
+  // 计划名已在顶栏 #page-title；这里只写角色，避免「标题 · 计划名」再叠一层
   const titleEl = $("confirm-title") || $("#confirm-title");
   if (titleEl) {
-    titleEl.textContent = job.plan_name
-      ? `${reused ? "历史拆分" : "拆分结果"} · ${job.plan_name}`
-      : reused
-        ? "历史拆分（可再次确认并开始）"
-        : "拆分结果";
+    titleEl.textContent = reused
+      ? "历史拆分（可再次确认并开始）"
+      : "拆分结果";
   }
 
   const mpCap = job.max_parallel ?? job.maxParallel ?? "—";
@@ -118,14 +117,11 @@ export function fillSplitMeta(job, ctx = {}) {
             : "可编辑 · 确认并开始";
 
   const modeRaw = job.digest_mode || job.digestMode || "";
-  const flowModeLabel = g("flowModeLabel");
-  const modeLabel =
-    typeof flowModeLabel === "function" ? flowModeLabel(modeRaw) : "";
-  const modeBit = modeLabel ? ` · ${modeLabel}` : "";
+  // 模式只走 badge 行（label+hint），不塞进 meta，避免「从零落地」双份
   const nSteps = job.task_count || tasks.length;
   const metaEl = $("confirm-meta") || $("#confirm-meta");
   if (metaEl) {
-    metaEl.textContent = `共 ${nSteps} 步 · 约 ${layers.length} 波${parallelHint}${optHint}${modeBit} · ${confirmHint}`;
+    metaEl.textContent = `共 ${nSteps} 步 · 约 ${layers.length} 波${parallelHint}${optHint} · ${confirmHint}`;
   }
 
   const applyFlowModeBadge = g("applyFlowModeBadge");

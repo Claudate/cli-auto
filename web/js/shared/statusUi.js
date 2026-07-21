@@ -17,7 +17,7 @@ export const STATUS_LABEL = {
   queued: "排队中",
   validated: "进行中",
   init: "进行中",
-  paused: "排队中",
+  paused: "已暂停",
   resuming: "进行中",
   failed: "失败",
   aborted: "失败",

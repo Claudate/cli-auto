@@ -151,16 +151,28 @@ export function countBuckets(tasks) {
  * @param {{ phase?: string }} [legacy]
  */
 export function runContext(live, legacy = {}) {
-  const runStatus = live?.run_status;
-  const hasRun = !!live?.run_id;
-  const active = isLiveStatus(runStatus);
+  const phase = legacy.phase || "";
+  const planning = phase === "planning" || phase === "confirm";
+  // 打开拆分会话时，项目「最近一次」历史 run 不算本轮
+  let belongs = true;
+  try {
+    const w = typeof window !== "undefined" ? window : globalThis;
+    if (typeof w.liveBelongsToOpenPlan === "function") {
+      belongs = !!w.liveBelongsToOpenPlan();
+    } else if (planning) {
+      belongs = false;
+    }
+  } catch (_) {
+    if (planning) belongs = false;
+  }
+  const runStatus = belongs ? live?.run_status : null;
+  const hasRun = belongs && !!live?.run_id;
+  const active = hasRun && isLiveStatus(runStatus);
   const finished =
     hasRun &&
     !active &&
     ["completed", "done", "failed", "aborted", "stopped", "paused"].includes(
       String(runStatus || "").toLowerCase()
     );
-  const phase = legacy.phase || "";
-  const planning = phase === "planning" || phase === "confirm";
-  return { hasRun, active, finished, runStatus, planning };
+  return { hasRun, active, finished, runStatus, planning, belongs };
 }

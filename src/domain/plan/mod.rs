@@ -8,16 +8,24 @@
 //! [POS]: domain/plan
 //! [PROTOCOL]: 变更时更新此头部与 src/domain/CLAUDE.md
 
+pub mod cco_split;
 mod materialize;
 mod optional;
 mod routing;
+mod soften;
 mod system_ids;
 mod types;
 mod validate;
 
+pub use cco_split::{
+    from_plan_ir, recompute_waves, run_gate_ok, soft_accept_split, split_topo_layers, to_plan_ir,
+    CcoSplitJob, CcoSplitSource, CcoSplitStatus, CcoSplitTask, CcoTaskKind, CcoTaskStatus,
+    CCO_SPLIT_SCHEMA,
+};
 pub use materialize::{materialize_role_defaults, materialize_selected_tasks};
 pub use optional::{normalize_optional_title, title_is_meta_heading, title_looks_optional};
 pub use routing::apply_tag_routing;
+pub use soften::soften_plan_for_accept;
 pub use system_ids::{
     is_system_post_task, SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID, SYS_POST_OPEN_PR_ID,
 };

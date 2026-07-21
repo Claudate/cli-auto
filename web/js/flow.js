@@ -273,7 +273,11 @@ function flowStageState(phase) {
   return { stages, active, phase: p };
 }
 
-/** HTML for the horizontal flow stage strip. opts.compact = 只阶段点、不副文案 */
+/**
+ * HTML for the horizontal flow stage strip.
+ * opts.compact  = 只阶段点、不副文案（顶栏全局条）
+ * opts.lineOnly = 只副文案、不阶段点（页内条；避免与全局条重复阶段）
+ */
 function flowStageStripHtml(phase, opts = {}) {
   const { stages, active } = flowStageState(phase);
   const serious =
@@ -303,7 +307,16 @@ function flowStageStripHtml(phase, opts = {}) {
               : phase === "fail"
                 ? flowPickBlurb("fail", phase)
                 : "";
+  // lineOnly (page-local under global) keeps the hint; compact (global topbar) drops it.
   const line = opts.compact ? "" : flowJoinSeriousFun(serious, fun);
+  if (opts.lineOnly) {
+    if (!line) return "";
+    return (
+      `<div class="flow-stage-strip is-line-only" role="status" aria-live="polite">` +
+      `<div class="flow-stage-line muted">${line}</div>` +
+      `</div>`
+    );
+  }
   const steps = stages
     .map((s, i) => {
       let cls = "flow-stage";

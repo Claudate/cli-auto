@@ -222,8 +222,9 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                 <button class="btn primary" id="btn-confirm-start" type="button">确认并开始</button>
               </div>
             </div>
-            <div class="confirm-layout split-layout">
-              <aside class="split-timeline" id="split-timeline" aria-label="波次时间线"></aside>
+            <div class="confirm-layout split-layout split-layout-merged">
+              <!-- 波次并入步骤列表；保留 id 兼容旧脚本，默认隐藏 -->
+              <aside class="split-timeline" id="split-timeline" aria-label="波次时间线" hidden></aside>
               <div class="confirm-waves split-cards" id="confirm-waves"></div>
               <div class="confirm-detail split-detail">
                 <div class="confirm-detail-head">
@@ -497,25 +498,32 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
         </div>
       </section>
 
-      <!-- 计划管理页：选中 / 预览 / 编辑文档 / 执行 / 换夹（≠ 聊天右栏） -->
+      <!-- 计划管理页：选中 / 预览 / 编辑文档 / 执行（≠ 聊天右栏） -->
       <section id="page-plans" class="page">
         <div class="plans-mgmt">
           <div class="plans-mgmt-toolbar">
             <div class="plans-mgmt-dir">
-              <span class="muted">保存目录</span>
-              <strong id="plans-mgmt-dir-label">plans/</strong>
-              <button class="btn ghost sm" id="btn-plans-set-dir" type="button" title="选择项目内计划文件夹">换夹</button>
-              <button class="btn ghost sm" id="btn-plans-open-dir" type="button" title="在访达中打开当前计划夹">打开夹</button>
-              <button class="btn ghost sm" id="btn-plans-pick-file" type="button" title="从磁盘选择一份计划文件">选文件…</button>
+              <button
+                class="btn ghost sm"
+                id="btn-plans-pick-folder"
+                type="button"
+                title="选择项目内文件夹，加载其中的计划文档"
+              >
+                选中文件夹
+              </button>
+              <button
+                class="btn ghost sm"
+                id="btn-plans-pick-file"
+                type="button"
+                title="选择一份计划文件并加载到列表"
+              >
+                选中文件
+              </button>
             </div>
             <div class="plans-mgmt-actions">
               <label class="plan-show-executed" title="默认隐藏已成功执行的计划">
                 <input type="checkbox" id="plans-mgmt-show-executed" />
                 <span>显示已执行</span>
-              </label>
-              <label class="plan-show-executed" title="默认只列当前保存目录；勾选后显示项目内其它位置的计划">
-                <input type="checkbox" id="plans-mgmt-show-other" />
-                <span>显示其它位置</span>
               </label>
               <button class="btn ghost sm" id="btn-plans-refresh" type="button">刷新</button>
               <button class="btn ghost sm" id="btn-plans-to-chat" type="button">回聊天</button>
@@ -523,10 +531,10 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
           </div>
           <div class="plans-mgmt-body">
             <div class="plans-mgmt-list-col">
-              <h3 class="plans-mgmt-col-title">本夹计划</h3>
+              <h3 class="plans-mgmt-col-title">计划列表</h3>
               <p class="muted plans-mgmt-hint">选中后点「拆成步骤」· 双击编辑文档 · 最新高亮</p>
               <div id="plans-mgmt-list" class="plans-mgmt-list"></div>
-              <p id="plans-mgmt-empty" class="plans-mgmt-empty muted" hidden>暂无计划文件 · 去聊天生成并保存</p>
+              <p id="plans-mgmt-empty" class="plans-mgmt-empty muted" hidden>暂无计划 · 用上方「选中文件夹」或「选中文件」加载</p>
             </div>
             <div class="plans-mgmt-detail-col">
               <div id="plans-mgmt-detail-empty" class="plans-mgmt-detail-empty muted">
@@ -747,7 +755,8 @@ bin = "/Users/你/.local/bin/claude"</pre>
               <label class="field">
                 <span>规划方式</span>
                 <select id="pp-plan-mode">
-                  <option value="ai" selected>AI 智能拆分</option>
+                  <option value="fast" selected>快速拆分（本地，推荐）</option>
+                  <option value="ai">AI 智能拆分（较慢）</option>
                   <option value="parse">跳过规划（直接解析）</option>
                   <option value="fake">模拟拆分</option>
                 </select>
