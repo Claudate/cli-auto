@@ -25,7 +25,7 @@ interactive.rs: 交互选 project/plan · confirm · 非交互硬要求 --projec
 |------------|------|----------|------|
 | `cco plan` | 只规划 | `app::split::{start_job,get_job}` | 不 spawn worker；开跑指引桌面或 `run` |
 | `cco run`（散文 / 非 structured） | 规划 + **开跑** | plan: `start_job`/`get_job`/`load_proposed_plan`；开跑: **`split::confirm_materialize`**；loop: `run::prepare_scheduler` + `preflight_plan` + `finish_with_reports` | TTY `proceed?` = 人确认；契约同桌面 confirm（optional drop · soft defaults） |
-| `cco run`（structured / `--skip-plan` / `--adapter`） | ParseOnly 开跑 | `run::apply_provider_override` → **`run::materialize_run`** → `prepare_scheduler` … | **非** Mode B；文档化 ParseOnly；**禁止**当主路径旁路 Mode B |
+| `cco run`（structured / `--skip-plan` / `--adapter`） | ParseOnly 开跑 | `run::apply_provider_override` → **`run::materialize_run`**（**返回已 drop optional 的 IR** · A0-R4/D-T3-1）→ `prepare_scheduler(… returned ir …)` | **非** Mode B；文档化 ParseOnly；**禁止**当主路径旁路 Mode B；**禁止**调度未 materialize 的原 IR |
 | `cco run --provider` | soft-fill | `run::apply_provider_override` → domain `RouteFillMode::Soft` | 不盖显式 route |
 | `cco run --force-provider` | 全量覆盖 | 同上 · `Force` | force 优先于 soft |
 | `cco resume` | 恢复 | `run::prepare_resume` + `prepare_scheduler` … | 与桌面 `resume`（后台）同准备语义 |

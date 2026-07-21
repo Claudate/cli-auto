@@ -695,7 +695,7 @@ ports::Clock             now（可测）
 | `plan` | `app::split::{start_job,get_job}` | ✅ | 开跑指引桌面 confirm |
 | `stop` | `app::run::{stop,stop_task}` | ✅ | — |
 | `run`（散文） | plan → split；开跑 → **`split::confirm_materialize`**；loop → `prepare_scheduler` | ✅ | 与桌面 confirm 同 optional/soft 契约 |
-| `run`（结构化 / `--skip-plan`） | `apply_provider_override` → **`materialize_run`** → `prepare_scheduler` | ✅ | 文档化 ParseOnly；非 Mode B 旁路 |
+| `run`（结构化 / `--skip-plan`） | `apply_provider_override` → **`materialize_run`**（**返回已 drop optional 的 IR** · A0-R4/D-T3-1）→ `prepare_scheduler` | ✅ | 文档化 ParseOnly；非 Mode B 旁路；**禁止**调度未 materialize 的原 IR |
 | `resume` | `prepare_resume` + `prepare_scheduler` | ✅ | 与 stop 对称经 app |
 | `status` | `load_by_dir` + `handoff_paths` | ✅ | 不碰 handoff 内部 |
 | `plans` | `run::plans` | ✅ | — |
@@ -753,4 +753,4 @@ A5-0 ✅（本刀）
 
 ---
 
-*本文件是 2026-07-20 起的架构大改唯一实施真源。**A0–A5 主线已收口（A5-4 GEB 2026-07-21）**；A5-5 workspace crates **本轮不做**。收口后补刀（**非 A6** · 总账 t61–t63）：**S-role** role/scope 可写 · **S-PR** 可选 auto-open PR（默认关）· **S-run** `app/run` 纵切 ≤400。变更阶段勾选时更新头部状态；GEB 与总账 P2-17 已同步（T-sync-T2 2026-07-21）。*
+*本文件是 2026-07-20 起的架构大改唯一实施真源。**A0–A5 主线已收口（A5-4 GEB 2026-07-21）**；A5-5 workspace crates **本轮不做**。收口后补刀（**非 A6** · 总账 t61–t66）：**S-role** role/scope 可写 · **S-PR** 可选 auto-open PR（默认关）· **S-run** `app/run` 纵切 ≤400 · **P2-7 SDK S1 HTTP**（t65 · 默认关）· **A0-R4 ParseOnly 同 drop optional**（t66 / D-T3-1）。变更阶段勾选时更新头部状态；GEB 与总账已同步（T-sync-T2/T3 2026-07-21）。*

@@ -16,7 +16,7 @@
 //! | File | Responsibility |
 //! |------|----------------|
 //! | `mod.rs` (this) | lifecycle facade · domain maps · observe helpers · re-export |
-//! | [`materialize`] | disk materialize / ParseOnly load+materialize |
+//! | [`materialize`] | disk materialize / ParseOnly load+materialize（返回 ir · drop optional） |
 //! | [`foreground`] | ForegroundOpts · prepare_scheduler · preflight · prepare_resume · finish |
 //! | [`route`] | soft/force provider override (A0-R3) |
 //!
@@ -29,7 +29,7 @@
 //! | `get_runs` / `get_run` / `cco status` / TUI reload | [`list`] / [`load`] / [`load_by_dir`] / [`handoff_paths`] |
 //! | TUI Graph plan | [`load_resolved_plan`] |
 //! | legacy ParseOnly `start_run` IPC | [`start_from_request`] (not Mode B) |
-//! | `cco run` ParseOnly / `--skip-plan` | [`materialize_parse_only`] + [`prepare_scheduler`] |
+//! | `cco run` ParseOnly / `--skip-plan` | [`materialize_run`] / [`materialize_parse_only`]（drop optional · 返回 ir）+ [`prepare_scheduler`] |
 //! | `cco run --provider` | [`apply_provider_override`] → domain soft/force |
 //! | CLI foreground loop | [`prepare_scheduler`] · [`finish_with_reports`] |
 

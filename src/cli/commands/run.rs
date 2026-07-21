@@ -3,7 +3,8 @@
 //! [INPUT]: Config · clap fields
 //! [OUTPUT]: exit code
 //! [POS]: cli/commands；Mode B → `app::split::confirm_materialize`；
-//!   ParseOnly → `app::run::materialize_run`；soft-fill → `app::run::apply_provider_override`；
+//!   ParseOnly → `app::run::materialize_run`（返回 drop optional 后的 IR · D-T3-1）；
+//!   soft-fill → `app::run::apply_provider_override`；
 //!   loop → `app::run::prepare_scheduler`
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/cli/CLAUDE.md · **禁止**手搓 second soft-fill / confirm
 
@@ -129,8 +130,9 @@ pub async fn run(
         let ir = parse_only_ir
             .take()
             .expect("ParseOnly path always loads IR before confirm");
-        // Documented ParseOnly — not Mode B; same materialize as desktop start_from_plan.
-        let (run_id, st) = run_uc::materialize_run(config, project.clone(), &ir)?;
+        // Documented ParseOnly — not Mode B; still drops optional && !include (A0-R4).
+        // Use **returned** IR for the scheduler (D-T3-1).
+        let (run_id, st, ir) = run_uc::materialize_run(config, project.clone(), &ir)?;
         (run_id, st, ir)
     };
 

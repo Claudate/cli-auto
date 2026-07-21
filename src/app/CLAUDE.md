@@ -6,7 +6,7 @@ mod.rs: 用例层根 · A1-7 presentation map 注释
 split.rs: **A1-2/A1-7/A5-1** Mode B — `confirm`（后台唯一业务开跑）· **`confirm_materialize`**（CLI 前台同契约）· start_job/get_job/edit_task(**role/scope_paths S-role**)/remove_task/sanitize_deps
 run/: **A1-3/A1-7/A5-1/A5-3 · S-run 多文件** Run 用例面（单文件 ≤400）
   · mod.rs: lifecycle facade（list/load/stop/resume/rework）· domain maps · observe · re-export
-  · materialize.rs: materialize_run · materialize_parse_only
+  · materialize.rs: materialize_run（**返回 (run_id,state,ir)** · 内调 materialize_selected_tasks · A0-R4/D-T3-1）· materialize_parse_only
   · foreground.rs: ForegroundOpts · prepare_scheduler · preflight_plan · prepare_resume · finish_with_reports
   · route.rs: apply_provider_override（soft/force · A0-R3）
   · 编排循环仍在 `runtime/scheduler`；**不**旁路 Mode B；TUI 只经本面
@@ -16,7 +16,7 @@ chat.rs: **A1-6/A1-7** Chat 用例面 — session list/get/new/delete · send ·
 ## 硬规则
 
 1. Presentation（CLI/Tauri/TUI）只调 app 用例，不写业务策略。  
-2. **开跑**只经 [`split::confirm`](./split.rs) / [`confirm_materialize`](./split.rs)（`services::confirm_start` 为后台 facade）；ParseOnly 走 `run::materialize_run`（文档化，非 Mode B）。  
+2. **开跑**只经 [`split::confirm`](./split.rs) / [`confirm_materialize`](./split.rs)（`services::confirm_start` 为后台 facade）；ParseOnly 走 `run::materialize_run`（文档化，非 Mode B；**仍** drop `optional && !include` · A0-R4/D-T3-1；调度须用返回 IR）。  
 3. 禁止新建上帝 Manager；组合逻辑写在用例内。  
 4. 体积：软 400 / 硬 600 行。  
 5. `app/run` **不**旁路 Mode B；stop 冻 Pending 语义与 `services::stop_run` 一致。  

@@ -83,7 +83,8 @@ pub fn confirm_materialize(
     if let Some(mp) = patches.max_parallel {
         ir.max_parallel = mp;
     }
-    let (run_id, st) =
+    // materialize_run re-applies optional drop (idempotent) and returns the IR to schedule.
+    let (run_id, st, ir) =
         crate::app::run::materialize_run(config, job.project.clone(), &ir)?;
     mark_confirmed(config, job_id, &run_id, &ir)?;
     Ok((run_id, st, ir, fill_msg))

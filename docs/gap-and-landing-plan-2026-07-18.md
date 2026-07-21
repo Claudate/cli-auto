@@ -151,7 +151,7 @@
 | P2-11 | 计划驱动执行闭环：拆分 plan_ref · 巡检对照勾选 · 回补波 | ✅ **已落地** | plan-execute-inspect-rework L0–L2 ✅ | **P-loop**；与 multi-cli inspect 分列扩展 |
 | P2-12 | 聊天主窗 · 未执行可改 · 已执行标识 · 有跑进执行/无跑进聊天 · stall 可见 · 重试尽换 CLI | ✅ **已落地** | chat-home-plan-cli H0–H4 · **P-chat-home** | **t28 勾满**；与 P2-9/10 分列；**≠** P-loop 进程 hang |
 | P2-16 | PRODUCT **主路径大改**（UI/操作流 · **拆分台优先** · 结果台 · 默认停拆分） | ✅ **UI 波次 1–5 闭环**（t46） | [`product-mainpath-optimize-2026-07-20.md`](./product-mainpath-optimize-2026-07-20.md) | **架构边界仍听 P2-17**；桌面 S/F/R/V/T/X 已落地；**不**换栈 |
-| P2-17 | **系统架构大改**（六边形+用例 · MVVM · Split/Worker/Run/Inspect · CLI 同构） | ✅ **A0–A5 收口**（t47–t58；**A5-5 可选不做**） | [`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md) A0–A5 · **P-arch-redesign** | A5-4 GEB 地图=地形；S8 classic facade ≤200；`state.js` **D9+ ~230**；收口后 t61–t63（S-role/S-PR/S-run）；**不**回灌 D0–D4 |
+| P2-17 | **系统架构大改**（六边形+用例 · MVVM · Split/Worker/Run/Inspect · CLI 同构） | ✅ **A0–A5 收口**（t47–t58；**A5-5 可选不做**） | [`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md) A0–A5 · **P-arch-redesign** | A5-4 GEB 地图=地形；S8 classic facade ≤200；`state.js` **D9+ ~230**；收口后 t61–t66（S-role/S-PR/S-run · SDK S1 · A0-R4 ParseOnly）；**不**回灌 D0–D4 |
 
 #### 2.1.1 与 §1.3 的边界（防回灌）
 
@@ -493,7 +493,7 @@
 | **P2-11** | 计划驱动执行闭环（拆分 · 巡检 · 回补） | plan-execute-inspect-rework L0–L2 | **已落地** L0–L2；**P-loop** | host ISSUES 分级 + rework 波 + 桌面一键 |
 | **P2-12** | 聊天主窗 · 未执行可改 · 已执行标识 · 有跑进执行 · stall 可见 · 重试尽换 CLI | chat-home-plan-cli H0–H4 | **已落地** H0–H4；**P-chat-home ✅**（t28） | 与 P2-9/10 分列；**≠** 进程 hang 外的 P-loop |
 | **P2-16** | PRODUCT 主路径 UI/操作流（拆分台 · 结果台 · 模板 · 默认停拆分） | [`product-mainpath-optimize-2026-07-20.md`](./product-mainpath-optimize-2026-07-20.md) | ✅ **波次 1–5 闭环**（t46） | **P-product-light**；架构边界仍听 P2-17；无第三方 agent 运行时 |
-| **P2-17** | **系统架构大改**：Ports&Adapters · App 用例 · Domain 切开 · 桌面 MVVM · 多 CLI Worker · 薄编排 · CLI 同构 | [`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md) §11 A0–A5 | ✅ **A0–A5 收口**（t58；A5-5 可选 ☐） | **P-arch-redesign**；GEB 齐；S8 classic facade；`state.js` D9+ ~230；A5-5 不落 crate；收口后 t61–t63；**不**回灌 D0–D4 |
+| **P2-17** | **系统架构大改**：Ports&Adapters · App 用例 · Domain 切开 · 桌面 MVVM · 多 CLI Worker · 薄编排 · CLI 同构 | [`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md) §11 A0–A5 | ✅ **A0–A5 收口**（t58；A5-5 可选 ☐） | **P-arch-redesign**；GEB 齐；S8 classic facade；`state.js` D9+ ~230；A5-5 不落 crate；收口后 t61–t66；**不**回灌 D0–D4 |
 
 **t15 完成定义（本阶段只做这些）**：
 
@@ -931,6 +931,7 @@ D0 文档同构（半天，降低所有后续返工）
 | 2026-07-21 | **t63 / S-run `app/run` 纵切 ≤400**：`src/app/run.rs`（463）→ `app/run/{mod,materialize,foreground,route}.rs` 多文件（单文件 ≤400）；`pub use` 保 `app::run::*` 对外路径；零语义 diff；L2 app/src 成员表；check-arch app 软超清零 WARN=0；lib+A0+mode_b 绿；**不**旁路 Mode B；**不**改 run_dir/session/plan job；**不做** A5-5 / FE 产品；**不**回灌 D0–D4 |
 | 2026-07-21 | **t64 / T-sync-T2 GEB 文档**：architecture §7/§11 A3 role/scope **展示/写字段待** → **可写（S-role/t61）**；A5/S8/附录 C `state.js` **D9 未做/仍厚 820** → **D9+ ~230**；L1/src L2 同步；总账 P2-17 注 t61–t63；P2-7 已与 t41/t59/t60/t62 一致（**SDK S1 HTTP 未做**）；**A5-5 仍不做**；**真 PTY 仍未出池**；**零**业务代码 · **不开 A6** |
 | 2026-07-21 | **t65 / P2-7 单项 SDK S1 HTTP（勿整包 M5）**：`runtime/provider/sdk_http.rs` `AnthropicMessagesBackend` 实现 `SdkBackend`（one-shot `/v1/messages` · mockable `MessagesHttpClient`）；`build_sdk_provider` 按 `bin=messages`/`CCO_SDK_BACKEND` 注入；`reqwest` json；registry 仍 **opt-in**（`providers.sdk.enabled` 默认 false）；S0 inline 默认不变；单测 mock HTTP start/poll/collect + preflight key；**不**做 S2 tool loop / 自动 PR 返工 / 旁路 confirm；**不**回灌 D0–D4 |
+| 2026-07-21 | **t66 / T-sync-T3 热修 A0-R4 ParseOnly 同 drop optional（D-T3-1）**：`app::run::materialize_run` 内调 `materialize_selected_tasks`，返回 `(run_id,state,ir)`；CLI ParseOnly / `confirm_materialize` 调度**返回 IR**；`start_run_from_plan` 同 drop（idempotent）；A0 金样 + unit；契约 `behavior-golden` A0-R4 扩全写 run 入口；architecture C.2/脚注 + L2 同步；**不**旁路 Mode B · **不**改 confirm 唯一开跑 · **不开 A6** · **不**回灌 D0–D4 |
 
 ### 9.1 边界（防与产品变更混淆）
 

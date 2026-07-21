@@ -297,23 +297,27 @@ pub fn start_run_async(config: Config, req: StartRunRequest) -> Result<String> {
 }
 
 /// Start scheduler from an already-built PlanIR (used by plan-job confirm).
+///
+/// Always drops `optional && !include` before write/spawn (A0-R4 · D-T3-1),
+/// same as [`crate::app::run::materialize_run`]. Mode B callers usually already
+/// ran `materialize_selected_tasks` — re-apply is idempotent.
 pub fn start_run_from_plan(config: Config, project: PathBuf, ir: &PlanIR) -> Result<String> {
     if !project.is_dir() {
         bail!("项目路径不是目录: {}", project.display());
     }
-    ir.validate()?;
+    let ir = crate::plan::materialize_selected_tasks(ir.clone())?;
 
     let run_id = state::new_run_id();
     let run_dir = state::prepare_run_dir(&config.runs_dir(), &run_id)?;
     let project = project
         .canonicalize()
         .with_context(|| format!("canonicalize {}", project.display()))?;
-    let run_state = RunState::new(run_id.clone(), project, ir, run_dir.clone());
+    let run_state = RunState::new(run_id.clone(), project, &ir, run_dir.clone());
     run_state.save()?;
 
     // Persist resolved plan for resume (scheduler also writes this; write early for UI).
     let resolved = run_dir.join("plan.resolved.json");
-    std::fs::write(&resolved, serde_json::to_string_pretty(ir)?)?;
+    std::fs::write(&resolved, serde_json::to_string_pretty(&ir)?)?;
 
     let registry = ProviderRegistry::from_config(&config)?;
     let max_parallel = ir.max_parallel;

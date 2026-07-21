@@ -5,6 +5,7 @@
 //! 2. `stop_run` freezes **Pending** (and Running/Starting/Queued) → run Aborted.
 //! 3. Provider soft-fill (job default / tags) never overwrites an explicit task route.
 //! 4. Unselected optional tasks are dropped on confirm — never silent auto-start.
+//! 5. ParseOnly / structured `materialize_run` also drops `optional && !include` (D-T3-1).
 //!
 //! Inventory: `docs/contracts/behavior-golden.md`.
 
@@ -424,6 +425,91 @@ fn a0_materialize_rejects_all_optional_unselected() {
     assert!(
         msg.contains("没有选中") || msg.contains("至少"),
         "must refuse empty selection: {msg}"
+    );
+}
+
+/// A0-R4c / D-T3-1: ParseOnly `materialize_run` drops unselected optionals (not only Mode B confirm).
+#[test]
+fn a0_parse_only_materialize_drops_unselected_optional() {
+    use cco::app::run as run_uc;
+    use cco::plan::{OnFailure, TaskIR};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().join("proj");
+    std::fs::create_dir_all(project.join("docs/plans")).unwrap();
+    let cfg = test_config(tmp.path());
+
+    let ir = PlanIR {
+        schema: "cco-plan/v1".into(),
+        name: "parseonly-opt".into(),
+        adapter: "cco-plan/v1".into(),
+        source_path: project.join("docs/plans/opt.cco.yaml"),
+        max_parallel: 2,
+        on_failure: OnFailure::Pause,
+        retry_max: 0,
+        default_provider: "fake".into(),
+        default_mode: "print".into(),
+        worktree: false,
+        require_inspect: false,
+        tasks: vec![
+            TaskIR {
+                id: "must".into(),
+                title: "必做".into(),
+                depends_on: vec![],
+                group: None,
+                provider: "fake".into(),
+                mode: "print".into(),
+                prompt: "must\nCCO_DONE ok".into(),
+                acceptance: None,
+                timeout_secs: None,
+                worktree: Some(false),
+                provider_opts: serde_json::json!({}),
+                optional: false,
+                include: true,
+                role: None,
+                scope: None,
+                outputs: vec![],
+                tags: vec![],
+            },
+            TaskIR {
+                id: "maybe".into(),
+                title: "可选未勾选".into(),
+                depends_on: vec![],
+                group: None,
+                provider: "fake".into(),
+                mode: "print".into(),
+                prompt: "maybe\nCCO_DONE ok".into(),
+                acceptance: None,
+                timeout_secs: None,
+                worktree: Some(false),
+                provider_opts: serde_json::json!({}),
+                optional: true,
+                include: false,
+                role: None,
+                scope: None,
+                outputs: vec![],
+                tags: vec![],
+            },
+        ],
+    };
+
+    let (run_id, st, out) = run_uc::materialize_run(&cfg, project, &ir).unwrap();
+    assert!(!run_id.is_empty());
+    assert!(out.task("must").is_some());
+    assert!(
+        out.task("maybe").is_none(),
+        "ParseOnly must drop unselected optional from returned IR"
+    );
+    assert!(!st.tasks.contains_key("maybe"));
+    assert!(st.tasks.contains_key("must"));
+
+    let resolved: PlanIR = serde_json::from_str(
+        &std::fs::read_to_string(st.run_dir.join("plan.resolved.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        resolved.task("maybe").is_none(),
+        "plan.resolved.json must not keep unselected optional"
     );
 }
 
