@@ -209,16 +209,20 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
     );
   }
 
+  // B2：主 CTA 始终「拆成步骤」；仅保存 / 重新保存 为 ghost 次按钮
+  const canExec = !runLocked && !busy && !!md;
+  const assignTitle = runLocked
+    ? "运行中，请先停止后再拆分"
+    : isSaved
+      ? "把计划拆成可执行步骤"
+      : "先保存到本机计划，再进入拆分台";
   if (isSaved) {
-    const canExec = !runLocked && !busy;
     return (
       `<span class="chat-plan-card-saved muted">已保存：${chatEsc(savedPath)}</span>` +
       `<div class="chat-plan-card-actions-btns">` +
       expand +
-      `<button type="button" class="btn ghost sm btn-chat-plan-adopt" ${busy ? "disabled" : ""} title="覆盖保存到本地计划文件">重新保存</button>` +
-      `<button type="button" class="btn primary sm btn-chat-plan-assign" ${canExec ? "" : "disabled"} title="${
-        runLocked ? "运行中，请先停止后再执行新计划" : "带上当前计划进入拆分执行"
-      }">拆成步骤</button>` +
+      `<button type="button" class="btn ghost sm btn-chat-plan-adopt" ${busy ? "disabled" : ""} title="覆盖保存到本地计划文件">仅保存</button>` +
+      `<button type="button" class="btn primary sm btn-chat-plan-assign" ${canExec ? "" : "disabled"} title="${assignTitle}">拆成步骤</button>` +
       `</div>`
     );
   }
@@ -226,7 +230,8 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
   return (
     `<div class="chat-plan-card-actions-btns">` +
     expand +
-    `<button type="button" class="btn primary sm btn-chat-plan-adopt" ${busy || !md ? "disabled" : ""}>保存为计划</button>` +
+    `<button type="button" class="btn ghost sm btn-chat-plan-adopt" ${busy || !md ? "disabled" : ""} title="只保存到本机，暂不拆分">仅保存</button>` +
+    `<button type="button" class="btn primary sm btn-chat-plan-assign" ${canExec ? "" : "disabled"} title="${assignTitle}">拆成步骤</button>` +
     `</div>`
   );
 }

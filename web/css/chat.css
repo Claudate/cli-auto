@@ -63,6 +63,28 @@
   gap: 0.4rem;
   flex-shrink: 0;
 }
+/* B3: session switcher tucked under details */
+.chat-session-more {
+  position: relative;
+}
+.chat-session-more > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.chat-session-more > summary::-webkit-details-marker {
+  display: none;
+}
+.chat-session-more[open] .chat-session-switch {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.25rem);
+  z-index: 25;
+  padding: 0.4rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg2, var(--panel, #1e1e24));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
 /* C3 multi-session switcher */
 .chat-session-switch {
   display: flex;
@@ -330,6 +352,12 @@
   max-width: 28rem;
   text-align: center;
   line-height: 1.55;
+}
+.chat-empty-coach {
+  margin: 0 0 0.35rem;
+  font-size: 0.98rem;
+  color: var(--text, inherit);
+  opacity: 1;
 }
 .chat-hint {
   margin-top: 0.75rem;

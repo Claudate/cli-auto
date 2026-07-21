@@ -443,17 +443,21 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
             <div class="chat-head">
               <!-- 页头单源：顶栏 #page-title/#page-sub；此处只留一句步骤 + C3 会话切换 -->
               <div class="chat-head-row">
-                <p class="muted chat-head-step">先保存计划文档，再「拆成步骤」进入拆分台 · 项目：<span id="chat-project-label">—</span></p>
+                <p class="muted chat-head-step">说清目标 → 生成计划 → 点「拆成步骤」 · <span id="chat-project-label">—</span></p>
                 <div class="chat-head-actions">
-                  <div class="chat-session-switch" id="chat-session-switch" title="多会话（C3）">
-                    <label class="chat-session-label muted" for="chat-session-select">会话</label>
-                    <select id="chat-session-select" class="chat-session-select" aria-label="切换聊天会话">
-                      <option value="default">默认</option>
-                    </select>
-                    <button type="button" class="btn ghost sm" id="btn-chat-session-new" title="新建会话">＋</button>
-                    <button type="button" class="btn ghost sm" id="btn-chat-session-del" title="删除当前会话">删</button>
-                  </div>
-                  <button type="button" class="icon-btn sm chat-rail-toggle" id="btn-chat-rail-toggle" title="展开/收起右侧计划列表" aria-label="展开右侧计划列表" aria-pressed="false">☰</button>
+                  <!-- B3：会话切换默认藏进 details，首屏不抢概念 -->
+                  <details class="chat-session-more" id="chat-session-more" title="多会话（进阶）">
+                    <summary class="btn ghost sm">会话…</summary>
+                    <div class="chat-session-switch" id="chat-session-switch">
+                      <label class="chat-session-label muted" for="chat-session-select">会话</label>
+                      <select id="chat-session-select" class="chat-session-select" aria-label="切换聊天会话">
+                        <option value="default">默认</option>
+                      </select>
+                      <button type="button" class="btn ghost sm" id="btn-chat-session-new" title="新建会话">＋</button>
+                      <button type="button" class="btn ghost sm" id="btn-chat-session-del" title="删除当前会话">删</button>
+                    </div>
+                  </details>
+                  <button type="button" class="icon-btn sm chat-rail-toggle" id="btn-chat-rail-toggle" title="展开/收起右侧计划列表（进阶）" aria-label="展开右侧计划列表" aria-pressed="false">☰</button>
                 </div>
               </div>
             </div>
@@ -537,13 +541,13 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
           <div class="plans-mgmt-body">
             <div class="plans-mgmt-list-col">
               <h3 class="plans-mgmt-col-title">计划列表</h3>
-              <p class="muted plans-mgmt-hint">选中后点「拆成步骤」· 双击编辑文档 · 最新高亮</p>
+              <p class="muted plans-mgmt-hint">选一份计划 →「拆成步骤」；需要时再编辑正文</p>
               <div id="plans-mgmt-list" class="plans-mgmt-list"></div>
-              <p id="plans-mgmt-empty" class="plans-mgmt-empty muted" hidden>暂无计划 · 用上方「选中文件夹」或「选中文件」加载</p>
+              <p id="plans-mgmt-empty" class="plans-mgmt-empty muted" hidden>暂无计划 · 可从聊天生成，或点上方加载文件</p>
             </div>
             <div class="plans-mgmt-detail-col">
               <div id="plans-mgmt-detail-empty" class="plans-mgmt-detail-empty muted">
-                从左侧选一份计划，可预览、编辑文档或执行
+                从左侧选一份计划，预览后可拆成步骤
               </div>
               <div id="plans-mgmt-detail" class="plans-mgmt-detail" hidden>
                 <div class="plans-mgmt-detail-head">

@@ -126,26 +126,27 @@ export function planTemplateById(id) {
   return PLAN_TEMPLATES[id] || null;
 }
 
-/** Chat empty-state HTML (T2); keeps example chips + template one-click. */
+/** Chat empty-state HTML (B1): coach line + 3 examples + 2 templates; no eng jargon. */
 export function planTemplateChatEmptyHtml() {
   const tplBtns = Object.values(PLAN_TEMPLATES)
+    .slice(0, 2)
     .map(
       (t) =>
         `<button type="button" class="chat-example-chip chat-tpl-chip" data-plan-template="${esc(
           t.id
-        )}" title="${esc(t.hint || "一键落盘到 plans/")}">${esc(t.short)}</button>`
+        )}" title="${esc(t.hint || "从模板开始")}">${esc(t.short)}</button>`
     )
     .join("");
   return `
       <div class="chat-empty muted">
-        <p>用自然语言说明你要做什么。AI 会先帮你写成一份<strong>计划文档</strong>，保存后再点「拆成步骤」进入拆分台核对。</p>
+        <p class="chat-empty-coach"><strong>在下方输入你的目标，点发送</strong> — AI 会先写成计划，再拆成可并行的步骤。</p>
         <p class="chat-hint">点示例填入输入框，改完再发送：</p>
         <div class="chat-example-chips">
+          <button type="button" class="chat-example-chip" data-chat-example="把产品官网改成双语落地页，含表单与 SEO 要点">出海落地页</button>
           <button type="button" class="chat-example-chip" data-chat-example="优化登录与注册体验，写清范围和验收">优化登录体验</button>
-          <button type="button" class="chat-example-chip" data-chat-example="排查并修复 flaky 测试，列出可疑用例与步骤">修 flaky 测试</button>
-          <button type="button" class="chat-example-chip" data-chat-example="为当前模块补用户文档与上手步骤">补模块文档</button>
+          <button type="button" class="chat-example-chip" data-chat-example="为当前功能补一份用户能看懂的需求大纲与验收">写清需求大纲</button>
         </div>
-        <p class="chat-hint chat-hint-tpl">或从模板一键落盘到 plans/，改完再「拆成步骤」：</p>
+        <p class="chat-hint chat-hint-tpl">或从模板开始：</p>
         <div class="chat-example-chips chat-tpl-chips">${tplBtns}</div>
       </div>`;
 }

@@ -47,6 +47,7 @@ export {
   normalizeChatDraft,
   saveChatPlan,
   assignFromChat,
+  assignAndSplitFromChat,
   previewChatPlan,
 } from "./chatPlanOps.js";
 

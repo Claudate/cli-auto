@@ -101,27 +101,13 @@ export function attachDocumentClick(deps) {
       const planAssign = e.target?.closest?.(".btn-chat-plan-assign");
       if (planAssign) {
         e.preventDefault();
-        const card = planAssign.closest?.(".chat-plan-card");
-        const full = card?.querySelector?.(".chat-plan-full");
-        const md = full?.textContent?.trim();
-        const st = state();
-        if (md && typeof g("ensureChatState") === "function") {
-          call("ensureChatState");
-          if (st?.chatSession) {
-            if (!st.chatSession.draft_plan) {
-              st.chatSession.draft_plan = {
-                path: st.chatDraftPlan || "",
-                saved: !!st.chatDraftPlan,
-                markdown: md,
-                title: null,
-              };
-            } else if (!st.chatSession.draft_plan.markdown) {
-              st.chatSession.draft_plan.markdown = md;
-            }
-          }
-        }
+        // B2: save if needed then direct-assign (no start_run)
         Promise.resolve(
-          typeof g("assignFromChat") === "function" ? call("assignFromChat") : null
+          typeof g("assignAndSplitFromChat") === "function"
+            ? call("assignAndSplitFromChat", planAssign)
+            : typeof g("assignFromChat") === "function"
+              ? call("assignFromChat")
+              : null
         ).catch((err) => toast(String(err?.message || err)));
         return;
       }

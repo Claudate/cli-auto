@@ -214,6 +214,46 @@ export async function assignFromChat() {
   }
 }
 
+/**
+ * B2：未落盘时先静默保存，再走 startExecuteFromSelection（默认直拆，禁止 start_run）。
+ * @param {HTMLElement|null} btn  plan card button (optional; seeds markdown from card)
+ */
+export async function assignAndSplitFromChat(btn) {
+  ensureChatState();
+  if (hasActiveRun()) {
+    toastRunLocked("拆成步骤");
+    return;
+  }
+  const card = btn?.closest?.(".chat-plan-card");
+  const full = card?.querySelector?.(".chat-plan-full");
+  const md = full?.textContent?.trim();
+  if (md) {
+    if (!state.chatSession.draft_plan) {
+      state.chatSession.draft_plan = {
+        path: state.chatDraftPlan || "",
+        saved: !!state.chatDraftPlan,
+        markdown: md,
+        title: null,
+      };
+    } else {
+      state.chatSession.draft_plan.markdown = md;
+    }
+  }
+  const draft = state.chatSession?.draft_plan;
+  const alreadySaved = !!(
+    state.chatDraftPlan &&
+    draft?.saved &&
+    draft?.path
+  );
+  if (!alreadySaved) {
+    const resp = await saveChatPlan({ skipConfirm: true });
+    if (!resp?.plan_rel && !state.chatDraftPlan) {
+      return;
+    }
+  }
+  await assignFromChat();
+}
+
 /** Ready-bar「打开预览」→ App 内全文 modal（不默认 open_path）. */
 export async function previewChatPlan() {
   if (!state.chatDraftPlan || !state.selectedPath) return;

@@ -7,7 +7,7 @@
 > 架构边界（**不重开 A0–A5**）：[`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)  
 > 交互意图参考（**不继承其 ✅**）：[`product-mainpath-optimize-2026-07-20.md`](./product-mainpath-optimize-2026-07-20.md)  
 > 范围：`web/` 为主 · 设置文案/默认值 · 帮助页；**不**换栈 · **不**旁路 `confirm_start` · **不**改 Scheduler 内核  
-> 状态：**波次 A ✅**（A1–A6 · 默认直拆 · 拆分台/顶栏减法 · 帮助三步 · package）
+> 状态：**波次 A ✅ · 波次 B ✅**（写计划顺滑 + 拆分短读；C/D 待做）
 
 [PROTOCOL]: **勾选只认本文件 §3 任务表**。诊断文 `ux-nondev-mainpath` 保留为背景，不再双轨勾选。落地后回写 PRODUCT / docs L2 / web L2。每波结束必须跑 §5 非开发脚本，不得以 `cargo test` 或 facade 行数代替。
 
@@ -166,7 +166,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **B1** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.5 d |
 | **文件** | [`web/js/features/templates/catalog.js`](../web/js/features/templates/catalog.js) 或 `planTemplateChatEmptyHtml`<br>[`web/js/features/chat/chatRender.js`](../web/js/features/chat/chatRender.js)<br>[`web/css/chat.css`](../web/css/chat.css) 薄样式 |
 | **改法** | 空态结构：一句教练文案 + 3 个示例目标（点填输入框）+ 模板两个；去掉工程师说明堆叠 |
@@ -178,7 +178,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **B2** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.5–1 d |
 | **依赖** | A2 |
 | **文件** | [`web/js/features/chat/chatPlanOps.js`](../web/js/features/chat/chatPlanOps.js) / `chatActions.js`<br>[`web/index.html`](../web/index.html) `#chat-ready-bar` 按钮<br>经现有 save + `startExecuteFromSelection` / assign |
@@ -191,7 +191,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **B3** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.3 d |
 | **文件** | [`web/index.html`](../web/index.html) `#chat-session-switch` · `#btn-chat-rail-toggle`<br>chat install / render 默认 `hidden` 或仅「更多」 |
 | **改法** | 会话 UI 默认 hidden；计划轨默认不展开；进阶用户设置或长按/更多可开（最小：设置一开关或保持 ☰ 但默认不教学） |
@@ -203,7 +203,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **B4** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.5 d |
 | **依赖** | A4 |
 | **文件** | shellChrome / index 顶栏；[`web/js/features/chat/plansMgmt.js`](../web/js/features/chat/plansMgmt.js) 仅保留能力 |
@@ -216,7 +216,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **B5** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.5 d |
 | **文件** | [`web/js/features/split/splitDetail.js`](../web/js/features/split/splitDetail.js)<br>[`web/js/features/split/splitRender.js`](../web/js/features/split/splitRender.js) |
 | **改法** | 详情默认：标题 + 一句话 +「怎样算做完」；完整说明 `<details>`；高级路由 fold 保持默认关 |
@@ -228,7 +228,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **B6** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.3 d |
 | **文件** | [`web/js/features/split/splitFillMeta.js`](../web/js/features/split/splitFillMeta.js) |
 | **改法** | 有业务可选未勾时，confirm 区固定一条非 dismiss 提示（可沿用 meta 文案，视觉升一级） |
@@ -413,3 +413,4 @@
 | 2026-07-21 | **原则落地**：识别失败不得静默换成空壳。路径改为 diagnose（规划日志写原因）→ recover（从文档真标题/可实施正文恢复任务）→ 仅无结构时 last-resort meta，且 meta 第一步 prompt 写明失败原因。 |
 | 2026-07-21 | **A1 + 本轮状态收口**：`resolveEntryRoute` planned/confirmed → workspace 拆分台；`selectProject` 双保险放宽；历史 `project_live` completed 不抢 phase/KPI/结果台（`liveBelongsToOpenPlan`）；新开 plan job `supersede` 同项目 planning；`latest_plan_job` 跳过超时 planning 僵尸（>30min），其余仍按 `updated_at`。 |
 | 2026-07-21 | **波次 A 收口 A2–A6**：`chatAssignDirect` 默认开（仅 `"0"` 关）；设置「拆成步骤前先确认选项」语义翻转；拆分台顶栏仅重新拆分+确认，sanitize/写回进「调整…」；chat 待确认顶栏「继续核对拆分」；计划管理仅更多且永不 primary；帮助「三步上手」去 Mode B/R-S 首屏；`node --check` + `package-app`。 |
+| 2026-07-21 | **波次 B 收口 B1–B6**：聊天空态教练句+示例；计划卡主 CTA「拆成步骤」（未保存先 skipConfirm 落盘）；会话切换默认「会话…」；计划管理文案降权；详情默认短读+完整说明 fold；可选未勾 banner。 |

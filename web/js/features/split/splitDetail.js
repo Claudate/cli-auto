@@ -255,29 +255,41 @@ export function paintDetail(ctx) {
         }
       }
     } else {
+      // B5：默认短读 — 一句话 + 怎样算做完；完整说明进 details
+      if (editForm) editForm.hidden = true;
+      if (promptLabel) {
+        promptLabel.textContent = "这一步做什么";
+      }
+      const bodyText = displayBody || full || "";
+      const ol = oneLiner(cur) || "";
+      let doneLine = "";
+      if (cur.acceptance || cur.done_when || cur.doneWhen) {
+        doneLine = String(cur.acceptance || cur.done_when || cur.doneWhen).trim();
+      }
+      const shortBits = [];
+      if (ol) shortBits.push(ol);
+      if (doneLine && doneLine !== ol) shortBits.push(`怎样算做完：${doneLine}`);
+      const shortHtml = shortBits.length
+        ? `<p class="split-detail-short">${esc(shortBits.join(" · "))}</p>`
+        : `<p class="split-detail-short muted">点「完整说明」查看给执行 AI 的正文</p>`;
+      const fullHtml = md(bodyText);
       if (promptEl) {
         promptEl.hidden = false;
         promptEl.classList.add("md-body");
-        promptEl.innerHTML = md(displayBody || full);
+        promptEl.innerHTML =
+          shortHtml +
+          `<details class="split-detail-full">` +
+          `<summary>完整说明</summary>` +
+          `<div class="split-detail-full-body md-body">${fullHtml}</div>` +
+          `</details>`;
         promptEl.scrollTop = 0;
-      }
-      if (editForm) editForm.hidden = true;
-      if (promptLabel) {
-        promptLabel.textContent =
-          typeof g("flowPromptLabel") === "function"
-            ? g("flowPromptLabel")(false)
-            : "拆解后的任务内容（执行时按完整 worker 说明进行）";
       }
     }
     if (metaEl) {
-      const chars = [...(displayBody || full)].length;
       metaEl.hidden = false;
-      metaEl.textContent =
-        typeof g("flowConfirmMetaLine") === "function"
-          ? g("flowConfirmMetaLine")(chars, editing)
-          : editing
-            ? `编辑中 · 说明 ${chars} 字`
-            : `任务内容 ${chars} 字 · 点左侧可切换步骤`;
+      metaEl.textContent = editing
+        ? "编辑中 · 保存后生效"
+        : "点左侧切换步骤 · 需要时展开完整说明";
     }
   } else {
     const titleEl = $("confirm-task-title");

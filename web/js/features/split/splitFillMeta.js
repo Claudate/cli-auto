@@ -124,6 +124,29 @@ export function fillSplitMeta(job, ctx = {}) {
     metaEl.textContent = `共 ${nSteps} 步 · 约 ${layers.length} 波${parallelHint}${optHint} · ${confirmHint}`;
   }
 
+  // B6：业务可选未勾 — 固定非 dismiss 提示条（与卡片 include===false 同构）
+  let optBanner = $("split-optional-banner") || $("#split-optional-banner");
+  if (!optBanner) {
+    const head = document.querySelector("#plan-phase-confirm .split-head-main");
+    if (head) {
+      optBanner = document.createElement("div");
+      optBanner.id = "split-optional-banner";
+      optBanner.className = "split-optional-banner";
+      optBanner.setAttribute("role", "status");
+      head.appendChild(optBanner);
+    }
+  }
+  if (optBanner) {
+    const offCount = bizOpt.filter((t) => t.include === false).length;
+    if (offCount > 0 && !runLocked) {
+      optBanner.hidden = false;
+      optBanner.textContent = `有 ${offCount} 个可选步骤未勾选：点「确认并开始」后它们不会执行。需要跑的请先在列表里勾选。`;
+    } else {
+      optBanner.hidden = true;
+      optBanner.textContent = "";
+    }
+  }
+
   const applyFlowModeBadge = g("applyFlowModeBadge");
   if (typeof applyFlowModeBadge === "function") {
     applyFlowModeBadge(
