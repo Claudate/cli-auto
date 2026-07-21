@@ -400,8 +400,12 @@ enabled = true
 bin = "codex"
 extra_args = []
 
-# P2-7 S0: non-CLI WorkerPort (in-process). Default off — zero product behavior change.
-# Enable only for explicit plan provider: sdk (or soft-fill). S1 HTTP backend later.
+# P2-7: non-CLI WorkerPort. Default off — zero product behavior change.
+# Enable only for explicit plan provider: sdk (or soft-fill).
+# bin = "inline"     → S0 in-process stub (no network)
+# bin = "messages"   → S1 Anthropic Messages HTTP (needs CCO_SDK_API_KEY or ANTHROPIC_API_KEY)
+# optional: extra_args = ["claude-sonnet-4-5"]  # model override (or CCO_SDK_MODEL)
+# optional: CCO_SDK_BASE_URL, CCO_SDK_MAX_TOKENS, CCO_SDK_BACKEND=messages|inline
 [providers.sdk]
 enabled = false
 bin = "inline"

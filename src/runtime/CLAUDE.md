@@ -24,7 +24,7 @@ handoff/: **A1-5 多文件适配器**（单文件 ≤600；实现 `ports::Handof
   · store.rs: FsHandoffStore
   · tests.rs: 单元测（原 monolith 迁入）
 log_events.rs: worker stdout/stderr → LogEvent · compact_text_tail/floor_char_boundary（CJK 安全）
-provider/: **A1-4** 实现 `ports::WorkerPort`（claude/codex/fake）· **P2-7 S0** `sdk`（非 CLI · 默认关）· ProviderRegistry · DTO re-export；`WorkerProvider` = 历史别名
+provider/: **A1-4** 实现 `ports::WorkerPort`（claude/codex/fake）· **P2-7** `sdk`（S0 inline · **S1** messages HTTP · 默认关）· ProviderRegistry · DTO re-export；`WorkerProvider` = 历史别名
 worktree.rs: git worktree 隔离创建/清理 · on_fail 映射 domain IsolationOnFail（混跑 FailClosed）
 acceptance.rs: 任务后软验收命令
 

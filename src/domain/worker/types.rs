@@ -13,7 +13,7 @@ pub enum ProviderId {
     Claude,
     Codex,
     Fake,
-    /// Non-CLI path (P2-7 S0 inline / later Messages API). Registry opt-in.
+    /// Non-CLI path (P2-7 S0 inline · S1 Messages HTTP). Registry opt-in.
     Sdk,
 }
 

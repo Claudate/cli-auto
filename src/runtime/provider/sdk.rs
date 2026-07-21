@@ -1,10 +1,10 @@
-//! SDK / non-CLI worker adapter implementing [`crate::ports::WorkerPort`] (P2-7 S0).
+//! SDK / non-CLI worker adapter implementing [`crate::ports::WorkerPort`] (P2-7 S0+S1).
 //!
 //! [INPUT]: StartCtx · TaskIR · optional SdkBackend
 //! [OUTPUT]: in-process TaskResult (no agent CLI spawn)
 //! [POS]: runtime/provider — proves non-CLI path; default registry **off**
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/provider/CLAUDE.md
-//! note: S0 = InlineSdkBackend only；S1 HTTP/Agent SDK 另立，不进本文件堆功能
+//! note: S0 = InlineSdkBackend；S1 HTTP = [`super::sdk_http`] via injected backend（不堆进本文件）
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,11 +19,16 @@ use super::{
 };
 use crate::plan::TaskIR;
 
-/// Transport behind [`SdkProvider`]. S0 = inline; S1+ may be HTTP Messages API.
+/// Transport behind [`SdkProvider`]. S0 = inline; S1 = Messages HTTP ([`super::sdk_http`]).
 #[async_trait]
 pub trait SdkBackend: Send + Sync {
     /// Human label for meta.json (not the registry provider name).
     fn kind(&self) -> &str;
+
+    /// Optional readiness check (S1: API key present). Default: ready.
+    async fn preflight(&self) -> Result<()> {
+        Ok(())
+    }
 
     /// Run one task in-process. Write `stdout_path` (NDJSON) and return exit code.
     async fn execute(
@@ -132,8 +137,7 @@ impl WorkerPort for SdkProvider {
     }
 
     async fn preflight(&self) -> Result<()> {
-        // S0: always ready (no bin, no network). S1: check API key here.
-        Ok(())
+        self.backend.preflight().await
     }
 
     fn validate_task(&self, task: &TaskIR) -> Result<()> {
@@ -199,6 +203,7 @@ impl WorkerPort for SdkProvider {
                         1
                     }
                 };
+                let inline = backend_kind == "inline";
                 let _ = std::fs::write(
                     &meta_path,
                     serde_json::to_string_pretty(&serde_json::json!({
@@ -206,7 +211,7 @@ impl WorkerPort for SdkProvider {
                         "provider": "sdk",
                         "mode": "print",
                         "backend": backend_kind,
-                        "inline_sdk": true,
+                        "inline_sdk": inline,
                     }))
                     .unwrap_or_else(|_| "{}".into()),
                 );
@@ -216,14 +221,15 @@ impl WorkerPort for SdkProvider {
         }
 
         let code = self.backend.execute(task, ctx, &stdout_path).await?;
+        let backend_kind = self.backend.kind();
         std::fs::write(
             &meta_path,
             serde_json::to_string_pretty(&serde_json::json!({
                 "exit_code": code,
                 "provider": "sdk",
                 "mode": mode,
-                "backend": self.backend.kind(),
-                "inline_sdk": true,
+                "backend": backend_kind,
+                "inline_sdk": backend_kind == "inline",
             }))?,
         )?;
         std::fs::write(&done_flag, code.to_string())?;

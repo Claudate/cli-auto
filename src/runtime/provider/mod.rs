@@ -12,22 +12,24 @@
 //! | route soft/force fill | preflight · spawn · poll · stop · collect |
 //! | failover target name | live registry get + preflight gate |
 //! | isolation FailClosed | worktree path create (worktree.rs) |
-//! note: `sdk` = 非 CLI 路径（P2-7 S0）；默认 config 不注册
+//! note: `sdk` = 非 CLI 路径（P2-7 S0 inline · S1 messages HTTP）；默认 config 不注册
 
 pub mod claude;
 pub mod codex;
 pub mod fake;
 pub mod sdk;
+pub mod sdk_http;
 
 // re-export parse helper for tests
 pub use claude::parse_agent_id;
 pub use sdk::{InlineSdkBackend, SdkBackend, SdkProvider};
+pub use sdk_http::{AnthropicMessagesBackend, MessagesHttpClient, ReqwestMessagesClient};
 
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
 
-use crate::config::Config;
+use crate::config::{Config, ProviderConfig};
 
 // ── Port DTO + trait re-exports (compat: historical `runtime::provider::*` paths) ──
 pub use crate::ports::worker::{
@@ -66,10 +68,11 @@ impl ProviderRegistry {
                 providers.push(Arc::new(codex::CodexProvider::new(bin, pc.extra_args.clone())));
             }
         }
-        // P2-7 S0: non-CLI sdk path — opt-in only (default enabled=false).
+        // P2-7: non-CLI sdk path — opt-in only (default enabled=false).
+        // S0 bin=inline (default); S1 bin=messages|http|anthropic|api → Messages HTTP.
         if let Some(pc) = config.provider("sdk") {
             if pc.enabled {
-                providers.push(Arc::new(sdk::SdkProvider::new()));
+                providers.push(Arc::new(build_sdk_provider(pc)?));
             }
         }
 
@@ -110,6 +113,29 @@ impl ProviderRegistry {
             out.push((p.name().to_string(), p.preflight().await));
         }
         out
+    }
+}
+
+/// Assemble [`SdkProvider`] with inline (S0) or messages HTTP (S1) backend.
+///
+/// Selection: `providers.sdk.bin` ∈ {messages, http, anthropic, api} → HTTP;
+/// anything else (incl. `inline`) → [`InlineSdkBackend`]. Env `CCO_SDK_BACKEND`
+/// may force `messages` / `inline` when set.
+pub fn build_sdk_provider(pc: &ProviderConfig) -> Result<SdkProvider> {
+    let env_backend = std::env::var("CCO_SDK_BACKEND")
+        .ok()
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty());
+    let use_messages = match env_backend.as_deref() {
+        Some("messages") | Some("http") | Some("anthropic") | Some("api") => true,
+        Some("inline") => false,
+        _ => sdk_http::is_messages_bin(&pc.bin),
+    };
+    if use_messages {
+        let backend = sdk_http::messages_backend_from_config(&pc.extra_args)?;
+        Ok(SdkProvider::with_backend(backend))
+    } else {
+        Ok(SdkProvider::new())
     }
 }
 
@@ -224,5 +250,31 @@ mod tests {
         let reg = ProviderRegistry::from_config(&cfg).unwrap();
         assert!(reg.list().contains(&"sdk"));
         assert_eq!(reg.get("sdk").unwrap().name(), "sdk");
+    }
+
+    #[test]
+    fn build_sdk_provider_messages_bin_selects_http_backend() {
+        // No live HTTP: construction must succeed even without API key;
+        // preflight is what gates missing keys (async, covered in sdk_http tests).
+        let pc = ProviderConfig {
+            enabled: true,
+            bin: "messages".into(),
+            extra_args: vec!["claude-test".into()],
+            max_parallel: None,
+        };
+        let p = build_sdk_provider(&pc).unwrap();
+        assert_eq!(p.name(), "sdk");
+    }
+
+    #[test]
+    fn build_sdk_provider_inline_default() {
+        let pc = ProviderConfig {
+            enabled: true,
+            bin: "inline".into(),
+            extra_args: vec![],
+            max_parallel: None,
+        };
+        let p = build_sdk_provider(&pc).unwrap();
+        assert_eq!(p.name(), "sdk");
     }
 }
