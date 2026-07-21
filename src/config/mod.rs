@@ -251,6 +251,16 @@ impl Default for Config {
                 max_parallel: None,
             },
         );
+        // P2-7 S0 non-CLI path: present in defaults but off until explicitly enabled.
+        providers.insert(
+            "sdk".into(),
+            ProviderConfig {
+                enabled: false,
+                bin: "inline".into(),
+                extra_args: vec![],
+                max_parallel: None,
+            },
+        );
         Self {
             default: DefaultSection::default(),
             providers,
@@ -292,6 +302,13 @@ impl Config {
             c.providers.entry("fake".into()).or_insert(ProviderConfig {
                 enabled: true,
                 bin: "fake-claude".into(),
+                extra_args: vec![],
+                max_parallel: None,
+            });
+            // Opt-in only: do not flip existing installs to enabled.
+            c.providers.entry("sdk".into()).or_insert(ProviderConfig {
+                enabled: false,
+                bin: "inline".into(),
                 extra_args: vec![],
                 max_parallel: None,
             });
@@ -372,6 +389,12 @@ bin = "fake-claude"
 enabled = true
 bin = "codex"
 extra_args = []
+
+# P2-7 S0: non-CLI WorkerPort (in-process). Default off — zero product behavior change.
+# Enable only for explicit plan provider: sdk (or soft-fill). S1 HTTP backend later.
+[providers.sdk]
+enabled = false
+bin = "inline"
 
 [terminal]
 default_kind = "embedded"

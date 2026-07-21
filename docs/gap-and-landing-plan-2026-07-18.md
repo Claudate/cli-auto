@@ -144,7 +144,7 @@
 | P2-4 | 跨显示器系统级多窗口 | ✅ **t39 薄切片** | ux-simple · `open_monitor_window_cmd` | 系统级「独立监视窗」可拖第二屏；非整应用多窗 IDE |
 | P2-5 | TUI 内嵌真 PTY 网格 | ✅ **t40 薄切片** | orchestrator M3 · Terminals 多窗格 | 只读 log 网格+zoom（伪 PTY）；交互 write 仍外部终端 |
 | P2-6 | Claude Code skill `/cco-run` | ✅ **t37 已落地** | M4 · `.claude/skills/cco-run/SKILL.md` | 薄封装 `cco run`；不重写 Scheduler |
-| P2-7 | M5：SDK provider / Mermaid / 自动开 PR / Windows launcher | ⚠ **t41+t59 部分** | orchestrator M5 · `format_mermaid` · `terminal/external` | **Mermaid ✅ t41**；**Windows launcher ✅ t59**（wt/powershell/cmd）；SDK/自动 PR 仍池内 |
+| P2-7 | M5：SDK provider / Mermaid / 自动开 PR / Windows launcher | ⚠ **t41+t59+t60 部分** | orchestrator M5 · `format_mermaid` · `terminal/external` · `provider/sdk` | **Mermaid ✅ t41**；**Windows launcher ✅ t59**；**SDK S0 ✅ t60**（`SdkProvider` inline · 默认关）；自动 PR 仍池内 · S1 HTTP 未做 |
 | P2-8 | M5「第二 provider」文档债 | ✅ **t35 扫尾** | M5 已划掉 Codex 并指向 `codex.rs`；全树无「尚无第二 provider」 | 发现即改 |
 | P2-9 | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | ✅ **t32–t34 闭环** | chat-plan-builder §5 C3 | 多会话 · 方案 B · 计划 diff · 流式 partial |
 | P2-10 | 聊天页注意力收敛：后台态降噪 · fake/故障可信 · CTA 序 · 卡片 | ✅ **已落地** | chat-ux-focus U0–U2 | **t29 勾满**；与 P2-9 分列 |
@@ -487,7 +487,7 @@
 | **P2-4** | 跨显示器系统级多窗口 | ux-simple 未做 | ✅ **t39**：`open_monitor_window_cmd` + `#btn-open-monitor-window`（优先第二显示器） | 非整应用多窗；监视专用 OS 窗 |
 | **P2-5** | TUI 内嵌真 PTY 网格 | orchestrator M3 | ✅ **t40**：Terminals 多窗格 stdout 网格 + zoom；n/p 切窗 · z 放大 | 真交互 write / portable-pty 未做（print 模式无 PTY） |
 | **P2-6** | Claude Code skill `/cco-run` | orchestrator M4 可选 | ✅ **t37**：`.claude/skills/cco-run/SKILL.md` 薄封装 | — |
-| **P2-7** | M5：SDK provider / Mermaid / 自动 PR / Windows launcher | orchestrator M5 | ⚠ **t41+t59**：Mermaid ✅；Windows launcher ✅（`wt`/`powershell`/`cmd` · follow_logs Win）；SDK/自动 PR 仍未做 | 勿整包；下一项须再点名 |
+| **P2-7** | M5：SDK provider / Mermaid / 自动 PR / Windows launcher | orchestrator M5 | ⚠ **t41+t59+t60**：Mermaid ✅；Windows ✅；**SDK S0 ✅**（inline WorkerPort · 默认关）；自动 PR / S1 HTTP 仍未做 | 勿整包；下一项须再点名 |
 | **P2-9** | 聊天 C3：流式 / 多会话 / 方案 B / 计划 diff | chat-plan-builder §5 C3 | ✅ **t32–t34 闭环**（多会话 · 方案 B · 计划 diff · 流式 partial） | 流式 = stdout partial 轮询，非 SSE |
 | **P2-10** | 聊天页注意力收敛（后台降噪 · fake 可信 · CTA） | chat-ux-focus U0–U2 | **已落地** U0–U2；**P-chat-ux ✅**（t29） | 与 P2-9 分列 |
 | **P2-11** | 计划驱动执行闭环（拆分 · 巡检 · 回补） | plan-execute-inspect-rework L0–L2 | **已落地** L0–L2；**P-loop** | host ISSUES 分级 + rework 波 + 桌面一键 |
@@ -499,7 +499,8 @@
 
 - [x] §2.1 P2 表状态统一为「☐ **D5 池**」并与上表一一对应  
 - [x] 子计划勾选指向总账：Mode B B2 可选 → P2-1/2；terminal P2 → P2-3；ux-simple → P2-4；orchestrator M3 PTY / M4 skill / M5 → P2-5/6/7；**chat C3 → P2-9**（t12）；**chat UX focus → P2-10**（t22）；**执行闭环 → P2-11**（t25）  
-- [x] 明确 **禁止在 D5 任务内实现**（未出池项）：portable-pty 真交互写、自动 PR、SDK provider；**已出池落地**：P2-1…6/8–12 等见上表；**P2-5 伪 PTY 网格 t40**；**P2-7 部分**：Mermaid t41 · Windows launcher t59；SDK/PR 仍池内  
+- [x] 明确 **禁止在 D5 任务内实现**（未出池项）：portable-pty 真交互写、自动 PR；**已出池落地**：P2-1…6/8–12 等见上表；**P2-5 伪 PTY 网格 t40**；**P2-7 部分**：Mermaid t41 · Windows launcher t59 · **SDK S0 t60**（inline · 默认关）；自动 PR / SDK S1 HTTP 仍池内  
+
 - [x] D0–D4 已闭环项 **不得** 因本池存在而回灌为缺口 
 
 **不做（防范围膨胀）**：
@@ -924,6 +925,7 @@ D0 文档同构（半天，降低所有后续返工）
 | 2026-07-21 | **t57 / P2-17 A5-0 清单**：只调研不删；[`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md) §11 A5-0 + **§16 附录 C**（classic JS 职责/invoke/委托 · CLI↔app 缺口 · TUI 内部触点 · 删除序与并发）；[`web/CLAUDE.md`](../web/CLAUDE.md) A5-0 表；发现：`cco run` 手搓 Scheduler + `mark_confirmed` 旁路 `split::confirm`；TUI `stop_selected` 直写 `.done`；plan/chat 巨石仍 3k 行、confirm fallback 仍在 plan.js；features 无散落 invoke、UI 无 `start_run`；**零**代码行为 diff；A5-1…待；**不**回灌 D0–D4 |
 | 2026-07-21 | **t58 / P2-17 A5 收口（A5-4 GEB）**：A0–A5 主线 ✅（A5-1 CLI · A5-2 facade 绞杀 · A5-3 TUI · A5-4 文档/门禁）；§7/§11 勾满；L1/L2 巨石名单出榜 chat/log/doctor/result/plan/monitor facade；`check-arch.sh` GIANTS 空经典业务巨石；S1–S8 自检（S8 classic ≤200；`state.js` D9 遗留）；**A5-5 本轮明确不做**（评估 docs only）；**零**产品行为 diff · **不**再迁 plan 大块/改调度；**不**回灌 D0–D4 |
 | 2026-07-21 | **t59 / P2-7 单项 Windows 外部终端 launcher（勿整包 M5）**：`ExternalLauncher::{WindowsTerminal,PowerShell,Cmd}`；auto 探测 `WT_SESSION`/`wt`/`powershell`/`cmd`；`open_window` + `follow_logs`/`shell_in_dir` 平台分支；`windows_cmdline_preview` 单测 dry-run；config 模板补 wt/ps/cmd 注释；**不**做 SDK provider / 自动 PR / 安装器 MSI；**不**回灌 D0–D4 |
+| 2026-07-21 | **t60 / P2-7 单项 SDK provider S0（勿整包 M5）**：设计 [`p2-7-sdk-provider-2026-07-21.md`](./p2-7-sdk-provider-2026-07-21.md)；`runtime/provider/sdk.rs` `SdkProvider`+`InlineSdkBackend` 实现 `WorkerPort`（**无** agent CLI spawn）；`ProviderId::Sdk`；registry **opt-in**（`providers.sdk.enabled` 默认 false）；task_dir 同契约；单测 start/poll/collect + registry 默认不含；**不**做 S1 HTTP / 自动 PR / 旁路 confirm；**不**回灌 D0–D4 |
 
 ### 9.1 边界（防与产品变更混淆）
 

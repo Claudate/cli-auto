@@ -13,6 +13,8 @@ pub enum ProviderId {
     Claude,
     Codex,
     Fake,
+    /// Non-CLI path (P2-7 S0 inline / later Messages API). Registry opt-in.
+    Sdk,
 }
 
 impl ProviderId {
@@ -21,6 +23,7 @@ impl ProviderId {
             Self::Claude => "claude",
             Self::Codex => "codex",
             Self::Fake => "fake",
+            Self::Sdk => "sdk",
         }
     }
 
@@ -30,6 +33,7 @@ impl ProviderId {
             "claude" => Some(Self::Claude),
             "codex" => Some(Self::Codex),
             "fake" | "mock" => Some(Self::Fake),
+            "sdk" | "claude-sdk" | "claude_sdk" => Some(Self::Sdk),
             _ => None,
         }
     }
@@ -78,6 +82,9 @@ mod tests {
         assert_eq!(ProviderId::parse("claude"), Some(ProviderId::Claude));
         assert_eq!(ProviderId::parse("CODEX"), Some(ProviderId::Codex));
         assert_eq!(ProviderId::parse("mock"), Some(ProviderId::Fake));
+        assert_eq!(ProviderId::parse("sdk"), Some(ProviderId::Sdk));
+        assert_eq!(ProviderId::parse("claude-sdk"), Some(ProviderId::Sdk));
+        assert_eq!(ProviderId::as_str(ProviderId::Sdk), "sdk");
         assert_eq!(ProviderId::parse("other"), None);
     }
 }

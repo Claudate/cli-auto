@@ -2,7 +2,7 @@
 //! Host never assembles CLI flags here.
 //!
 //! [INPUT]: config::Config · domain::plan::TaskIR · which/dirs 解析 bin
-//! [OUTPUT]: ProviderRegistry · WorkerPort 实现（claude/codex/fake）
+//! [OUTPUT]: ProviderRegistry · WorkerPort 实现（claude/codex/fake/sdk）
 //! [POS]: runtime/provider 适配器；被 scheduler 与 doctor 消费
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/provider/CLAUDE.md
 //!
@@ -12,13 +12,16 @@
 //! | route soft/force fill | preflight · spawn · poll · stop · collect |
 //! | failover target name | live registry get + preflight gate |
 //! | isolation FailClosed | worktree path create (worktree.rs) |
+//! note: `sdk` = 非 CLI 路径（P2-7 S0）；默认 config 不注册
 
 pub mod claude;
 pub mod codex;
 pub mod fake;
+pub mod sdk;
 
 // re-export parse helper for tests
 pub use claude::parse_agent_id;
+pub use sdk::{InlineSdkBackend, SdkBackend, SdkProvider};
 
 use std::sync::Arc;
 
@@ -61,6 +64,12 @@ impl ProviderRegistry {
             if pc.enabled {
                 let bin = resolve_provider_bin(&pc.bin, "CCO_CODEX_BIN");
                 providers.push(Arc::new(codex::CodexProvider::new(bin, pc.extra_args.clone())));
+            }
+        }
+        // P2-7 S0: non-CLI sdk path — opt-in only (default enabled=false).
+        if let Some(pc) = config.provider("sdk") {
+            if pc.enabled {
+                providers.push(Arc::new(sdk::SdkProvider::new()));
             }
         }
 
@@ -181,4 +190,39 @@ pub fn parse_claude_result_json(text: &str) -> Result<serde_json::Value> {
         }
     }
     bail!("could not parse worker JSON result");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{Config, ProviderConfig};
+
+    #[test]
+    fn registry_omits_sdk_when_disabled_by_default() {
+        let cfg = Config::default();
+        let reg = ProviderRegistry::from_config(&cfg).unwrap();
+        let names = reg.list();
+        assert!(
+            !names.contains(&"sdk"),
+            "sdk must stay off by default: {names:?}"
+        );
+        assert!(names.contains(&"claude") || names.contains(&"fake") || names.contains(&"codex"));
+    }
+
+    #[test]
+    fn registry_includes_sdk_when_enabled() {
+        let mut cfg = Config::default();
+        cfg.providers.insert(
+            "sdk".into(),
+            ProviderConfig {
+                enabled: true,
+                bin: "inline".into(),
+                extra_args: vec![],
+                max_parallel: None,
+            },
+        );
+        let reg = ProviderRegistry::from_config(&cfg).unwrap();
+        assert!(reg.list().contains(&"sdk"));
+        assert_eq!(reg.get("sdk").unwrap().name(), "sdk");
+    }
 }
