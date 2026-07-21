@@ -60,6 +60,25 @@ export async function addProjectFromModal() {
     closeModal();
     await loadProjects();
     await host.selectProject(path);
+    // C4: resume welcome-template click after folder pick
+    let pending = null;
+    try {
+      pending = sessionStorage.getItem("cco.pendingPlanTemplate");
+      if (pending) sessionStorage.removeItem("cco.pendingPlanTemplate");
+    } catch (_) {}
+    if (pending && typeof window.applyPlanTemplate === "function") {
+      await Promise.resolve(window.applyPlanTemplate(pending)).catch((e) =>
+        toast(String(e?.message || e))
+      );
+    } else if (
+      pending &&
+      window.ccoTemplates &&
+      typeof window.ccoTemplates.applyPlanTemplate === "function"
+    ) {
+      await Promise.resolve(
+        window.ccoTemplates.applyPlanTemplate(pending)
+      ).catch((e) => toast(String(e?.message || e)));
+    }
   } catch (e) {
     toast(String(e));
   }

@@ -187,6 +187,45 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
           ? `<div class="cli-window-err" title="${esc(sum)}">${esc(sum)}</div>`
           : ""
       }
+      ${(() => {
+        // C2: human progress blurb (3–5 lines max) before raw log body
+        const lines = [];
+        lines.push(
+          bucket === "run"
+            ? "正在推进这一步…"
+            : bucket === "wait"
+              ? "排队等待前序步骤完成"
+              : bucket === "stall"
+                ? "较久没有新进展，可点「详细日志」或停止后重试"
+                : bucket === "done"
+                  ? "本步已完成"
+                  : bucket === "fail"
+                    ? "本步未完成"
+                    : "等待开始"
+        );
+        if (elapsed && elapsed !== "—" && elapsed !== "-") {
+          lines.push(`已用时 ${elapsed}`);
+        }
+        if (stallTxt) {
+          const human =
+            typeof g("flowStallUserText") === "function"
+              ? g("flowStallUserText")(stallTxt)
+              : stallTxt;
+          if (human) lines.push(String(human));
+        }
+        if (sum) lines.push(String(sum).slice(0, 120));
+        if (t.attempt && t.attempt > 1) {
+          lines.push(`第 ${t.attempt} 次尝试`);
+        }
+        const body = lines
+          .filter(Boolean)
+          .slice(0, 5)
+          .map((l) => esc(l))
+          .join("<br/>");
+        return body
+          ? `<div class="cli-window-human muted" data-human="${esc(t.task_id)}">${body}</div>`
+          : "";
+      })()}
       <div class="cli-window-body log-console term-mode" data-log="${esc(t.task_id)}" ${
         expanded ? "" : "hidden"
       }></div>

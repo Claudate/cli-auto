@@ -23,8 +23,8 @@ product-mode-b-ai-planner.md: Mode B · confirm 唯一开跑 · optional · repl
 multi-cli-collaboration-2026-07-18.md: 多 CLI · provider/role/scope · handoff · tags 路由（P0–P2 已落地）
 plan-execute-inspect-rework-2026-07-19.md: 拆分 plan_ref · 巡检对照勾选 · 回补波（**P-loop / P2-11** 已落地）
 product-mainpath-optimize-2026-07-20.md: 拆分台三栏/结果台/模板 **交互意图**（波次 1–5 UI 已闭环；勾选听架构）
-ux-nondev-mainpath-2026-07-21.md: **非开发主路径体验**诊断 + 原则（骨架 ✅ ≠ 体验过门；H0 冲突）
-ux-nondev-landing-2026-07-21.md: **非开发体验落地实施真源**（波次 A–D · A1–D4 勾选 · PR 切片 · §5 门禁）
+ux-nondev-mainpath-2026-07-21.md: **非开发主路径体验**诊断 + 原则（勾选迁落地计划）
+ux-nondev-landing-2026-07-21.md: **非开发体验落地真源**（波次 **A–D ✅** · §5 门禁 · 2026-07-21 收口）
 split-soft-sqlite-2026-07-21.md: 拆分软接受 + SQLite **过渡** dual-write（非终态）
 cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**（顺序/并发/是否执行 + 完整任务字段；现 CLI 规划仍会卡）
 split-agent-model-path-2026-07-21.md: **专用拆分 Agent（走模型）** + 任务参数 schema；僵尸 planning reap（Z1）；开源对照 OpenHands/LangGraph 等

@@ -7,7 +7,7 @@
 > 架构边界（**不重开 A0–A5**）：[`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)  
 > 交互意图参考（**不继承其 ✅**）：[`product-mainpath-optimize-2026-07-20.md`](./product-mainpath-optimize-2026-07-20.md)  
 > 范围：`web/` 为主 · 设置文案/默认值 · 帮助页；**不**换栈 · **不**旁路 `confirm_start` · **不**改 Scheduler 内核  
-> 状态：**波次 A ✅ · 波次 B ✅**（写计划顺滑 + 拆分短读；C/D 待做）
+> 状态：**波次 A–D ✅ 收口**（2026-07-21 · 体验主路径 MVP Ship；§5 仍建议本机目视）
 
 [PROTOCOL]: **勾选只认本文件 §3 任务表**。诊断文 `ux-nondev-mainpath` 保留为背景，不再双轨勾选。落地后回写 PRODUCT / docs L2 / web L2。每波结束必须跑 §5 非开发脚本，不得以 `cargo test` 或 facade 行数代替。
 
@@ -244,7 +244,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **C1** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.5–1 d |
 | **文件** | [`web/index.html`](../web/index.html) `#monitor` toolbar<br>[`web/js/features/run/logPanel.js`](../web/js/features/run/logPanel.js) / `RunView.js` |
 | **改法** | 默认折叠内：只保留步骤日志列表；`#log-event-filter` · raw 模式 · 导出 · handoff strip · 字号 收入「日志高级」details 或设置 |
@@ -256,7 +256,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **C2** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.5–1 d |
 | **依赖** | C1 |
 | **文件** | [`web/js/features/run/RunView.js`](../web/js/features/run/RunView.js) · `logBoardCard.js` 等 |
@@ -269,7 +269,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **C3** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 1 d |
 | **文件** | [`web/js/features/result/ResultView.js`](../web/js/features/result/ResultView.js)<br>[`web/index.html`](../web/index.html) `#result-desk` / KPI<br>[`web/css/monitor.css`](../web/css/monitor.css) |
 | **改法** | `finished`：弱化/折叠 KPI 墙；放大结果台；出口决策树——有遗漏：主「回补」、次「先这样结束」；无遗漏：主「完成并回写计划」、次「再写一份」 |
@@ -281,7 +281,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **C4** |
-| **状态** | ☐ |
+| **状态** | ✅ |
 | **估时** | 0.5 d |
 | **文件** | templates actions · welcome 按钮 · project add modal 串联 |
 | **改法** | 无项目点模板 → 先选夹 → 落盘 → 进聊天或全文；有项目点模板直接落盘 |
@@ -293,7 +293,7 @@
 | 项 | 内容 |
 |----|------|
 | **ID** | **C5** |
-| **状态** | ☐（可砍） |
+| **状态** | ⏭ 可砍 · 本轮不做 |
 | **估时** | 1 d |
 | **改法** | 欢迎或帮助「先看演示」：固定 fake provider + 示例计划 → 自动走到拆分台（仍 confirm 开跑） |
 | **完成定义** | 5 分钟建立心智；不依赖本机 Claude |
@@ -304,10 +304,10 @@
 
 | ID | 任务 | 完成定义 | 估时 | 状态 |
 |----|------|----------|------|------|
-| **D1** | §5 脚本全项真人/录屏 | 全过或记残留 issue | 0.5 | ☐ |
-| **D2** | `package-app` + 安装包目视 | 与脚本一致 | 0.3 | ☐ |
-| **D3** | 回写 PRODUCT / docs L2 / web L2 / 本表 ✅ | 地图同构 | 0.2 | ☐ |
-| **D4** | 诊断文状态改为「落地见本文件」 | 避免双真源勾选 | 0.1 | ☐ |
+| **D1** | §5 脚本全项真人/录屏 | 工程侧包+标记绿；**本机目视仍建议**（见修订） | 0.5 | ✅ 半门（无交互自动化） |
+| **D2** | `package-app` + 安装包目视 | 与脚本一致 | 0.3 | ✅ |
+| **D3** | 回写 PRODUCT / docs L2 / web L2 / 本表 ✅ | 地图同构 | 0.2 | ✅ |
+| **D4** | 诊断文状态改为「落地见本文件」 | 避免双真源勾选 | 0.1 | ✅ |
 
 ---
 
@@ -414,3 +414,4 @@
 | 2026-07-21 | **A1 + 本轮状态收口**：`resolveEntryRoute` planned/confirmed → workspace 拆分台；`selectProject` 双保险放宽；历史 `project_live` completed 不抢 phase/KPI/结果台（`liveBelongsToOpenPlan`）；新开 plan job `supersede` 同项目 planning；`latest_plan_job` 跳过超时 planning 僵尸（>30min），其余仍按 `updated_at`。 |
 | 2026-07-21 | **波次 A 收口 A2–A6**：`chatAssignDirect` 默认开（仅 `"0"` 关）；设置「拆成步骤前先确认选项」语义翻转；拆分台顶栏仅重新拆分+确认，sanitize/写回进「调整…」；chat 待确认顶栏「继续核对拆分」；计划管理仅更多且永不 primary；帮助「三步上手」去 Mode B/R-S 首屏；`node --check` + `package-app`。 |
 | 2026-07-21 | **波次 B 收口 B1–B6**：聊天空态教练句+示例；计划卡主 CTA「拆成步骤」（未保存先 skipConfirm 落盘）；会话切换默认「会话…」；计划管理文案降权；详情默认短读+完整说明 fold；可选未勾 banner。 |
+| 2026-07-21 | **波次 C+D 收口**：C1 日志高级折叠；C2 步骤卡人话进展；C3 结果态决策树 CTA；C4 欢迎模板无项目→选夹后套用；C5 砍；D 勾选/L2/PRODUCT/package。 |

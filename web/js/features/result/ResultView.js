@@ -213,16 +213,34 @@ export function bindResultView(vm, bridge = {}) {
       honest.textContent = h.text;
     }
 
-    if (finishBtn) {
-      const loopCan =
-        loop &&
+    // C3: decision tree — miss → rework/accept; clean → 完成并回写计划 + 再写一份
+    const hasMiss =
+      miss.length > 0 ||
+      (loop &&
         (loop.can_rework ||
           loop.blocking_count > 0 ||
           String(loop.verdict || "").toUpperCase() === "FAIL" ||
-          loop.residual_count > 0);
-      finishBtn.hidden = false;
-      finishBtn.textContent =
-        loopCan && loop?.can_rework ? "结束本轮（不回补）" : "结束本轮";
+          loop.residual_count > 0));
+    const btnBack = $("btn-ws-back-chat");
+    if (finishBtn) {
+      if (hasMiss && loop?.can_rework) {
+        // accept residual is the soft exit; avoid three similar CTAs
+        finishBtn.hidden = true;
+      } else if (hasMiss) {
+        finishBtn.hidden = false;
+        finishBtn.textContent = "先这样结束";
+        finishBtn.classList.remove("primary");
+        finishBtn.classList.add("ghost");
+      } else {
+        finishBtn.hidden = false;
+        finishBtn.textContent = "完成并回写计划";
+        finishBtn.classList.add("primary");
+        finishBtn.classList.remove("ghost");
+      }
+    }
+    if (btnBack) {
+      btnBack.hidden = false;
+      btnBack.textContent = "再写一份";
     }
 
     const heading = $("task-dash-heading");

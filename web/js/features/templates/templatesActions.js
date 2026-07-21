@@ -44,7 +44,11 @@ export async function applyPlanTemplate(templateId) {
   }
   const state = stateObj();
   if (!state.selectedPath) {
-    toast("请先添加并选择项目，再使用模板");
+    // C4: stash pending template → add folder modal → resume after select
+    try {
+      sessionStorage.setItem("cco.pendingPlanTemplate", String(templateId));
+    } catch (_) {}
+    toast("先选一个工作文件夹，添加后会自动套用模板");
     call("openModal");
     return null;
   }

@@ -6,8 +6,8 @@
 > 架构收口（**不重开**）：[`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md) A0–A5 ✅  
 > 交互意图参考（**勾选不继承**）：[`product-mainpath-optimize-2026-07-20.md`](./product-mainpath-optimize-2026-07-20.md)  
 > 范围：`web/` 信息架构 · 路由 · 文案 · 密度 · 首跑引导；必要时薄改 Tauri 命令暴露面；**不**换 React/Vue；**不**旁路 `confirm_start`  
-> 状态：**诊断 / 原则保留** · **实施勾选已迁至落地计划**  
-> **落地实施真源**：[`ux-nondev-landing-2026-07-21.md`](./ux-nondev-landing-2026-07-21.md)（波次 A–D · 派工勾选）
+> 状态：**诊断 / 原则保留** · **实施勾选只认落地计划**（波次 A–D ✅ 2026-07-21）  
+> **落地实施真源**：[`ux-nondev-landing-2026-07-21.md`](./ux-nondev-landing-2026-07-21.md)
 
 [PROTOCOL]: 本文不再双轨勾选。实施勾选只认落地计划；本文供背景与根因。禁止平行第二套架构阶段表。
 

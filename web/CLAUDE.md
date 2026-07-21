@@ -12,11 +12,11 @@ js/app/: **AppViewModel.js** · **routes.js**（phase author|split|run|result �
 js/features/chat/: **A5-2a ✅ · P-ship-D 软超纵切** chatApi · ChatViewModel · chatState · chatSessions · chatActions · **chatRender** · **chatPlanOps** · chatFormat · chatAttachments · planDir · planRail · planFull · plansMgmt · installChat · legacy/host · index（经 gateway；**无** confirm/start_run）
 js/features/project/: **A5-2b-fin D5 ✅** projectApi · ProjectViewModel · sessionEntry · shellChrome · projectCrud · planMeta · projectPicker · planSelect · jobPoll · confirmActions · loadLiveBridge · installProject · legacy/host · index（picker/H0/job 轮询/optional 门；confirm→ccoSplit；**无** invoke/start_run）
 js/features/split/: **A3 ✅ · A5-2b · S-role** splitApi · SplitViewModel · splitRender · splitDetail（高级折叠可改 provider/**role/scope paths**）· SplitView · **splitFillMeta** · index
-js/features/run/: **A4 ✅ · A5-2b · A5-2c · P-ship-D** runApi · runBuckets · RunViewModel · RunView · logPanel · **loadLive** · **log\*** · **logBoardCard** · **logBoardEvents** · index（进度·stall·停/续；日志次级；workspace 轮询壳）
-js/features/result/: **A4 ✅** resultApi · inspectCopy · ResultViewModel · ResultView · index（摘要·回补·inspect 人话）
+js/features/run/: **A4 ✅ · A5-2b · A5-2c · P-ship-D · ux-C** runApi · runBuckets · RunViewModel · RunView · logPanel · **loadLive** · **log\*** · **logBoardCard**（人话进展）· **logBoardEvents** · index（进度·stall·停/续；**日志高级**折叠；workspace 轮询壳）
+js/features/result/: **A4 ✅ · ux-C3** resultApi · inspectCopy · ResultViewModel · ResultView · index（结果态决策树 CTA · 报告感）
 js/features/settings/: **A5-2d ✅ · P-ship-D** settingsApi · settingsForm · doctorPage · shellBoot · uiActions · bindUi · **bindUiClick** · installSettings（settings/doctor/meta/open_monitor 经 gateway；事件表只绑意图）
-js/features/templates/: **P-ship-D D7 ✅** catalog · splitSummary · templatesApi · templatesActions · installTemplates · index（冷启动模板落盘 · S14 拆分摘要写回；经 chatApi/gateway；**无** confirm/start_run）
-css/: tokens（A2-3 主 CTA 变量）· layout · **select**（统一下拉 closed/open）· plan（含 split-route-advanced）· monitor · log · chat
+js/features/templates/: **P-ship-D D7 ✅ · ux-C4** catalog · splitSummary · templatesApi · templatesActions（无项目 pending 模板）· installTemplates · index（冷启动模板落盘 · S14 拆分摘要写回；经 chatApi/gateway；**无** confirm/start_run）
+css/: tokens（A2-3 主 CTA 变量）· layout · **select**（统一下拉 closed/open）· plan（含 split-route-advanced）· monitor（log-advanced · is-result）· log · chat
 
 ## 硬规则（继承 L1 · 本层加严）
 

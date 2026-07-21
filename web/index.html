@@ -91,7 +91,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
           </div>
           <!-- T1/T2: 模板冷启动（一键落盘 plans/；需先有选中项目） -->
           <div class="welcome-templates" id="welcome-templates">
-            <p class="muted welcome-tpl-label">从模板开始（需先选中项目）</p>
+            <p class="muted welcome-tpl-label">从模板开始（无项目时会先请你选工作文件夹）</p>
             <div class="welcome-template-row">
               <button class="btn ghost sm" type="button" data-plan-template="overseas-landing" title="文案 · SEO · 表单 · 多语言要点">出海落地页</button>
               <button class="btn ghost sm" type="button" data-plan-template="req-outline" title="背景 · 目标 · 范围 · 验收 · 风险">通用需求大纲</button>
@@ -300,10 +300,10 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
               </div>
               <div class="task-dash-actions" id="result-actions">
                 <button class="btn primary sm" id="btn-ws-resume" type="button" hidden>继续</button>
-                <button class="btn primary sm" id="btn-ws-rework" type="button" hidden title="根据巡检遗漏生成回补波并再巡检">回补并再巡检</button>
-                <button class="btn ghost sm" id="btn-ws-accept-residual" type="button" hidden title="接受当前遗漏并结束本轮">接受遗漏并结束</button>
-                <button class="btn ghost sm" id="btn-ws-finish" type="button" hidden title="结束本轮，回到写计划">结束本轮</button>
-                <button class="btn ghost sm" id="btn-ws-back-chat" type="button" hidden title="回聊天写下一份计划">回聊天</button>
+                <button class="btn primary sm" id="btn-ws-rework" type="button" hidden title="根据遗漏再跑一轮回补">回补遗漏</button>
+                <button class="btn ghost sm" id="btn-ws-accept-residual" type="button" hidden title="接受当前遗漏并结束本轮">先这样结束</button>
+                <button class="btn primary sm" id="btn-ws-finish" type="button" hidden title="结束本轮，回到写计划">完成并回写计划</button>
+                <button class="btn ghost sm" id="btn-ws-back-chat" type="button" hidden title="回聊天写下一份计划">再写一份</button>
                 <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
                 <button class="btn ghost sm" id="btn-open-monitor-window" type="button" hidden title="在系统级独立窗口打开监视（可拖到另一显示器）">独立监视窗</button>
                 <button class="icon-btn sm task-dash-toggle" id="btn-task-dash-toggle" type="button" title="折叠任务看板" aria-label="折叠任务看板" hidden>▾</button>
@@ -377,33 +377,37 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                   <button type="button" class="filter-chip" data-cli-filter="fail" title="仅失败">失败</button>
                 </div>
                 <button type="button" class="btn ghost sm" id="btn-restore-panels" hidden>恢复已关闭</button>
-                <button type="button" class="btn ghost sm" id="btn-cli-h-auto" title="恢复自适应高度">自适应</button>
-                <button type="button" class="cli-h-grip" id="cli-h-grip" title="按住上下拖动调整看板高度">⇅ 高度</button>
               </div>
-              <div class="detail-tools">
-                <div class="seg" id="log-event-filter" title="事件类型过滤（P2-3）" role="group" aria-label="事件过滤">
-                  <button type="button" data-ev-filter="all" class="active">全部事件</button>
-                  <button type="button" data-ev-filter="tool" title="仅工具调用/结果">工具</button>
-                  <button type="button" data-ev-filter="error" title="仅错误">错误</button>
+              <!-- C1：调试工具默认收进「日志高级」 -->
+              <details class="log-advanced" id="log-advanced">
+                <summary class="btn ghost sm">日志高级…</summary>
+                <div class="log-advanced-body detail-tools">
+                  <div class="seg" id="log-event-filter" title="事件类型过滤" role="group" aria-label="事件过滤">
+                    <button type="button" data-ev-filter="all" class="active">全部事件</button>
+                    <button type="button" data-ev-filter="tool" title="仅工具调用/结果">工具</button>
+                    <button type="button" data-ev-filter="error" title="仅错误">错误</button>
+                  </div>
+                  <div class="seg" id="log-view-mode" title="日志视图">
+                    <button type="button" data-mode="term" class="active">终端</button>
+                    <button type="button" data-mode="pretty">结构</button>
+                    <button type="button" data-mode="raw">原始</button>
+                  </div>
+                  <div class="font-size-group" id="log-font-group" title="日志字号">
+                    <button type="button" data-size="12">A</button>
+                    <button type="button" data-size="14" class="active">A</button>
+                    <button type="button" data-size="16" style="font-size:.85rem">A</button>
+                  </div>
+                  <button type="button" class="btn ghost sm" id="btn-export-log-md" title="导出当前看板日志为 Markdown">导出 MD</button>
+                  <button type="button" class="btn ghost sm" id="btn-cli-h-auto" title="恢复自适应高度">自适应高度</button>
+                  <button type="button" class="cli-h-grip" id="cli-h-grip" title="按住上下拖动调整看板高度">⇅ 高度</button>
                 </div>
-                <div class="seg" id="log-view-mode" title="日志视图">
-                  <button type="button" data-mode="term" class="active">终端</button>
-                  <button type="button" data-mode="pretty">结构</button>
-                  <button type="button" data-mode="raw">原始</button>
-                </div>
-                <div class="font-size-group" id="log-font-group" title="日志字号">
-                  <button type="button" data-size="12">A</button>
-                  <button type="button" data-size="14" class="active">A</button>
-                  <button type="button" data-size="16" style="font-size:.85rem">A</button>
-                </div>
-                <button type="button" class="btn ghost sm" id="btn-export-log-md" title="导出当前看板日志为 Markdown">导出 MD</button>
-              </div>
+              </details>
             </div>
-            <!-- multi-cli P2-6: handoff Board strip -->
+            <!-- multi-cli handoff Board：进阶协作账本 -->
             <div id="handoff-board-strip" class="handoff-board-strip" hidden>
               <div class="handoff-board-head">
-                <span class="section-label">协作账本 Board</span>
-                <button type="button" class="btn ghost sm" id="btn-open-handoff" title="打开 handoff.md">打开账本</button>
+                <span class="section-label">协作账本</span>
+                <button type="button" class="btn ghost sm" id="btn-open-handoff" title="打开协作账本">打开账本</button>
               </div>
               <div id="handoff-board-rows" class="handoff-board-rows"></div>
             </div>

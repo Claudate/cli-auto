@@ -1029,3 +1029,59 @@ button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip
   border-color: #f0e0a8;
   color: #8a6d1d;
 }
+
+/* C1: log advanced tools tuck away */
+.log-advanced {
+  margin-top: 0.35rem;
+}
+.log-advanced > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+}
+.log-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+.log-advanced-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.4rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg3, rgba(0, 0, 0, 0.03));
+}
+
+/* C2: human progress blurb on step cards */
+.cli-window-human {
+  padding: 0.35rem 0.65rem 0.45rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  border-bottom: 1px solid var(--border);
+}
+
+/* C3: finished run → report mode (collapse KPI wall, grow result desk) */
+#result-card.is-result .task-dash-kpis .kpi-card {
+  display: none;
+}
+#result-card.is-result .task-dash-kpis .kpi-meta {
+  font-size: 0.8rem;
+}
+#result-card.is-result .task-dash-body {
+  opacity: 0.72;
+  max-height: 12rem;
+  overflow: auto;
+}
+#result-card.is-result .result-desk {
+  display: block;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg2, var(--panel, #fafafa));
+}
+#result-card.is-result .result-desk-h {
+  font-size: 0.95rem;
+}
