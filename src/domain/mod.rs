@@ -32,7 +32,7 @@ mod tests {
 
     #[test]
     fn plan_types_reachable() {
-        assert_eq!(super::plan::MAX_TASKS, 22);
+        assert_eq!(super::plan::MAX_TASKS, 23);
         assert_eq!(super::plan::PLANNER_MAX_TASKS, 20);
     }
 

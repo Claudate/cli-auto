@@ -636,6 +636,11 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                 <input id="s-post-git-push" type="checkbox" />
                 <span class="field-hint">会附带巡检门禁；仅通过后才 commit + push；禁止 force push。</span>
               </label>
+              <label class="field field-check" title="开启后每次拆分追加「自动开 PR」（需本机 gh 已登录）">
+                <span>拆分后附加：自动开 PR</span>
+                <input id="s-post-open-pr" type="checkbox" />
+                <span class="field-hint">默认关。会附带巡检+Push；用本机 <code>gh pr create</code>；禁止 force-push / 自动 merge。需已登录 GitHub CLI。</span>
+              </label>
             </div>
             <div class="settings-group">
               <h3 class="settings-group-title">外观与聊天</h3>

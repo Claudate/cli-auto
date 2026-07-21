@@ -11,8 +11,9 @@ use serde::{Deserialize, Serialize};
 
 // ── Product hard limits (P1-4 / B3) ───────────────────────────────────
 /// Max tasks in one plan (planner + validate).
-/// Planner still targets ≤18 work tasks so two system post-tasks can fit.
-pub const MAX_TASKS: usize = 22;
+/// Planner soft-cap leaves room for up to three system post-tasks
+/// (inspect / git-push / open-pr).
+pub const MAX_TASKS: usize = 23;
 /// Soft cap for planner-produced tasks (system post-tasks use the remainder).
 pub const PLANNER_MAX_TASKS: usize = 20;
 /// Max characters per task prompt.

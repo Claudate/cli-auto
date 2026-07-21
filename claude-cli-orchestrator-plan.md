@@ -994,9 +994,11 @@ cp target/release/cco ~/.local/bin/
 - 更多真实 Provider（Gemini 等，继续验证扩展契约） → **P2-7**  
 - Agent SDK 作为 `ClaudeSdkProvider` → **P2-7**  
 - 计划可视化导出（Mermaid） → **P2-7 部分 t41**：`format_mermaid` + `cco parse --mermaid` ✅；其余 M5 仍池内  
-- 自动开 PR（gh） → **P2-7**  
+- 自动开 PR（gh） → **P2-7 部分 t62（S-PR）**：`post_open_pr_enabled` + `sys-post-open-pr` · 默认关 · 本机 `gh pr create` ✅；**不做** SDK/Windows 专用 PR / 自动 merge  
+
 - 远程 worker — 明确不在 v1  
-- Windows 外部终端 launcher → **P2-7 部分 t59**：`wt` / `powershell` / `cmd` + Win follow_logs；**不做** SDK / 自动 PR 
+- Windows 外部终端 launcher → **P2-7 部分 t59**：`wt` / `powershell` / `cmd` + Win follow_logs；**不做** SDK / 安装器 MSI  
+
 
 ---
 

@@ -203,7 +203,12 @@ export function planHasOptionalTasks(view) {
 export function isSystemPostTask(t) {
   if (!t) return false;
   const id = String(t.id || "");
-  if (id === "sys-post-inspect" || id === "sys-post-git-push") return true;
+  if (
+    id === "sys-post-inspect" ||
+    id === "sys-post-git-push" ||
+    id === "sys-post-open-pr"
+  )
+    return true;
   if (id.startsWith("sys-post-")) return true;
   return String(t.group || "") === "系统收尾";
 }

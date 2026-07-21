@@ -56,6 +56,7 @@ fn test_config(tmp: &std::path::Path) -> Config {
     // Keep system post tasks off so optional counts stay predictable.
     config.default.post_inspect_enabled = false;
     config.default.post_git_push_enabled = false;
+    config.default.post_open_pr_enabled = false;
     std::fs::create_dir_all(config.runs_dir()).unwrap();
     config
 }

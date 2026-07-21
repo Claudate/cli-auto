@@ -1,7 +1,7 @@
 //! Desktop/CLI settings subset of Config.
 //!
 //! [INPUT]: Config · SettingsUpdate
-//! [OUTPUT]: get_settings · set_settings · SettingsView（H4 failover · 系统收尾 post_inspect/post_git_push · planner_critic_enabled）
+//! [OUTPUT]: get_settings · set_settings · SettingsView（H4 failover · 系统收尾 post_inspect/post_git_push/post_open_pr · planner_critic_enabled）
 //! [POS]: services 子模块
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/services/CLAUDE.md
 
@@ -32,6 +32,8 @@ pub struct SettingsView {
     pub post_inspect_enabled: bool,
     /// 拆分后附加系统任务「代码提交 Push」（可选，默认勾选）。总开关默认关。
     pub post_git_push_enabled: bool,
+    /// 拆分后附加系统任务「自动开 PR」（可选，默认勾选）。总开关默认关。需本机 `gh` 已登录。
+    pub post_open_pr_enabled: bool,
     /// 设置页只读说明：系统收尾不参与拆解。
     pub post_tasks_note: String,
     /// 拆分后可选 LLM 第二跳校对（去假依赖）；默认关。也可 env CCO_PLANNER_CRITIC=1。
@@ -50,6 +52,7 @@ pub struct SettingsUpdate {
     pub fallback_extra_attempts: Option<u32>,
     pub post_inspect_enabled: Option<bool>,
     pub post_git_push_enabled: Option<bool>,
+    pub post_open_pr_enabled: Option<bool>,
     pub planner_critic_enabled: Option<bool>,
 }
 
@@ -69,8 +72,9 @@ pub fn get_settings(config: &Config) -> SettingsView {
             "备用顺序只读：claude ↔ codex；fake 不参与。同 CLI 重试尽后自动换另一家再试。".into(),
         post_inspect_enabled: config.default.post_inspect_enabled,
         post_git_push_enabled: config.default.post_git_push_enabled,
+        post_open_pr_enabled: config.default.post_open_pr_enabled,
         post_tasks_note:
-            "系统收尾任务不参与 AI 拆解；开启后每次拆分末尾自动追加为「可选」且默认勾选，确认屏可取消。"
+            "系统收尾任务不参与 AI 拆解；开启后每次拆分末尾自动追加为「可选」且默认勾选，确认屏可取消。自动开 PR 需本机已安装并登录 GitHub CLI（gh）；禁止 force-push / 自动 merge。"
                 .into(),
         planner_critic_enabled: config.default.planner_critic_enabled,
     }
@@ -116,6 +120,9 @@ pub fn set_settings(config: &mut Config, update: SettingsUpdate) -> Result<()> {
     if let Some(v) = update.post_git_push_enabled {
         config.default.post_git_push_enabled = v;
     }
+    if let Some(v) = update.post_open_pr_enabled {
+        config.default.post_open_pr_enabled = v;
+    }
     if let Some(v) = update.planner_critic_enabled {
         config.default.planner_critic_enabled = v;
     }
@@ -142,5 +149,28 @@ mod tests {
         let u2: SettingsUpdate = serde_json::from_str(r#"{"max_parallel":3}"#).unwrap();
         assert_eq!(u2.planner_critic_enabled, None);
         assert_eq!(u2.max_parallel, Some(3));
+    }
+
+    #[test]
+    fn open_pr_view_and_update_field() {
+        let mut cfg = Config::default();
+        assert!(!cfg.default.post_open_pr_enabled);
+        assert!(!get_settings(&cfg).post_open_pr_enabled);
+
+        let u: SettingsUpdate =
+            serde_json::from_str(r#"{"post_open_pr_enabled":true}"#).unwrap();
+        assert_eq!(u.post_open_pr_enabled, Some(true));
+        // Partial update keeps other fields None
+        let u2: SettingsUpdate = serde_json::from_str(r#"{"post_git_push_enabled":true}"#).unwrap();
+        assert_eq!(u2.post_open_pr_enabled, None);
+
+        cfg.default.post_open_pr_enabled = true;
+        assert!(get_settings(&cfg).post_open_pr_enabled);
+        assert!(
+            get_settings(&cfg)
+                .post_tasks_note
+                .contains("gh"),
+            "settings note should mention gh for PR"
+        );
     }
 }

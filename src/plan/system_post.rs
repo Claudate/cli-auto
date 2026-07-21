@@ -1,7 +1,7 @@
 //! System post-tasks appended after Mode B planning (not from the planner).
 //!
-//! [INPUT]: PlanIR · Config.post_inspect_enabled / post_git_push_enabled
-//! [OUTPUT]: inject_system_post_tasks · fixed ids sys-post-inspect / sys-post-git-push
+//! [INPUT]: PlanIR · Config.post_inspect / post_git_push / post_open_pr
+//! [OUTPUT]: inject_system_post_tasks · fixed ids inspect / git-push / open-pr
 //! [POS]: plan/ 侧路；finish_plan_job 写 proposed 前调用
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/plan/CLAUDE.md
 //!
@@ -9,7 +9,8 @@
 //! - 不参与任务拆解；固定 id / 文案 / 依赖边
 //! - 总是 `optional: true`；功能开启时 `include: true`（确认屏默认勾选）
 //! - 功能关闭：不注入；若图上已有同 id 则剥离（避免旧图残留）
-//! - 扩展：在 FEATURES 表增一项即可
+//! - 链：业务 → inspect（门禁）→ git-push → open-pr（S-PR，默认关）
+//! - 扩展：在本文件增 make_* + 开关即可
 
 use serde_json::json;
 
@@ -18,7 +19,9 @@ use crate::domain::plan::{
     normalize_optional_title, PlanIR, TaskIR, TaskRole, TaskScope, MAX_TASKS,
 };
 // Domain-owned ids + predicate (A1); re-export for plan::system_post callers.
-pub use crate::domain::plan::{is_system_post_task, SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID};
+pub use crate::domain::plan::{
+    is_system_post_task, SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID, SYS_POST_OPEN_PR_ID,
+};
 
 const SYS_GROUP: &str = "系统收尾";
 
@@ -30,10 +33,12 @@ pub fn inject_system_post_tasks(ir: &mut PlanIR, config: &Config) {
     // Strip previous system post-tasks so toggles / re-plan stay clean.
     ir.tasks.retain(|t| !is_system_post_task(&t.id));
 
-    let want_push = config.default.post_git_push_enabled;
-    // 开启 Push 时强制附带巡检门禁（先巡检通过才提交）
+    let want_pr = config.default.post_open_pr_enabled;
+    // Open-PR needs a pushed branch; force Push when PR is on.
+    let want_push = config.default.post_git_push_enabled || want_pr;
+    // Push (or PR) forces inspect gate — 先巡检通过才提交 / 开 PR
     let want_inspect = config.default.post_inspect_enabled || want_push;
-    if !want_inspect && !want_push {
+    if !want_inspect && !want_push && !want_pr {
         return;
     }
 
@@ -65,9 +70,22 @@ pub fn inject_system_post_tasks(ir: &mut PlanIR, config: &Config) {
         {
             vec![SYS_POST_INSPECT_ID.to_string()]
         } else {
-            business_deps
+            business_deps.clone()
         };
         ir.tasks.push(make_git_push_task(ir, &deps));
+        budget = budget.saturating_sub(1);
+    }
+
+    if want_pr && budget > 0 {
+        // Prefer after push (branch on remote); else after inspect; else business.
+        let deps = if ir.tasks.iter().any(|t| t.id == SYS_POST_GIT_PUSH_ID) {
+            vec![SYS_POST_GIT_PUSH_ID.to_string()]
+        } else if ir.tasks.iter().any(|t| t.id == SYS_POST_INSPECT_ID) {
+            vec![SYS_POST_INSPECT_ID.to_string()]
+        } else {
+            business_deps
+        };
+        ir.tasks.push(make_open_pr_task(ir, &deps));
     }
 
     crate::plan::materialize_role_defaults(ir);
@@ -204,6 +222,84 @@ fn make_git_push_task(ir: &PlanIR, depends_on: &[String]) -> TaskIR {
     }
 }
 
+fn make_open_pr_task(ir: &PlanIR, depends_on: &[String]) -> TaskIR {
+    let title = normalize_optional_title("自动开 PR（系统）", true);
+    let after_push = depends_on.iter().any(|d| d == SYS_POST_GIT_PUSH_ID);
+    let after_inspect = depends_on.iter().any(|d| d == SYS_POST_INSPECT_ID);
+    let chain_note = if after_push {
+        "本任务依赖 `sys-post-git-push`（分支应已 push）。"
+    } else if after_inspect {
+        "本任务依赖巡检；未挂 Push 时请先确认当前分支已 push 到 origin。"
+    } else {
+        "请先确认当前分支已 push 到 origin，再开 PR。"
+    };
+    let prompt = format!(
+        r#"# 自动开 Pull Request（系统收尾 · 非业务拆解）
+
+你是 cco **系统内置**收尾任务（S-PR）：在业务{chain_suffix}完成后，用本机 **GitHub CLI `gh`** 开一个 PR。
+
+{chain}
+
+## 前置检查（任一失败 → 跳过，不要硬开）
+1. `command -v gh` 可用；`gh auth status` 已登录（否则输出 `CCO_PR_SKIPPED reason=gh_not_ready`）
+2. 当前目录是 git 仓库；有 `origin` remote（无则 `CCO_PR_SKIPPED reason=no_origin`）
+3. 当前分支 **不是** 默认主干（main/master）——在主干上不要开 PR（`CCO_PR_SKIPPED reason=on_default_branch`）
+4. 当前分支相对默认分支 **有 commits**；无差异 → `CCO_PR_SKIPPED reason=no_diff`
+5. 若已有同 head 的 **open** PR：输出已有 URL + `CCO_PR_OK reused=1`，**不要**再 create
+
+## 目标（检查通过后）
+1. 确认 upstream 已 push（若 push 任务刚跑过应已有；否则 `git push -u origin HEAD`，**禁止** `--force`）
+2. 用 `gh pr create` 开 PR：
+   - base = 仓库默认分支（`gh repo view --json defaultBranchRef -q .defaultBranchRef.name`）
+   - head = 当前分支
+   - title：简短说明本计划做了什么（可用计划名「{name}」+ 一句摘要；≤72 字）
+   - body：2–6 行中文或英文：背景 / 改动要点 / 如何自测；**不要**贴密钥、token、`.env`
+3. 成功后输出一行：`CCO_PR_OK url=<pr_url>`
+4. 失败：输出 `CCO_PR_SKIPPED reason=…` + 错误摘要，**不要**循环重试
+
+## 硬规则（安全）
+1. **禁止** `git push --force` / `--force-with-lease` / `gh pr merge` / 自动 merge
+2. **禁止**改 `git config` 全局项；不要改用户 name/email
+3. **禁止**把密钥、cookie、私钥、`.env` 内容写入 PR 描述
+4. 仅本机已安装且已登录的 `gh`；**不要**调用未授权远程 HTTP API 旁路
+5. 本任务由 cco 设置「拆分后附加：自动开 PR」注入；用户可在确认屏取消勾选
+6. **默认关**：未开设置时不会出现本任务
+
+计划名：{name}
+"#,
+        name = ir.name,
+        chain = chain_note,
+        chain_suffix = if after_push {
+            "、巡检与 Push"
+        } else if after_inspect {
+            "与巡检"
+        } else {
+            ""
+        },
+    );
+    TaskIR {
+        id: SYS_POST_OPEN_PR_ID.into(),
+        title,
+        depends_on: depends_on.to_vec(),
+        group: Some(SYS_GROUP.into()),
+        provider: ir.default_provider.clone(),
+        mode: ir.default_mode.clone(),
+        prompt,
+        acceptance: Some(
+            "已开 PR 并输出 CCO_PR_OK url=…，或明确 CCO_PR_SKIPPED reason=…".into(),
+        ),
+        timeout_secs: Some(600),
+        worktree: Some(false),
+        provider_opts: json!({}),
+        optional: true,
+        include: true,
+        role: Some(TaskRole::Integrate),
+        scope: None,
+        outputs: vec![],
+        tags: vec!["system".into(), "pr".into()],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -241,7 +337,7 @@ mod tests {
                 role: None,
                 scope: None,
                 outputs: vec![],
-            tags: vec![],
+                tags: vec![],
             }],
         }
     }
@@ -252,6 +348,7 @@ mod tests {
         let cfg = Config::default();
         assert!(!cfg.default.post_inspect_enabled);
         assert!(!cfg.default.post_git_push_enabled);
+        assert!(!cfg.default.post_open_pr_enabled);
         inject_system_post_tasks(&mut ir, &cfg);
         assert_eq!(ir.tasks.len(), 1);
         assert!(!ir.require_inspect);
@@ -304,14 +401,47 @@ mod tests {
     }
 
     #[test]
+    fn open_pr_only_auto_adds_inspect_and_push() {
+        let mut ir = sample_ir();
+        let mut cfg = Config::default();
+        cfg.default.post_open_pr_enabled = true;
+        inject_system_post_tasks(&mut ir, &cfg);
+        assert_eq!(ir.tasks.len(), 4, "inspect+push+pr");
+        assert_eq!(ir.tasks[1].id, SYS_POST_INSPECT_ID);
+        assert_eq!(ir.tasks[2].id, SYS_POST_GIT_PUSH_ID);
+        assert_eq!(ir.tasks[3].id, SYS_POST_OPEN_PR_ID);
+        assert!(ir.tasks[3].optional && ir.tasks[3].include);
+        assert_eq!(
+            ir.tasks[3].depends_on,
+            vec![SYS_POST_GIT_PUSH_ID.to_string()]
+        );
+        assert!(
+            ir.tasks[3].prompt.contains("CCO_PR_OK")
+                && ir.tasks[3].prompt.contains("gh pr create")
+                && ir.tasks[3].prompt.contains("禁止"),
+            "pr prompt must document gh create + safety"
+        );
+        assert!(ir.require_inspect);
+        ir.validate().expect("inspect→push→pr chain valid");
+    }
+
+    #[test]
     fn reinject_is_idempotent() {
         let mut ir = sample_ir();
         let mut cfg = Config::default();
         cfg.default.post_inspect_enabled = true;
+        cfg.default.post_open_pr_enabled = true;
         inject_system_post_tasks(&mut ir, &cfg);
         inject_system_post_tasks(&mut ir, &cfg);
         assert_eq!(
             ir.tasks.iter().filter(|t| t.id == SYS_POST_INSPECT_ID).count(),
+            1
+        );
+        assert_eq!(
+            ir.tasks
+                .iter()
+                .filter(|t| t.id == SYS_POST_OPEN_PR_ID)
+                .count(),
             1
         );
     }
@@ -321,11 +451,13 @@ mod tests {
         let mut ir = sample_ir();
         let mut cfg = Config::default();
         cfg.default.post_inspect_enabled = true;
+        cfg.default.post_open_pr_enabled = true;
         inject_system_post_tasks(&mut ir, &cfg);
-        assert_eq!(ir.tasks.len(), 2);
+        assert_eq!(ir.tasks.len(), 4);
         cfg.default.post_inspect_enabled = false;
+        cfg.default.post_open_pr_enabled = false;
         inject_system_post_tasks(&mut ir, &cfg);
         assert_eq!(ir.tasks.len(), 1);
-        assert!(!ir.tasks.iter().any(|t| t.id == SYS_POST_INSPECT_ID));
+        assert!(!ir.tasks.iter().any(|t| is_system_post_task(&t.id)));
     }
 }

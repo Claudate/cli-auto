@@ -1,7 +1,7 @@
 //! Global config: ~/.cco/config.toml + env overrides.
 //!
 //! [INPUT]: 磁盘 config · 环境变量
-//! [OUTPUT]: Config · AllowedProject · load/save · runs_dir · failover · post_inspect/post_git_push
+//! [OUTPUT]: Config · AllowedProject · load/save · runs_dir · failover · post_inspect/post_git_push/post_open_pr
 //! [POS]: 全局配置真源；桌面项目白名单存此
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/config/CLAUDE.md
 
@@ -103,6 +103,12 @@ pub struct DefaultSection {
     /// Master switch off → never inject. Default **false**.
     #[serde(default = "default_post_feature_off")]
     pub post_git_push_enabled: bool,
+    /// When true, each Mode B split appends a system optional task「自动开 PR」
+    /// after push (or business if push off). Uses local `gh pr create`.
+    /// Confirm defaults **checked**. Master switch off → never inject. Default **false**.
+    /// Security: runs only when user opts in; never force-push; requires authenticated `gh`.
+    #[serde(default = "default_post_feature_off")]
+    pub post_open_pr_enabled: bool,
     /// Optional second-pass LLM critic after rule critic (drop bad edges + notes).
     /// Also enabled when env `CCO_PLANNER_CRITIC=1`. Default **false** (cost/latency).
     #[serde(default = "default_post_feature_off")]
@@ -182,6 +188,7 @@ impl Default for DefaultSection {
             fallback_extra_attempts: default_fallback_extra_attempts(),
             post_inspect_enabled: default_post_feature_off(),
             post_git_push_enabled: default_post_feature_off(),
+            post_open_pr_enabled: default_post_feature_off(),
             planner_critic_enabled: default_post_feature_off(),
         }
     }
@@ -370,6 +377,9 @@ fallback_extra_attempts = 1
 # Off by default; when on, injected as optional + default-checked on confirm.
 post_inspect_enabled = false
 post_git_push_enabled = false
+# Auto-open GitHub PR via local `gh` after push (S-PR). Default off.
+# Requires authenticated `gh`; never force-push; confirm-screen optional.
+post_open_pr_enabled = false
 # Optional second-pass LLM critic after rule critic (also CCO_PLANNER_CRITIC=1).
 planner_critic_enabled = false
 permission_mode = "dontAsk"

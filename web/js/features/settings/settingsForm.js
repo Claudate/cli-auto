@@ -47,6 +47,9 @@ export async function loadSettings() {
     if ($("#s-post-git-push")) {
       $("#s-post-git-push").checked = !!s.post_git_push_enabled;
     }
+    if ($("#s-post-open-pr")) {
+      $("#s-post-open-pr").checked = !!s.post_open_pr_enabled;
+    }
     if ($("#s-planner-critic")) {
       $("#s-planner-critic").checked = !!s.planner_critic_enabled;
     }
@@ -102,8 +105,10 @@ export async function saveSettings() {
   const failoverEnabled = failoverEl ? !!failoverEl.checked : undefined;
   const postInspectEl = $("#s-post-inspect");
   const postGitPushEl = $("#s-post-git-push");
+  const postOpenPrEl = $("#s-post-open-pr");
   const postInspectEnabled = postInspectEl ? !!postInspectEl.checked : undefined;
   const postGitPushEnabled = postGitPushEl ? !!postGitPushEl.checked : undefined;
+  const postOpenPrEnabled = postOpenPrEl ? !!postOpenPrEl.checked : undefined;
   const plannerCriticEl = $("#s-planner-critic");
   const plannerCriticEnabled = plannerCriticEl
     ? !!plannerCriticEl.checked
@@ -155,6 +160,9 @@ export async function saveSettings() {
     if (postGitPushEnabled !== undefined) {
       update.post_git_push_enabled = postGitPushEnabled;
     }
+    if (postOpenPrEnabled !== undefined) {
+      update.post_open_pr_enabled = postOpenPrEnabled;
+    }
     if (plannerCriticEnabled !== undefined) {
       update.planner_critic_enabled = plannerCriticEnabled;
     }
@@ -189,6 +197,12 @@ export async function saveSettings() {
       typeof updated.post_git_push_enabled === "boolean"
     ) {
       $("#s-post-git-push").checked = updated.post_git_push_enabled;
+    }
+    if (
+      $("#s-post-open-pr") &&
+      typeof updated.post_open_pr_enabled === "boolean"
+    ) {
+      $("#s-post-open-pr").checked = updated.post_open_pr_enabled;
     }
     if ($("#s-post-tasks-note") && updated.post_tasks_note) {
       $("#s-post-tasks-note").textContent = updated.post_tasks_note;

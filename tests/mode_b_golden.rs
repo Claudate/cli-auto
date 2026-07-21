@@ -243,7 +243,7 @@ async fn golden_cco_v1_plan_confirm_exec() {
 /// MAX_TASKS = hard cap including system-post tails; PLANNER_MAX_TASKS is the softer split cap.
 #[test]
 fn golden_limits_constants_exported() {
-    assert_eq!(MAX_TASKS, 22);
+    assert_eq!(MAX_TASKS, 23);
     assert_eq!(cco::plan::PLANNER_MAX_TASKS, 20);
     assert!(cco::plan::MAX_PROMPT_CHARS >= 8_000);
     assert_eq!(cco::plan::MAX_TIMEOUT_SECS, 86_400);

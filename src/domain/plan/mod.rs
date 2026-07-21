@@ -18,7 +18,9 @@ mod validate;
 pub use materialize::{materialize_role_defaults, materialize_selected_tasks};
 pub use optional::{normalize_optional_title, title_is_meta_heading, title_looks_optional};
 pub use routing::apply_tag_routing;
-pub use system_ids::{is_system_post_task, SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID};
+pub use system_ids::{
+    is_system_post_task, SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID, SYS_POST_OPEN_PR_ID,
+};
 pub use types::{
     parse_role_input, OnFailure, PlanIR, TaskIR, TaskRole, TaskScope, INSPECT_DEFAULT_ALLOWED_TOOLS,
     INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_SYSTEM_PROMPT, INSPECT_SYSTEM_PROMPT_MARKER,

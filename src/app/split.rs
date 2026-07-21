@@ -181,6 +181,7 @@ mod tests {
         cfg.default.worktree = false;
         cfg.default.post_inspect_enabled = false;
         cfg.default.post_git_push_enabled = false;
+        cfg.default.post_open_pr_enabled = false;
         std::fs::create_dir_all(cfg.runs_dir()).unwrap();
 
         let view = start_job(
