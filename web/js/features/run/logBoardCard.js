@@ -1,7 +1,7 @@
 /**
  * [INPUT]: live task · logContent · logVirtual · logHost
  * [OUTPUT]: stallStripText · upsertCliWindowCard（单窗 chrome + body）
- * [POS]: A5-2c features/run；自 logBoard 纵切（P-ship-D）
+ * [POS]: A5-2c features/run；自 logBoard 纵切（P-ship-D）· P1-3 失败卡执行方式
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -14,6 +14,7 @@ import {
   isNearBottom,
 } from "./logVirtual.js";
 import * as host from "./logHost.js";
+import { taskBucket, fiveStateLabel } from "./runBuckets.js";
 
 const g = host.g;
 const S = host.S;
@@ -55,12 +56,18 @@ export function stallStripText(t) {
  */
 export function upsertCliWindowCard(board, t, idx, canPatch) {
   const st = String(t.status || "").toLowerCase();
-  const bucket = callG("taskBucket")(t);
+  let bucket = "wait";
+  try {
+    bucket = taskBucket(t) || "wait";
+  } catch (_) {
+    bucket = callG("taskBucket", t) || "wait";
+  }
   const failed = bucket === "fail";
   const stalled = bucket === "stall";
   const title = t.title || t.task_id;
-  const elapsed = callG("formatElapsed")(t.started_at, t.finished_at);
-  const sum = callG("taskErrorSummary")(t);
+  const elapsed = callG("formatElapsed", t.started_at, t.finished_at) || "";
+  const sum = callG("taskErrorSummary", t) || "";
+  if (!S().panelPos) S().panelPos = {};
   const pos = S().panelPos[t.task_id];
   let card = canPatch
     ? board.querySelector(`.cli-window[data-task="${CSS.escape(t.task_id)}"]`)
@@ -107,6 +114,8 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
     title,
     t.cost_usd != null ? Number(t.cost_usd).toFixed(4) : "",
     t.provider || "",
+    // P1-3: App-composed route_label drives fail/miss copy
+    t.route_label || "",
     sum || "",
     failed ? 1 : 0,
     stalled ? 1 : 0,
@@ -129,14 +138,18 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
     if (!S().cliLogExpanded) S().cliLogExpanded = {};
     const expanded = S().cliLogExpanded[t.task_id] === true;
     const five =
-      typeof g("fiveStateLabel") === "function"
-        ? callG("fiveStateLabel")(bucket)
-        : callG("statusLabel")(t.status);
+      fiveStateLabel(bucket) ||
+      callG("fiveStateLabel", bucket) ||
+      callG("statusLabel", t.status) ||
+      bucket;
     card.classList.toggle("is-log-collapsed", !expanded);
+    const dotCls =
+      callG("statusDot", st, t) ||
+      (failed ? "err" : stalled ? "warn" : bucket === "done" ? "ok" : bucket === "run" ? "live" : "");
     card.innerHTML = `
       <div class="cli-window-head" data-drag="${esc(t.task_id)}">
         <div class="cli-window-title">
-          <span class="dot ${callG("statusDot")(st, t)}"></span>
+          <span class="dot ${esc(dotCls)}"></span>
           <strong title="${esc(title)}">${esc(title)}</strong>
           <span class="badge ${
             bucket === "done"
@@ -160,8 +173,8 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
           <button type="button" class="btn ghost sm cli-log-toggle" data-log-toggle="${esc(t.task_id)}" title="展开或折叠详细日志">${
             expanded ? "收起日志" : "详细日志"
           }</button>
-          <button type="button" class="icon-btn sm" data-focus="${esc(t.task_id)}" title="聚焦">◉</button>
-          <button type="button" class="icon-btn sm" data-close="${esc(t.task_id)}" title="关闭窗口">×</button>
+          <button type="button" class="icon-btn sm" data-focus="${esc(t.task_id)}" title="聚焦" aria-label="聚焦">${typeof g("ccoIcon") === "function" ? g("ccoIcon")("maximize-2", { size: 14 }) : "◎"}</button>
+          <button type="button" class="icon-btn sm" data-close="${esc(t.task_id)}" title="关闭窗口" aria-label="关闭">${typeof g("ccoIcon") === "function" ? g("ccoIcon")("x", { size: 14 }) : "×"}</button>
         </div>
       </div>
       <div class="cli-window-meta muted">
@@ -203,6 +216,12 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
                     ? "本步未完成"
                     : "等待开始"
         );
+        // P1-3: fail card shows App-composed 执行方式（指定/默认/故障切换…）
+        // Never surface raw route_source enum on the main path.
+        const routeLabel = String(t.route_label || "").trim();
+        if (routeLabel && (failed || bucket === "fail" || bucket === "stall")) {
+          lines.push(`执行方式：${routeLabel}`);
+        }
         if (elapsed && elapsed !== "—" && elapsed !== "-") {
           lines.push(`已用时 ${elapsed}`);
         }

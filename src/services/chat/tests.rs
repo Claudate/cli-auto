@@ -200,13 +200,35 @@ fn chat_save_attachment_png_roundtrip() {
 }
 
 #[test]
-fn chat_save_attachment_rejects_bad_mime() {
+fn chat_save_attachment_rejects_exe() {
     let dir = tempdir().unwrap();
     let project = dir.path().join("proj");
     std::fs::create_dir_all(&project).unwrap();
     let err =
         chat_save_attachment(&project, None, "x.exe", "application/octet-stream", b"hi").unwrap_err();
-    assert!(err.to_string().contains("unsupported"), "{err}");
+    let s = err.to_string();
+    assert!(
+        s.contains("blocked") || s.contains("unsupported"),
+        "{s}"
+    );
+}
+
+#[test]
+fn chat_save_attachment_markdown_ok() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("proj");
+    std::fs::create_dir_all(&project).unwrap();
+    let att = chat_save_attachment(
+        &project,
+        Some("default"),
+        "brief.md",
+        "text/markdown",
+        b"# hello\n\nworld\n",
+    )
+    .unwrap();
+    assert!(att.path.ends_with(".md"), "{}", att.path);
+    assert!(project.join(&att.path).is_file());
+    assert!(att.mime.contains("markdown") || att.mime == "text/plain" || !att.mime.is_empty());
 }
 
 #[test]

@@ -141,9 +141,11 @@ function toast(msg) {
   t.hidden = false;
   t.textContent = msg;
   clearTimeout(toast._t);
+  // Longer copy (run-locked / replan hints) needs more than ~3s to read.
+  const ms = String(msg || "").length > 28 ? 5200 : 3200;
   toast._t = setTimeout(() => {
     t.hidden = true;
-  }, 3200);
+  }, ms);
 }
 
 /**

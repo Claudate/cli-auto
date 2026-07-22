@@ -23,6 +23,8 @@ export function ensureChatState() {
   if (state.chatDraftPlan === undefined) state.chatDraftPlan = null;
   if (state.chatFake == null) state.chatFake = false;
   if (state.chatEnvNote === undefined) state.chatEnvNote = null;
+  // P2-2: author empty-state last_summary banner text
+  if (state.chatLastSummary === undefined) state.chatLastSummary = null;
   if (!state.chatSessions) state.chatSessions = {};
   if (state.chatProjectPath === undefined) state.chatProjectPath = null;
   if (state._chatLoadSeq == null) state._chatLoadSeq = 0;
@@ -51,7 +53,7 @@ export function ensureChatState() {
   }
   // 管理页列表作用域（选中的文件夹；null = 项目全量）
   if (state.plansMgmtScopeDir === undefined) state.plansMgmtScopeDir = null;
-  // G4: pending image files before send [{name,mime,dataUrl,size}]
+  // G4: pending attachments before send [{name,mime,dataUrl,size,isImage?}]
   if (!Array.isArray(state.chatPendingAttachments)) state.chatPendingAttachments = [];
   if (state.showExecutedPlans == null) {
     state.showExecutedPlans = localStorage.getItem("cco.showExecutedPlans") === "1";

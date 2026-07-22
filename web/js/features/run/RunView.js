@@ -217,10 +217,19 @@ export function bindRunView(vm, bridge = {}) {
       if (fail > 0 && !collapsed && !finished) {
         const first = tasks.find((t) => isFailedStatus(t.status));
         const sum = first ? taskErrorSummary(first) : "";
+        // P1-3: first fail strip may include App-composed 执行方式 (route_label)
+        const route = first && String(first.route_label || "").trim();
+        const name = first ? first.title || first.task_id : "";
         errText.hidden = false;
-        errText.textContent = sum
-          ? `${first.title || first.task_id}：${sum}`
-          : `${fail} 个步骤失败`;
+        if (sum && name) {
+          errText.textContent = route
+            ? `${name}：${sum} · 执行方式：${route}`
+            : `${name}：${sum}`;
+        } else if (name && route) {
+          errText.textContent = `${name} · 执行方式：${route}`;
+        } else {
+          errText.textContent = `${fail} 个步骤失败`;
+        }
       } else {
         errText.hidden = true;
         errText.textContent = "";
@@ -261,7 +270,13 @@ export function bindRunView(vm, bridge = {}) {
     const toggle = $("btn-task-dash-toggle");
     if (toggle) {
       toggle.hidden = !hasRun;
-      toggle.textContent = collapsed ? "▸" : "▾";
+      if (typeof g("ccoIcon") === "function") {
+        toggle.innerHTML = g("ccoIcon")(collapsed ? "chevron-right" : "chevron-down", {
+          size: 14,
+        });
+      } else {
+        toggle.textContent = collapsed ? "▸" : "▾";
+      }
       toggle.title = collapsed ? "展开进度看板" : "折叠进度看板";
       toggle.setAttribute("aria-label", toggle.title);
       toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
@@ -377,8 +392,12 @@ export function bindRunView(vm, bridge = {}) {
       try {
         if (typeof g("renderCliBoard") === "function") {
           g("renderCliBoard")(tasks);
+        } else if (g("ccoLog") && typeof g("ccoLog").renderCliBoard === "function") {
+          g("ccoLog").renderCliBoard(tasks);
         }
-      } catch (_) {}
+      } catch (e) {
+        console.error("[RunView] renderCliBoard", e);
+      }
     }
 
     // Terminal → shell result phase

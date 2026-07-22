@@ -61,14 +61,26 @@ export function legacyToPhase(legacy) {
   }
   if (page === "doctor" || page === "help" || page === "settings") {
     // advanced overlays — keep last business phase if known
-    if (modeB === "confirm" || modeB === "planning") return "split";
+    if (
+      modeB === "confirm" ||
+      modeB === "planning" ||
+      modeB === "plan_failed"
+    ) {
+      return "split";
+    }
     if (hasRun && (st === "completed" || st === "failed" || modeB === "done"))
       return "result";
     if (hasRun || modeB === "running") return "run";
     return "author";
   }
-  // workspace
-  if (modeB === "planning" || modeB === "confirm") return "split";
+  // workspace — plan_failed must not fall through to historical result/run
+  if (
+    modeB === "planning" ||
+    modeB === "confirm" ||
+    modeB === "plan_failed"
+  ) {
+    return "split";
+  }
   if (modeB === "done" || st === "completed" || st === "failed") return "result";
   if (modeB === "running" || hasRun) return "run";
   if (legacy?.planJobId) return "split";

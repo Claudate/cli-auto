@@ -46,8 +46,19 @@ pub(crate) fn system_prompt(project: &Path) -> String {
     )
 }
 
-pub(crate) fn build_user_prompt(sess: &ChatSession, project: &Path) -> String {
-    let mut parts = vec![system_prompt(project)];
+/// System prompt with optional project memory context (P2-2 · pins/summary only).
+pub(crate) fn system_prompt_with_memory(config: &Config, project: &Path) -> String {
+    let base = system_prompt(project);
+    let mem = crate::app::memory::prompt_context(config, project);
+    if mem.is_empty() {
+        base
+    } else {
+        format!("{base}\n\n{mem}")
+    }
+}
+
+pub(crate) fn build_user_prompt(config: &Config, sess: &ChatSession, project: &Path) -> String {
+    let mut parts = vec![system_prompt_with_memory(config, project)];
     parts.push("\n\n--- 对话历史 ---\n".into());
     for m in &sess.messages {
         let role = match m.role.as_str() {
@@ -153,7 +164,7 @@ pub(crate) fn call_claude_chat(
     let _ = std::fs::write(task_dir.join("stdout.json"), "");
     let _ = std::fs::write(task_dir.join("stdout.raw.ndjson"), "");
 
-    let prompt = build_user_prompt(sess, project);
+    let prompt = build_user_prompt(config, sess, project);
     std::fs::write(task_dir.join("prompt.md"), &prompt)?;
 
     let chat_task = TaskIR {

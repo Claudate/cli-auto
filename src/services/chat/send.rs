@@ -12,7 +12,7 @@ use crate::domain::chat::{
 };
 
 use super::attachment::{
-    allowed_image_mime, format_attachments_block, MAX_ATTACHMENTS_PER_MSG,
+    allowed_attachment_mime, format_attachments_block, MAX_ATTACHMENTS_PER_MSG,
 };
 use super::cli_call::{
     call_claude_chat, fake_chat_reply, soft_fallback_assistant_reply, soft_fallback_env_note,
@@ -42,7 +42,7 @@ pub fn chat_send(
         bail!("too many attachments (max {MAX_ATTACHMENTS_PER_MSG})");
     }
     for a in &atts {
-        if !allowed_image_mime(&a.mime) {
+        if !allowed_attachment_mime(&a.mime) {
             bail!("unsupported attachment mime: {}", a.mime);
         }
         let abs = project.join(&a.path);
@@ -70,7 +70,7 @@ pub fn chat_send(
     let user_content = if atts.is_empty() {
         msg.to_string()
     } else if msg.is_empty() {
-        format!("（见附图）{}", format_attachments_block(&atts))
+        format!("（见附件）{}", format_attachments_block(&atts))
     } else {
         format!("{msg}{}", format_attachments_block(&atts))
     };

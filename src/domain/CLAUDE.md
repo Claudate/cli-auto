@@ -3,11 +3,11 @@
 
 成员清单
 mod.rs: 领域根；A0 骨架 marker；挂 `plan` · `run` · `worker` · `inspect` · `chat`
-plan/: **A1-1** PlanIR/TaskIR/TaskRole/TaskScope/OnFailure · MAX_* · optional 标题 · materialize_selected/role · validate+collab · **soften_plan_for_accept**（LLM 出图软接受：scope 重叠串行/补 scope，避免整图丢弃）· **cco_split**（CcoSplitJob/Task · soft_accept · **sanitize_cco_split_deps** · from/to PlanIR · run_gate · waves；拆分 SoT 形状）· apply_tag_routing · system post ids · **TaskRole::parse/as_str · parse_role_input**
+plan/: **A1-1** PlanIR/TaskIR/TaskRole/TaskScope/OnFailure · MAX_* · optional 标题 · materialize_selected/role · validate+collab · **soften_plan_for_accept**（LLM 出图软接受：scope 重叠串行/补 scope，避免整图丢弃）· **cco_split**（CcoSplitJob/Task · soft_accept（**scope_paths 重叠串行**）· **sanitize_cco_split_deps** · from/to PlanIR · run_gate · waves · **humanize** summary/done_when/依赖列 · 禁 worker 首行）· apply_tag_routing（返回 rewritten ids）· **tag_implied_provider** · system post ids · **TaskRole::parse/as_str · parse_role_input**
 run/: **A1-3** 纯 run 规则 — status（终态/external-stop/slot/budget/stall）· retry（SameProvider/TryFailover/Permanent · claude↔codex）· active（--only/--from 下游展开）；**无**路径拼接 / provider IO / VERDICT 解析
-worker/: **A1-4** 纯 worker 策略 — ProviderId/WorkerRoute/CapabilityFlags · soft-fill Soft/Force（`apply_route_fill` / `apply_worker_defaults`）· FailoverPolicy · IsolationOnFail / is_multi_provider；**无** spawn / worktree 路径
+worker/: **A1-4** 纯 worker 策略 — ProviderId/WorkerRoute/CapabilityFlags · soft-fill Soft/Force（`apply_route_fill` / `apply_worker_defaults` → **RouteFillReport{filled_ids,kept_ids}** · P1-2 溯源）· FailoverPolicy · IsolationOnFail / is_multi_provider；**无** spawn / worktree 路径 / RunState
 inspect/: **A1-5** 纯 VERDICT/ISSUES — types（InspectVerdict/IssueSeverity/ParsedIssue · REWORK_MAX · MAP 白名单）· parse（parse_verdict_text/parse_issues_text）· gate（candidate paths · task_has_verdict_gate · count_blocking · inspect_gate_fail_reason · push_inspect_gate_decision · can_start_rework）；**无**路径拼接 / fs / git
-chat/: **A1-6** 纯 chat 规则 — fence（extract_plan_fence 嵌套 depth + CJK）· title（sanitize/extract H1）· normalize/structure_plan_markdown · stream_parse（extract_assistant_text）· id（sanitize_session_id）· text（truncate_chars）；**无**路径拼接 / fs / provider
+chat/: **A1-6** 纯 chat 规则 — fence（extract_plan_fence 嵌套 depth + CJK）· title（sanitize/extract H1）· normalize/structure_plan_markdown · **acceptance_quality / AcceptanceQuality / acceptance_hint / acceptance_is_stub（P1-4；`## 成功标准`=验收别名）** · **parse_acceptance_checklist / collect_task_acceptance_items / build_verification · VerificationView（P2-1 清单 vs 巡检）** · stream_parse（extract_assistant_text）· id（sanitize_session_id）· text（truncate_chars）；**无**路径拼接 / fs / provider
 
 ## 硬规则
 

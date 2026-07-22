@@ -35,7 +35,8 @@ pub use runs::{
     accept_run_residual, confirm_start, get_plan_job, latest_plan_job_for_project, list_plan_meta,
     list_plans, list_runs, load_run, preview_plan, resume_run_async, run_doctor, remove_proposed_task,
     sanitize_proposed_deps, start_plan_job, start_rework_from_run, start_run_async,
-    start_run_from_plan, stop_run, update_proposed_task, PlanJobView, PlanMeta, PlanPreview,
+    start_run_from_plan, start_run_from_plan_with_route, stop_run, update_proposed_task,
+    PlanJobView, PlanMeta, PlanPreview,
     ReworkStartResponse, RunSummary, SanitizeDepsResult, StartPlanJobRequest, StartRunRequest,
 };
 pub use settings::{get_settings, set_settings, SettingsUpdate, SettingsView};

@@ -47,6 +47,34 @@ export function createUiActions() {
       typeof g("writeSplitSummaryToPlan") === "function"
         ? call("writeSplitSummaryToPlan")
         : toast("写回不可用"),
+    // shell-chrome A2：设置高级 · 拆分台工具（与 hidden 的调整… 同 handler）
+    "btn-settings-sanitize-deps": () => {
+      if (typeof g("sanitizeDepsFromConfirm") !== "function") {
+        return toast("当前不可用");
+      }
+      const st = state();
+      if (!st?.planJob) {
+        return toast("请先拆成步骤，再使用此工具");
+      }
+      if (st.page !== "workspace" || st.phase !== "confirm") {
+        if (typeof g("showSplitPlanConfirm") === "function") {
+          call("showSplitPlanConfirm");
+        } else if (st.page !== "workspace") {
+          call("showPage", "workspace");
+        }
+      }
+      return call("sanitizeDepsFromConfirm");
+    },
+    "btn-settings-split-writeback": () => {
+      if (typeof g("writeSplitSummaryToPlan") !== "function") {
+        return toast("写回不可用");
+      }
+      const st = state();
+      if (!st?.planJob) {
+        return toast("请先拆成步骤，再写回步骤摘要");
+      }
+      return call("writeSplitSummaryToPlan");
+    },
     "btn-refresh": async () => {
       const st = state();
       if (st?.page === "workspace" && st.selectedPath) {
@@ -229,8 +257,18 @@ export function createUiActions() {
     "btn-confirm-edit-cancel": () => call("cancelConfirmEdit"),
     "btn-confirm-edit-save": () => call("saveConfirmEdit"),
     "split-plan-chip": () => call("showSplitPlanConfirm"),
-    "btn-edit-plan": () => call("openEditPlan"),
+    // shell-chrome A3：顶栏编辑任务已撤；步骤编辑在拆分台详情
     "btn-cancel-planning": () => call("cancelPlanning"),
+    "btn-retry-planning": () => {
+      // 拆分失败后主路径：再拆一次（不进历史执行台）
+      if (typeof g("analyzePlanFromPicker") === "function") {
+        return call("analyzePlanFromPicker");
+      }
+      if (typeof g("assignFromChat") === "function") {
+        return call("assignFromChat");
+      }
+      return null;
+    },
     "btn-plan-expand": () => call("openPlanChooser", true),
     "btn-restore-panels": () => {
       const st = state();
@@ -379,6 +417,18 @@ export function createUiActions() {
       typeof g("assignFromPlansMgmt") === "function"
         ? call("assignFromPlansMgmt")
         : null,
+    "btn-plans-view-split": () => {
+      if (typeof g("viewSplitFromPlansMgmt") === "function") {
+        return call("viewSplitFromPlansMgmt");
+      }
+      if (window.ccoChat?.viewSplitFromPlansMgmt) {
+        return window.ccoChat.viewSplitFromPlansMgmt();
+      }
+      if (typeof g("showSplitPlanConfirm") === "function") {
+        return call("showSplitPlanConfirm");
+      }
+      return null;
+    },
     "btn-empty-to-chat": () => call("openChatPage"),
     "btn-chooser-to-chat": () => {
       call("openPlanChooser", false);
@@ -424,7 +474,14 @@ export function createUiActions() {
       else grid.setAttribute("hidden", "");
       if (btn) {
         btn.setAttribute("aria-expanded", open ? "true" : "false");
-        btn.textContent = open ? "更多选项 ▾" : "更多选项 ▸";
+        if (typeof window.ccoIcon === "function") {
+          const chev = window.ccoIcon(open ? "chevron-down" : "chevron-right", {
+            size: 14,
+          });
+          btn.innerHTML = `更多选项 ${chev}`;
+        } else {
+          btn.textContent = open ? "更多选项 ▾" : "更多选项 ▸";
+        }
       }
     },
     "btn-plan-full-close": () => call("closePlanFullView"),

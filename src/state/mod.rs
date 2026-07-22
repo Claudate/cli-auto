@@ -1,12 +1,19 @@
 //! Run state on disk: run.json, events.jsonl, per-task files · SQLite dual-write.
 //!
 //! [INPUT]: runs_root · PlanIR（初始化）
-//! [OUTPUT]: RunState/TaskState(attempt/failover_used) · save/load · event append · sqlite
+//! [OUTPUT]: RunState/TaskState(attempt/failover_used/route_*) · save/load · event append · sqlite
 //! [POS]: 运行状态落盘；scheduler 与 services 读写
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/state/CLAUDE.md
 
 pub mod cco_split_store;
+pub mod project_memory;
 pub mod sqlite;
+
+pub use project_memory::{
+    compose_last_summary, format_memory_context, get_last_summary, get_memory, list_pins,
+    set_last_summary, try_format_memory_context, try_set_last_summary, upsert_pin, delete_pin,
+    ProjectLastSummary, ProjectMemoryView, ProjectPin, MAX_PINS_PER_PROJECT,
+};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -28,6 +35,24 @@ pub enum RunStatus {
     Completed,
     Failed,
     Aborted,
+}
+
+/// How the current task `provider` was chosen (run.json optional; P1-1).
+///
+/// Wire values are snake_case. Missing on old runs → `None` (not an error).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RouteSource {
+    /// Plan/confirm kept an explicit provider (not soft-filled).
+    Explicit,
+    /// Soft-fill applied the plan/default provider.
+    SoftFill,
+    /// Tag routing rewrote provider after soft-fill (last write wins).
+    TagRouting,
+    /// Force-provider / hard override.
+    Force,
+    /// H4 production failover switched provider mid-run.
+    Failover,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,9 +91,20 @@ pub struct TaskState {
     /// True once H4 provider failover has been applied for this task (run-state only).
     #[serde(default)]
     pub failover_used: bool,
+    /// Provenance of current `provider` (optional; old runs omit → None).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_source: Option<RouteSource>,
+    /// Provider name before failover (`route_source=failover`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_previous: Option<String>,
+    /// Optional short note (e.g. fail reason code); UI may prefer a composed label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_note: Option<String>,
 }
 
 impl TaskState {
+    /// Initialize a task before routing provenance is known.
+    /// Does **not** hard-code `route_source` (stays `None` until confirm/tag/failover write it).
     pub fn pending(provider: &str, mode: &str) -> Self {
         Self {
             status: TaskStatus::Pending,
@@ -88,6 +124,9 @@ impl TaskState {
             attempt: 0,
             last_retry_reason: None,
             failover_used: false,
+            route_source: None,
+            route_previous: None,
+            route_note: None,
         }
     }
 }
@@ -266,5 +305,115 @@ impl RunState {
             .values()
             .filter_map(|t| t.cost_usd)
             .sum()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::provider::TaskStatus;
+    use std::io::Write;
+
+    /// P1-1: old run.json TaskState without route_* fields still deserializes.
+    #[test]
+    fn task_state_deserializes_without_route_fields() {
+        let json = r#"{
+            "status": "pending",
+            "provider": "claude",
+            "mode": "print",
+            "attempt": 0,
+            "failover_used": false
+        }"#;
+        let ts: TaskState = serde_json::from_str(json).expect("legacy TaskState");
+        assert_eq!(ts.status, TaskStatus::Pending);
+        assert_eq!(ts.provider, "claude");
+        assert_eq!(ts.mode, "print");
+        assert!(ts.route_source.is_none());
+        assert!(ts.route_previous.is_none());
+        assert!(ts.route_note.is_none());
+        assert!(!ts.failover_used);
+    }
+
+    /// P1-1: full route provenance round-trips through serde (snake_case wire).
+    #[test]
+    fn task_state_route_fields_round_trip() {
+        let mut ts = TaskState::pending("codex", "print");
+        ts.route_source = Some(RouteSource::Failover);
+        ts.route_previous = Some("claude".into());
+        ts.route_note = Some("stall after 2 attempt(s)".into());
+        let text = serde_json::to_string(&ts).unwrap();
+        assert!(text.contains("\"route_source\":\"failover\""));
+        assert!(text.contains("\"route_previous\":\"claude\""));
+        let back: TaskState = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.route_source, Some(RouteSource::Failover));
+        assert_eq!(back.route_previous.as_deref(), Some("claude"));
+        assert_eq!(back.route_note.as_deref(), Some("stall after 2 attempt(s)"));
+    }
+
+    /// P1-1: pending() must not invent a route_source.
+    #[test]
+    fn task_state_pending_leaves_route_unset() {
+        let ts = TaskState::pending("claude", "print");
+        assert!(ts.route_source.is_none());
+        assert!(ts.route_previous.is_none());
+        assert!(ts.route_note.is_none());
+        // unset Option fields stay out of JSON (skip_serializing_if)
+        let v: serde_json::Value = serde_json::to_value(&ts).unwrap();
+        assert!(v.get("route_source").is_none());
+        assert!(v.get("route_previous").is_none());
+        assert!(v.get("route_note").is_none());
+    }
+
+    /// P1-1: full legacy run.json (no route_*) loads via RunState::load.
+    #[test]
+    fn run_state_load_legacy_run_json_without_route_fields() {
+        let dir = tempfile::tempdir().unwrap();
+        let run_dir = dir.path();
+        let body = r#"{
+  "schema": "cco-run/v1",
+  "run_id": "20260721T000000Z-leg1",
+  "project_root": "/tmp/proj",
+  "plan_path": "/tmp/proj/plan.md",
+  "adapter": "cco-plan/v1",
+  "started_at": "2026-07-21T00:00:00Z",
+  "status": "completed",
+  "tasks": {
+    "t1": {
+      "status": "done",
+      "provider": "claude",
+      "mode": "print",
+      "attempt": 1,
+      "failover_used": false
+    }
+  }
+}"#;
+        let mut f = std::fs::File::create(run_dir.join("run.json")).unwrap();
+        f.write_all(body.as_bytes()).unwrap();
+        let rs = RunState::load(run_dir).expect("legacy run.json load");
+        assert_eq!(rs.run_id, "20260721T000000Z-leg1");
+        assert_eq!(rs.run_dir, run_dir);
+        let t1 = rs.tasks.get("t1").expect("t1");
+        assert_eq!(t1.status, TaskStatus::Done);
+        assert!(t1.route_source.is_none());
+        assert!(t1.route_previous.is_none());
+        assert!(t1.route_note.is_none());
+    }
+
+    /// All RouteSource wire tags are stable snake_case (contract lock).
+    #[test]
+    fn route_source_wire_values() {
+        let cases = [
+            (RouteSource::Explicit, "explicit"),
+            (RouteSource::SoftFill, "soft_fill"),
+            (RouteSource::TagRouting, "tag_routing"),
+            (RouteSource::Force, "force"),
+            (RouteSource::Failover, "failover"),
+        ];
+        for (src, wire) in cases {
+            let s = serde_json::to_string(&src).unwrap();
+            assert_eq!(s, format!("\"{wire}\""));
+            let back: RouteSource = serde_json::from_str(&s).unwrap();
+            assert_eq!(back, src);
+        }
     }
 }

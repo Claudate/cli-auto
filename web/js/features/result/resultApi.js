@@ -24,6 +24,11 @@ export function acceptResidual(runId, note) {
   return gateway.acceptResidual(runId, note || null);
 }
 
+/** P2-2: write project last_summary from run (best-effort). */
+export function writebackMemory(runId) {
+  return gateway.writebackMemory(runId);
+}
+
 /** Live snapshot (read) when result needs refresh. */
 export function getProjectLive(project) {
   return gateway.getProjectLive(project);

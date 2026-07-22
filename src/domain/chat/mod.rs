@@ -5,7 +5,7 @@
 //! |--------------------|----------------------------------------|
 //! | extract_plan_fence · nest fence depth | `.cco/chat/*.json` load/save/list |
 //! | sanitize_plan_title · extract_title_from_md | attachments write · plan.md write |
-//! | normalize/structure_plan_markdown | Claude CLI spawn / stream poll |
+//! | normalize/structure_plan_markdown · acceptance_quality (P1-4) · parse_acceptance_checklist / build_verification (P2-1) | Claude CLI spawn / stream poll |
 //! | truncate_chars · sanitize_session_id | chat_stream_partial disk read |
 //! | extract_assistant_text · stream_result_summary | TTL cleanup · path resolve |
 //!
@@ -23,7 +23,13 @@ mod title;
 
 pub use fence::extract_plan_fence;
 pub use id::{sanitize_session_id, DEFAULT_SESSION};
-pub use normalize::{normalize_plan_markdown, structure_plan_markdown};
+pub use normalize::{
+    acceptance_hint, acceptance_is_stub, acceptance_quality, build_verification,
+    collect_task_acceptance_items, normalize_plan_markdown, parse_acceptance_checklist,
+    structure_plan_markdown, AcceptanceQuality, PlanChecklistItem, TaskAcceptanceItem,
+    VerificationInputs, VerificationItem, VerificationItemStatus, VerificationSource,
+    VerificationView,
+};
 pub use stream_parse::{extract_assistant_text, stream_result_summary};
 pub use text::truncate_chars;
 pub use title::{extract_title_from_md, sanitize_plan_title, PLAN_TITLE_MAX_CHARS};

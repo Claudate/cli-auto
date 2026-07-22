@@ -20,7 +20,7 @@ use crate::graph::topo_layers;
 use crate::plan::{PlanIR, TaskIR};
 use crate::runtime::log_events::{self, LogEvent};
 
-use super::job::{append_log, apply_worker_defaults, job_dir, read_log_tail, PlanJob, PlanJobStatus};
+use super::job::{append_log, job_dir, read_log_tail, PlanJob, PlanJobStatus};
 use super::llm::read_planner_cost;
 
 /// Scope paths exposed on the confirm DTO (S-role).
@@ -111,6 +111,12 @@ pub struct PlanJobView {
     pub critic_llm_cost_usd: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub critic_llm_ms: Option<u64>,
+    /// P1-4: plan-level acceptance is stub/missing (confirm yellow bar; never blocks start).
+    #[serde(default)]
+    pub acceptance_is_stub: bool,
+    /// P1-4: one-line human hint when `acceptance_is_stub` (None/omit when filled).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acceptance_hint: Option<String>,
     pub layers: Vec<Vec<String>>,
     pub tasks: Vec<PlanTaskView>,
     pub planner_log_tail: String,
@@ -213,6 +219,21 @@ fn task_view_from_cco(t: &crate::plan::CcoSplitTask) -> PlanTaskView {
     }
 }
 
+/// P1-4: read plan markdown and classify acceptance section (best-effort; no fail).
+fn plan_acceptance_fields(job: &PlanJob) -> (bool, Option<String>) {
+    let text = crate::plan::resolve_plan_path(&job.project, &job.plan_path)
+        .ok()
+        .and_then(|p| std::fs::read_to_string(p).ok());
+    let Some(md) = text else {
+        // Unreadable plan → no yellow bar (don't block confirm UX with false positives).
+        return (false, None);
+    };
+    let q = crate::domain::chat::acceptance_quality(&md);
+    let is_stub = crate::domain::chat::acceptance_is_stub(q);
+    let hint = crate::domain::chat::acceptance_hint(q).map(|s| s.to_string());
+    (is_stub, hint)
+}
+
 pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJobView> {
     let mut layers = Vec::new();
     let mut tasks = Vec::new();
@@ -257,6 +278,7 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
     } else {
         full
     };
+    let (acceptance_is_stub, acceptance_hint) = plan_acceptance_fields(job);
     Ok(PlanJobView {
         job_id: job.job_id.clone(),
         status: job.status.as_str().to_string(),
@@ -281,6 +303,8 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
         critic_llm_used: job.critic_llm_used,
         critic_llm_cost_usd: job.critic_llm_cost_usd,
         critic_llm_ms: job.critic_llm_ms,
+        acceptance_is_stub,
+        acceptance_hint,
         layers,
         tasks,
         planner_log_tail,
@@ -994,7 +1018,13 @@ pub fn planner_cost_for_run(run_dir: &Path) -> Option<f64> {
 }
 
 /// Load proposed plan and apply job's provider/mode defaults.
-pub fn load_proposed_for_exec(config: &Config, job_id: &str) -> Result<(PlanJob, PlanIR)> {
+///
+/// Returns `(job, ir, soft_fill_report)` — the report is for P1-2 `route_source`
+/// stamping at materialize (filled → soft_fill, kept → explicit / tag_routing).
+pub fn load_proposed_for_exec(
+    config: &Config,
+    job_id: &str,
+) -> Result<(PlanJob, PlanIR, crate::domain::worker::RouteFillReport)> {
     let job = PlanJob::load(config, job_id)?;
     // planned：首次确认；confirmed：允许用同一份拆分结果再次开跑（不必重拆）
     if !matches!(
@@ -1024,7 +1054,8 @@ pub fn load_proposed_for_exec(config: &Config, job_id: &str) -> Result<(PlanJob,
     })?;
     // Soft collab fixes before hard materialize validate (align with split accept layer).
     let _ = crate::plan::soften_plan_for_accept(&mut ir);
-    apply_worker_defaults(&mut ir, &job.provider, &job.exec_mode);
+    let soft_report =
+        crate::domain::worker::apply_worker_defaults(&mut ir, &job.provider, &job.exec_mode);
     // Drop unselected optional tasks before validate / spawn.
     let before = ir.tasks.len();
     ir = crate::plan::materialize_selected_tasks(ir)?;
@@ -1041,5 +1072,5 @@ pub fn load_proposed_for_exec(config: &Config, job_id: &str) -> Result<(PlanJob,
         job_id,
         &format!("confirm_start → spawning run with {} tasks", ir.tasks.len()),
     );
-    Ok((job, ir))
+    Ok((job, ir, soft_report))
 }

@@ -24,7 +24,8 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use cco::app::{chat as chat_uc, run as run_uc, split as split_uc};
+use cco::app::{chat as chat_uc, memory as memory_uc, run as run_uc, split as split_uc};
+use cco::state::{ProjectLastSummary, ProjectMemoryView, ProjectPin};
 use cco::config::Config;
 use cco::services::{
     add_project, get_settings, list_projects, open_task_terminal, project_live_view, remove_project,
@@ -389,6 +390,69 @@ fn accept_residual_cmd(
     Ok(json!({ "ok": true, "run_id": runId, "accepted_residual": true }))
 }
 
+/// P2-2: write project last_summary from a finished run (rule template).
+#[tauri::command]
+fn writeback_memory_cmd(
+    state: tauri::State<'_, AppState>,
+    #[allow(non_snake_case)] runId: String,
+) -> Result<Value, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    let row = run_uc::writeback_memory(&config, &runId).map_err(map_err)?;
+    Ok(json!({ "ok": true, "run_id": runId, "last_summary": row }))
+}
+
+/// P2-2: project memory view (last_summary + pins).
+#[tauri::command]
+fn project_memory_get_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<ProjectMemoryView, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    memory_uc::get(&config, PathBuf::from(project).as_path()).map_err(map_err)
+}
+
+#[tauri::command]
+fn project_memory_last_summary_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<Option<ProjectLastSummary>, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    memory_uc::last_summary(&config, PathBuf::from(project).as_path()).map_err(map_err)
+}
+
+#[tauri::command]
+fn project_pins_list_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<Vec<ProjectPin>, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    memory_uc::list_pins(&config, PathBuf::from(project).as_path()).map_err(map_err)
+}
+
+#[tauri::command]
+fn project_pin_upsert_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    key: String,
+    value: String,
+) -> Result<ProjectPin, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    memory_uc::upsert_pin(&config, PathBuf::from(project).as_path(), &key, &value)
+        .map_err(map_err)
+}
+
+#[tauri::command]
+fn project_pin_delete_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    key: String,
+) -> Result<Value, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    let deleted =
+        memory_uc::delete_pin(&config, PathBuf::from(project).as_path(), &key).map_err(map_err)?;
+    Ok(json!({ "ok": true, "deleted": deleted, "key": key }))
+}
+
 #[tauri::command]
 fn open_path(path: String) -> Result<(), String> {
     // Normalize trailing slashes for existence checks (macOS open tolerates them).
@@ -708,6 +772,12 @@ pub fn run() {
             resume_run_cmd,
             start_rework_cmd,
             accept_residual_cmd,
+            writeback_memory_cmd,
+            project_memory_get_cmd,
+            project_memory_last_summary_cmd,
+            project_pins_list_cmd,
+            project_pin_upsert_cmd,
+            project_pin_delete_cmd,
             open_path,
             open_monitor_window_cmd,
             get_settings_cmd,

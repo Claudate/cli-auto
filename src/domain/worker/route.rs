@@ -1,9 +1,10 @@
 //! Soft-fill / force route fill (A1-4). Never silent-overwrite explicit engines on Soft.
 //!
 //! [INPUT]: PlanIR · desired provider · fill mode
-//! [OUTPUT]: mutated plan + RouteFillReport
+//! [OUTPUT]: mutated plan + RouteFillReport (filled_ids / kept_ids for provenance)
 //! [POS]: domain/worker — CLI `--provider` / planner confirm / desktop defaults
-//! [PROTOCOL]: Force only with explicit force semantics; Soft keeps mixed plans mixed
+//! [PROTOCOL]: Force only with explicit force semantics; Soft keeps mixed plans mixed.
+//!   Domain **never** writes paths / RunState — app stamps `route_source` from reports.
 
 use crate::domain::plan::PlanIR;
 
@@ -16,12 +17,18 @@ pub enum RouteFillMode {
     Force,
 }
 
+/// Result of soft/force fill. IDs let app/runtime stamp `TaskState.route_source`
+/// without re-deriving policy (P1-2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RouteFillReport {
     pub mode: RouteFillMode,
     pub provider: String,
     pub filled: usize,
     pub kept_explicit: usize,
+    /// Task ids whose provider was rewritten by this fill.
+    pub filled_ids: Vec<String>,
+    /// Soft only: task ids that kept a non-default explicit provider.
+    pub kept_ids: Vec<String>,
 }
 
 impl RouteFillReport {
@@ -59,7 +66,8 @@ pub fn apply_route_fill(
     }
     match mode {
         RouteFillMode::Force => {
-            let n = plan.tasks.len();
+            let filled_ids: Vec<String> = plan.tasks.iter().map(|t| t.id.clone()).collect();
+            let n = filled_ids.len();
             for t in &mut plan.tasks {
                 t.provider = p.to_string();
             }
@@ -69,26 +77,30 @@ pub fn apply_route_fill(
                 provider: p.to_string(),
                 filled: n,
                 kept_explicit: 0,
+                filled_ids,
+                kept_ids: vec![],
             })
         }
         RouteFillMode::Soft => {
             let old = plan.default_provider.clone();
-            let mut filled = 0usize;
-            let mut kept = 0usize;
+            let mut filled_ids = Vec::new();
+            let mut kept_ids = Vec::new();
             for t in &mut plan.tasks {
                 if is_still_default_route(&t.provider, &old) {
                     t.provider = p.to_string();
-                    filled += 1;
+                    filled_ids.push(t.id.clone());
                 } else {
-                    kept += 1;
+                    kept_ids.push(t.id.clone());
                 }
             }
             plan.default_provider = p.to_string();
             Some(RouteFillReport {
                 mode: RouteFillMode::Soft,
                 provider: p.to_string(),
-                filled,
-                kept_explicit: kept,
+                filled: filled_ids.len(),
+                kept_explicit: kept_ids.len(),
+                filled_ids,
+                kept_ids,
             })
         }
     }
@@ -98,15 +110,29 @@ pub fn apply_route_fill(
 ///
 /// - Always sets `default_provider` / `default_mode` and each task's `mode`.
 /// - Provider is **soft**: only rewrite still-default routes (see [`is_still_default_route`]).
-pub fn apply_worker_defaults(plan: &mut PlanIR, provider: &str, exec_mode: &str) {
+/// - Returns a Soft [`RouteFillReport`] so app can stamp `route_source` (P1-2).
+pub fn apply_worker_defaults(plan: &mut PlanIR, provider: &str, exec_mode: &str) -> RouteFillReport {
     let old_default = plan.default_provider.clone();
     plan.default_provider = provider.to_string();
     plan.default_mode = exec_mode.to_string();
+    let mut filled_ids = Vec::new();
+    let mut kept_ids = Vec::new();
     for t in &mut plan.tasks {
         t.mode = exec_mode.to_string();
         if is_still_default_route(&t.provider, &old_default) {
             t.provider = provider.to_string();
+            filled_ids.push(t.id.clone());
+        } else {
+            kept_ids.push(t.id.clone());
         }
+    }
+    RouteFillReport {
+        mode: RouteFillMode::Soft,
+        provider: provider.to_string(),
+        filled: filled_ids.len(),
+        kept_explicit: kept_ids.len(),
+        filled_ids,
+        kept_ids,
     }
 }
 
@@ -166,6 +192,10 @@ mod tests {
         let r = apply_route_fill(&mut ir, "fake", RouteFillMode::Soft).unwrap();
         assert_eq!(r.filled, 3);
         assert_eq!(r.kept_explicit, 1);
+        assert_eq!(r.kept_ids, vec!["t2".to_string()]);
+        assert!(r.filled_ids.contains(&"t1".into()));
+        assert!(r.filled_ids.contains(&"t3".into()));
+        assert!(r.filled_ids.contains(&"t4".into()));
         assert_eq!(ir.tasks[0].provider, "fake");
         assert_eq!(ir.tasks[1].provider, "codex");
         assert_eq!(ir.tasks[2].provider, "fake");
@@ -177,6 +207,8 @@ mod tests {
         let mut ir = mixed_plan();
         let r = apply_route_fill(&mut ir, "fake", RouteFillMode::Force).unwrap();
         assert_eq!(r.mode, RouteFillMode::Force);
+        assert_eq!(r.filled_ids.len(), 4);
+        assert!(r.kept_ids.is_empty());
         assert!(ir.tasks.iter().all(|t| t.provider == "fake"));
         assert_eq!(ir.default_provider, "fake");
     }
@@ -184,9 +216,12 @@ mod tests {
     #[test]
     fn worker_defaults_soft_and_modes() {
         let mut ir = mixed_plan();
-        apply_worker_defaults(&mut ir, "fake", "bg");
+        let r = apply_worker_defaults(&mut ir, "fake", "bg");
         assert_eq!(ir.default_mode, "bg");
         assert_eq!(ir.tasks[1].provider, "codex");
         assert!(ir.tasks.iter().all(|t| t.mode == "bg"));
+        assert_eq!(r.mode, RouteFillMode::Soft);
+        assert_eq!(r.kept_ids, vec!["t2".to_string()]);
+        assert_eq!(r.filled, 3);
     }
 }

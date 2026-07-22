@@ -29,6 +29,12 @@ import { installStatusUi } from "./shared/statusUi.js";
 import { installMarkdown } from "./shared/markdown.js";
 import { installShellUi } from "./shared/shellUi.js";
 import { installSelectUi } from "./shared/selectUi.js";
+import { installIconsGlobal, hydrateIcons } from "./shared/icons.js";
+import { installClickOutsideGlobal } from "./shared/clickOutside.js";
+import {
+  paintWorkStyleChooser,
+  applyTemplateOrder,
+} from "./shared/workStyle.js";
 import { createAppViewModel } from "./app/AppViewModel.js";
 import { wireRunResult } from "./app/wireRunResult.js";
 import { createChatViewModel } from "./features/chat/ChatViewModel.js";
@@ -52,6 +58,14 @@ import { PHASE_TITLE } from "./app/routes.js";
 installStatusUi(window);
 installMarkdown(window);
 installShellUi(window);
+installIconsGlobal();
+try {
+  hydrateIcons(document);
+} catch (_) {}
+/** shell-chrome B2：展开的 details/菜单点空白收起 */
+try {
+  installClickOutsideGlobal(window);
+} catch (_) {}
 /** Shared form control: macOS-style selects (keep native .value / change). */
 installSelectUi();
 
@@ -540,6 +554,15 @@ function softSyncFromLegacy() {
 
 function boot() {
   wireShellNav();
+  try {
+    hydrateIcons(document);
+  } catch (_) {}
+  try {
+    paintWorkStyleChooser();
+    applyTemplateOrder();
+  } catch (e) {
+    console.error("[cco main] workStyle", e);
+  }
   try {
     softSyncFromLegacy();
   } catch (e) {

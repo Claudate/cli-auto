@@ -675,6 +675,63 @@
   margin: 0;
 }
 
+/* P2-2: author empty-state last_summary one-liner */
+.chat-last-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 0.65rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  background: color-mix(in srgb, var(--accent, #2563eb) 6%, transparent);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  max-width: 36rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+.chat-last-summary-text {
+  color: var(--text);
+  min-width: 0;
+}
+.chat-last-summary-actions {
+  display: inline-flex;
+  gap: 0.55rem;
+  flex-shrink: 0;
+}
+.chat-last-summary-actions .linkish {
+  font-size: 0.8rem;
+}
+
+/* P2-2 settings pins */
+.pins-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.pin-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.75rem;
+  padding: 0.3rem 0.4rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg, #fff);
+  font-size: 0.85rem;
+}
+.pin-key {
+  min-width: 4rem;
+}
+.pin-val {
+  flex: 1;
+  min-width: 6rem;
+  word-break: break-word;
+}
+
 /* G5: empty-state example chips */
 .chat-example-chips {
   display: flex;
@@ -759,6 +816,25 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.chat-attach-file {
+  min-height: 54px;
+  justify-content: center;
+  align-items: center;
+  padding-top: 0.35rem;
+}
+.chat-attach-file-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  color: var(--accent, #2563eb);
+  opacity: 0.9;
+}
+.chat-msg-att-path {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 .chat-composer {
   display: flex;
@@ -925,6 +1001,30 @@
 }
 .plan-rail-empty[hidden] {
   display: none !important;
+}
+/* shell-chrome C1：行容器 + 「查看拆分结果」 */
+.plan-rail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+}
+.plan-rail-view-split {
+  align-self: flex-start;
+  margin: 0 0 0.15rem 0.55rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg3, #f5f5f7);
+  color: var(--accent, #2563eb);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.plan-rail-view-split:hover {
+  border-color: var(--accent, #2563eb);
+  background: #e8f2fc;
 }
 .plan-rail-item {
   display: flex;

@@ -20,26 +20,64 @@ function esc(s) {
     .replace(/"/g, "&quot;");
 }
 
-/** First non-empty sentence-ish line for card one-liner. */
+function isWorkerNoise(line) {
+  const t = String(line || "").trim();
+  if (!t) return true;
+  const lower = t.toLowerCase();
+  return (
+    t.startsWith("你是执行") ||
+    t.includes("的 worker") ||
+    t.includes("的worker") ||
+    lower.includes("cco_done") ||
+    t.startsWith("项目根目录") ||
+    t.startsWith("依据下列说明")
+  );
+}
+
+function displayTitle(title) {
+  return String(title || "")
+    .replace(/[☐✅☑□■✗✘×]+$/g, "")
+    .trim();
+}
+
+/** First non-empty sentence-ish line for card one-liner (never worker scaffold). */
 export function oneLiner(task) {
   const fn = g("splitOneLiner");
   if (typeof fn === "function") return fn(task);
-  const full =
-    task?.summary ||
-    task?.prompt ||
-    task?.prompt_preview ||
-    task?.promptPreview ||
-    task?.acceptance ||
-    task?.done_when ||
-    task?.doneWhen ||
-    "";
-  let body = String(full || "")
+  const candidates = [
+    task?.summary,
+    task?.done_when || task?.doneWhen,
+    task?.acceptance,
+    displayTitle(task?.title),
+    task?.prompt_preview || task?.promptPreview,
+  ];
+  for (const c of candidates) {
+    const s = String(c || "")
+      .replace(/^#+\s+/gm, "")
+      .replace(/^\s*[-*]\s+/gm, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (s.length > 2 && !isWorkerNoise(s)) {
+      return s.length > 72 ? s.slice(0, 70) + "…" : s;
+    }
+  }
+  // Last resort: strip scaffold from full prompt
+  const strip =
+    typeof g("stripWorkerScaffold") === "function"
+      ? g("stripWorkerScaffold")
+      : (p) => p;
+  let body = String(strip(task?.prompt || "") || "")
     .replace(/^#+\s+/gm, "")
     .replace(/^\s*[-*]\s+/gm, "")
     .trim();
   if (!body) return "点选查看完整说明";
-  const line = body.split(/\n+/).find((l) => l.trim().length > 4) || body;
+  const line =
+    body
+      .split(/\n+/)
+      .map((l) => l.trim())
+      .find((l) => l.length > 4 && !isWorkerNoise(l)) || body;
   const s = line.replace(/\s+/g, " ").trim();
+  if (isWorkerNoise(s)) return displayTitle(task?.title) || "点选查看完整说明";
   return s.length > 72 ? s.slice(0, 70) + "…" : s;
 }
 
@@ -88,12 +126,14 @@ export function partitionTasks(tasks) {
 
 export function waitLine(task, byId) {
   const deps = task?.depends_on || [];
-  if (!deps.length) return "可进首波";
+  if (!deps.length) return "可马上开始";
   const titles = deps.map((id) => {
     const d = byId[id];
-    return d ? d.title || id : id;
+    const raw = d ? d.title || id : id;
+    return displayTitle(raw) || id;
   });
-  return `等待：${titles.join(" · ")}`;
+  if (titles.length <= 2) return `等：${titles.join(" · ")}`;
+  return `等：${titles.slice(0, 2).join(" · ")} 等 ${titles.length} 项`;
 }
 
 /**
@@ -303,16 +343,17 @@ export function cardsHtml(job, byId, opts = {}) {
       const parallel = n > 1;
       const tone = i % 6; // 0..5 色循环
       const kindClass = parallel ? " is-parallel" : " is-serial";
+      // S2-3: 甲扫左栏 —「第 N 批 · M 步一起」/「按顺序」
       const label = parallel
-        ? `第 ${i + 1} 波 · ${n} 步可并行`
-        : `第 ${i + 1} 波 · 顺序`;
+        ? `第 ${i + 1} 批 · ${n} 步一起`
+        : `第 ${i + 1} 批 · 按顺序`;
       const rows = waveTasks.map((t) => taskCardHtml(t, byId, opts)).join("");
       return (
         `<div class="split-wave-group tone-${tone}${kindClass}" data-wave="${i + 1}">` +
         `<div class="split-wave-group-head">` +
         `<span class="split-wave-group-label">${esc(label)}</span>` +
         (parallel
-          ? `<span class="split-wave-parallel-tag">并行</span>`
+          ? `<span class="split-wave-parallel-tag">一起做</span>`
           : "") +
         `</div>` +
         `<div class="split-wave-group-body">${rows}</div>` +

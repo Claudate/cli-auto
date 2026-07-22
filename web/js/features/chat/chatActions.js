@@ -30,7 +30,7 @@ import {
   startChatWaitTicker,
   stopChatWaitTicker,
 } from "./chatSessions.js";
-import { renderChatPage } from "./chatRender.js";
+import { renderChatPage, renderChatMessages } from "./chatRender.js";
 
 // Re-export surfaces so installChat `...chatActions` stays stable.
 export {
@@ -65,17 +65,86 @@ export async function openChatPage() {
   // Restore immediately so history is never blank while disk loads.
   restoreChatSession(state.selectedPath);
   applyPlanRailVisibility();
+  // P2-2: clear stale last_summary until load
+  state.chatLastSummary = null;
   renderChatPage();
   await loadChatSession();
   // C3: session switcher list (best-effort)
   try {
     await loadChatSessionList();
   } catch (_) {}
+  // P2-2: author empty-state last_summary line (best-effort)
+  try {
+    await loadChatLastSummary();
+  } catch (_) {}
   // G0/G1: only scan rail when user has opened 计划管理
   if (state.planRailOpen) {
     try {
       await host.loadPlanRail();
     } catch (_) {}
+  }
+}
+
+/**
+ * P2-2: fetch last_summary for empty author state.
+ * Honors per-project ignore flag.
+ */
+export async function loadChatLastSummary() {
+  const project = state.selectedPath;
+  if (!project) {
+    state.chatLastSummary = null;
+    return null;
+  }
+  const ignoreKey = `cco.ignoreLastSummary:${project}`;
+  if (localStorage.getItem(ignoreKey) === "1") {
+    state.chatLastSummary = null;
+    return null;
+  }
+  try {
+    const row = await chatApi.getLastSummary(project);
+    const text =
+      row && typeof row === "object"
+        ? String(row.text || "").trim()
+        : String(row || "").trim();
+    state.chatLastSummary = text || null;
+  } catch (_) {
+    state.chatLastSummary = null;
+  }
+  // Re-paint empty state banner if still empty.
+  try {
+    renderChatMessages();
+  } catch (_) {}
+  return state.chatLastSummary;
+}
+
+/**
+ * P2-2: reuse / ignore last_summary banner actions.
+ * @param {"reuse"|"ignore"} action
+ */
+export function handleLastSummaryAction(action) {
+  const project = state.selectedPath;
+  if (action === "ignore") {
+    if (project) {
+      localStorage.setItem(`cco.ignoreLastSummary:${project}`, "1");
+    }
+    state.chatLastSummary = null;
+    const bar = document.querySelector(".chat-last-summary");
+    if (bar) bar.remove();
+    toast("已忽略上次摘要");
+    return;
+  }
+  if (action === "reuse") {
+    const text = String(state.chatLastSummary || "").trim();
+    if (!text) return;
+    const input = $("#chat-input");
+    if (input) {
+      const seed = `承接上次：${text}\n\n接下来我想：`;
+      input.value = seed;
+      input.focus();
+    }
+    // Keep banner until user types; optional soft hide
+    const bar = document.querySelector(".chat-last-summary");
+    if (bar) bar.remove();
   }
 }
 
@@ -101,7 +170,7 @@ export async function sendChatMessage() {
   // optimistic user bubble + pending AI bubble (renderChatMessages)
   const optContent =
     text ||
-    (pendingSnap.length ? `（附图 ${pendingSnap.length} 张）` : "");
+    (pendingSnap.length ? `（附件 ${pendingSnap.length} 个）` : "");
   state.chatSession.messages = [
     ...(state.chatSession.messages || []),
     {
@@ -121,7 +190,7 @@ export async function sendChatMessage() {
   startChatWaitTicker();
 
   try {
-    // G4: upload pending images first, then send with attachment meta
+    // G4: upload pending attachments first, then send with attachment meta
     let attachments = [];
     if (pendingSnap.length) {
       // restore pending temporarily for upload helper
@@ -136,7 +205,7 @@ export async function sendChatMessage() {
     // User sees "思考中…" bubble; send is disabled only to avoid double-send.
     const sendArgs = {
       project: projectPath,
-      message: text || (attachments.length ? "（见附图）" : ""),
+      message: text || (attachments.length ? "（见附件）" : ""),
       sessionId: state.chatSession.session_id || "default",
       attachments: attachments.length ? attachments : null,
     };

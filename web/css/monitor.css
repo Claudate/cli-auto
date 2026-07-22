@@ -256,6 +256,13 @@
   box-sizing: border-box;
   width: 100%;
 }
+.cli-board-empty {
+  grid-column: 1 / -1;
+  padding: 1.2rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
 .cli-board.single {
   grid-template-columns: var(--cli-col) var(--cli-col) !important;
   max-height: min(52vh, 560px);
@@ -922,94 +929,56 @@ button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip
 .ansi-magenta { color: #9f1ab1; }
 .ansi-cyan { color: #0e9384; }
 
-/* ── R1/R4: logs secondary fold ── */
+/* ── R1: 进度卡紧凑 + 运行端吃剩余高度 ── */
 .monitor.logs-secondary {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
   min-height: 0;
 }
-.monitor-logs-fold {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--bg2);
-  box-shadow: 0 1px 2px rgba(0,0,0,.03);
-  overflow: hidden;
-}
-.monitor-logs-fold > .board-toolbar,
-.monitor-logs-fold > .handoff-board-strip,
-.monitor-logs-fold > .cli-shell {
-  /* only visible when open */
-}
-.monitor-logs-fold:not([open]) {
-  flex: 0 0 auto;
-}
-.monitor-logs-fold:not([open]) > :not(summary) {
-  display: none !important;
-}
-.monitor-logs-summary {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.55rem 0.85rem;
-  user-select: none;
+.monitor.logs-secondary > .board-toolbar {
   flex-shrink: 0;
+  padding: 0.15rem 0.1rem;
 }
-.monitor-logs-summary::-webkit-details-marker { display: none; }
-.monitor-logs-summary::before {
-  content: "▸";
-  color: var(--muted);
-  font-size: 0.75rem;
-  margin-right: 0.35rem;
+.monitor.logs-secondary > .board-toolbar .board-toolbar-main {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
-.monitor-logs-fold[open] > .monitor-logs-summary::before {
-  content: "▾";
+.monitor.logs-secondary > .board-toolbar #flow-board-label {
+  margin-right: 0.15rem;
 }
-.monitor-logs-hint {
-  font-size: 0.75rem;
-}
-.monitor-logs-fold[open] {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.monitor-logs-fold[open] > .cli-shell {
+.monitor.logs-secondary > .cli-shell {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
 }
-.monitor-logs-fold[open] > .board-toolbar {
+.monitor.logs-secondary > .handoff-board-strip {
   flex-shrink: 0;
-  border-top: 1px solid var(--border);
-  padding: 0.4rem 0.65rem;
 }
 
-/* R1 progress-first: when running, task-dash grows, logs fold stays compact closed */
+/* 进度看板：不抢剩余高度，避免折叠后大块空白 */
 #workspace-body.mode-running #result-card.task-dash,
 #workspace-body.mode-done #result-card.task-dash {
-  flex: 1 1 auto;
-  max-height: none;
-  min-height: 0;
-}
-#workspace-body.mode-running #monitor.board-mode,
-#workspace-body.mode-done #monitor.board-mode {
-  flex: 0 1 auto !important;
-  min-height: 0 !important;
-}
-#workspace-body.mode-running #monitor.logs-secondary:has(.monitor-logs-fold:not([open])),
-#workspace-body.mode-done #monitor.logs-secondary:has(.monitor-logs-fold:not([open])) {
   flex: 0 0 auto !important;
+  max-height: min(42vh, 360px);
+  min-height: 0;
+  overflow: auto;
 }
-#workspace-body.mode-running #monitor.logs-secondary:has(.monitor-logs-fold[open]),
-#workspace-body.mode-done #monitor.logs-secondary:has(.monitor-logs-fold[open]) {
-  flex: 1 1 42% !important;
-  min-height: 180px !important;
+#workspace-body.mode-running #result-card.task-dash.collapsed,
+#workspace-body.mode-done #result-card.task-dash.collapsed {
+  flex: 0 0 auto !important;
+  max-height: none;
+  overflow: visible;
+}
+/* 运行端始终吃掉剩余空间（不再藏在 details 里） */
+#workspace-body.mode-running #monitor.board-mode,
+#workspace-body.mode-done #monitor.board-mode,
+#workspace-body.mode-running #monitor.logs-secondary,
+#workspace-body.mode-done #monitor.logs-secondary {
+  flex: 1 1 auto !important;
+  min-height: 160px !important;
+  overflow: hidden;
 }
 
 .cli-window.stalled {
@@ -1018,6 +987,19 @@ button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip
 }
 .cli-window.is-log-collapsed {
   min-height: 0;
+}
+/* 折叠时不占固定 --cli-body-h 高度（须压过 mode-running 的 id 规则） */
+#workspace-body.mode-running .cli-window.is-log-collapsed .cli-window-body[hidden],
+#workspace-body.mode-done .cli-window.is-log-collapsed .cli-window-body[hidden],
+.cli-window.is-log-collapsed .cli-window-body[hidden] {
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  flex: 0 0 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  border: none !important;
 }
 .cli-window.is-log-collapsed .cli-window-foot {
   opacity: 0.85;

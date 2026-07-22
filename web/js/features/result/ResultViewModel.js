@@ -154,8 +154,19 @@ export function createResultViewModel(deps = {}) {
       }
     },
 
-    /** Soft end: dismiss focus → chat (no new backend). */
-    finishRound() {
+    /**
+     * Soft end + P2-2 writeback last_summary (best-effort; never blocks finish).
+     */
+    async finishRound() {
+      const runId = runIdOf(snap().live);
+      if (runId && typeof runId === "string" && runId.trim()) {
+        try {
+          await resultApi.writebackMemory(runId);
+        } catch (e) {
+          // Memory failure must not block ending the round (P2 gate).
+          console.warn("[ResultViewModel] writebackMemory", e);
+        }
+      }
       if (typeof deps.onFinishRound === "function") {
         try {
           deps.onFinishRound();

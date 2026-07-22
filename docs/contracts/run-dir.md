@@ -42,9 +42,29 @@
 | `adapter` | 如 `cco-plan/v1` / `serial-prompts/v0` / `raw-single` |
 | `status` | `init` · `validated` · `running` · `paused` · `completed` · `failed` · `aborted` |
 | `started_at` / `finished_at` | RFC3339 |
-| `tasks.{id}` | `TaskState`：status/provider/mode/pid/attempt/failover_used/… |
+| `tasks.{id}` | `TaskState`：status/provider/mode/pid/attempt/failover_used/route 溯源/… |
 
 **不序列化**：`RunState.run_dir`（`#[serde(skip)]`，load 时注入）。
+
+### 3.1 `TaskState` route 溯源（P1-1 · 可选）
+
+写入 `run.json` 的任务对象；**全部可选**，缺省/旧 run 缺字段时 serde default → `None`，**load 不炸**。
+
+| 字段 | 类型 / 取值 | 说明 |
+|------|-------------|------|
+| `route_source` | `explicit` \| `soft_fill` \| `tag_routing` \| `force` \| `failover` | 当前 `provider` 是如何落到任务上的（契约字段；写入由 confirm / tag / failover 路径负责，见 pilotdeck P1-2） |
+| `route_previous` | string | 仅 `route_source=failover` 时有意义：切换前的 provider 名 |
+| `route_note` | string | 可选短注（如切换原因码）；UI 可忽略 raw 值，用 live 拼好的人话 |
+
+规则：
+
+- `TaskState::pending` **不**写死 `route_source`（保持 `None`），避免把「尚未溯源」标成错误来源。
+- 新写可带字段；旧 `run.json` 无此三字段仍须可 `RunState::load`。
+- schema 仍为 `cco-run/v1`（可选字段扩展，不升 schema 名）。
+- **写入路径（P1-2）**：domain 只产出 `RouteFillReport`（filled/kept ids）；`route_*` 由 app/runtime 在组装 `RunState` 时写入：
+  - soft-fill 改写 → `soft_fill`；kept 显式 → `explicit`（若与 tag 隐含一致 → `tag_routing`）
+  - force → `force`
+  - scheduler failover → `failover` + `route_previous`
 
 ## 4. 任务状态（stop 契约相关）
 

@@ -41,6 +41,8 @@ function pickChatAttachments(...a) { return _chatCall("pickChatAttachments", ...
 function openImageLightbox(...a) { return _chatCall("openImageLightbox", ...a); }
 function closeImageLightbox(...a) { return _chatCall("closeImageLightbox", ...a); }
 function fillChatExample(...a) { return _chatCall("fillChatExample", ...a); }
+function handleLastSummaryAction(...a) { return _chatCall("handleLastSummaryAction", ...a); }
+function loadChatLastSummary(...a) { return _chatCall("loadChatLastSummary", ...a); }
 function toggleChatPlanExpand(...a) { return _chatCall("toggleChatPlanExpand", ...a); }
 function adoptChatPlanFromCard(...a) { return _chatCall("adoptChatPlanFromCard", ...a); }
 function dismissChatEnvBar(...a) { return _chatCall("dismissChatEnvBar", ...a); }
@@ -60,6 +62,8 @@ function renderPlansMgmtPage(...a) { return _chatCall("renderPlansMgmtPage", ...
 function selectPlansMgmtItem(...a) { return _chatCall("selectPlansMgmtItem", ...a); }
 function openPlansMgmtItem(...a) { return _chatCall("openPlansMgmtItem", ...a); }
 function assignFromPlansMgmt(...a) { return _chatCall("assignFromPlansMgmt", ...a); }
+function viewSplitFromPlansMgmt(...a) { return _chatCall("viewSplitFromPlansMgmt", ...a); }
+function viewSplitFromPlanRail(...a) { return _chatCall("viewSplitFromPlanRail", ...a); }
 function loadPlanRail(...a) { return _chatCall("loadPlanRail", ...a); }
 function renderPlanRail(...a) { return _chatCall("renderPlanRail", ...a); }
 function selectPlanRailItem(...a) { return _chatCall("selectPlanRailItem", ...a); }

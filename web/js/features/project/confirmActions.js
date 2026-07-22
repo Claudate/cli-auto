@@ -81,7 +81,7 @@ export function renderConfirmPanel() {
   const titleEl = $("#confirm-title");
   if (titleEl) {
     titleEl.textContent = reused
-      ? "历史拆分（可再次确认并开始）"
+      ? "历史拆分（可再次执行规划）"
       : "拆分结果";
   }
   const waves = $("#confirm-waves");
@@ -146,6 +146,7 @@ export async function confirmAndStart() {
 export function cancelPlanning() {
   host.stopPlanJobPoll();
   host.setAssignBusy(false);
+  // C2：用户取消规划 / 拆分失败后「回到计划」— 清 session，不进历史执行台
   host.clearPlanSession(state.selectedPath);
   state.phase = "pick";
   state.planJobId = null;
@@ -153,16 +154,25 @@ export function cancelPlanning() {
   host.renderPhasePanels();
   host.renderPlanPicker();
   host.updateBgPlanBanner();
+  // 清完后若仍有历史 live，留给项目档案；本轮 phase=pick 不自动 goResult
+  try {
+    if (typeof host.renderWorkspace === "function") host.renderWorkspace();
+  } catch (_) {}
 }
 
 /**
  * Confirm-screen re-split: keep current plan path and start a fresh plan job
  * (one click — no need to re-pick the file). Falls back to chooser if no plan.
  * P2-2: pass preserve_from_job_id so human title/prompt/deps/deletes re-apply.
+ *
+ * UX: do **not** clear the desk to phase=pick before analyze — that only
+ * flashed an empty screen. Keep split/planning chrome until the new job lands.
  */
 export async function replanFromConfirm() {
   if (hasActiveRun()) {
-    toastRunLocked("重新拆分");
+    toast(
+      "本轮还在执行，请先停止运行，再重新规划（否则会改到正在跑的任务图）"
+    );
     return;
   }
   if (state.confirmEditing) {
@@ -187,6 +197,12 @@ export async function replanFromConfirm() {
         : planPath;
   }
 
+  if (!state.selectedPlan || !state.selectedPath) {
+    host.openPlanChooser(true);
+    toast("请选择计划后再次拆分");
+    return;
+  }
+
   // P2-2: remember current job so the next start_plan_job can re-apply edits.
   const preserveFrom =
     state.planJobId ||
@@ -201,32 +217,18 @@ export async function replanFromConfirm() {
     }
   } catch (_) {}
 
+  // Soft reset only — leave cards visible until analyze swaps in the new job.
   host.stopPlanJobPoll();
-  host.setAssignBusy(false);
-  host.clearPlanSession(state.selectedPath);
-  state.planJobId = null;
-  state.planJob = null;
-  state.confirmTaskId = null;
   state.confirmEditing = false;
   state.returnPhaseAfterConfirm = null;
-  state.phase = "pick";
-  host.renderPhasePanels();
-  host.renderPlanPicker();
-  host.updateSplitPlanChip();
-  host.updateBgPlanBanner();
-
-  if (!state.selectedPlan || !state.selectedPath) {
-    host.openPlanChooser(true);
-    toast("请选择计划后再次拆分");
-    return;
-  }
+  // analyzePlanFromPicker sets phase=planning and replaces planJob.
 
   toast(
     modeHint
-      ? `按当前计划重新拆分（保留人工修改 · 上次：${modeHint}）…`
+      ? `按当前计划重新规划（保留人工修改 · 上次：${modeHint}）…`
       : preserveFrom
-        ? "按当前计划重新拆分（保留人工修改）…"
-        : "按当前计划重新拆分…"
+        ? "按当前计划重新规划（保留人工修改）…"
+        : "按当前计划重新规划…"
   );
   // Same entry as「开始拆分」— keeps chooser options (并发 / 通道)
   if (typeof host.analyzePlanFromPicker === "function") {
@@ -261,7 +263,7 @@ export async function enablePostInspectAndResplit() {
     await setS({ post_inspect_enabled: true });
     // Keep settings page in sync if open
     if ($("#s-post-inspect")) $("#s-post-inspect").checked = true;
-    toast("已开启「拆分后附加：任务巡检」· 正在按当前计划重拆…");
+    toast("已开启「拆分后附加：任务巡检」· 正在按当前计划重新规划…");
     if (typeof replanFromConfirm === "function") {
       await replanFromConfirm();
     }
@@ -270,7 +272,7 @@ export async function enablePostInspectAndResplit() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = "开启巡检并重拆";
+      btn.textContent = "开启巡检并重新规划";
     }
   }
 }
@@ -298,7 +300,7 @@ export async function enablePlannerCriticAndResplit() {
       ((u) => requireGateway().setSettings(u));
     await setS({ planner_critic_enabled: true });
     if ($("#s-planner-critic")) $("#s-planner-critic").checked = true;
-    toast("已开启「智能第二跳校对」· 正在按当前计划重拆…");
+    toast("已开启「智能第二跳校对」· 正在按当前计划重新规划…");
     if (typeof replanFromConfirm === "function") {
       await replanFromConfirm();
     }
@@ -307,7 +309,7 @@ export async function enablePlannerCriticAndResplit() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = "开启智能校对并重拆";
+      btn.textContent = "开启智能校对并重新规划";
     }
   }
 }

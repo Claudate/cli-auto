@@ -4,6 +4,10 @@
 //! [OUTPUT]: ProjectLiveView · task_logs · open_task_terminal · stop_task
 //! [POS]: services 子模块；桌面 monitor / LogConsole 主数据源
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md
+//!
+//! P1-3: each task carries App-composed `route_label` (+ optional `route_source`);
+//! UI must not re-map raw enum on the main path.
+//! P2-1: `verification` = plan acceptance checklist vs inspect (domain pure assemble).
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -11,12 +15,17 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Result};
 use serde::Serialize;
 
+use crate::app::run::compose_route_label;
 use crate::config::Config;
+use crate::domain::chat::{
+    build_verification, collect_task_acceptance_items, parse_acceptance_checklist,
+    VerificationInputs, VerificationView,
+};
 use crate::plan::PlanIR;
 use crate::runtime::handoff::{self, InspectLoopView};
 use crate::runtime::log_events::{self, LogEvent};
 use crate::runtime::provider::TaskStatus;
-use crate::state::{self, RunState, RunStatus};
+use crate::state::{self, RouteSource, RunState, RunStatus};
 use crate::terminal::{SessionKind, TerminalManager};
 
 use super::runs::{list_runs, load_run, RunSummary};
@@ -66,6 +75,13 @@ pub struct TaskLiveView {
     /// Config stall threshold (seconds) for UI copy; always set when config known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stall_threshold_secs: Option<u64>,
+    /// Wire tag from run.json (`explicit` / `soft_fill` / …); omitted on old runs.
+    /// Main UI path should prefer [`Self::route_label`] (no raw enum on screen).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_source: Option<RouteSource>,
+    /// App-composed human route story (P1-3). Always set; old runs → product label only.
+    #[serde(default)]
+    pub route_label: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -102,6 +118,9 @@ pub struct ProjectLiveView {
     /// Compact Board rows from handoff.json (id/provider/role/status).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub handoff_board: Vec<HandoffBoardRowView>,
+    /// P2-1: plan acceptance checklist vs inspect side-by-side.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification: Option<VerificationView>,
 }
 
 /// Compact Board row for desktop handoff strip (multi-cli P2-6).
@@ -170,6 +189,7 @@ pub fn project_live_view(
             run_dir: None,
             handoff_md_path: None,
             handoff_board: vec![],
+            verification: None,
         });
     };
 
@@ -264,6 +284,13 @@ pub fn project_live_view(
                 last_retry_reason: ts.last_retry_reason.clone(),
                 stall_idle_secs,
                 stall_threshold_secs,
+                // P1-3: App-composed label; UI shows 执行方式：{route_label}
+                route_source: ts.route_source,
+                route_label: compose_route_label(
+                    &ts.provider,
+                    ts.route_source,
+                    ts.route_previous.as_deref(),
+                ),
             }
         })
         .collect();
@@ -317,6 +344,13 @@ pub fn project_live_view(
         &rs.project_root,
     ));
 
+    // P2-1: plan checklist vs inspect side-by-side (pure domain assemble).
+    let verification = Some(build_live_verification(
+        &rs,
+        resolved.as_ref(),
+        inspect_loop.as_ref().unwrap(),
+    ));
+
     // multi-cli P2-6: expose handoff Board for desktop strip / open ledger.
     let handoff_md_path = {
         let p = handoff::Handoff::path_md(&rs.run_dir);
@@ -359,6 +393,55 @@ pub fn project_live_view(
         run_dir: Some(rs.run_dir.display().to_string()),
         handoff_md_path,
         handoff_board,
+        verification,
+    })
+}
+
+/// P2-1: best-effort plan md + task acceptance → VerificationView (no fail).
+fn build_live_verification(
+    rs: &RunState,
+    plan: Option<&PlanIR>,
+    loop_view: &InspectLoopView,
+) -> VerificationView {
+    // Prefer source plan markdown; fall back empty checklist when unreadable.
+    let plan_items = std::fs::read_to_string(&rs.plan_path)
+        .ok()
+        .map(|md| parse_acceptance_checklist(&md))
+        .unwrap_or_default();
+
+    let task_items = plan
+        .map(|p| {
+            collect_task_acceptance_items(
+                p.tasks
+                    .iter()
+                    .map(|t| (t.id.as_str(), t.acceptance.as_deref())),
+            )
+        })
+        .unwrap_or_default();
+
+    let verdict = loop_view
+        .verdict
+        .as_deref()
+        .map(|s| s.trim().to_ascii_uppercase())
+        .filter(|s| !s.is_empty());
+    let blocking = loop_view.blocking_count;
+    let has_preview = !loop_view.issue_preview.is_empty();
+    // Real inspect product: PASS (no blocking) or FAIL / blocking / issue product.
+    let has_real_inspect = matches!(verdict.as_deref(), Some("PASS") if blocking == 0)
+        || matches!(verdict.as_deref(), Some("FAIL"))
+        || blocking > 0
+        || (has_preview && verdict.is_some());
+    let inspect_pending = !has_real_inspect
+        && (loop_view.require_inspect || plan.map(|p| p.require_inspect).unwrap_or(false));
+
+    build_verification(VerificationInputs {
+        plan_items,
+        task_items,
+        has_real_inspect,
+        blocking_count: blocking,
+        residual_count: loop_view.residual_count,
+        issue_preview: loop_view.issue_preview.clone(),
+        inspect_pending,
     })
 }
 

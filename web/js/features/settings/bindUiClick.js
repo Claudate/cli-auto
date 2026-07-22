@@ -46,6 +46,43 @@ export function attachDocumentClick(deps) {
         return;
       }
 
+      // P2-2: last_summary 沿用 / 忽略
+      const lastSumBtn = e.target?.closest?.("[data-last-summary]");
+      if (lastSumBtn) {
+        e.preventDefault();
+        const act = lastSumBtn.getAttribute("data-last-summary");
+        if (typeof g("handleLastSummaryAction") === "function") {
+          call("handleLastSummaryAction", act);
+        } else if (window.ccoChat?.handleLastSummaryAction) {
+          window.ccoChat.handleLastSummaryAction(act);
+        }
+        return;
+      }
+
+      // P2-2: pin delete in settings
+      const pinDel = e.target?.closest?.("[data-pin-delete]");
+      if (pinDel) {
+        e.preventDefault();
+        const key = pinDel.getAttribute("data-pin-delete");
+        if (typeof g("deleteProjectPin") === "function") {
+          Promise.resolve(call("deleteProjectPin", key)).catch((err) =>
+            toast(String(err?.message || err))
+          );
+        }
+        return;
+      }
+
+      const pinAdd = e.target?.closest?.("#btn-pin-add");
+      if (pinAdd) {
+        e.preventDefault();
+        if (typeof g("addProjectPin") === "function") {
+          Promise.resolve(call("addProjectPin")).catch((err) =>
+            toast(String(err?.message || err))
+          );
+        }
+        return;
+      }
+
       const tplBtn = e.target?.closest?.("[data-plan-template]");
       if (tplBtn) {
         e.preventDefault();
@@ -112,6 +149,24 @@ export function attachDocumentClick(deps) {
         return;
       }
 
+      // shell-chrome C1：rail「查看拆分结果」— 勿当选中整行
+      const railView = e.target?.closest?.("[data-plan-rail-view]");
+      if (railView) {
+        e.preventDefault();
+        e.stopPropagation();
+        const p = railView.getAttribute("data-plan-rail-view");
+        if (typeof g("viewSplitFromPlanRail") === "function") {
+          call("viewSplitFromPlanRail", p);
+        } else if (window.ccoChat?.viewSplitFromPlanRail) {
+          window.ccoChat.viewSplitFromPlanRail(p);
+        } else if (typeof g("showSplitPlanConfirm") === "function") {
+          call("showSplitPlanConfirm");
+        } else {
+          toast("查看拆分结果不可用");
+        }
+        return;
+      }
+
       const railItem = e.target?.closest?.(".plan-rail-item[data-plan-rail]");
       if (railItem) {
         e.preventDefault();
@@ -138,6 +193,10 @@ export function attachDocumentClick(deps) {
         return;
       }
 
+      // shell-chrome B1：移除按钮由 shellUi 绑定，勿当选中
+      if (e.target?.closest?.(".project-item-remove")) {
+        return;
+      }
       const proj = e.target?.closest?.(".project-item[data-path]");
       if (proj) {
         e.preventDefault();
@@ -183,16 +242,11 @@ export function attachDocumentClick(deps) {
         const tid = taskChip.dataset.task;
         st.selectedTaskId = tid;
         if (st.closedPanels?.[tid]) delete st.closedPanels[tid];
+        // 点步骤卡 → 展开该步详细日志（运行端本身始终可见）
         if (!st.cliLogExpanded) st.cliLogExpanded = {};
         st.cliLogExpanded[tid] = true;
-        const fold = $("#monitor-logs-fold");
-        if (fold) {
-          fold.open = true;
-          st.monitorLogsOpen = true;
-          try {
-            localStorage.setItem("cco.monitorLogsOpen", "1");
-          } catch (_) {}
-        }
+        const mon = $("#monitor");
+        if (mon) mon.hidden = false;
         const tasks = st.live?.tasks || [];
         call("renderCliBoard", tasks);
         call("renderTaskStrip", st.live, tasks, {

@@ -250,7 +250,7 @@ export async function loadDoctor() {
       d.ok ? "全部检查通过" : "存在失败项，请按详情处理"
     }</p>`;
     }
-    callG("renderDoctorWarn");
+    callG("renderDoctorWarn")();
   } catch (e) {
     toast(String(e));
   }

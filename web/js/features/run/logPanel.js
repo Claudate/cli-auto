@@ -1,57 +1,24 @@
 /**
- * [INPUT]: #monitor-logs-fold · state.monitorLogsOpen
- * [OUTPUT]: 日志次级面板默认折叠；不挡主进度
+ * [INPUT]: #monitor · run 上下文
+ * [OUTPUT]: 运行端（CLI 看板）可见性；卡内详细日志按需展开
  * [POS]: A4-2 features/run；虚拟列表见 logVirtual.js（A5-2c）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
-
-function g(name) {
-  const w = typeof window !== "undefined" ? window : globalThis;
-  return w[name];
-}
 
 function $(id) {
   return document.getElementById(id);
 }
 
 /**
- * R1: keep logs fold closed by default; remember user open.
- * Does not reimplement virtual list — only fold chrome.
- * @param {{ getOpen?: () => boolean, setOpen?: (v: boolean) => void }} [bridge]
+ * Legacy no-op: 整板不再用 details 折叠；运行端始终在 #monitor 内可见。
+ * 保留导出名，避免 classic/facade 调用炸掉。
  */
-export function syncMonitorLogsFold(bridge = {}) {
-  const fold = $("monitor-logs-fold");
-  if (!fold) return;
-
-  const getOpen =
-    typeof bridge.getOpen === "function"
-      ? bridge.getOpen
-      : () => {
-          const s = g("state");
-          return !!(s && s.monitorLogsOpen);
-        };
-  const setOpen =
-    typeof bridge.setOpen === "function"
-      ? bridge.setOpen
-      : (v) => {
-          const s = g("state");
-          if (s) s.monitorLogsOpen = !!v;
-          try {
-            localStorage.setItem("cco.monitorLogsOpen", v ? "1" : "0");
-          } catch (_) {}
-        };
-
-  if (fold.dataset.ccoA4Bound !== "1") {
-    fold.dataset.ccoA4Bound = "1";
-    fold.addEventListener("toggle", () => {
-      setOpen(!!fold.open);
-    });
-  }
-  fold.open = !!getOpen();
+export function syncMonitorLogsFold(_bridge = {}) {
+  // intentionally empty — CLI board is always shown while #monitor is visible
 }
 
 /**
- * Show/hide monitor board as secondary (not main focus).
+ * Show/hide monitor board (CLI 运行端) under the progress card.
  * @param {{ planning?: boolean, hasTasks?: boolean, hasRun?: boolean }} ctx
  */
 export function paintLogSecondaryVisibility(ctx) {
@@ -69,5 +36,4 @@ export function paintLogSecondaryVisibility(ctx) {
   }
   if (monitor) monitor.hidden = false;
   if (cliEmpty) cliEmpty.hidden = true;
-  syncMonitorLogsFold();
 }

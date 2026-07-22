@@ -1,7 +1,8 @@
 
     // A1: pure helpers now live in domain::plan (was private in plan/mod).
-    use crate::domain::plan::{materialize_inspect_task, scope_glob_prefix, scope_paths_overlap};
-
+    use crate::domain::plan::{
+        looks_like_work_task_id, materialize_inspect_task, scope_glob_prefix, scope_paths_overlap,
+    };
 
     use super::*;
     use crate::config::Config;
@@ -259,6 +260,12 @@
         assert!(!title_is_meta_heading("准备"));
         assert!(!title_is_meta_heading("实现 handoff 归并"));
         assert!(!title_is_meta_heading("P0 实现示例计划落地"));
+        // Landing task ids must NOT be meta (was broken by needle "p0-")
+        assert!(!title_is_meta_heading("P0-1 · 结果台消费 live 费用与用时 ☐"));
+        assert!(!title_is_meta_heading("P1-2 · confirm / tag / failover 写入 provenance ☐"));
+        assert!(!title_is_meta_heading("A1 · 待确认强制进拆分台"));
+        assert!(looks_like_work_task_id("P0-1 · 结果台消费 live 费用与用时 ☐"));
+        assert!(looks_like_work_task_id("U1-1 · 测"));
     }
 
     #[test]

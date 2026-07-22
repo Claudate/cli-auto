@@ -19,6 +19,7 @@
 //! | [`materialize`] | disk materialize / ParseOnly load+materialize（返回 ir · drop optional） |
 //! | [`foreground`] | ForegroundOpts · prepare_scheduler · preflight · prepare_resume · finish |
 //! | [`route`] | soft/force provider override (A0-R3) |
+//! | [`provenance`] | stamp `route_source` (P1-2) · compose live `route_label` (P1-3) |
 //!
 //! ## Presentation map (A1-7 + A5-1 + **A5-3 TUI**)
 //! | CLI / Tauri / TUI | app::run |
@@ -35,12 +36,17 @@
 
 mod foreground;
 mod materialize;
+pub mod provenance;
 mod route;
 
 pub use foreground::{
     finish_with_reports, preflight_plan, prepare_resume, prepare_scheduler, ForegroundOpts,
 };
-pub use materialize::{materialize_parse_only, materialize_run};
+pub use materialize::{materialize_parse_only, materialize_run, materialize_run_with_route};
+pub use provenance::{
+    compose_route_label, provider_product_label, stamp_failover, stamp_route_fill,
+    stamp_route_inferred,
+};
 pub use route::apply_provider_override;
 
 use std::path::{Path, PathBuf};
@@ -174,8 +180,17 @@ pub fn start_rework(config: Config, source_run_id: &str) -> Result<ReworkStartRe
 }
 
 /// User accepts residual open risks.
+/// Also best-effort writes project last_summary (P2-2 · does not fail accept).
 pub fn accept_residual(config: &Config, run_id: &str, note: Option<&str>) -> Result<()> {
-    accept_run_residual(config, run_id, note)
+    accept_run_residual(config, run_id, note)?;
+    super::memory::try_writeback_from_run(config, run_id, note);
+    Ok(())
+}
+
+/// Result-desk「完成并回写」: rule-template last_summary for the project (P2-2).
+/// Best-effort — never blocks ending the round.
+pub fn writeback_memory(config: &Config, run_id: &str) -> Result<Option<crate::state::ProjectLastSummary>> {
+    super::memory::writeback_from_run(config, run_id, None)
 }
 
 /// Handoff file paths for status / observe (no Handoff type leak to CLI).
@@ -258,21 +273,28 @@ mod tests {
     #[test]
     fn soft_provider_keeps_explicit_codex() {
         let mut ir = mixed_plan();
-        let msg = apply_provider_override(&mut ir, Some("fake".into()), None);
-        assert!(msg.as_deref().unwrap().contains("filled 2"));
+        let report = apply_provider_override(&mut ir, Some("fake".into()), None);
+        let msg = report.as_ref().map(|r| r.summary_line()).unwrap();
+        assert!(msg.contains("filled 2"));
         assert_eq!(ir.tasks[1].provider, "codex");
         assert_eq!(ir.tasks[0].provider, "fake");
+        assert_eq!(report.as_ref().unwrap().kept_ids, vec!["t2".to_string()]);
     }
 
     #[test]
     fn force_provider_wins_over_soft() {
         let mut ir = mixed_plan();
-        let msg = apply_provider_override(
+        let report = apply_provider_override(
             &mut ir,
             Some("claude".into()),
             Some("fake".into()),
         );
-        assert!(msg.as_deref().unwrap().contains("force-provider"));
+        let msg = report.as_ref().map(|r| r.summary_line()).unwrap();
+        assert!(msg.contains("force-provider"));
         assert!(ir.tasks.iter().all(|t| t.provider == "fake"));
+        assert_eq!(
+            report.as_ref().unwrap().mode,
+            crate::domain::worker::RouteFillMode::Force
+        );
     }
 }

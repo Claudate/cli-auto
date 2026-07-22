@@ -6,11 +6,13 @@ mod.rs: 用例层根 · A1-7 presentation map 注释
 split.rs: **A1-2/A1-7/A5-1** Mode B — `confirm`（后台唯一业务开跑）· **`confirm_materialize`**（CLI 前台同契约）· start_job/get_job/edit_task(**role/scope_paths S-role**)/remove_task/sanitize_deps
 run/: **A1-3/A1-7/A5-1/A5-3 · S-run 多文件** Run 用例面（单文件 ≤400）
   · mod.rs: lifecycle facade（list/load/stop/resume/rework）· domain maps · observe · re-export
-  · materialize.rs: materialize_run（**返回 (run_id,state,ir)** · 内调 materialize_selected_tasks · A0-R4/D-T3-1）· materialize_parse_only
+  · materialize.rs: materialize_run / **materialize_run_with_route**（**返回 (run_id,state,ir)** · drop optional · stamp route_source · A0-R4/D-T3-1）· materialize_parse_only
   · foreground.rs: ForegroundOpts · prepare_scheduler · preflight_plan · prepare_resume · finish_with_reports
-  · route.rs: apply_provider_override（soft/force · A0-R3）
+  · route.rs: apply_provider_override（soft/force · 返回 RouteFillReport · A0-R3）
+  · provenance.rs: **P1-2** stamp_route_fill / stamp_route_inferred / stamp_failover → TaskState.route_* · **P1-3** compose_route_label / provider_product_label（live 人话）
   · 编排循环仍在 `runtime/scheduler`；**不**旁路 Mode B；TUI 只经本面
 chat.rs: **A1-6/A1-7** Chat 用例面 — session list/get/new/delete · send · stream_partial · save_plan · read_plan_md · normalize_plan · save_attachment · cleanup_expired；现委托 `services::chat_*` thin facade；**禁止** confirm/start_run
+memory.rs: **P2-2** 项目轻记忆 — get/last_summary/list_pins/upsert_pin/delete_pin · writeback_from_run（规则模板 summary）· prompt_context（仅上下文，不改 route/不 auto-confirm）
 （A1-5 **未**加 `app/inspect` 用例面：inspect 纯规则在 `domain/inspect`，IO 在 `runtime/handoff`；桌面 rework 经 `app::run::start_rework` → services。A4 再做人话 DTO 用例。）
 
 ## 硬规则

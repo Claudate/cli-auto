@@ -2,7 +2,7 @@
  * [INPUT]: legacy host + gateway via requireGateway
  * [OUTPUT]: assign busy · execute · chooser · renderPlanPicker · max parallel partial
  * [POS]: A5-2b-fin features/project/projectPicker.js
- * note: assign busy · execute · chooser · renderPlanPicker · max parallel partial
+ * note: assign busy · execute · chooser · renderPlanPicker；系统页隐藏业务顶栏 CTA
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -344,7 +344,6 @@ export function renderPlanPicker() {
   const pp = $("#plan-picker");
   const btnChoose = $("#btn-plan-choose");
   const btnAssign = $("#btn-pp-analyze");
-  const btnEdit = $("#btn-edit-plan");
   const btnChat = $("#btn-open-chat");
   const btnMonitor = $("#btn-monitor-plan");
   const btnPlanMgmt = $("#btn-plan-mgmt");
@@ -352,6 +351,11 @@ export function renderPlanPicker() {
   const inWorkspace = !!state.selectedPath && state.page === "workspace";
   const inChat = !!state.selectedPath && state.page === "chat";
   const inPlans = !!state.selectedPath && state.page === "plans";
+  // 系统页：顶栏只留刷新，不展示业务 CTA / 阶段相关入口
+  const isSystemPage =
+    state.page === "settings" ||
+    state.page === "doctor" ||
+    state.page === "help";
   // 选择计划：workspace；执行此计划：仅 workspace（聊天/计划管理用各自 CTA）
   const hideForPhase = state.phase === "planning" || state.phase === "confirm";
   const runActive = hasActiveRun();
@@ -359,31 +363,38 @@ export function renderPlanPicker() {
     !!state.planJob &&
     ["planned", "confirmed"].includes(String(state.planJob.status || "").toLowerCase());
 
-  // 顶栏「聊天」：已选项目常驻；chat 页隐藏自指
+  // shell-chrome A4：顶栏「聊天」icon；业务页有项目时；chat 自指 / 系统页隐藏
   if (btnChat) {
     btnChat.hidden =
+      isSystemPage ||
       !state.selectedPath ||
       state.page === "welcome" ||
       state.page === "chat";
     btnChat.disabled = false;
-    btnChat.title = "与 AI 共建计划文档";
+    btnChat.title = "聊天";
+    btnChat.setAttribute("aria-label", "聊天");
   }
 
-  // A4：计划管理只在「更多」里，永不 primary（主路径不抢戏）
+  // shell-chrome A4：计划管理 icon — 业务页有项目；plans 自指 / 系统页隐藏
   if (btnPlanMgmt) {
     const showMgmt =
+      !isSystemPage &&
       !!state.selectedPath &&
       state.page !== "welcome" &&
       state.page !== "plans";
     btnPlanMgmt.hidden = !showMgmt;
     btnPlanMgmt.disabled = false;
-    btnPlanMgmt.textContent = "管理计划文件";
-    btnPlanMgmt.title = "进阶：选中 / 预览 / 编辑计划文件";
-    btnPlanMgmt.classList.remove("primary");
-    btnPlanMgmt.classList.add("ghost");
+    btnPlanMgmt.title = "管理计划文件";
+    btnPlanMgmt.setAttribute("aria-label", "管理计划文件");
+    // icon-btn：勿写 textContent（会冲掉 SVG）
+    btnPlanMgmt.classList.remove("primary", "ghost", "btn", "sm");
+    if (!btnPlanMgmt.classList.contains("icon-btn")) {
+      btnPlanMgmt.classList.add("icon-btn");
+    }
   }
 
   // A4：有待确认且在 chat →「继续核对拆分」；有活动 run →「返回执行」
+  // 系统页不展示（设置/环境检查/帮助与执行态无关）
   if (btnMonitor) {
     const pendingSplit =
       hasSplit &&
@@ -392,6 +403,7 @@ export function renderPlanPicker() {
         String(state.planJob?.status || "").toLowerCase()
       );
     const showMon =
+      !isSystemPage &&
       !!state.selectedPath &&
       state.page !== "workspace" &&
       state.page !== "welcome" &&
@@ -418,7 +430,7 @@ export function renderPlanPicker() {
         btnMonitor.title = "返回工作区查看已暂停的计划";
       } else if (pendingSplit || state.phase === "confirm") {
         btnMonitor.textContent = "继续核对拆分";
-        btnMonitor.title = "回到拆分台核对波次后确认并开始";
+        btnMonitor.title = "回到拆分台核对后点「执行规划」";
       } else if (host.isPlanSessionActive()) {
         btnMonitor.textContent =
           state.phase === "planning" ? "查看规划" : "继续核对拆分";
@@ -436,15 +448,15 @@ export function renderPlanPicker() {
     }
   }
 
-  // 顶栏「选择计划」：进「更多」；workspace 非拆分相位显示
+  // 顶栏「选择计划」：workspace 非拆分相位直出（系统页隐藏）
   if (btnChoose) {
-    btnChoose.hidden = !inWorkspace || hideForPhase;
+    btnChoose.hidden = isSystemPage || !inWorkspace || hideForPhase;
     btnChoose.disabled = !!runActive;
     btnChoose.title = runActive ? "运行中，请先停止后再切换计划" : "选择计划";
   }
-  // 顶栏主 CTA「拆成步骤」：仅 workspace 且未在拆分中；主路径最多 1 个 primary
+  // 顶栏主 CTA「拆成步骤」：仅 workspace 且未在拆分中
   if (btnAssign) {
-    btnAssign.hidden = !inWorkspace || hideForPhase;
+    btnAssign.hidden = isSystemPage || !inWorkspace || hideForPhase;
     if (!hideForPhase && !state.assigning) {
       btnAssign.textContent = runActive ? "运行中…" : "拆成步骤";
       btnAssign.title = runActive
@@ -452,17 +464,16 @@ export function renderPlanPicker() {
         : "把当前计划拆成可执行步骤";
     }
   }
-  // F5：更多菜单在无次要入口时隐藏
-  const topMore = $("#top-more");
-  if (topMore) {
-    const hasSecondary =
-      (btnPlanMgmt && !btnPlanMgmt.hidden) ||
-      (btnChoose && !btnChoose.hidden) ||
-      (btnEdit && !btnEdit.hidden) ||
-      !!$("#budget-chip:not([hidden])");
-    // 刷新始终可用；有项目时显示更多
-    topMore.hidden = !state.selectedPath && state.page === "welcome";
-    if (!hasSecondary && state.page === "welcome") topMore.hidden = true;
+  // shell-chrome A4：刷新 icon；系统页 / 业务页可用；纯冷启动欢迎页隐藏
+  const btnRefresh = $("#btn-refresh");
+  if (btnRefresh) {
+    btnRefresh.hidden = state.page === "welcome" && !state.selectedPath;
+    btnRefresh.title = "刷新项目与运行状态";
+    btnRefresh.setAttribute("aria-label", "刷新项目与运行状态");
+    if (!btnRefresh.classList.contains("icon-btn")) {
+      btnRefresh.classList.add("icon-btn");
+    }
+    btnRefresh.classList.remove("btn", "ghost", "sm");
   }
   try {
     document.body.dataset.ccoPhase = state.phase || "pick";
@@ -470,25 +481,9 @@ export function renderPlanPicker() {
     if (typeof host.refreshFlowStrips === "function") host.refreshFlowStrips();
   } catch (_) {}
 
-  // 「编辑任务」：仅在有拆分结果时显示；运行中禁用，暂停后可进确认页改未执行任务
-  if (btnEdit) {
-    const showEdit = inWorkspace && hasSplit;
-    btnEdit.hidden = !showEdit;
-    if (showEdit) {
-      btnEdit.textContent = "编辑任务";
-      const editableNow = canEditSelectedTask(state.confirmTaskId || state.planJob?.tasks?.[0]?.id);
-      btnEdit.disabled = !!runActive && !isRunPaused();
-      if (runActive && !isRunPaused()) {
-        btnEdit.title = "运行中不可编辑任务，请先停止或待计划暂停";
-      } else if (isRunPaused()) {
-        btnEdit.title = "计划已暂停：仅可编辑尚未执行的任务";
-      } else if (state.phase === "confirm" || editableNow) {
-        btnEdit.title = "编辑拆分后的任务说明（仅未执行任务）";
-      } else {
-        btnEdit.title = "打开拆分结果；仅暂停后、未执行任务可编辑";
-      }
-    }
-  }
+  // shell-chrome A3：顶栏「编辑任务」已撤（若旧 DOM 仍在则强制 hidden）
+  const btnEditLegacy = $("#btn-edit-plan");
+  if (btnEditLegacy) btnEditLegacy.hidden = true;
 
   // plan-picker 仅用于错误条 / 隐藏钩子
   if (pp) {

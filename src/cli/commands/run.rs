@@ -82,10 +82,10 @@ pub async fn run(
         )?;
         // Preview graph (proposed; optionals still visible until confirm).
         let mut preview = preview_ir;
-        if let Some(msg) =
+        if let Some(report) =
             run_uc::apply_provider_override(&mut preview, provider.clone(), force_provider.clone())
         {
-            println!("{msg}");
+            println!("{}", report.summary_line());
         }
         apply_mode_parallel(&mut preview, mode.as_ref(), max_parallel);
         print!("{}", format_graph(&preview));
@@ -93,16 +93,17 @@ pub async fn run(
     };
 
     // ParseOnly: load + soft-fill for display before TTY confirm.
-    let mut parse_only_ir = if do_skip {
+    // Keep the fill report so materialize can stamp route_source (P1-2).
+    let mut parse_only = if do_skip {
         let mut ir = load_plan(&project, &plan, adapter.as_deref(), config)?;
-        if let Some(msg) =
-            run_uc::apply_provider_override(&mut ir, provider.clone(), force_provider.clone())
-        {
-            println!("{msg}");
+        let report =
+            run_uc::apply_provider_override(&mut ir, provider.clone(), force_provider.clone());
+        if let Some(ref r) = report {
+            println!("{}", r.summary_line());
         }
         apply_mode_parallel(&mut ir, mode.as_ref(), max_parallel);
         print!("{}", format_graph(&ir));
-        Some(ir)
+        Some((ir, report))
     } else {
         None
     };
@@ -127,12 +128,17 @@ pub async fn run(
             split_uc::confirm_materialize(config, &job_id, patches)?;
         (run_id, st, ir)
     } else {
-        let ir = parse_only_ir
+        let (ir, report) = parse_only
             .take()
             .expect("ParseOnly path always loads IR before confirm");
         // Documented ParseOnly — not Mode B; still drops optional && !include (A0-R4).
-        // Use **returned** IR for the scheduler (D-T3-1).
-        let (run_id, st, ir) = run_uc::materialize_run(config, project.clone(), &ir)?;
+        // Use **returned** IR for the scheduler (D-T3-1). Stamp route_source from report.
+        let (run_id, st, ir) = run_uc::materialize_run_with_route(
+            config,
+            project.clone(),
+            &ir,
+            report.as_ref(),
+        )?;
         (run_id, st, ir)
     };
 

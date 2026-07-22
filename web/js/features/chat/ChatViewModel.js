@@ -82,13 +82,13 @@ export function createChatViewModel(opts = {}) {
       }
       const text = String(input?.message || "").trim();
       if (!text && !(input?.attachments && input.attachments.length)) {
-        throw new Error("请输入内容或附图");
+        throw new Error("请输入内容或添加附件");
       }
       store.set({ ...s, busy: true, lastSendError: null });
       try {
         const resp = await chatApi.sendMessage({
           project: s.projectPath,
-          message: text || "（见附图）",
+          message: text || "（见附件）",
           sessionId: input.sessionId || "default",
           attachments: input.attachments ?? null,
         });

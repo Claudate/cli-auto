@@ -152,7 +152,11 @@ export function countBuckets(tasks) {
  */
 export function runContext(live, legacy = {}) {
   const phase = legacy.phase || "";
-  const planning = phase === "planning" || phase === "confirm";
+  // plan_failed: still on split path — must hide historical run/result desk
+  const planning =
+    phase === "planning" ||
+    phase === "confirm" ||
+    phase === "plan_failed";
   // 打开拆分会话时，项目「最近一次」历史 run 不算本轮
   let belongs = true;
   try {

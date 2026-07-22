@@ -2,15 +2,16 @@
 
 > 日期：2026-07-21  
 > 角色：**工程形状草稿**（引导写计划 + SQLite 会话记忆 + 有界对抗）——**产品本体以** [`subjective-desire-decision-concept.md`](./subjective-desire-decision-concept.md) **为准**  
-> 状态：**设计稿 · 未排期实施**（勾选 ☐ 见 §8；**不**平行第二套 A0–A5；心爱主线是「接近主观渴望」，本文偏 cco 嫁接想象）  
+> 状态：**设计稿 · 全量 Guide 未排期实施**（勾选 ☐ 见 §8 G0–G4；**不**平行第二套 A0–A5；心爱主线是「接近主观渴望」，本文偏 cco 嫁接想象）  
 > 产品方向：[`../PRODUCT.md`](../PRODUCT.md)  
 > 架构边界：[`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)（confirm 唯一开跑 · MVVM · 体积）  
 > 拆分 SoT：[`cco-split-format-sqlite-2026-07-21.md`](./cco-split-format-sqlite-2026-07-21.md)  
 > 拆分 Agent：[`split-agent-model-path-2026-07-21.md`](./split-agent-model-path-2026-07-21.md) · [`openhands-style-split-agent-landing-2026-07-21.md`](./openhands-style-split-agent-landing-2026-07-21.md)  
 > 体验：[`ux-nondev-landing-2026-07-21.md`](./ux-nondev-landing-2026-07-21.md)  
+> 轻记忆先行切片（**非**本文件全量 Guide · **不**开第二套波次）：[`pilotdeck-borrow-landing-2026-07-21.md`](./pilotdeck-borrow-landing-2026-07-21.md) **P2-2** pin/summary ✅ · **P2-3** 与本文互链 ✅（见 §3.1 / §5.6.1）  
 > 聊天共建（已归档参考）：[`archive/chat-plan-builder-2026-07-18.md`](./archive/chat-plan-builder-2026-07-18.md)
 
-[PROTOCOL]: 改本方案时同步 §0 定位、§6 数据模型、§8 波次勾选；落地后回写 PRODUCT 五步叙事（只在「① 生成」前插入引导子相）与 `docs/CLAUDE.md` 索引。**禁止**旁路 `confirm_start`；**禁止**把本文件写成第二套调度器。
+[PROTOCOL]: 改本方案时同步 §0 定位、§6 数据模型、§8 波次勾选；落地后回写 PRODUCT 五步叙事（只在「① 生成」前插入引导子相）与 `docs/CLAUDE.md` 索引。**禁止**旁路 `confirm_start`；**禁止**把本文件写成第二套调度器。**禁止**因 pilotdeck P2-2 薄表落地而把 §8 G0-2 / G1-5 勾成 ✅——薄表 = 可复用地基，**不等于** Guide 状态机 / 全量 `project_memory` schema 已 ship。
 
 ---
 
@@ -133,6 +134,7 @@
 | 聊天共建 | `app::chat`：session JSON · send · save_plan · fence 抽 plan | **Guide 可挂在 chat 前相或并列相**；最终仍 `save_plan` → `.md` |
 | Mode B | plan job · LLM/heuristic · confirm 唯一开跑 | **不改**；Brief 变厚 plan.md 即可 |
 | CcoSplit + SQLite | `cco.db`：`plan_jobs` / `plan_tasks` / `cco_split_*` | **扩展表**做用户/会话记忆；拆分 SoT 继续独立 |
+| **项目轻记忆（P2-2 ✅）** | 同库表 `project_last_summary` + `project_pins`（pin 硬顶 3）· `state::project_memory` · `app::memory` 回写/空态/设置 pin · prompt **仅上下文** | **Guide Brief 预判条 / synthesize 后写回 可直接复用这两表**（见 §5.6.1）；**不**等于 G0–G1 全量记忆 schema 已落地 |
 | 拆分 Agent 路径 | ModelSplitAgent 设计稿 | Guide 产出的结构字段可写入 plan front-matter，供拆分提示词使用 |
 | optional / 停台 | 业务可选勾选 · 默认停拆分台 | Guide 结束「生成计划」后仍走核对/拆分闸 |
 
@@ -141,7 +143,7 @@
 | 缺口 | 说明 |
 |------|------|
 | **无引导相** | 聊天偏「共建散文」，不是结构化追问槽位 |
-| **无用户记忆表** | SQLite 只有 job/task；会话在 `.cco/chat/*.json` 文件，无跨会话预判 |
+| **无 Guide 全量记忆 / 会话表** | P2-2 已有 **薄** `project_last_summary` + `project_pins`（可作预判条地基）；仍缺 `user_profile` · 富 `project_memory`（open_tensions / last_brief_json…）· `guide_*` 会话/轮次/发言；跨会话结构化预判与 Brief 持久化未 ship |
 | **无角色组 / 轮次状态机** | 多 CLI 的 role/scope 是 **Worker 路由**，不是「需求层人格角色」 |
 | **无决策 Brief  schema** | 计划 md 无强制「得/失/风险/未决」 |
 | **无轮次评分持久化** | 无法复盘「哪一轮创造了价值」 |
@@ -297,6 +299,25 @@ synthesis = 最后一轮后强制 Brief，禁止再开无限轮
 
 路径：现有 `~/.cco/cco.db`（与 cco_split 同库，分表）。
 
+#### 5.6.1 已落地 · 可被 Guide Brief 复用（pilotdeck P2-2 · 2026-07-22）
+
+> **真源勾选**：[`pilotdeck-borrow-landing-2026-07-21.md`](./pilotdeck-borrow-landing-2026-07-21.md) §3 **P2-2 ✅** · **P2-3 ✅**（互链本文）。  
+> **本文件 §8 G0–G4 仍全部 ☐**——不因薄表 ship 而双轨勾选。
+
+| 表 / 模块 | 形状 | Guide 复用约定 |
+|-----------|------|----------------|
+| `project_last_summary` | `(project_id PK, text, updated_at)` | **G1-5 预判条**与 Author 空态「上次：…」同源；Guide `synthesize` / `materialize_plan` 后可用规则模板写回（`app::memory::writeback_*` / `set_last_summary`） |
+| `project_pins` | `(project_id, key, value, pinned_at)` PK 复合 · **每项目硬顶 3** | 高级上下文（设置页 CRUD）；注入 chat/planner **仅 prompt 上下文**，不改 route、不 auto-confirm |
+| `state::project_memory` · `app::memory` | CRUD + `compose_last_summary` + `format_memory_context` | Guide 用例应 **复用**，勿平行第二套 store；失败 **best-effort**（不挡结束本轮 / 不挡 accept） |
+
+**映射到下文目标 schema**：薄表 ≈ 目标 `project_memory.summary` 的 **先行切片** + 独立 pin 键值表。G0-2 落地时：
+
+1. **保留** `project_last_summary` / `project_pins` 读写路径（或迁列为 `project_memory.summary` 时 dual-read 过渡，禁止静默丢数据）。  
+2. **新增** `user_profile` · `guide_sessions` / `guide_rounds` / `guide_utterances`；富字段（`open_tensions_json` · `last_brief_json` · `last_role_pack` · `signals_json`）可并入扩展表或 `project_memory` 宽表，**不得**在 pilotdeck 计划里另开 G 波次。  
+3. Guide 全量状态机、Brief schema、角色 Pack **只听本文件 §8 排期**；pilotdeck **不**强绑。
+
+下列 SQL 为 **目标形状**（G0+）；与 P2-2 已落地表并存时以「复用薄表 + 扩展」为准，勿当「从未建库」。
+
 ```sql
 -- 本机用户级（跨项目弱画像）
 CREATE TABLE IF NOT EXISTS user_profile (
@@ -446,8 +467,9 @@ materialize_plan → 既有 app::chat::save_plan 或直接写 plans/guide-*.md
 
 | 数据 | SoT |
 |------|-----|
-| 引导过程 / 轮次 / 发言 | `guide_*` SQLite |
-| 项目预判摘要 | `project_memory` |
+| 引导过程 / 轮次 / 发言 | `guide_*` SQLite（**未建** · 听 §8 G0） |
+| 项目预判摘要（薄 · **已落地**） | `project_last_summary` + `project_pins`（P2-2；Guide Brief 可复用） |
+| 项目预判 / Brief 富字段（目标） | `project_memory` 宽表或扩展列（G0-2+；接在薄表之上） |
 | 计划正文 | `plans/*.md` 文件 |
 | 拆分任务图 | `cco_split_*` SQLite |
 | 执行状态 | run 目录 / 既有 state |
@@ -477,14 +499,16 @@ materialize_plan → 既有 app::chat::save_plan 或直接写 plans/guide-*.md
 ## 8. 落地波次（建议 · 勾选真源）
 
 > 状态：☐ 待做 · ░ 进行中 · ✅ 完成  
-> **不**重开 A0–A5；可与 `ux-nondev-landing` 波次 B（写计划顺滑）衔接。
+> **不**重开 A0–A5；可与 `ux-nondev-landing` 波次 B（写计划顺滑）衔接。  
+> **排期主权在本文件**：全量 Guide 状态机 / Brief / 角色 Pack **只**认下列 G0–G4 勾选。  
+> pilotdeck **P2-2/P2-3** = 轻记忆薄切片 + 文档互链（已 ✅）；**禁止**在 pilotdeck 再开第二套 G 波次，也**禁止**把 G0-2/G1-5 因 P2-2 表存在而提前勾 ✅（见 §5.6.1）。
 
 ### 波次 G0 · 契约与空壳（0.5–1 d）
 
 | ID | 内容 | 状态 |
 |----|------|------|
 | G0-1 | Domain：`GuideBrief` · `RolePack` · `SessionMode` 类型 + 金样 JSON | ☐ |
-| G0-2 | SQLite schema：`user_profile` / `project_memory` / `guide_*` + store 读写 | ☐ |
+| G0-2 | SQLite schema：`user_profile` / 富 `project_memory` / `guide_*` + store 读写（**复用**已有 `project_last_summary` + `project_pins`，不平行双写） | ☐ |
 | G0-3 | `app::guide` 空用例 + Tauri/gateway 桩（list/start/get） | ☐ |
 | G0-4 | 本文 + docs L2 索引；PRODUCT「① 生成」加一句引导子相（不改五步序） | ☐ |
 
@@ -496,7 +520,7 @@ materialize_plan → 既有 app::chat::save_plan 或直接写 plans/guide-*.md
 | G1-2 | 槽位追问（coop）+ 自适应停 + slots 持久化 | ☐ |
 | G1-3 | `synthesize` → Brief 人话页（得/失/风险/未决） | ☐ |
 | G1-4 | `materialize_plan` → `plans/guide-*.md` + 跳转核对 | ☐ |
-| G1-5 | 项目预判条（读 `project_memory`） | ☐ |
+| G1-5 | 项目预判条（读 **已有** `project_last_summary` / pins；有富字段再叠 open_tensions） | ☐ |
 
 ### 波次 G2 · 角色卡 + 人闸轮次（2–3 d）
 
@@ -571,3 +595,4 @@ materialize_plan → 既有 app::chat::save_plan 或直接写 plans/guide-*.md
 | 日期 | 说明 |
 |------|------|
 | 2026-07-21 | 初稿：结合用户四段意图 · cco 现状 · 外部 MAD/Socratic/AutoGen/Genspark/Advisor 研究 · SQLite 记忆 · 波次 G0–G4 |
+| 2026-07-22 | **P2-3 互链**：§3.1/3.2 · §5.6.1 · §6 SoT · §8 序言 — 标明 pilotdeck P2-2 薄表可被 Guide Brief 复用；G0–G4 仍 ☐、无双轨勾选；全量 Guide 只听本文排期 |

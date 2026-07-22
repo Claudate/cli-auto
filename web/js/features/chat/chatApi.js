@@ -70,3 +70,12 @@ export function saveAttachment(args) {
 export function readPlanMd(project, plan) {
   return gateway.readPlanMd(project, plan);
 }
+
+/** P2-2: project light memory (last_summary + pins). */
+export function getProjectMemory(project) {
+  return gateway.projectMemoryGet(project);
+}
+
+export function getLastSummary(project) {
+  return gateway.projectMemoryLastSummary(project);
+}

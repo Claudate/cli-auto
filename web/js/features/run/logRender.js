@@ -48,7 +48,7 @@ export function renderTranscriptLine(e) {
   if (e.kind === "tool_result") {
     const short = (summary || title || "完成").slice(0, 280);
     return `<div class="tx-line role-result">
-      <div class="tx-role">tool✓</div>
+      <div class="tx-role">tool</div>
       <div class="tx-body">${short}</div>
     </div>`;
   }

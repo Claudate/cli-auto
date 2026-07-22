@@ -24,11 +24,11 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
 
       <div class="sidebar-section-head">
         <span class="section-label">我的项目</span>
-        <button id="btn-add-plus" class="icon-btn" type="button" title="添加项目">＋</button>
+        <button id="btn-add-plus" class="icon-btn" type="button" title="添加项目" aria-label="添加项目" data-icon="plus" data-icon-size="16"></button>
       </div>
 
       <div class="project-list" id="project-list">
-        <p class="muted empty-hint">尚未添加项目<br/>点 ＋ 添加</p>
+        <p class="muted empty-hint">尚未添加项目<br/>点侧栏 <span class="ico-hint" data-icon="plus" data-icon-size="14"></span> 添加</p>
       </div>
 
       <div class="sidebar-foot">
@@ -46,31 +46,26 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
         <div class="top-title">
           <h1 id="page-title">欢迎</h1>
           <div id="page-sub" class="muted sub"></div>
-          <!-- F1: 全局阶段条（写计划/拆分/执行/结果） -->
-          <div id="flow-strip-global" class="flow-strip-host flow-strip-global" aria-live="polite"></div>
+          <!-- shell-chrome A1: 顶栏阶段条已撤；节点保留供旧脚本 no-op 写 -->
+          <div id="flow-strip-global" class="flow-strip-host flow-strip-global" hidden aria-hidden="true"></div>
         </div>
         <div class="top-actions" id="top-actions">
-          <button class="btn ghost sm chat-top-btn" id="btn-open-chat" type="button" hidden title="与 AI 共建计划文档">聊天</button>
+          <button class="icon-btn chat-top-btn" id="btn-open-chat" type="button" hidden title="聊天" aria-label="聊天" data-icon="message-square" data-icon-size="16"></button>
           <button class="btn primary sm" id="btn-pp-analyze" type="button" hidden disabled>拆成步骤</button>
           <button class="btn ghost sm" id="btn-monitor-plan" type="button" hidden title="回到拆分台或执行进度">继续核对拆分</button>
-          <div id="split-plan-chip" class="split-plan-chip" hidden title="点击查看拆分结果">
-            <span class="split-plan-chip-label">拆分</span>
+          <div id="split-plan-chip" class="split-plan-chip" hidden title="查看拆分结果">
+            <span class="split-plan-chip-label">查看拆分结果</span>
             <strong id="split-plan-chip-name">—</strong>
             <span id="split-plan-chip-meta" class="muted">—</span>
           </div>
-          <!-- F5: 次要入口收进「更多」 -->
-          <details class="top-more" id="top-more">
-            <summary class="btn ghost sm top-more-sum">更多</summary>
-            <div class="top-more-menu" role="menu">
-              <button class="btn ghost sm" id="btn-plan-mgmt" type="button" hidden title="进入计划管理页">计划管理</button>
-              <button class="btn ghost sm" id="btn-plan-choose" type="button" hidden>选择计划</button>
-              <button type="button" class="linkish" id="btn-edit-plan" hidden title="仅暂停后、且未执行的任务可编辑">编辑任务</button>
-              <div id="budget-chip" class="budget-chip muted" hidden title="规划成本 · 执行成本">
-                <span id="budget-chip-text">—</span>
-              </div>
-              <button id="btn-refresh" class="btn ghost sm" type="button">刷新</button>
-            </div>
-          </details>
+          <!-- 直出顶栏按钮（不再收进「更多」） -->
+          <button class="icon-btn" id="btn-plan-mgmt" type="button" hidden title="管理计划文件" aria-label="管理计划文件" data-icon="list" data-icon-size="16"></button>
+          <button class="btn ghost sm" id="btn-plan-choose" type="button" hidden>选择计划</button>
+          <!-- A3: 顶栏「编辑任务」已撤；步骤编辑仍在拆分台详情 -->
+          <div id="budget-chip" class="budget-chip muted" hidden title="规划成本 · 执行成本">
+            <span id="budget-chip-text">—</span>
+          </div>
+          <button class="icon-btn" id="btn-refresh" type="button" title="刷新项目与运行状态" aria-label="刷新项目与运行状态" data-icon="refresh" data-icon-size="16"></button>
         </div>
       </header>
 
@@ -79,16 +74,18 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
         <div class="empty-state" id="welcome-empty">
           <p class="welcome-kicker muted">给 PM / 出海 / 非开发的本机任务控制台</p>
           <h2>写清计划 → 拆成步骤 → 并行推进 → 对照收口</h2>
-          <p class="muted">添加项目后和 AI 写计划，或选已有文档。默认会停在<strong>拆分台</strong>看清波次，再点「确认并开始」。</p>
+          <p class="muted">添加项目后和 AI 写计划，或选已有文档。默认会停在<strong>拆分台</strong>看清波次，再点「执行规划」。</p>
           <ol class="welcome-steps muted">
             <li>添加本机项目文件夹</li>
             <li>聊天写计划或从模板开始</li>
-            <li>点「拆成步骤」→ 看清波次 →「确认并开始」</li>
+            <li>点「拆成步骤」→ 看清波次 →「执行规划」</li>
           </ol>
           <div class="welcome-actions">
             <button class="btn primary" id="btn-welcome-add" type="button">添加项目文件夹</button>
             <button class="btn ghost" id="btn-welcome-help" type="button">查看帮助</button>
           </div>
+          <!-- 方案 C：首次可跳过 · 工作习惯四选一（非每次打开必选） -->
+          <div id="work-style-chooser" class="work-style-chooser" hidden></div>
           <!-- T1/T2: 模板冷启动（一键落盘 plans/；需先有选中项目） -->
           <div class="welcome-templates" id="welcome-templates">
             <p class="muted welcome-tpl-label">从模板开始（无项目时会先请你选工作文件夹）</p>
@@ -149,13 +146,15 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
 
           <!-- B0 / S8: planning phase — progress first, log collapsed -->
           <div id="plan-phase-planning" class="plan-phase" hidden>
-            <div id="flow-strip-planning" class="flow-strip-host" aria-live="polite"></div>
+            <!-- shell-chrome A1: 页内阶段条默认 hidden（顶栏条已撤） -->
+            <div id="flow-strip-planning" class="flow-strip-host" hidden aria-hidden="true"></div>
             <div class="plan-phase-head">
               <div class="planning-title-row">
                 <span class="spinner lg" aria-hidden="true"></span>
                 <div>
                   <h3>正在把计划拆成可执行步骤…</h3>
                   <p class="muted" id="planning-sub">先理解计划结构，再生成有依赖的工作步骤</p>
+                  <p class="err-text planning-fail-detail" id="planning-fail-detail" hidden></p>
                   <p class="flow-mode-badge-row" id="planning-mode-row" hidden>
                     <span class="flow-mode-badge" id="planning-mode-badge">—</span>
                     <span class="muted flow-mode-hint" id="planning-mode-hint"></span>
@@ -171,13 +170,14 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
               <div id="planner-log" class="detail-log planner-log log-console term-mode" aria-live="polite"></div>
             </details>
             <div class="plan-actions">
+              <button class="btn primary" id="btn-retry-planning" type="button" hidden>再拆一次</button>
               <button class="btn ghost" id="btn-cancel-planning" type="button">取消回计划</button>
             </div>
           </div>
 
           <!-- S1: 拆分台 — 波次时间线 · 步骤卡 · 详情 -->
           <div id="plan-phase-confirm" class="plan-phase plan-phase-split" hidden>
-            <div id="flow-strip-confirm" class="flow-strip-host" aria-live="polite"></div>
+            <div id="flow-strip-confirm" class="flow-strip-host" hidden aria-hidden="true"></div>
             <div class="plan-phase-head split-head">
               <div class="split-head-main">
                 <h3 id="confirm-title">拆分结果</h3>
@@ -202,21 +202,21 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                     </div>
                     <ul class="flow-critic-notes" id="confirm-critic-notes" hidden></ul>
                     <div class="flow-critic-actions" id="confirm-critic-actions" hidden>
-                      <button class="btn ghost sm" id="btn-enable-post-inspect" type="button" title="在设置中开启「拆分后附加：任务巡检」，并按当前计划重新拆分">
-                        开启巡检并重拆
+                      <button class="btn ghost sm" id="btn-enable-post-inspect" type="button" title="在设置中开启「拆分后附加：任务巡检」，并按当前计划重新规划">
+                        开启巡检并重新规划
                       </button>
-                      <button class="btn ghost sm" id="btn-enable-planner-critic" type="button" hidden title="在设置中开启智能第二跳校对，并按当前计划重新拆分">
-                        开启智能校对并重拆
+                      <button class="btn ghost sm" id="btn-enable-planner-critic" type="button" hidden title="在设置中开启智能第二跳校对，并按当前计划重新规划">
+                        开启智能校对并重新规划
                       </button>
                     </div>
                   </div>
                 </details>
               </div>
               <div class="plan-actions split-actions">
-                <!-- A3：主路径仅「重新拆分」+「确认并开始」；其余进调整 -->
-                <button class="btn ghost sm" id="btn-replan" type="button" title="重新拆分（保留你的修改）">重新拆分</button>
-                <button class="btn primary" id="btn-confirm-start" type="button">确认并开始</button>
-                <details class="split-more-actions" id="split-more-actions">
+                <!-- shell-chrome A2：第一屏仅「重新规划」+「执行规划」；调整… hidden 保 handler -->
+                <button class="btn ghost sm" id="btn-replan" type="button" title="按当前计划再拆一次；尽量保留你的修改">重新规划</button>
+                <button class="btn primary" id="btn-confirm-start" type="button" title="核对后开始执行（走确认开跑）">执行规划</button>
+                <details class="split-more-actions" id="split-more-actions" hidden>
                   <summary class="btn ghost sm">调整…</summary>
                   <div class="split-more-menu" role="menu">
                     <button class="btn ghost sm" id="btn-sanitize-deps" type="button" title="让可并行的步骤真正并行">让可并行的真正并行</button>
@@ -306,7 +306,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                 <button class="btn ghost sm" id="btn-ws-back-chat" type="button" hidden title="回聊天写下一份计划">再写一份</button>
                 <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
                 <button class="btn ghost sm" id="btn-open-monitor-window" type="button" hidden title="在系统级独立窗口打开监视（可拖到另一显示器）">独立监视窗</button>
-                <button class="icon-btn sm task-dash-toggle" id="btn-task-dash-toggle" type="button" title="折叠任务看板" aria-label="折叠任务看板" hidden>▾</button>
+                <button class="icon-btn sm task-dash-toggle" id="btn-task-dash-toggle" type="button" title="折叠任务看板" aria-label="折叠任务看板" hidden data-icon="chevron-down" data-icon-size="14"></button>
                 <!-- legacy hooks -->
                 <button id="btn-rerun" type="button" hidden>再跑一次</button>
                 <button id="btn-change-plan" type="button" hidden>换计划</button>
@@ -333,6 +333,13 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                   <p class="result-desk-honest muted" id="result-desk-honest" hidden></p>
                 </div>
               </div>
+              <!-- P2-1: plan acceptance checklist vs inspect (live.verification) -->
+              <details class="result-desk-verify" id="result-desk-verify" hidden>
+                <summary class="result-desk-verify-sum" id="result-desk-verify-sum">原计划要验收</summary>
+                <p class="result-desk-verify-note muted" id="result-desk-verify-note" hidden></p>
+                <ul class="result-desk-list result-desk-verify-list" id="result-desk-verify-list"></ul>
+                <ul class="result-desk-list result-desk-verify-tasks" id="result-desk-verify-tasks" hidden></ul>
+              </details>
             </div>
             <div id="task-strip-body" class="task-dash-body">
               <div id="task-strip-list" class="task-dash-grid"></div>
@@ -358,16 +365,12 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
             <div class="completion-actions"></div>
           </div>
 
-          <!-- Multi-window execution board（次级 · 日志默认折叠） -->
+          <!-- Multi-window CLI 运行端（运行中始终可见；卡内详细日志可按需展开） -->
           <div id="monitor" class="monitor board-mode logs-secondary" hidden>
-            <div id="flow-strip-running" class="flow-strip-host" aria-live="polite"></div>
-            <details class="monitor-logs-fold" id="monitor-logs-fold">
-              <summary class="monitor-logs-summary">
-                <span class="section-label" id="flow-board-label">步骤日志（按需展开）</span>
-                <span class="muted monitor-logs-hint">默认收起 · 点步骤卡也可打开</span>
-              </summary>
+            <div id="flow-strip-running" class="flow-strip-host" hidden aria-hidden="true"></div>
             <div class="board-toolbar">
-              <div class="row gap">
+              <div class="row gap board-toolbar-main">
+                <span class="section-label" id="flow-board-label">运行端</span>
                 <div class="cli-status-filters" id="cli-status-filters" role="group" aria-label="按状态过滤">
                   <button type="button" class="filter-chip active" data-cli-filter="all" title="显示全部">全部</button>
                   <button type="button" class="filter-chip" data-cli-filter="run" title="仅进行中">进行中</button>
@@ -399,7 +402,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                   </div>
                   <button type="button" class="btn ghost sm" id="btn-export-log-md" title="导出当前看板日志为 Markdown">导出 MD</button>
                   <button type="button" class="btn ghost sm" id="btn-cli-h-auto" title="恢复自适应高度">自适应高度</button>
-                  <button type="button" class="cli-h-grip" id="cli-h-grip" title="按住上下拖动调整看板高度">⇅ 高度</button>
+                  <button type="button" class="cli-h-grip" id="cli-h-grip" title="按住上下拖动调整看板高度"><span data-icon="move-vertical" data-icon-size="14"></span> 高度</button>
                 </div>
               </details>
             </div>
@@ -415,7 +418,6 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
             <div id="cli-shell" class="cli-shell">
               <div id="cli-board" class="cli-board" aria-live="polite"></div>
             </div>
-            </details>
             <!-- offscreen legacy hooks for optional copy/stop APIs -->
             <div id="task-list-pane" hidden></div>
             <div id="task-list" hidden></div>
@@ -430,7 +432,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
           </div>
 
           <div id="cli-empty" class="empty-state soft" hidden>
-            <p class="muted">选一份计划 →「拆成步骤」→ 核对波次后「确认并开始」。</p>
+            <p class="muted">选一份计划 →「拆成步骤」→ 核对波次后「执行规划」。</p>
             <p class="muted" style="margin-top:.5rem">
               没有计划？
               <button type="button" class="linkish" id="btn-empty-to-chat">和 AI 聊聊先写一份</button>
@@ -457,11 +459,11 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                       <select id="chat-session-select" class="chat-session-select" aria-label="切换聊天会话">
                         <option value="default">默认</option>
                       </select>
-                      <button type="button" class="btn ghost sm" id="btn-chat-session-new" title="新建会话">＋</button>
-                      <button type="button" class="btn ghost sm" id="btn-chat-session-del" title="删除当前会话">删</button>
+                      <button type="button" class="icon-btn sm" id="btn-chat-session-new" title="新建会话" aria-label="新建会话" data-icon="plus" data-icon-size="14"></button>
+                      <button type="button" class="icon-btn sm" id="btn-chat-session-del" title="删除当前会话" aria-label="删除当前会话" data-icon="trash" data-icon-size="14"></button>
                     </div>
                   </details>
-                  <button type="button" class="icon-btn sm chat-rail-toggle" id="btn-chat-rail-toggle" title="展开/收起右侧计划列表（进阶）" aria-label="展开右侧计划列表" aria-pressed="false">☰</button>
+                  <button type="button" class="icon-btn sm chat-rail-toggle" id="btn-chat-rail-toggle" title="展开/收起右侧计划列表（进阶）" aria-label="展开右侧计划列表" aria-pressed="false" data-icon="panel-right" data-icon-size="14"></button>
                 </div>
               </div>
             </div>
@@ -484,12 +486,12 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
             </div>
             <div id="chat-attach-preview" class="chat-attach-preview" hidden></div>
             <div class="chat-composer">
-              <input type="file" id="chat-file-input" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden />
-              <button class="btn ghost sm" id="btn-chat-attach" type="button" title="上传图片：点击选择 / 拖入 / Ctrl+V 粘贴">📎</button>
-              <textarea id="chat-input" rows="2" placeholder="说清目标与约束… 可附图（点击📎 / 拖入 / Ctrl+V）" ></textarea>
+              <input type="file" id="chat-file-input" accept="image/*,.pdf,.md,.markdown,.txt,.csv,.json,.yaml,.yml,.toml,.xml,.html,.htm,.css,.rs,.ts,.tsx,.js,.jsx,.py,.go,.java,.c,.h,.cpp,.hpp,.cs,.sql,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.log" multiple hidden />
+              <button class="btn ghost sm icon-only" id="btn-chat-attach" type="button" title="上传附件：图片 / PDF / 文档 / 代码（点击选择 / 拖入 / Ctrl+V）" aria-label="上传附件" data-icon="paperclip" data-icon-size="16"></button>
+              <textarea id="chat-input" rows="2" placeholder="说清目标与约束… 可附文件（点击别针 / 拖入 / Ctrl+V）" ></textarea>
               <button class="btn primary" id="btn-chat-send" type="button">发送</button>
             </div>
-            <p class="chat-composer-hint">Enter 发送 · Shift+Enter 换行 · 附图：点击📎 / 拖入 / Ctrl+V 粘贴 · 点图可放大</p>
+            <p class="chat-composer-hint">Enter 发送 · Shift+Enter 换行 · 附件：图片 / PDF / md / 文档 / 代码 · 点图可放大</p>
           </div>
           <!-- 聊天侧栏：仅 icon 展开；完整管理进 page-plans -->
           <aside id="plan-rail" class="plan-rail" aria-label="本项目计划快览" hidden>
@@ -497,7 +499,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
               <h3 class="plan-rail-title">计划快览</h3>
               <div class="plan-rail-head-actions">
                 <button class="btn ghost sm" id="btn-plan-rail-refresh" type="button" title="刷新列表">刷新</button>
-                <button class="btn ghost sm" id="btn-plan-rail-close" type="button" title="收起列表">✕</button>
+                <button class="icon-btn sm" id="btn-plan-rail-close" type="button" title="收起列表" aria-label="收起列表" data-icon="x" data-icon-size="14"></button>
               </div>
             </div>
             <p class="plan-rail-hint muted">单击选中 · 顶栏「计划管理」细看 · 就绪条可直接执行 · 最新高亮</p>
@@ -545,7 +547,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
           <div class="plans-mgmt-body">
             <div class="plans-mgmt-list-col">
               <h3 class="plans-mgmt-col-title">计划列表</h3>
-              <p class="muted plans-mgmt-hint">选一份计划 →「拆成步骤」；需要时再编辑正文</p>
+              <p class="muted plans-mgmt-hint">选一份计划 →「拆成步骤」；已拆分可「查看拆分结果」</p>
               <div id="plans-mgmt-list" class="plans-mgmt-list"></div>
               <p id="plans-mgmt-empty" class="plans-mgmt-empty muted" hidden>暂无计划 · 可从聊天生成，或点上方加载文件</p>
             </div>
@@ -564,6 +566,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                 <pre id="plans-mgmt-detail-body" class="plans-mgmt-detail-body"></pre>
                 <div class="plans-mgmt-detail-foot">
                   <button class="btn ghost sm" id="btn-plans-preview" type="button">编辑文档</button>
+                  <button class="btn ghost sm" id="btn-plans-view-split" type="button" hidden title="打开上次拆分的步骤列表">查看拆分结果</button>
                   <button class="btn primary sm" id="btn-plans-assign" type="button">拆成步骤</button>
                 </div>
               </div>
@@ -583,111 +586,208 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
       </section>
 
       <section id="page-settings" class="page">
-        <div class="panel">
-          <div class="row gap" style="margin-bottom:.75rem">
-            <button class="btn" id="btn-settings-save" type="button">保存</button>
-            <button class="btn ghost" id="btn-settings-back" type="button">返回</button>
-          </div>
-          <div class="settings-grid">
-            <!-- F6 分组：开始与拆分 · 卡住与重试 · 系统收尾 · 外观 -->
-            <div class="settings-group">
-              <h3 class="settings-group-title">开始与拆分</h3>
-              <p class="field-hint" style="margin:0 0 .5rem">
-                主路径默认：一点「拆成步骤」即开拆，<strong>拆完停在拆分台</strong>核对后再开始。
-                通道、自动开跑、选项层属高级。
-              </p>
-              <label class="field field-check" title="A2：勾选后「拆成步骤」先弹出通道/并发等选项">
-                <span>拆成步骤前先确认选项</span>
-                <input id="s-chat-assign-direct" type="checkbox" />
-                <span class="field-hint">默认不勾。勾选后每次先选通道/并发再拆（仍经确认台开跑，不会旁路）。</span>
-              </label>
-              <label class="field">默认执行通道
-                <select id="s-default-provider">
-                  <option value="claude">默认通道</option>
-                  <option value="codex">备用通道</option>
-                  <option value="fake">演练模式（不调外部）</option>
-                </select>
-                <span class="field-hint">主路径默认不展示通道名；调试可用演练模式。</span>
-              </label>
-              <label class="field">运行方式
-                <select id="s-default-mode">
-                  <option value="0">前台跟进（推荐）</option>
-                  <option value="1">后台运行</option>
-                  <option value="2">自动选择</option>
-                </select>
-              </label>
-              <label class="field">最多同时进行几步
-                <input id="s-max-parallel" type="number" min="1" max="32" step="1" placeholder="2" />
-              </label>
-              <label class="field field-check" title="规则校对后再跑智能第二跳；默认关">
-                <span>智能第二跳校对</span>
-                <input id="s-planner-critic" type="checkbox" />
-                <span class="field-hint" id="s-planner-critic-note">
-                  默认关闭。开启后规则校对后再请 AI 扫假依赖（也可 CCO_PLANNER_CRITIC=1）。失败保留规则结果。
+        <div class="settings-shell">
+          <header class="settings-header">
+            <p class="settings-lead">
+              一点「拆成步骤」即开拆，拆完停在拆分台核对后点「执行规划」。多数情况不用改。
+            </p>
+            <div class="settings-header-actions">
+              <span id="s-save-status" class="save-status" hidden></span>
+              <button class="btn ghost" id="btn-settings-back" type="button">返回</button>
+              <button class="btn primary" id="btn-settings-save" type="button">保存</button>
+            </div>
+          </header>
+
+          <div class="settings-stack">
+            <section class="settings-group" aria-labelledby="sg-common">
+              <h3 class="settings-group-title" id="sg-common">常用</h3>
+              <label class="settings-row">
+                <span class="settings-row-text">
+                  <span class="settings-label">最多同时进行几步</span>
+                  <span class="field-hint">建议 2–4</span>
                 </span>
+                <input id="s-max-parallel" class="settings-num" type="number" min="1" max="32" step="1" placeholder="2" />
               </label>
-            </div>
-            <div class="settings-group">
-              <h3 class="settings-group-title">卡住与重试</h3>
-              <label class="field" title="同一执行方式最多再试几次（不含首次；0 = 不重试）">卡住/失败后再试几次
-                <input id="s-retry-max" type="number" min="0" max="10" step="1" placeholder="2" />
-                <span class="field-hint">失败或卡住后同方式最多再试几次（不含首次；0 = 不重试）。上限 10。</span>
+              <label class="settings-row" title="主路径状态旁短旁白">
+                <span class="settings-row-text">
+                  <span class="settings-label">趣味流程说明</span>
+                  <span class="field-hint">拆分/执行时的一句旁白</span>
+                </span>
+                <input id="s-flow-fun" type="checkbox" checked />
               </label>
-              <label class="field" title="多久没新日志算卡住（秒）">多久没新进展算卡住（秒）
-                <input id="s-stall-secs" type="number" min="30" max="7200" step="30" placeholder="180" />
-                <span class="field-hint">默认 180（3 分钟）。到点停掉并按上面次数重试。</span>
-              </label>
-              <label class="field field-check" title="同方式重试尽后是否换通道">
-                <span>卡住后换一种执行方式</span>
-                <input id="s-failover-enabled" type="checkbox" checked />
-                <span class="field-hint" id="s-failover-order-note">默认与备用通道间切换；演练不参与。关闭则只同方式重试。</span>
-              </label>
-            </div>
-            <div class="settings-group">
-              <h3 class="settings-group-title">系统收尾</h3>
-              <p class="field-hint" id="s-post-tasks-note" style="margin:0 0 .5rem">
-                不参与 AI 拆解；在拆分末尾追加为「可选」。<strong>默认总开关关闭</strong>；开启后拆分台上默认勾选（仍可取消）。
-              </p>
-              <label class="field field-check" title="开启后每次拆分追加「任务巡检」">
-                <span>拆分后附加：任务巡检</span>
-                <input id="s-post-inspect" type="checkbox" />
-                <span class="field-hint">对照计划写完成/遗漏；业务代码只读。</span>
-              </label>
-              <label class="field field-check" title="开启后每次拆分追加「代码提交 Push」">
-                <span>拆分后附加：代码提交 Push</span>
-                <input id="s-post-git-push" type="checkbox" />
-                <span class="field-hint">会附带巡检门禁；仅通过后才 commit + push；禁止 force push。</span>
-              </label>
-              <label class="field field-check" title="开启后每次拆分追加「自动开 PR」（需本机 gh 已登录）">
-                <span>拆分后附加：自动开 PR</span>
-                <input id="s-post-open-pr" type="checkbox" />
-                <span class="field-hint">默认关。会附带巡检+Push；用本机 <code>gh pr create</code>；禁止 force-push / 自动 merge。需已登录 GitHub CLI。</span>
-              </label>
-            </div>
-            <div class="settings-group">
-              <h3 class="settings-group-title">外观与聊天</h3>
-              <label class="field">状态刷新间隔（秒）
-                <input id="s-poll-interval" type="number" min="1" max="60" step="1" placeholder="5" />
-                <span class="field-hint">界面多久问一次进度。建议 2–5 秒。</span>
-              </label>
-              <label class="field">日志字号
-                <select id="s-log-font">
-                  <option value="12">12px（紧凑）</option>
-                  <option value="14" selected>14px（推荐）</option>
-                  <option value="16">16px（大）</option>
+              <label class="settings-row">
+                <span class="settings-row-text">
+                  <span class="settings-label">日志字号</span>
+                </span>
+                <select id="s-log-font" class="settings-select">
+                  <option value="12">紧凑</option>
+                  <option value="14" selected>推荐</option>
+                  <option value="16">大</option>
                 </select>
               </label>
-              <label class="field field-check" title="主路径状态旁短旁白">
-                <span>趣味流程说明</span>
-                <input id="s-flow-fun" type="checkbox" checked />
-                <span class="field-hint">拆分/执行时的一句旁白（可关）。</span>
-              </label>
-              <p class="field-hint" style="margin:.5rem 0 0">
-                聊天记录约保留 <strong>2 天</strong>。附图：png/jpeg/webp/gif，单张 ≤5MB，每条最多 4 张。
+            </section>
+
+            <section class="settings-group" aria-labelledby="sg-post">
+              <h3 class="settings-group-title" id="sg-post">拆分后附加</h3>
+              <p class="settings-group-note field-hint" id="s-post-tasks-note">
+                可选步骤，默认关；开启后在拆分台仍可取消。
               </p>
-            </div>
+              <label class="settings-row" title="开启后每次拆分追加「任务巡检」">
+                <span class="settings-row-text">
+                  <span class="settings-label">任务巡检</span>
+                  <span class="field-hint">对照计划写完成/遗漏</span>
+                </span>
+                <input id="s-post-inspect" type="checkbox" />
+              </label>
+              <label class="settings-row" title="开启后每次拆分追加「代码提交 Push」">
+                <span class="settings-row-text">
+                  <span class="settings-label">代码提交 Push</span>
+                  <span class="field-hint">巡检通过后才 commit + push</span>
+                </span>
+                <input id="s-post-git-push" type="checkbox" />
+              </label>
+              <label class="settings-row" title="开启后每次拆分追加「自动开 PR」（需本机 gh 已登录）">
+                <span class="settings-row-text">
+                  <span class="settings-label">自动开 PR</span>
+                  <span class="field-hint">需 GitHub CLI 已登录</span>
+                </span>
+                <input id="s-post-open-pr" type="checkbox" />
+              </label>
+            </section>
+
+            <details class="settings-advanced">
+              <summary>高级</summary>
+              <div class="settings-advanced-body">
+                <section class="settings-group" aria-labelledby="sg-exec">
+                  <h3 class="settings-group-title" id="sg-exec">执行与拆分</h3>
+                  <label class="settings-row" title="勾选后「拆成步骤」先弹出通道/并发等选项">
+                    <span class="settings-row-text">
+                      <span class="settings-label">拆成步骤前先确认选项</span>
+                      <span class="field-hint">默认关；勾选后每次先选通道/并发</span>
+                    </span>
+                    <input id="s-chat-assign-direct" type="checkbox" />
+                  </label>
+                  <label class="settings-row" title="影响说明深浅与建议并行；不挡主路径；可随时改">
+                    <span class="settings-row-text">
+                      <span class="settings-label">我更常拿 cco 干什么</span>
+                      <span class="field-hint">可选；影响默认拆法与模板排序</span>
+                    </span>
+                    <select id="s-work-style" class="settings-select">
+                      <option value="">通用（与「写需求 / 管进度」相同）</option>
+                      <option value="pm">写需求 / 管进度</option>
+                      <option value="gtm">出海 / 运营 / 落地页</option>
+                      <option value="semi">会看一点实现 · 对齐验收</option>
+                      <option value="eng">改代码 / 工程落地</option>
+                    </select>
+                  </label>
+                  <label class="settings-row">
+                    <span class="settings-row-text">
+                      <span class="settings-label">默认执行通道</span>
+                    </span>
+                    <select id="s-default-provider" class="settings-select">
+                      <option value="claude">默认通道</option>
+                      <option value="codex">备用通道</option>
+                      <option value="fake">演练模式</option>
+                    </select>
+                  </label>
+                  <label class="settings-row">
+                    <span class="settings-row-text">
+                      <span class="settings-label">运行方式</span>
+                    </span>
+                    <select id="s-default-mode" class="settings-select">
+                      <option value="0">前台跟进</option>
+                      <option value="1">后台运行</option>
+                      <option value="2">自动选择</option>
+                    </select>
+                  </label>
+                  <label class="settings-row" title="规则校对后再跑智能第二跳；默认关">
+                    <span class="settings-row-text">
+                      <span class="settings-label">智能第二跳校对</span>
+                      <span class="field-hint" id="s-planner-critic-note">默认关</span>
+                    </span>
+                    <input id="s-planner-critic" type="checkbox" />
+                  </label>
+                </section>
+
+                <!-- shell-chrome A2：拆分台「调整…」退出第一屏后，能力从这里进 -->
+                <section class="settings-group" aria-labelledby="sg-split-tools">
+                  <h3 class="settings-group-title" id="sg-split-tools">拆分台工具</h3>
+                  <p class="settings-group-note field-hint">
+                    第一屏只保留「重新规划 / 执行规划」。下列能力需已在拆分台有结果；运行中请先停止。
+                  </p>
+                  <div class="settings-tool-row">
+                    <button class="btn ghost sm" id="btn-settings-sanitize-deps" type="button" title="让可并行的步骤真正并行（与拆分台原「调整…」相同）">
+                      让可并行的真正并行
+                    </button>
+                    <button class="btn ghost sm" id="btn-settings-split-writeback" type="button" title="把步骤标题追加到计划文末（不覆盖正文）">
+                      写回步骤摘要
+                    </button>
+                  </div>
+                </section>
+
+                <section class="settings-group" aria-labelledby="sg-retry">
+                  <h3 class="settings-group-title" id="sg-retry">卡住与重试</h3>
+                  <label class="settings-row" title="同一执行方式最多再试几次（不含首次；0 = 不重试）">
+                    <span class="settings-row-text">
+                      <span class="settings-label">失败后再试几次</span>
+                      <span class="field-hint">不含首次，0 = 不重试</span>
+                    </span>
+                    <input id="s-retry-max" class="settings-num" type="number" min="0" max="10" step="1" placeholder="2" />
+                  </label>
+                  <label class="settings-row" title="多久没新日志算卡住（秒）">
+                    <span class="settings-row-text">
+                      <span class="settings-label">卡住判定</span>
+                      <span class="field-hint">秒 · 默认 180</span>
+                    </span>
+                    <input id="s-stall-secs" class="settings-num" type="number" min="30" max="7200" step="30" placeholder="180" />
+                  </label>
+                  <label class="settings-row" title="同方式重试尽后是否换通道">
+                    <span class="settings-row-text">
+                      <span class="settings-label">卡住后换执行方式</span>
+                      <span class="field-hint" id="s-failover-order-note">默认与备用通道切换</span>
+                    </span>
+                    <input id="s-failover-enabled" type="checkbox" checked />
+                  </label>
+                </section>
+
+                <section class="settings-group" aria-labelledby="sg-ui">
+                  <h3 class="settings-group-title" id="sg-ui">界面</h3>
+                  <label class="settings-row">
+                    <span class="settings-row-text">
+                      <span class="settings-label">状态刷新间隔</span>
+                      <span class="field-hint">秒 · 建议 2–5</span>
+                    </span>
+                    <input id="s-poll-interval" class="settings-num" type="number" min="1" max="60" step="1" placeholder="5" />
+                  </label>
+                  <p class="settings-group-note field-hint">
+                    聊天约保留 2 天；附图 ≤5MB，每条最多 4 张。
+                  </p>
+                </section>
+
+                <section class="settings-group" id="s-pins-group" aria-labelledby="sg-pins">
+                  <h3 class="settings-group-title" id="sg-pins">项目记忆</h3>
+                  <p class="settings-group-note field-hint">
+                    每项目最多 3 条 pin，仅作上下文；需先选中左侧项目。
+                  </p>
+                  <div id="s-pins-list" class="pins-list muted" aria-live="polite">
+                    <p class="field-hint" id="s-pins-empty">暂无 pin</p>
+                  </div>
+                  <div class="pins-add-row">
+                    <label class="pins-field">
+                      <span class="settings-label">键</span>
+                      <input id="s-pin-key" type="text" maxlength="64" placeholder="stack" />
+                    </label>
+                    <label class="pins-field pins-field-wide">
+                      <span class="settings-label">值</span>
+                      <input id="s-pin-value" type="text" maxlength="240" placeholder="rust + tauri" />
+                    </label>
+                    <button class="btn ghost sm" id="btn-pin-add" type="button">添加</button>
+                  </div>
+                  <p class="field-hint" id="s-pins-status" hidden></p>
+                </section>
+              </div>
+            </details>
           </div>
-          <div id="s-save-status" class="save-status" hidden></div>
         </div>
       </section>
 
@@ -698,18 +798,20 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
           </div>
           <h2>三步上手</h2>
           <ol>
-            <li>点侧栏 <strong>＋</strong> 添加本机工作文件夹</li>
+            <li>点侧栏 <strong>添加</strong> 本机工作文件夹</li>
             <li>在<strong>聊天</strong>里说清目标（或点欢迎页模板），生成计划</li>
-            <li>点<strong>拆成步骤</strong> → 看清波次 → 点<strong>确认并开始</strong></li>
+            <li>点<strong>拆成步骤</strong> → 看清波次 → 点<strong>执行规划</strong></li>
           </ol>
-          <p class="muted">默认会停在拆分台，不会自动开跑。可选步骤需你勾选才会执行。</p>
+          <p class="muted">默认会停在拆分台，不会自动开跑。可选步骤需你勾选才会执行。拆分台默认用<strong>智能拆分</strong>；来源会在拆分台标明。欢迎页可跳过选择「我更常拿 cco 干什么」，也可在设置里改。点左侧步骤看完整说明；可编辑后再执行规划。</p>
           <h3>计划是什么？</h3>
           <p>计划 = 用大白话写的「要干什么」。优先 <code>.md</code> 文档；也可先聊天共建，再拆成步骤并行推进。</p>
           <h3>常见操作</h3>
           <ul>
-            <li><strong>重新拆分</strong>：保留你在拆分台上的修改，再拆一次</li>
+            <li><strong>重新规划</strong>：保留你在拆分台上的修改，再拆一次</li>
+            <li><strong>执行规划</strong>：核对后开跑（唯一业务开跑）</li>
             <li><strong>全部停止</strong>：结束当前运行中的全部任务</li>
             <li><strong>继续未完成任务</strong>：暂停/失败后尝试接着做</li>
+            <li><strong>侧栏项目 ×</strong>：从 cco 列表移除（不删电脑文件夹）</li>
             <li><strong>设置 · 环境检查</strong>：通道、并发、本机环境（进阶）</li>
           </ul>
           <details class="help-advanced">
@@ -720,10 +822,10 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
 bin = "/Users/你/.local/bin/claude"</pre>
             <h3 id="help-rs-checklist">拆分台借鉴清单</h3>
             <ul class="help-rs-list">
-              <li><strong>确认并开始</strong> — 唯一业务开跑（人闸）</li>
-              <li>步骤标题像待办；卡片「等待：…」用人话写依赖</li>
-              <li>计划文件真源 <code>plans/*.md</code>；可「调整…」里写回步骤摘要</li>
-              <li>人改优先 — 重新拆分会尽量保留你的修改</li>
+              <li><strong>执行规划</strong> — 唯一业务开跑（人闸 · confirm_start）</li>
+              <li>步骤标题像待办；卡片「等：… / 可马上开始」；右栏默认「要做什么 · 怎样算做完」</li>
+              <li>计划文件真源 <code>plans/*.md</code>；高级可写回步骤摘要</li>
+              <li>人改优先 — 重新规划会尽量保留你的修改</li>
             </ul>
           </details>
           <p class="muted">冷启动：欢迎页模板「出海落地页 · 通用需求大纲」→ 落盘 → 可改 → 拆成步骤。</p>
@@ -758,15 +860,15 @@ bin = "/Users/你/.local/bin/claude"</pre>
           <div id="chooser-list" class="plan-list chooser-list"></div>
           <div class="chooser-options">
             <button type="button" class="chooser-options-toggle muted" id="btn-chooser-options-toggle" aria-expanded="false">
-              更多选项 ▸
+              更多选项 <span data-icon="chevron-right" data-icon-size="14"></span>
             </button>
             <div class="chooser-options-title" hidden>拆分选项</div>
             <div class="grid-2 chooser-options-grid" id="chooser-options-grid" hidden>
               <label class="field">
                 <span>规划方式</span>
                 <select id="pp-plan-mode">
-                  <option value="fast" selected>快速拆分（本地，推荐）</option>
-                  <option value="ai">AI 智能拆分（较慢）</option>
+                  <option value="ai" selected>智能拆分（推荐 · 会思考依赖与并行）</option>
+                  <option value="fast">快速拆分（本地规则 · 不等模型）</option>
                   <option value="parse">跳过规划（直接解析）</option>
                   <option value="fake">模拟拆分</option>
                 </select>
@@ -815,7 +917,7 @@ bin = "/Users/你/.local/bin/claude"</pre>
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-head">
         <h2 id="modal-title">添加项目</h2>
-        <button type="button" class="icon-btn" id="modal-close" title="关闭">×</button>
+        <button type="button" class="icon-btn" id="modal-close" title="关闭" aria-label="关闭" data-icon="x" data-icon-size="16"></button>
       </div>
       <p class="muted modal-hint">选择本机项目目录，加入左侧「我的项目」。</p>
       <label class="field">项目路径
@@ -843,7 +945,7 @@ bin = "/Users/你/.local/bin/claude"</pre>
           <h2 id="plan-full-title">计划全文</h2>
           <p id="plan-full-path" class="muted plan-full-path">—</p>
         </div>
-        <button type="button" class="icon-btn" id="btn-plan-full-close" title="关闭">×</button>
+        <button type="button" class="icon-btn" id="btn-plan-full-close" title="关闭" aria-label="关闭" data-icon="x" data-icon-size="16"></button>
       </div>
       <div id="plan-full-badge-row" class="plan-full-badge-row">
         <span id="plan-full-status-badge" class="plan-rail-badge plan-rail-badge-pending">未执行</span>
@@ -888,7 +990,7 @@ bin = "/Users/你/.local/bin/claude"</pre>
   <div id="img-lightbox" class="modal img-lightbox" hidden>
     <div class="modal-backdrop" id="img-lightbox-backdrop"></div>
     <div class="img-lightbox-card" role="dialog" aria-modal="true" aria-label="图片预览">
-      <button type="button" class="icon-btn img-lightbox-close" id="btn-img-lightbox-close" title="关闭">×</button>
+      <button type="button" class="icon-btn img-lightbox-close" id="btn-img-lightbox-close" title="关闭" aria-label="关闭" data-icon="x" data-icon-size="16"></button>
       <img id="img-lightbox-img" alt="预览" />
       <p id="img-lightbox-caption" class="muted img-lightbox-caption"></p>
     </div>

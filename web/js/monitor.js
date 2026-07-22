@@ -62,6 +62,7 @@ function renderWorkspace() {
   });
 }
 
+/** Legacy: 整板 details 已移除；运行端始终可见。保留名供 facade 调用。 */
 function syncMonitorLogsFold() {
   if (window.ccoRun?.view?.syncLogsFold) {
     try {
@@ -70,18 +71,6 @@ function syncMonitorLogsFold() {
       console.error("[syncMonitorLogsFold] ccoRun", e);
     }
   }
-  const fold = $("#monitor-logs-fold");
-  if (!fold) return;
-  if (fold.dataset.bound !== "1") {
-    fold.dataset.bound = "1";
-    fold.addEventListener("toggle", () => {
-      state.monitorLogsOpen = !!fold.open;
-      try {
-        localStorage.setItem("cco.monitorLogsOpen", fold.open ? "1" : "0");
-      } catch (_) {}
-    });
-  }
-  fold.open = !!state.monitorLogsOpen;
 }
 
 /** Classic name for bindUi; paint is ccoRun only. */

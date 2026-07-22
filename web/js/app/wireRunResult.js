@@ -157,7 +157,13 @@ export function wireRunResult(deps) {
       const id = live?.run_id || null;
       if (!id || id === lastGoResultRunId) return;
       const s = legacyState();
-      if (s?.phase === "planning" || s?.phase === "confirm") return;
+      if (
+          s?.phase === "planning" ||
+          s?.phase === "confirm" ||
+          s?.phase === "plan_failed"
+        ) {
+          return;
+        }
       lastGoResultRunId = id;
       goShellResult();
     },

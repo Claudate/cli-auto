@@ -26,6 +26,9 @@ pub mod run;
 /// Chat / plan-authoring surface (A1-6/A1-7); IO via `services/chat`; pure in `domain/chat`.
 pub mod chat;
 
+/// Project light memory (P2-2): last_summary + pins ≤3; prompt context only.
+pub mod memory;
+
 /// A0 baseline marker.
 pub const A0_BASELINE: &str = "app-a0";
 

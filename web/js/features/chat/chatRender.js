@@ -34,6 +34,39 @@ export function fillChatExample(text) {
   input.focus();
 }
 
+/**
+ * P2-2: one-line last_summary banner for author empty state.
+ * @param {string|null|undefined} text
+ */
+export function renderLastSummaryBanner(text) {
+  const list = $("#chat-messages");
+  if (!list) return;
+  const existing = list.querySelector(".chat-last-summary");
+  if (existing) existing.remove();
+  const t = String(text || "").trim();
+  if (!t) return;
+  // Only show on empty author state (no messages).
+  ensureChatState();
+  const msgs = state.chatSession.messages || [];
+  if (msgs.length || state.chatBusy) return;
+  const short = t.length > 120 ? t.slice(0, 119) + "…" : t;
+  const bar = document.createElement("div");
+  bar.className = "chat-last-summary";
+  bar.setAttribute("role", "status");
+  bar.innerHTML =
+    `<span class="chat-last-summary-text">上次：${chatEsc(short)}</span>` +
+    `<span class="chat-last-summary-actions">` +
+    `<button type="button" class="linkish" data-last-summary="reuse" title="把上次摘要填入输入框">沿用</button>` +
+    `<button type="button" class="linkish muted" data-last-summary="ignore" title="本会话不再提示">忽略</button>` +
+    `</span>`;
+  const empty = list.querySelector(".chat-empty");
+  if (empty) {
+    empty.insertBefore(bar, empty.firstChild);
+  } else {
+    list.insertBefore(bar, list.firstChild);
+  }
+}
+
 export function renderChatMessages() {
   const list = $("#chat-messages");
   if (!list) return;
@@ -45,6 +78,13 @@ export function renderChatMessages() {
       typeof planTemplateChatEmptyHtml === "function"
         ? planTemplateChatEmptyHtml()
         : `<div class="chat-empty muted"><p>用自然语言说明你要做什么，保存后再点「拆成步骤」。</p></div>`;
+    // P2-2: last_summary one-liner (async filled by openChat / load memory)
+    const ignored =
+      state.selectedPath &&
+      localStorage.getItem(`cco.ignoreLastSummary:${state.selectedPath}`) === "1";
+    if (!ignored && state.chatLastSummary) {
+      renderLastSummaryBanner(state.chatLastSummary);
+    }
     return;
   }
   // Only the last assistant message's plan card gets save/execute CTAs
@@ -64,15 +104,24 @@ export function renderChatMessages() {
         ? `<div class="chat-msg-atts">${atts
             .map((a) => {
               const src = a._preview || "";
-              const name = chatEsc(a.name || a.path || "图");
-              if (src) {
+              const name = chatEsc(a.name || a.path || "附件");
+              const mime = String(a.mime || "").toLowerCase();
+              const isImg =
+                !!src ||
+                mime.startsWith("image/") ||
+                /\.(png|jpe?g|webp|gif|svg)$/i.test(a.name || a.path || "");
+              if (isImg && src) {
                 return (
                   `<div class="chat-msg-att">` +
                   `<img class="chat-img-zoomable" src="${src}" alt="${name}" data-img-src="${chatEsc(src)}" data-img-name="${name}" title="点击放大" />` +
                   `<span>${name}</span></div>`
                 );
               }
-              return `<div class="chat-msg-att chat-msg-att-path" title="${chatEsc(a.path || "")}">📎 ${name}</div>`;
+              const clip =
+                typeof window.ccoIcon === "function"
+                  ? window.ccoIcon(isImg ? "paperclip" : "file", { size: 12 })
+                  : "📄";
+              return `<div class="chat-msg-att chat-msg-att-path" title="${chatEsc(a.path || "")}">${clip} ${name}</div>`;
             })
             .join("")}</div>`
         : "";
@@ -180,7 +229,7 @@ export function renderChatPage() {
       ? "请先在左侧选择项目"
       : state.chatBusy
         ? "AI 正在回复，可先写下一条…"
-        : "说清目标与约束；可附图；满意后让 AI 生成计划…";
+        : "说清目标与约束；可附图片/文档；满意后让 AI 生成计划…";
   }
   if (sendBtn) {
     // Disabled while waiting = prevent double-send, NOT app freeze.

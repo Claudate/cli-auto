@@ -106,9 +106,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* 壳：左栏 | 右栏(头+中)；三区视觉在 layout.css */
 #app {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
   height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
 }
 

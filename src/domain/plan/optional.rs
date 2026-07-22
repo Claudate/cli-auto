@@ -31,6 +31,8 @@ pub fn title_looks_optional(title: &str) -> bool {
 /// True when a heading/title is document chrome — not a work package.
 /// Used by Mode B planner (LLM reject + heuristic skip) so users who only
 /// supply Markdown specs don't see Board / P0 / 修订历史 as runnable tasks.
+///
+/// **Must not** treat landing task ids as meta: `P0-1 · …`, `A1 · …`, `U1-1 · …`.
 pub fn title_is_meta_heading(title: &str) -> bool {
     let t = title.trim();
     if t.is_empty() {
@@ -40,6 +42,10 @@ pub fn title_is_meta_heading(title: &str) -> bool {
     let pipes = t.chars().filter(|c| *c == '|').count();
     if pipes >= 2 {
         return true;
+    }
+    // Work-package ids from 派工/落地 plans — never meta (fixes P0-1 / A1 · …).
+    if looks_like_work_task_id(t) {
+        return false;
     }
     let lower = t.to_ascii_lowercase();
     let compact: String = lower
@@ -75,7 +81,9 @@ pub fn title_is_meta_heading(title: &str) -> bool {
         return true;
     }
 
-    // Phrase / prefix patterns common in product-spec Markdown (not work orders)
+    // Phrase / prefix patterns common in product-spec Markdown (not work orders).
+    // **Do not** put bare `p0-` here — it false-positives task ids `P0-1 · …`.
+    // Stage banners use em/en dash after the stage label (`p0 — 协议…`).
     const NEEDLES: &[&str] = &[
         "修订历史",
         "revision history",
@@ -107,9 +115,9 @@ pub fn title_is_meta_heading(title: &str) -> bool {
         "p0 —",
         "p1 —",
         "p2 —",
-        "p0-",
-        "p1-",
-        "p2-",
+        "p0 –",
+        "p1 –",
+        "p2 –",
         "§",
         // Phase banners from product plans (title without leading P0)
         "协议与示例",
@@ -147,6 +155,67 @@ pub fn title_is_meta_heading(title: &str) -> bool {
     }
 
     false
+}
+
+/// Landing / 派工 task id at start of title: `P0-1 · …`, `A1 · …`, `U1-1 · …`, `S0 · …`.
+/// Shared with planner heuristic so meta chrome never swallows real work packages.
+///
+/// **Not** a task id: bare stage banners `P0 — 协议与示例` / `P1 — host…`
+/// (letter + digit + em-dash, **no** `-N` sub-id). Those stay meta.
+pub fn looks_like_work_task_id(title: &str) -> bool {
+    let t = title
+        .trim()
+        .trim_start_matches(['-', '*', '☐', '✅', '░', '[', ']', ' '])
+        .trim();
+    let chars: Vec<char> = t.chars().collect();
+    if chars.is_empty() {
+        return false;
+    }
+    let mut i = 0;
+    let mut letters = 0;
+    let letter_start = 0;
+    while i < chars.len() && chars[i].is_ascii_alphabetic() {
+        letters += 1;
+        i += 1;
+        if letters > 4 {
+            return false;
+        }
+    }
+    if letters == 0 || i >= chars.len() || !chars[i].is_ascii_digit() {
+        return false;
+    }
+    while i < chars.len() && chars[i].is_ascii_digit() {
+        i += 1;
+    }
+    // optional -N (P0-1 / U1-1) — required for single-letter stage families P/M/D
+    let mut has_sub_id = false;
+    if i < chars.len() && chars[i] == '-' {
+        i += 1;
+        if i >= chars.len() || !chars[i].is_ascii_digit() {
+            return false;
+        }
+        while i < chars.len() && chars[i].is_ascii_digit() {
+            i += 1;
+        }
+        has_sub_id = true;
+    }
+    // Stage banners: "P0 — …" / "M1 — …" / "D2 文档" without P0-1 style sub-id.
+    // Letter-only A1/B2/S0/F0/C5 and multi-letter PR1 stay work packages.
+    let prefix: String = chars[letter_start..letter_start + letters]
+        .iter()
+        .collect::<String>()
+        .to_ascii_lowercase();
+    let stage_family = matches!(prefix.as_str(), "p" | "m" | "d");
+    if stage_family && !has_sub_id {
+        return false;
+    }
+    if i >= chars.len() {
+        return true;
+    }
+    matches!(
+        chars[i],
+        '·' | '•' | '—' | '–' | '-' | ' ' | '：' | ':' | '（' | '(' | '|' | '/' | '　'
+    )
 }
 
 fn looks_like_numbered_catalog_title(lower: &str) -> bool {
@@ -191,6 +260,11 @@ fn looks_like_numbered_catalog_title(lower: &str) -> bool {
 
 fn is_stage_catalog_title(lower: &str) -> bool {
     let t = lower.trim();
+    // Task ids already excluded by looks_like_work_task_id at the top of title_is_meta_heading.
+    // Still guard here for callers that only hit this helper.
+    if looks_like_work_task_id(t) {
+        return false;
+    }
     let stage = t.starts_with("p0")
         || t.starts_with("p1")
         || t.starts_with("p2")
@@ -210,7 +284,11 @@ fn is_stage_catalog_title(lower: &str) -> bool {
         return false;
     }
     // Allow real work titles like "P0 实现 handoff 归并" (has action-ish length + 实现)
-    let work_cues = ["实现", "落地", "修复", "新增", "编写", "接入", "改造", "测试", "验收"];
+    let work_cues = [
+        "实现", "落地", "修复", "新增", "编写", "接入", "改造", "测试", "验收", "消费", "检测",
+        "契约", "清单", "记忆", "报告", "对照", "路由", "验收", "黄条", "占位", "标题", "对齐",
+        "写入", "溯源", "接轨",
+    ];
     if work_cues.iter().any(|c| t.contains(c)) {
         return false;
     }

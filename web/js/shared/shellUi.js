@@ -1,6 +1,7 @@
 /**
  * [INPUT]: window.state · $ · statusUi helpers · classic stash/banner globals
  * [OUTPUT]: showPage · goHome · loadProjects · renderProjectList · run-lock · modal
+ * note: 系统页(settings/doctor/help) 切页时 renderPlanPicker，清业务顶栏 CTA/阶段条
  * [POS]: D9 自 state.js 抽出；classic 经 installShellUi → window；features 仍读 window
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
@@ -96,7 +97,10 @@ export function canEditSelectedTask(taskId) {
 }
 
 export function toastRunLocked(action = "此操作") {
-  call("toast", `计划运行中，请先停止后再${action}`);
+  call(
+    "toast",
+    `本轮还在执行，请先点顶栏「停止」后再${action}`
+  );
 }
 
 /* ── Pages ── */
@@ -142,10 +146,16 @@ export function showPage(name) {
     if (title) title.textContent = "欢迎";
     if (sub) {
       sub.hidden = false;
-      sub.textContent = "添加项目 → 写计划 → 拆成步骤 → 确认并开始";
+      sub.textContent = "添加项目 → 写计划 → 拆成步骤 → 执行规划";
     }
+    try {
+      call("renderPlanPicker");
+    } catch (_) {}
   } else if (name === "workspace") {
     updateWorkspaceTitle();
+    try {
+      call("renderPlanPicker");
+    } catch (_) {}
   } else if (name === "chat") {
     const title = $el("#page-title");
     if (title) title.textContent = "共建计划";
@@ -192,6 +202,10 @@ export function showPage(name) {
       sub.hidden = false;
       sub.textContent = "确认本机 CLI 与依赖就绪";
     }
+    // 系统页：重算顶栏（隐藏业务 CTA / 阶段条）
+    try {
+      call("renderPlanPicker");
+    } catch (_) {}
   } else if (name === "help") {
     const title = $el("#page-title");
     if (title) title.textContent = "帮助";
@@ -199,13 +213,19 @@ export function showPage(name) {
       sub.hidden = false;
       sub.textContent = "";
     }
+    try {
+      call("renderPlanPicker");
+    } catch (_) {}
   } else if (name === "settings") {
     const title = $el("#page-title");
     if (title) title.textContent = "设置";
     if (sub) {
       sub.hidden = false;
-      sub.textContent = "";
+      sub.textContent = "常用优先 · 高级默认折叠";
     }
+    try {
+      call("renderPlanPicker");
+    } catch (_) {}
   }
 }
 
@@ -311,7 +331,11 @@ export function renderProjectList() {
   const el = $el("#project-list");
   if (!el) return;
   if (!state.projects || !state.projects.length) {
-    el.innerHTML = `<p class="muted empty-hint">尚未添加项目<br/>点 ＋ 添加</p>`;
+    const plus =
+      typeof window.ccoIcon === "function"
+        ? window.ccoIcon("plus", { size: 14 })
+        : "+";
+    el.innerHTML = `<p class="muted empty-hint">尚未添加项目<br/>点侧栏 ${plus} 添加</p>`;
     return;
   }
   // 各项目状态独立展示；允许多项目并行运行，不因当前项目在跑而锁其它项
@@ -336,6 +360,10 @@ export function renderProjectList() {
   const isPausedStatus =
     g("isPausedStatus") ||
     ((s) => String(s || "").toLowerCase() === "paused");
+  const xIco =
+    typeof window.ccoIcon === "function"
+      ? window.ccoIcon("x", { size: 14, className: "ico-btn" })
+      : "×";
 
   el.innerHTML = state.projects
     .map((p) => {
@@ -357,19 +385,44 @@ export function renderProjectList() {
       } else {
         meta = "路径不存在";
       }
-      return `<button type="button" class="project-item ${
+      // shell-chrome B1：悬停 × 移除（不删磁盘）；运行中仍显示但 handler 会 toast 锁
+      return `<div class="project-item-row ${
         isCurrent ? "active" : ""
       }" data-path="${esc(p.path)}">
-        <div class="name"><span class="dot ${statusDot(stt) || (live ? "live" : "")}"></span>${esc(
-          p.name
-        )}</div>
-        <div class="path" title="${esc(p.path)}">${esc(shortPath(p.path))}</div>
-        <div class="meta">${esc(meta)}</div>
-      </button>`;
+        <button type="button" class="project-item ${
+          isCurrent ? "active" : ""
+        }" data-path="${esc(p.path)}">
+          <div class="name"><span class="dot ${statusDot(stt) || (live ? "live" : "")}"></span>${esc(
+            p.name
+          )}</div>
+          <div class="path" title="${esc(p.path)}">${esc(shortPath(p.path))}</div>
+          <div class="meta">${esc(meta)}</div>
+        </button>
+        <button type="button" class="icon-btn sm project-item-remove" data-remove-path="${esc(
+          p.path
+        )}" title="从列表移除（不删文件夹）" aria-label="从列表移除 ${esc(
+        p.name
+      )}"${live ? " data-run-locked=\"1\"" : ""}>${xIco}</button>
+      </div>`;
     })
     .join("");
   $$el(".project-item", el).forEach((b) => {
     b.onclick = () => call("selectProject", b.dataset.path);
+  });
+  $$el(".project-item-remove", el).forEach((b) => {
+    b.onclick = (ev) => {
+      try {
+        ev.preventDefault();
+        ev.stopPropagation();
+      } catch (_) {}
+      const path = b.getAttribute("data-remove-path");
+      if (!path) return;
+      if (typeof g("removeSelectedProject") === "function") {
+        call("removeSelectedProject", path);
+      } else {
+        call("toast", "移除不可用");
+      }
+    };
   });
 }
 

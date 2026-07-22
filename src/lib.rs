@@ -6,7 +6,7 @@
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md
 //!
 //! Architecture (target P2-17): Presentation → App → Domain ← Ports ← Adapters.
-//! A1 ✅: `domain/{plan,run,worker,inspect,chat}` · `app/{split,run,chat}` ·
+//! A1 ✅: `domain/{plan,run,worker,inspect,chat}` · `app/{split,run,chat,memory}` ·
 //! `ports::{WorkerPort,HandoffStore}` · `runtime/{scheduler,handoff}/*` · `services/*` deprecated facade.
 //! A1-7: Tauri/CLI handlers → `app::*` (no presentation business policy). A2: frontend MVVM 待.
 //! Adapters: `runtime/provider/*` implement WorkerPort. Desktop: Tauri; CLI: `cco` binary.
@@ -45,6 +45,6 @@ pub use services::{
     ProjectLiveView, ProjectSummary, RunSummary, SettingsUpdate, SettingsView, StartPlanJobRequest,
     StartRunRequest, TaskLiveView, TaskLogsView,
 };
-pub use state::{RunState, RunStatus, TaskState};
+pub use state::{RouteSource, RunState, RunStatus, TaskState};
 pub use terminal::{SessionKind, TerminalManager, TerminalSession};
 pub use tui::{options_from_config, run_tui, TuiOptions};

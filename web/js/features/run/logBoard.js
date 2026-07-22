@@ -14,6 +14,7 @@ import {
   upsertCliWindowCard,
 } from "./logBoardCard.js";
 import { bindCliBoardEvents } from "./logBoardEvents.js";
+import { sortTasksByStatus, taskBucket } from "./runBuckets.js";
 
 const g = host.g;
 const S = host.S;
@@ -24,7 +25,39 @@ const callG = host.callG;
 
 export { stallStripText };
 
+function bucketOf(t) {
+  // Prefer local pure helper; classic window.taskBucket as fallback.
+  try {
+    return taskBucket(t);
+  } catch (_) {
+    const b = callG("taskBucket", t);
+    return b || "wait";
+  }
+}
+
+function sortVisible(list) {
+  try {
+    return sortTasksByStatus(list);
+  } catch (_) {
+    const sorted = callG("sortTasksByStatus", list);
+    return Array.isArray(sorted) ? sorted : list || [];
+  }
+}
+
 export function renderCliBoard(tasks) {
+  try {
+    return renderCliBoardInner(tasks || []);
+  } catch (e) {
+    console.error("[renderCliBoard]", e);
+    const board = $("#cli-board");
+    if (board && !board.querySelector(".cli-window")) {
+      board.innerHTML =
+        `<div class="cli-board-empty muted" style="grid-column:1/-1;padding:1.2rem;text-align:center">运行端渲染失败 · 可点「刷新」重试</div>`;
+    }
+  }
+}
+
+function renderCliBoardInner(tasks) {
   try {
     if (typeof renderHandoffBoardStrip === "function") renderHandoffBoardStrip();
   } catch (_) {}
@@ -43,11 +76,17 @@ export function renderCliBoard(tasks) {
       requestAnimationFrame(() => {
         const before = shell ? shell.scrollTop : 0;
         const prevH = document.documentElement.style.getPropertyValue("--cli-body-h");
-        callG("fitCliBodyHeight")();
+        try {
+          callG("fitCliBodyHeight")();
+        } catch (_) {}
         const nextH = document.documentElement.style.getPropertyValue("--cli-body-h");
         // Only second pass when height actually changed (avoids thrash).
         if (prevH !== nextH) {
-          requestAnimationFrame(() => callG("fitCliBodyHeight")());
+          requestAnimationFrame(() => {
+            try {
+              callG("fitCliBodyHeight")();
+            } catch (_) {}
+          });
         }
         if (shell && shell.scrollTop !== before) shell.scrollTop = before;
         if (shell && shellScrollTop > 0 && shell.scrollTop === 0) {
@@ -65,12 +104,17 @@ export function renderCliBoard(tasks) {
   const board = $("#cli-board");
   if (!board) return;
 
+  // Ensure shell/monitor not accidentally hidden after layout swaps.
+  if (shell) shell.hidden = false;
+  const mon = $("#monitor");
+  if (mon) mon.hidden = false;
+
   let shown = tasks;
   // 兼容旧 filterFailedOnly
   let filter = S().cliStatusFilter || "all";
   if (S().filterFailedOnly && filter === "all") filter = "fail";
   if (filter && filter !== "all") {
-    const filtered = tasks.filter((t) => callG("taskBucket")(t) === filter);
+    const filtered = tasks.filter((t) => bucketOf(t) === filter);
     // 无匹配时不回退，展示空板 + 过滤态更清晰
     shown = filtered;
   }
@@ -83,6 +127,7 @@ export function renderCliBoard(tasks) {
   const toolbar = document.querySelector(".board-toolbar");
   if (toolbar) toolbar.classList.toggle("quiet", tasks.length <= 1);
 
+  if (!S().closedPanels) S().closedPanels = {};
   const closedCount = Object.keys(S().closedPanels || {}).filter((id) =>
     tasks.some((t) => t.task_id === id)
   ).length;
@@ -93,8 +138,8 @@ export function renderCliBoard(tasks) {
   }
 
   // 可见面板：运行中最上，未运行居中，已完成/失败最底
-  const visible = callG("sortTasksByStatus")(
-    shown.filter((t) => !S().closedPanels[t.task_id])
+  const visible = sortVisible(
+    shown.filter((t) => t && t.task_id && !S().closedPanels[t.task_id])
   );
   // 自动布局：网格，若用户拖过则用绝对坐标
   const cols = Math.max(1, Math.min(2, visible.length));
@@ -135,7 +180,7 @@ export function renderCliBoard(tasks) {
         f === "all"
           ? typeof g("flowEmptyBoard") === "function"
             ? callG("flowEmptyBoard")()
-            : "暂无执行窗口 · 确认并开始后这里会按步骤出现"
+            : "暂无执行窗口 · 执行规划后这里会按步骤出现"
           : `当前过滤（${
               {
                 run: "进行中",

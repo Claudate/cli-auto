@@ -36,7 +36,13 @@ export function applyPlanRailVisibility() {
     toggle.setAttribute("aria-label", open ? "收起右侧计划列表" : "展开右侧计划列表");
     toggle.title = open ? "收起右侧计划列表" : "展开右侧计划列表";
     toggle.classList.toggle("is-on", open);
-    toggle.textContent = open ? "◀" : "☰";
+    if (typeof window.ccoIcon === "function") {
+      toggle.innerHTML = window.ccoIcon(open ? "chevron-left" : "panel-right", {
+        size: 14,
+      });
+    } else {
+      toggle.textContent = open ? "◀" : "☰";
+    }
   }
 }
 

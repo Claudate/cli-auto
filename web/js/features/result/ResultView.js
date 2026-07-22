@@ -1,8 +1,14 @@
 /**
  * [INPUT]: ResultViewModel · live/tasks · 既有 #result-desk DOM
- * [OUTPUT]: 结果摘要 + inspect 人话 + 回补/接受 CTA 可见性
- * [POS]: A4-3/A4-4 ResultView；禁止 invoke / 解析 VERDICT 正文
+ * [OUTPUT]: 结果摘要 + inspect 人话 + live 费用句 + 回补/接受 CTA 可见性
+ * [POS]: A4-3/A4-4 · P0-1/P0-4/P1-3/P2-1 ResultView；禁止 invoke / 解析 VERDICT 正文
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ *
+ * P0-4: 对照计划用语经 inspectCopy（与 report fallback 同词）；费用仍用
+ * resultSummary 本地拼句（未下沉 Rust — 规则简单、无第二套格式）。
+ * P1-3: miss 行展示 live.route_label（App 拼好人话）；主路径不露 raw route_source enum。
+ * P2-1: live.verification → 可折叠「原计划要验收」副栏（巡检为准 / 未自动对照）。
+ * 第一屏标题固定「本轮结果」，不写 run_id。
  */
 
 import {
@@ -10,6 +16,7 @@ import {
   honestInspectCopy,
   inspectActionVisibility,
 } from "./inspectCopy.js";
+import { formatLiveCostPhrase } from "./resultSummary.js";
 import {
   taskBucket,
   fiveStateLabel,
@@ -58,6 +65,26 @@ function planLabel(live) {
 
 function taskTitle(t) {
   return (t && (t.title || t.task_id)) || "步骤";
+}
+
+/**
+ * P1-3: one human route line from live DTO (App-composed route_label).
+ * Falls back to product label only when label missing (defensive).
+ * Never surfaces raw route_source enum tags.
+ * @param {object} t live task
+ * @returns {string} e.g. "执行方式：Codex · 你在拆分台指定的"
+ */
+function routeLine(t) {
+  if (!t) return "";
+  const label = String(t.route_label || "").trim();
+  if (label) return `执行方式：${label}`;
+  // Defensive: old payload without route_label — product-ish provider only.
+  const p = String(t.provider || "").trim();
+  if (!p) return "";
+  const fn = g("flowEngineLabel");
+  const product =
+    typeof fn === "function" ? fn(p) || p : p;
+  return product ? `执行方式：${product}` : "";
 }
 
 /**
@@ -145,6 +172,7 @@ export function bindResultView(vm, bridge = {}) {
 
     if (planLine) {
       const name = planLabel(live);
+      // First bits stay completion ratio / elapsed; cost is a trailing phrase only.
       const bits = [`《${name}》`];
       if (tasks && tasks.length) bits.push(`共 ${tasks.length} 步`);
       bits.push(`完成 ${done.length}`);
@@ -158,6 +186,8 @@ export function bindResultView(vm, bridge = {}) {
         const el = formatElapsed(live.started_at, runEnd || null);
         if (el) bits.push(el);
       }
+      // P0-1: always append human cost (or 「费用未汇总」); never fake $0.00.
+      bits.push(formatLiveCostPhrase(live));
       planLine.textContent = bits.join(" · ");
     }
 
@@ -168,7 +198,7 @@ export function bindResultView(vm, bridge = {}) {
         doneList.innerHTML = done
           .map(
             (t) =>
-              `<li class="result-desk-item is-done"><span class="result-desk-mark" aria-hidden="true">✓</span>${esc(
+              `<li class="result-desk-item is-done"><span class="result-desk-mark" aria-hidden="true">${typeof g("ccoIcon") === "function" ? g("ccoIcon")("check", { size: 12 }) : "✓"}</span>${esc(
                 taskTitle(t)
               )}</li>`
           )
@@ -185,12 +215,17 @@ export function bindResultView(vm, bridge = {}) {
         const b = taskBucket(t.status, t);
         const st = fiveStateLabel(b);
         const sum = taskErrorSummary(t);
+        const route = routeLine(t);
+        // P1-3: 步骤状态 + 执行方式 + 原因（概念 ≤3；不露 raw enum）
+        const bits = [st];
+        if (route) bits.push(route);
+        if (sum) bits.push(sum);
         rows.push(
           `<li class="result-desk-item is-miss"><span class="result-desk-mark" aria-hidden="true">·</span><span class="result-desk-item-body"><strong>${esc(
             taskTitle(t)
-          )}</strong><span class="muted"> · ${esc(st)}${
-            sum ? " · " + esc(sum) : ""
-          }</span></span></li>`
+          )}</strong><span class="muted"> · ${esc(
+            bits.join(" · ")
+          )}</span></span></li>`
         );
       });
       issuePreview.slice(0, 6).forEach((line) => {
@@ -201,17 +236,22 @@ export function bindResultView(vm, bridge = {}) {
         );
       });
       if (!rows.length) {
-        missList.innerHTML = `<li class="muted">没有步骤失败；见下方是否做过对照验收</li>`;
+        // P0-4: point at plan-compare footer (honest), not "验收" jargon alone
+        missList.innerHTML = `<li class="muted">没有步骤失败；对照计划结论见下方</li>`;
       } else {
         missList.innerHTML = rows.join("");
       }
     }
 
     if (honest) {
+      // P0-4: honestInspectCopy ↔ report「对照计划」同轮不矛盾
       const h = honestInspectCopy(loop);
       honest.hidden = h.hidden;
       honest.textContent = h.text;
     }
+
+    // P2-1: plan checklist vs inspect side-by-side (live.verification DTO)
+    renderVerificationPanel(live?.verification);
 
     // C3: decision tree — miss → rework/accept; clean → 完成并回写计划 + 再写一份
     const hasMiss =
@@ -251,6 +291,107 @@ export function bindResultView(vm, bridge = {}) {
   }
 
   /**
+   * P2-1: fill collapsible「原计划要验收」from live.verification.
+   * Inspect is authoritative when source=inspect; plan list is sidebar only.
+   * @param {object|null|undefined} verification
+   */
+  function renderVerificationPanel(verification) {
+    const panel = $("result-desk-verify");
+    const sum = $("result-desk-verify-sum");
+    const note = $("result-desk-verify-note");
+    const list = $("result-desk-verify-list");
+    const tasksList = $("result-desk-verify-tasks");
+    if (!panel) return;
+
+    const v = verification || null;
+    const source = v && v.source ? String(v.source) : "none";
+    const planItems = (v && v.plan_items) || [];
+    const taskItems = (v && v.task_items) || [];
+    const planCount = Number(v && v.plan_count) || planItems.length;
+    const total =
+      planCount + (Array.isArray(taskItems) ? taskItems.length : 0);
+
+    if (!v || source === "none" || total === 0) {
+      // Still surface plan-only note when backend set one with zero items? hide.
+      panel.hidden = true;
+      if (list) list.innerHTML = "";
+      if (tasksList) {
+        tasksList.innerHTML = "";
+        tasksList.hidden = true;
+      }
+      if (note) {
+        note.hidden = true;
+        note.textContent = "";
+      }
+      return;
+    }
+
+    panel.hidden = false;
+    // Summary: count + source hint (no raw VERDICT).
+    if (sum) {
+      if (source === "inspect") {
+        sum.textContent = `原计划要验收 · ${total} 条（巡检为准）`;
+      } else {
+        sum.textContent = `原计划要验收 · ${total} 条`;
+      }
+    }
+
+    if (note) {
+      const n = (v.plan_note && String(v.plan_note).trim()) || "";
+      if (n) {
+        note.hidden = false;
+        note.textContent = n;
+      } else if (source === "plan_only") {
+        note.hidden = false;
+        note.textContent = `计划写了 ${total} 条验收，本轮未自动对照`;
+      } else {
+        note.hidden = true;
+        note.textContent = "";
+      }
+    }
+
+    if (list) {
+      if (!planItems.length) {
+        list.innerHTML = "";
+      } else {
+        list.innerHTML = planItems
+          .map((it) => {
+            const text = String((it && it.text) || "").trim();
+            if (!text) return "";
+            const checked = !!(it && it.checked);
+            const mark = checked ? "☑" : "☐";
+            return `<li class="result-desk-item is-plan-check"><span class="result-desk-mark" aria-hidden="true">${mark}</span>${esc(
+              text
+            )}</li>`;
+          })
+          .filter(Boolean)
+          .join("");
+      }
+    }
+
+    if (tasksList) {
+      if (!taskItems.length) {
+        tasksList.innerHTML = "";
+        tasksList.hidden = true;
+      } else {
+        tasksList.hidden = false;
+        tasksList.innerHTML = taskItems
+          .map((it) => {
+            const tid = String((it && it.task_id) || "").trim();
+            const text = String((it && it.text) || "").trim();
+            if (!text) return "";
+            const label = tid ? `${tid} · ${text}` : text;
+            return `<li class="result-desk-item is-plan-task"><span class="result-desk-mark" aria-hidden="true">·</span>${esc(
+              label
+            )}</li>`;
+          })
+          .filter(Boolean)
+          .join("");
+      }
+    }
+  }
+
+  /**
    * Combined paint used by RunView bridge.
    */
   function renderInspectAndResult(live, tasks, ctx) {
@@ -263,6 +404,7 @@ export function bindResultView(vm, bridge = {}) {
     renderResultDesk,
     renderInspectLoopStrip,
     renderInspectAndResult,
+    renderVerificationPanel,
     startRework: () => vm.startRework(),
     acceptResidual: () => vm.acceptResidual(),
     finishRound: () => vm.finishRound(),

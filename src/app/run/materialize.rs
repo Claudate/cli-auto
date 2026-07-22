@@ -1,19 +1,23 @@
 //! Run disk materialization (A5-1 · S-run extract).
 //!
-//! [INPUT]: Config · project · PlanIR / plan path + adapter
+//! [INPUT]: Config · project · PlanIR / plan path + adapter · optional RouteFillReport
 //! [OUTPUT]: (run_id, RunState, PlanIR) · ParseOnly also loads then materializes
 //! [POS]: app::run sub-module; does **not** spawn scheduler
 //! [PROTOCOL]: Mode B IR only via split::confirm_materialize; ParseOnly is documented
 //!   non–Mode B **but still** drops `optional && !include` (A0-R4 · D-T3-1) — same
 //!   `materialize_selected_tasks` as confirm. Callers **must** schedule the returned IR.
+//!   Stamps `route_source` here (P1-2) — domain never writes paths / RunState.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
 use crate::config::Config;
-use crate::plan::{materialize_selected_tasks, load_plan, PlanIR};
+use crate::domain::worker::RouteFillReport;
+use crate::plan::{load_plan, materialize_selected_tasks, PlanIR};
 use crate::state::{self, RunState};
+
+use super::provenance::{stamp_route_fill, stamp_route_inferred};
 
 /// Disk materialization of a new run (run_id + run.json + plan.resolved.json).
 ///
@@ -25,11 +29,25 @@ use crate::state::{self, RunState};
 /// (which may already have dropped optionals — re-apply is idempotent).
 /// ParseOnly / `--skip-plan` use this after soft-fill, or [`materialize_parse_only`].
 ///
+/// When `route_report` is `Some`, stamps each task's `route_source` from the report
+/// (soft filled / kept explicit / force). When `None`, infers from the final IR.
+///
 /// Returns `(run_id, state, ir)` — **use the returned `ir` for `prepare_scheduler`**.
 pub fn materialize_run(
     config: &Config,
     project: PathBuf,
     ir: &PlanIR,
+) -> Result<(String, RunState, PlanIR)> {
+    materialize_run_with_route(config, project, ir, None)
+}
+
+/// Same as [`materialize_run`] but applies an optional last-write fill report for
+/// P1-2 `route_source` provenance before the first `run.json` save.
+pub fn materialize_run_with_route(
+    config: &Config,
+    project: PathBuf,
+    ir: &PlanIR,
+    route_report: Option<&RouteFillReport>,
 ) -> Result<(String, RunState, PlanIR)> {
     if !project.is_dir() {
         bail!("项目路径不是目录: {}", project.display());
@@ -41,7 +59,12 @@ pub fn materialize_run(
     let project = project
         .canonicalize()
         .with_context(|| format!("canonicalize {}", project.display()))?;
-    let run_state = RunState::new(run_id.clone(), project, &ir, run_dir.clone());
+    let mut run_state = RunState::new(run_id.clone(), project, &ir, run_dir.clone());
+    // P1-2: stamp provenance at RunState assembly (never in domain).
+    if let Some(report) = route_report {
+        stamp_route_fill(&mut run_state, &ir, report);
+    }
+    stamp_route_inferred(&mut run_state, &ir);
     run_state.save()?;
     let resolved = run_dir.join("plan.resolved.json");
     std::fs::write(&resolved, serde_json::to_string_pretty(&ir)?)?;
@@ -53,7 +76,7 @@ pub fn materialize_run(
 /// **Not** Mode B. Documented ParseOnly path — does not create a plan job.
 /// Soft-fill / force-provider must be applied by the caller via
 /// [`super::apply_provider_override`] before this call (or pass already-patched IR via
-/// [`materialize_run`] after load). Unselected optionals are still dropped (A0-R4).
+/// [`materialize_run_with_route`] after load). Unselected optionals are still dropped (A0-R4).
 pub fn materialize_parse_only(
     config: &Config,
     project: PathBuf,
@@ -178,5 +201,35 @@ mod tests {
         .unwrap();
         assert!(resolved.task("maybe").is_none());
         assert_eq!(resolved.tasks.len(), 2);
+        // P1-2: new runs stamp route_source (inferred soft_fill when provider==default).
+        assert!(st.tasks["must"].route_source.is_some());
+        assert!(st.tasks["maybe_on"].route_source.is_some());
+    }
+
+    /// P1-2: soft fill report → filled soft_fill, kept explicit in run.json.
+    #[test]
+    fn materialize_stamps_soft_fill_provenance() {
+        use crate::domain::worker::{apply_route_fill, RouteFillMode};
+        use crate::state::RouteSource;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        std::fs::create_dir_all(project.join("docs/plans")).unwrap();
+        let cfg = test_cfg(tmp.path());
+        let mut ir = sample_ir(&project);
+        // Multi-provider soft-fill needs worktree (validate gate).
+        ir.worktree = true;
+        ir.tasks[0].worktree = Some(true);
+        ir.tasks[2].worktree = Some(true);
+        // Make must explicit codex, leave others on default fake.
+        ir.tasks[0].provider = "codex".into();
+        let report = apply_route_fill(&mut ir, "fake", RouteFillMode::Soft).unwrap();
+        let (_run_id, st, _out) =
+            materialize_run_with_route(&cfg, project, &ir, Some(&report)).unwrap();
+        assert_eq!(st.tasks["must"].route_source, Some(RouteSource::Explicit));
+        assert_eq!(
+            st.tasks["maybe_on"].route_source,
+            Some(RouteSource::SoftFill)
+        );
     }
 }

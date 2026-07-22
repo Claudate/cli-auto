@@ -51,20 +51,30 @@ import {
 import { host } from "./host.js";
 
 export function isPlanSessionActive(phase = state.phase) {
-  return phase === "planning" || phase === "confirm";
+  return (
+    phase === "planning" ||
+    phase === "confirm" ||
+    phase === "plan_failed"
+  );
 }
 
 /**
  * project_live 返回的是「项目最近一次 run」（含历史 completed）。
  * 打开拆分会话且尚未/不匹配本 job 的 run 时，不得把旧 run 当成「本轮结果」。
+ * plan_failed 同样不得用历史 completed 当「本轮结果」。
  */
 export function liveBelongsToOpenPlan() {
   const live = state.live;
   if (!live?.run_id) return false;
+  // 拆分失败/进行中：没有本 job 的 run，历史 live 一律不算本轮
+  if (state.phase === "plan_failed" || state.phase === "planning") {
+    return false;
+  }
   const job = state.planJob;
   if (!job) return true;
   const st = String(job.status || "").toLowerCase();
-  if (st !== "planning" && st !== "planned" && st !== "confirmed") return true;
+  if (st === "plan_failed" || st === "planning") return false;
+  if (st !== "planned" && st !== "confirmed") return true;
   const jrid = job.run_id || job.runId || null;
   if (!jrid) return false;
   return String(jrid) === String(live.run_id);
@@ -108,6 +118,13 @@ export function restorePlanSession(projectPath) {
   return true;
 }
 
+/**
+ * shell-chrome C2：仅允许这些路径清 session，禁止旁路静默丢拆分结果：
+ * - 用户取消规划（cancelPlanning）
+ * - 新开拆分任务（analyze 开 planning，旧 job 被 supersede）
+ * - 从 cco 列表移除项目（removeProject）
+ * 禁止：仅切页 / 打开计划管理 / 点 chip 回看 时 clear。
+ */
 export function clearPlanSession(projectPath = state.selectedPath) {
   if (projectPath) delete state.planSessions[projectPath];
 }
@@ -129,7 +146,7 @@ export function applyRestoredPlanJob(view, { resumePoll = true } = {}) {
     state.phase = "planning";
     if (resumePoll) host.startPlanJobPoll();
   } else if (status === "planned" || status === "confirmed") {
-    // confirmed 也可再次「开始运行」，不必重拆
+    // confirmed 也可再次「执行规划」，不必重新规划
     state.phase = "confirm";
     host.stopPlanJobPoll();
     host.setAssignBusy(false);
@@ -154,8 +171,8 @@ export async function tryRestorePersistedPlanJob(projectPath) {
     } else if (status === "planned" || status === "confirmed") {
       toast(
         n
-          ? `已回到拆分台（${n} 任务），核对后可确认并开始`
-          : "已回到拆分台，核对后可确认并开始"
+          ? `已回到拆分台（${n} 任务），核对后可执行规划`
+          : "已回到拆分台，核对后可执行规划"
       );
     }
     return true;
@@ -326,7 +343,7 @@ export function updateBgPlanBanner() {
       '<span class="spinner sm" id="bg-plan-banner-spin" aria-hidden="true"></span>' +
       '<span id="bg-plan-banner-text">规划在后台进行中</span>' +
       '<button type="button" class="btn ghost sm" id="btn-bg-plan-back">查看监控</button>' +
-      '<button type="button" class="btn ghost sm bg-plan-banner-dismiss" id="btn-bg-plan-dismiss" aria-label="关闭提示" title="关闭">×</button>';
+      `<button type="button" class="icon-btn sm bg-plan-banner-dismiss" id="btn-bg-plan-dismiss" aria-label="关闭提示" title="关闭">${typeof window.ccoIcon === "function" ? window.ccoIcon("x", { size: 14 }) : "×"}</button>`;
     document.body.appendChild(bar);
     bar.querySelector("#btn-bg-plan-back")?.addEventListener("click", () => {
       goToPlanMonitor();
@@ -346,10 +363,14 @@ export function updateBgPlanBanner() {
       const d = document.createElement("button");
       d.type = "button";
       d.id = "btn-bg-plan-dismiss";
-      d.className = "btn ghost sm bg-plan-banner-dismiss";
+      d.className = "icon-btn sm bg-plan-banner-dismiss";
       d.setAttribute("aria-label", "关闭提示");
       d.title = "关闭";
-      d.textContent = "×";
+      if (typeof window.ccoIcon === "function") {
+        d.innerHTML = window.ccoIcon("x", { size: 14 });
+      } else {
+        d.textContent = "×";
+      }
       d.addEventListener("click", (e) => {
         e.stopPropagation();
         dismissBgPlanBanner();
@@ -496,7 +517,7 @@ export async function selectProject(path) {
     return;
   }
 
-  // 内存无会话 → 从磁盘接上该项目最近一次拆分（避免每次重拆）
+  // 内存无会话 → 从磁盘接上该项目最近一次拆分（避免每次重新规划）
   // 活动 run 优先；planned/confirmed 恢复后 A1 落拆分台
   const activeRun = hasActiveRun();
   if (!activeRun) {

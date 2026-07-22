@@ -107,6 +107,19 @@ export const resumeRun = (runId) => raw("resume_run_cmd", { runId });
 export const startRework = (runId) => raw("start_rework_cmd", { runId });
 export const acceptResidual = (runId, note) =>
   raw("accept_residual_cmd", { runId, note: note || null });
+/** P2-2: write last_summary from finished run (rule template). */
+export const writebackMemory = (runId) =>
+  raw("writeback_memory_cmd", { runId });
+export const projectMemoryGet = (project) =>
+  raw("project_memory_get_cmd", { project });
+export const projectMemoryLastSummary = (project) =>
+  raw("project_memory_last_summary_cmd", { project });
+export const projectPinsList = (project) =>
+  raw("project_pins_list_cmd", { project });
+export const projectPinUpsert = (project, key, value) =>
+  raw("project_pin_upsert_cmd", { project, key, value });
+export const projectPinDelete = (project, key) =>
+  raw("project_pin_delete_cmd", { project, key });
 export const openTaskTerminal = (args) => raw("open_task_terminal_cmd", args);
 
 /* ── Chat (author) ── */
@@ -168,6 +181,12 @@ export const gateway = {
   resumeRun,
   startRework,
   acceptResidual,
+  writebackMemory,
+  projectMemoryGet,
+  projectMemoryLastSummary,
+  projectPinsList,
+  projectPinUpsert,
+  projectPinDelete,
   openTaskTerminal,
   chatListSessions,
   chatNewSession,

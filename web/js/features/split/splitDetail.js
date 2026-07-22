@@ -158,7 +158,10 @@ export function paintDetail(ctx) {
     }
     const titleEl = $("confirm-task-title");
     if (titleEl) {
-      titleEl.textContent = cur.title || cur.id;
+      const rawT = cur.title || cur.id;
+      titleEl.textContent = String(rawT)
+        .replace(/[☐✅☑□■✗✘×]+$/g, "")
+        .trim();
       titleEl.classList.remove("muted");
     }
     const role = roleBadge(cur);
@@ -177,7 +180,10 @@ export function paintDetail(ctx) {
     if (cur.depends_on?.length > 0) {
       depTitles = cur.depends_on.map((id) => {
         const d = byId[id];
-        return d ? `${d.title}` : id;
+        const t = d ? d.title || id : id;
+        return String(t)
+          .replace(/[☐✅☑□■✗✘×]+$/g, "")
+          .trim();
       });
     }
     const depsEl = $("confirm-task-deps");
@@ -186,25 +192,9 @@ export function paintDetail(ctx) {
         typeof g("flowConfirmDepsLine") === "function"
           ? g("flowConfirmDepsLine")(kind, depTitles)
           : depTitles.length
-            ? `${kind} · 等待：${depTitles.join(" · ")}`
-            : `${kind} · 无依赖，可进首波`;
+            ? `${kind} · 等：${depTitles.join(" · ")}`
+            : `${kind} · 可马上开始`;
       depsEl.textContent = line;
-      const full =
-        cur.prompt || cur.prompt_preview || cur.promptPreview || "";
-      let doneLine = "";
-      const ol = oneLiner(cur);
-      if (ol && /怎样算做完|完成标志|验收|成功标准/.test(String(full || ""))) {
-        doneLine = ol;
-      } else if (cur.acceptance || cur.done_when || cur.doneWhen) {
-        doneLine = String(
-          cur.acceptance || cur.done_when || cur.doneWhen
-        ).trim();
-      }
-      if (doneLine) {
-        depsEl.textContent =
-          (depsEl.textContent ? depsEl.textContent + " · " : "") +
-          `怎样算做完：${doneLine}`;
-      }
     }
 
     const full =
@@ -255,7 +245,8 @@ export function paintDetail(ctx) {
         }
       }
     } else {
-      // B5：默认短读 — 一句话 + 怎样算做完；完整说明进 details
+      // S0：默认三块 — 要做什么 · 怎样算做完 · （等待在 deps 行）
+      // 技术说明默认折叠；完整说明可展开（不强制 open，对齐双受众短读）
       if (editForm) editForm.hidden = true;
       if (promptLabel) {
         promptLabel.textContent = "这一步做什么";
@@ -264,32 +255,97 @@ export function paintDetail(ctx) {
       const ol = oneLiner(cur) || "";
       let doneLine = "";
       if (cur.acceptance || cur.done_when || cur.doneWhen) {
-        doneLine = String(cur.acceptance || cur.done_when || cur.doneWhen).trim();
+        doneLine = String(
+          cur.acceptance || cur.done_when || cur.doneWhen
+        ).trim();
       }
-      const shortBits = [];
-      if (ol) shortBits.push(ol);
-      if (doneLine && doneLine !== ol) shortBits.push(`怎样算做完：${doneLine}`);
-      const shortHtml = shortBits.length
-        ? `<p class="split-detail-short">${esc(shortBits.join(" · "))}</p>`
-        : `<p class="split-detail-short muted">点「完整说明」查看给执行 AI 的正文</p>`;
+      if (!doneLine) {
+        const m = String(bodyText).match(
+          /\|\s*\*?\*?完成定义\*?\*?\s*\|\s*([^|\n]+)/
+        );
+        if (m) doneLine = m[1].trim();
+      }
+      const shortParts = [];
+      if (ol) {
+        shortParts.push(
+          `<p class="split-detail-short"><strong>要做什么</strong> · ${esc(ol)}</p>`
+        );
+      }
+      if (doneLine && doneLine !== ol) {
+        shortParts.push(
+          `<p class="split-detail-short"><strong>怎样算做完</strong> · ${esc(doneLine)}</p>`
+        );
+      }
+      const shortHtml = shortParts.length
+        ? shortParts.join("")
+        : `<p class="split-detail-short muted">下方可展开完整说明；也可点「编辑」改写</p>`;
+
+      // S3-1: 技术说明 — 落点/步骤；自测不进默认技术说明（进完整说明）
+      const techBits = [];
+      const tableCell = (labels) => {
+        for (const lab of labels) {
+          const re = new RegExp(
+            String.raw`\|\s*\*?\*?${lab}\*?\*?\s*\|\s*([^|\n]+)`,
+            "i"
+          );
+          const m = String(bodyText).match(re);
+          if (m) return m[1].trim();
+        }
+        return "";
+      };
+      const touch = tableCell(["落点", "文件", "改哪里"]);
+      const steps = tableCell(["步骤", "改法", "Steps"]);
+      const scopePaths = cur?.scope?.paths || cur?.scope_paths || cur?.scopePaths;
+      if (touch) techBits.push(`**改哪里** · ${touch}`);
+      if (Array.isArray(scopePaths) && scopePaths.length) {
+        techBits.push(
+          `**范围** · ${scopePaths.slice(0, 6).join(" · ")}${
+            scopePaths.length > 6 ? "…" : ""
+          }`
+        );
+      }
+      if (steps) techBits.push(`**怎么做** · ${steps}`);
+      const hasTech = techBits.length > 0;
       const fullHtml = md(bodyText);
       if (promptEl) {
         promptEl.hidden = false;
         promptEl.classList.add("md-body");
-        promptEl.innerHTML =
-          shortHtml +
-          `<details class="split-detail-full">` +
+        const sameTask = promptEl.dataset.forTask === cur.id;
+        const wasTech = sameTask
+          ? !!promptEl.querySelector("details.split-detail-tech")?.open
+          : false;
+        const wasOpen = sameTask
+          ? !!promptEl.querySelector("details.split-detail-full")?.open
+          : false;
+        const prevScroll = sameTask ? promptEl.scrollTop : 0;
+        promptEl.dataset.forTask = cur.id;
+        let html = shortHtml;
+        if (hasTech) {
+          html +=
+            `<details class="split-detail-tech"${wasTech ? " open" : ""}>` +
+            `<summary>技术说明</summary>` +
+            `<div class="split-detail-tech-body md-body">${md(techBits.join("\n\n"))}</div>` +
+            `</details>`;
+        }
+        // shell-chrome A5 纠偏：默认不强制 open（短读优先）；同任务 re-paint 尊重 wasOpen
+        html +=
+          `<details class="split-detail-full"${wasOpen ? " open" : ""}>` +
           `<summary>完整说明</summary>` +
           `<div class="split-detail-full-body md-body">${fullHtml}</div>` +
           `</details>`;
-        promptEl.scrollTop = 0;
+        promptEl.innerHTML = html;
+        if (sameTask) {
+          promptEl.scrollTop = prevScroll;
+        } else {
+          promptEl.scrollTop = 0;
+        }
       }
     }
     if (metaEl) {
       metaEl.hidden = false;
       metaEl.textContent = editing
         ? "编辑中 · 保存后生效"
-        : "点左侧切换步骤 · 需要时展开完整说明";
+        : "左侧选步骤 · 下方可展开完整说明 · 可编辑";
     }
   } else {
     const titleEl = $("confirm-task-title");
@@ -300,12 +356,13 @@ export function paintDetail(ctx) {
     if ($("confirm-task-deps")) $("confirm-task-deps").textContent = "";
     if (promptEl) {
       promptEl.hidden = false;
-      promptEl.innerHTML = "";
+      promptEl.innerHTML =
+        `<p class="muted">点左侧步骤查看「要做什么 / 怎样算做完」；可展开完整说明，也可编辑后再执行规划。</p>`;
     }
     if (editForm) editForm.hidden = true;
     if (metaEl) {
-      metaEl.hidden = true;
-      metaEl.textContent = "";
+      metaEl.hidden = false;
+      metaEl.textContent = "左侧选步骤 · 下方可展开完整说明 · 可编辑";
     }
   }
 
@@ -504,7 +561,6 @@ function paintAdvancedRoute(cur, job, ctx) {
 
 export function paintChrome(vm, job, runLocked) {
   const s = vm.getSnapshot();
-  const st = String(job.status || "").toLowerCase();
   const paused = isRunPaused();
   const editing = !!s.editing;
   const err = $("confirm-error");
@@ -513,22 +569,43 @@ export function paintChrome(vm, job, runLocked) {
     err.hidden = false;
     err.textContent = s.lastError;
   }
+  // shell-chrome A2：主按钮固定「执行规划」；验收 stub 用 title/黄条，不改成长句 label
   const startBtn = $("btn-confirm-start");
   if (startBtn) {
     startBtn.disabled = !!runLocked || editing || !!s.busy;
-    startBtn.textContent = runLocked
-      ? "运行中…"
-      : paused
-        ? "继续运行"
-        : st === "confirmed"
-          ? "再次确认并开始"
-          : "确认并开始";
+    const accStub =
+      job &&
+      (job.acceptance_is_stub === true ||
+        job.acceptanceIsStub === true ||
+        String(job.acceptance_is_stub || job.acceptanceIsStub || "") === "true");
+    let label = "执行规划";
+    if (runLocked) label = "运行中…";
+    else if (paused) label = "继续运行";
+    startBtn.textContent = label;
+    startBtn.classList.toggle("is-acceptance-stub", !!accStub && !runLocked);
+    if (runLocked) {
+      startBtn.title = "本轮还在执行";
+    } else if (accStub) {
+      startBtn.title =
+        "计划验收未写清：仍可执行规划，建议先补「怎样算做完」（见上方黄条）";
+    } else if (paused) {
+      startBtn.title = "从暂停处继续执行";
+    } else {
+      startBtn.title = "核对后开始执行（走确认开跑）";
+    }
   }
   const replanBtn = $("btn-replan");
   if (replanBtn) {
-    replanBtn.disabled = !!runLocked || editing;
-    if (!runLocked) replanBtn.textContent = "重新拆分（保留你的修改）";
+    // Keep clickable while runLocked so the handler can toast「先停止」
+    replanBtn.disabled = !!editing;
+    replanBtn.textContent = "重新规划";
+    replanBtn.title = runLocked
+      ? "本轮还在执行：请先停止，再重新规划"
+      : "按当前计划再拆一次，尽量保留你在拆分台上的修改";
   }
+  // 调整… 退出第一屏（能力 DOM 保留，handler 仍绑）
+  const more = $("split-more-actions");
+  if (more) more.hidden = true;
 }
 
 export { toast, hasActiveRun, isRunPaused, canEditTask, $ };

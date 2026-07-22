@@ -124,6 +124,10 @@ impl Scheduler {
                     ts.started_at = None;
                     ts.pid = None;
                     ts.last_retry_reason = Some(format!("failover:{reason_code}"));
+                    // P1-2: persist route provenance (failover + previous provider).
+                    ts.route_source = Some(crate::state::RouteSource::Failover);
+                    ts.route_previous = Some(current.clone());
+                    ts.route_note = Some(reason_code.to_string());
                 }
                 started.remove(id);
 

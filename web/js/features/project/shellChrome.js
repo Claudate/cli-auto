@@ -2,7 +2,7 @@
  * [INPUT]: legacy host + gateway via requireGateway
  * [OUTPUT]: phase panels · flow strips · chips · top title
  * [POS]: A5-2b-fin features/project/shellChrome.js
- * note: phase panels · flow strips · chips · top title
+ * note: phase panels · flow strips(no-op) · chips · top title；shell-chrome A1 去阶段条
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -97,62 +97,27 @@ export function resolveFlowPhaseForStrip() {
   return state.phase || "idle";
 }
 
-export function refreshFlowStrips(phaseOverride) {
-  if (typeof flowStageStripHtml !== "function") return;
-  const ph = phaseOverride || state.phase;
-  const globalPh =
-    phaseOverride != null ? phaseOverride : resolveFlowPhaseForStrip();
+/**
+ * shell-chrome A1：顶栏/页内阶段条一律清空并 hidden（no-op 写 strip）。
+ * 仍刷新 mode badge（智能/本地规则）。
+ */
+export function refreshFlowStrips(_phaseOverride) {
   const hostGlobal = $("#flow-strip-global");
-  const hasGlobal = !!hostGlobal;
   if (hostGlobal) {
-    // 顶栏：唯一完整阶段点（写计划→拆分→执行→结果）
-    hostGlobal.innerHTML = flowStageStripHtml(globalPh, { compact: true });
-    hostGlobal.hidden = false;
+    hostGlobal.innerHTML = "";
+    hostGlobal.hidden = true;
+    hostGlobal.setAttribute("aria-hidden", "true");
   }
-  // 页内条：有全局条时只留副文案（lineOnly），禁止再画一遍阶段点
-  const pageOpts = hasGlobal
-    ? { lineOnly: true }
-    : { compact: false };
-  const hostPlan = $("#flow-strip-planning");
-  const hostConfirm = $("#flow-strip-confirm");
-  const hostRun = $("#flow-strip-running");
-  if (hostPlan) {
-    if (ph === "planning") {
-      const html = flowStageStripHtml("planning", pageOpts);
-      hostPlan.innerHTML = html;
-      hostPlan.hidden = !html;
-    } else {
-      hostPlan.hidden = true;
-    }
-  }
-  if (hostConfirm) {
-    if (ph === "confirm") {
-      const html = flowStageStripHtml("confirm", pageOpts);
-      hostConfirm.innerHTML = html;
-      hostConfirm.hidden = !html;
-    } else {
-      hostConfirm.hidden = true;
-    }
-  }
-  if (hostRun) {
-    const runActive =
-      ph === "running" ||
-      (typeof hasActiveRun === "function" && hasActiveRun());
-    if (runActive && state.page === "workspace") {
-      const liveSt = String(state.live?.run_status || "").toLowerCase();
-      const done =
-        ["completed", "done", "success"].includes(liveSt) ||
-        (state.live && !runActive);
-      const fail = ["failed", "aborted", "error"].includes(liveSt);
-      const html = flowStageStripHtml(
-        fail ? "fail" : done ? "done" : "running",
-        pageOpts
-      );
-      hostRun.innerHTML = html;
-      hostRun.hidden = !html;
-    } else {
-      hostRun.hidden = true;
-    }
+  for (const id of [
+    "#flow-strip-planning",
+    "#flow-strip-confirm",
+    "#flow-strip-running",
+  ]) {
+    const el = $(id);
+    if (!el) continue;
+    el.innerHTML = "";
+    el.hidden = true;
+    el.setAttribute("aria-hidden", "true");
   }
   const mode =
     state.planJob?.digest_mode ||
@@ -178,14 +143,18 @@ export function renderPhasePanels() {
   if (!planning || !confirm) return;
 
   const ph = state.phase;
-  planning.hidden = ph !== "planning";
+  const splitFailed = ph === "plan_failed";
+  // plan_failed reuses planning shell as a failure surface (no historical run desk).
+  planning.hidden = ph !== "planning" && !splitFailed;
   confirm.hidden = ph !== "confirm";
 
   try {
     refreshFlowStrips(ph);
   } catch (_) {}
 
-  if (ph === "planning") {
+  paintPlanningFailSurface(splitFailed);
+
+  if (ph === "planning" || splitFailed) {
     if (state.planJob) {
       fillPlannerLog(state.planJob);
     } else {
@@ -201,12 +170,69 @@ export function renderPhasePanels() {
   try { host.updateBgPlanBanner(); } catch (_) {}
 }
 
+/** Switch planning panel between spinner and failure (plan_failed). */
+function paintPlanningFailSurface(failed) {
+  const panel = $("#plan-phase-planning");
+  if (!panel) return;
+  panel.classList.toggle("is-plan-failed", !!failed);
+  const spinner = panel.querySelector(".planning-title-row .spinner");
+  const h3 = panel.querySelector(".planning-title-row h3");
+  const sub = $("#planning-sub");
+  const bar = panel.querySelector(".planning-progress");
+  const cancelBtn = $("#btn-cancel-planning");
+  const retryBtn = $("#btn-retry-planning");
+  const errBox = $("#planning-fail-detail");
+  const job = state.planJob;
+  const errText = String(job?.error || "").trim();
+
+  if (spinner) spinner.hidden = !!failed;
+  if (bar) bar.hidden = !!failed;
+  if (h3) {
+    h3.textContent = failed
+      ? "拆分没有成功"
+      : "正在把计划拆成可执行步骤…";
+  }
+  if (sub) {
+    if (failed) {
+      if (/hard timeout|301s|did not finish/i.test(errText)) {
+        sub.textContent =
+          "智能拆分超时未完成。不会进入执行；可再拆一次，或改用本地规则拆分。";
+      } else if (errText) {
+        sub.textContent = errText.length > 200 ? errText.slice(0, 198) + "…" : errText;
+      } else {
+        sub.textContent = "拆分失败，不会进入执行台。请再拆一次或换拆分方式。";
+      }
+    }
+    // when !failed, jobPoll keeps updating planning-sub
+  }
+  if (errBox) {
+    if (failed && errText) {
+      errBox.hidden = false;
+      errBox.textContent = errText;
+    } else {
+      errBox.hidden = true;
+      errBox.textContent = "";
+    }
+  }
+  if (cancelBtn) {
+    cancelBtn.textContent = failed ? "回到计划" : "取消回计划";
+  }
+  if (retryBtn) {
+    retryBtn.hidden = !failed;
+  }
+}
+
 export function renderWorkspaceShell() {
   const body = $("#workspace-body");
   if (!body) return;
   body.classList.remove("mode-idle", "mode-running", "mode-done", "mode-plan");
-  if (state.phase === "planning" || state.phase === "confirm") body.classList.add("mode-plan");
-  else if (isLiveStatus(state.live?.run_status)) body.classList.add("mode-running");
+  if (
+    state.phase === "planning" ||
+    state.phase === "confirm" ||
+    state.phase === "plan_failed"
+  ) {
+    body.classList.add("mode-plan");
+  } else if (isLiveStatus(state.live?.run_status)) body.classList.add("mode-running");
   else if (state.phase === "done") body.classList.add("mode-done");
   else body.classList.add("mode-idle");
 }
@@ -251,8 +277,10 @@ export function updateSplitPlanChip() {
   $("#split-plan-chip-name").textContent = name;
   $("#split-plan-chip-meta").textContent = `${n} 任务 · 并发上限 ${mp}${capHint} · ${waves || "—"} 波${runHint}`;
   chip.title = hasActiveRun()
-    ? "查看拆分结果（运行中只读；停止后可编辑/重拆）"
-    : "点击查看/编辑拆分结果";
+    ? "查看拆分结果（运行中只读；停止后可重新规划）"
+    : "查看拆分结果";
+  const labelEl = chip.querySelector(".split-plan-chip-label");
+  if (labelEl) labelEl.textContent = "查看拆分结果";
   updateBudgetChip();
 }
 

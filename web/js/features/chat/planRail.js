@@ -244,6 +244,19 @@ export function renderPlanRail() {
       ? normalizePlanPath(latestPath, root) || latestPath
       : latestPath;
 
+  // shell-chrome C1：当前内存里的 planJob 指向哪份计划 → 可「查看拆分结果」
+  const job = state.planJob;
+  const jobSt = String(job?.status || "").toLowerCase();
+  const jobPathRaw = job?.plan_path || job?.planPath || "";
+  const jobPath =
+    jobPathRaw && typeof normalizePlanPath === "function"
+      ? normalizePlanPath(jobPathRaw, root) || jobPathRaw
+      : jobPathRaw;
+  const jobHasSplit =
+    !!job &&
+    !!jobPath &&
+    ["planned", "confirmed", "running", "done", "completed"].includes(jobSt);
+
   const rows = parts.visible.map((it) => {
     const path = it.path || "";
     const rawTitle = it.title || planRailTitleFromPath(path);
@@ -262,22 +275,73 @@ export function renderPlanRail() {
     const latestMark = isLatest
       ? `<span class="plan-latest-tag">最新</span>`
       : "";
+    const canViewSplit =
+      jobHasSplit &&
+      (norm === jobPath || path === jobPath || path === jobPathRaw);
+    const viewSplitBtn = canViewSplit
+      ? `<button type="button" class="plan-rail-view-split" data-plan-rail-view="${chatEsc(
+          path
+        )}" title="查看拆分结果">查看拆分结果</button>`
+      : "";
     return (
+      `<div class="plan-rail-row${active}${selected}${isLatest}">` +
       `<button type="button" class="plan-rail-item${active}${selected}${isLatest}" data-plan-rail="${chatEsc(path)}" title="${chatEsc(path)}">` +
       `<div class="plan-rail-item-title">${chatEsc(title)}${latestMark}</div>` +
       `<div class="plan-rail-item-path">${chatEsc(path)}</div>` +
       `<div class="plan-rail-item-meta"><span class="plan-rail-badge ${badge.cls}">${chatEsc(badge.label)}</span></div>` +
-      `</button>`
+      `</button>` +
+      viewSplitBtn +
+      `</div>`
     );
   });
   if (parts.historyHidden) {
     rows.push(
       `<div class="plan-history-hint muted" role="note">` +
-        `已隐藏 ${parts.historyCount} 份已执行 · 勾选「显示已执行」` +
+        `已隐藏 ${parts.historyCount} 份已执行 · 勾选「显示已执行」可展开；有拆分的可点「查看拆分结果」` +
         `</div>`
     );
   }
   list.innerHTML = rows.join("");
+}
+
+/**
+ * shell-chrome C1：从聊天 plan-rail 回看拆分台。
+ * @param {string} [planPath]
+ */
+export function viewSplitFromPlanRail(planPath) {
+  ensureChatState();
+  const path =
+    planPath ||
+    state.planRailSelected ||
+    state.selectedPlan ||
+    null;
+  if (!path) {
+    if (typeof window.toast === "function") window.toast("请先选中一份计划");
+    return;
+  }
+  if (!state.planJob) {
+    if (typeof window.toast === "function") {
+      window.toast("还没有拆分结果，请先点「拆成步骤」");
+    }
+    return;
+  }
+  selectPlanRailItem(path);
+  state.chatDraftPlan = path;
+  state.selectedPlan = path;
+  if (typeof window.showSplitPlanConfirm === "function") {
+    window.showSplitPlanConfirm({ keepReturn: true });
+    return;
+  }
+  if (typeof host.showSplitPlanConfirm === "function") {
+    host.showSplitPlanConfirm({ keepReturn: true });
+    return;
+  }
+  state.phase = "confirm";
+  try {
+    host.renderPhasePanels?.();
+    host.renderPlanPicker?.();
+  } catch (_) {}
+  if (typeof window.showPage === "function") window.showPage("workspace");
 }
 
 /** 从路径/时间戳猜「最新」计划（chat-YYYYMMDD-HHMM 优先，否则列表首项）. */

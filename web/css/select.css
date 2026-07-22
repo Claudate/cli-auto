@@ -79,11 +79,16 @@ select.cco-select--sm,
   background-size: 0.65rem 0.42rem;
 }
 
-/* field / settings 内统一占满 */
+/* field / input-row 内占满；settings 行内短控件见 layout.css .settings-row */
 .field select,
-.settings-group select,
 .input-row select {
   width: 100%;
+}
+/* settings 里原生 select（未 enhance 前）不要 100% 撑满 */
+.settings-group select.settings-select,
+.settings-row > select {
+  width: auto;
+  min-width: 8.5rem;
 }
 
 /* ── 自定义包装（installSelectUi 注入） ── */

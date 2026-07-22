@@ -301,7 +301,20 @@ pub fn start_run_async(config: Config, req: StartRunRequest) -> Result<String> {
 /// Always drops `optional && !include` before write/spawn (A0-R4 · D-T3-1),
 /// same as [`crate::app::run::materialize_run`]. Mode B callers usually already
 /// ran `materialize_selected_tasks` — re-apply is idempotent.
+///
+/// Route provenance: see [`start_run_from_plan_with_route`].
 pub fn start_run_from_plan(config: Config, project: PathBuf, ir: &PlanIR) -> Result<String> {
+    start_run_from_plan_with_route(config, project, ir, None)
+}
+
+/// Same as [`start_run_from_plan`] but stamps `route_source` from an optional
+/// soft/force fill report (P1-2). When `route_report` is `None`, infers from IR.
+pub fn start_run_from_plan_with_route(
+    config: Config,
+    project: PathBuf,
+    ir: &PlanIR,
+    route_report: Option<&crate::domain::worker::RouteFillReport>,
+) -> Result<String> {
     if !project.is_dir() {
         bail!("项目路径不是目录: {}", project.display());
     }
@@ -312,7 +325,12 @@ pub fn start_run_from_plan(config: Config, project: PathBuf, ir: &PlanIR) -> Res
     let project = project
         .canonicalize()
         .with_context(|| format!("canonicalize {}", project.display()))?;
-    let run_state = RunState::new(run_id.clone(), project, &ir, run_dir.clone());
+    // P1-2: stamp route_source at RunState assembly (never in domain).
+    let mut run_state = RunState::new(run_id.clone(), project, &ir, run_dir.clone());
+    if let Some(report) = route_report {
+        crate::app::run::stamp_route_fill(&mut run_state, &ir, report);
+    }
+    crate::app::run::stamp_route_inferred(&mut run_state, &ir);
     run_state.save()?;
 
     // Persist resolved plan for resume (scheduler also writes this; write early for UI).

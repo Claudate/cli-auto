@@ -93,26 +93,66 @@ export async function pickFolderToModal() {
   }
 }
 
-export async function removeSelectedProject() {
-  if (!state.selectedPath) return;
-  if (hasActiveRun()) {
-    toastRunLocked("关闭/移除项目");
+/**
+ * shell-chrome B1：从 cco 列表移除项目（不删磁盘文件夹）。
+ * @param {string} [pathArg] 侧栏行路径；默认当前选中
+ * @param {{ skipConfirm?: boolean }} [opts]
+ */
+export async function removeSelectedProject(pathArg, opts = {}) {
+  const path = pathArg || state.selectedPath;
+  if (!path) return;
+  const isCurrent = path === state.selectedPath;
+  // 运行中：当前项目用 hasActiveRun；其它行看 projects 上的 active_status
+  if (isCurrent && hasActiveRun()) {
+    toastRunLocked("移除项目");
     return;
   }
+  if (!isCurrent) {
+    const p = (state.projects || []).find((x) => x.path === path);
+    const stt = String(p?.active_status || "").toLowerCase();
+    const live =
+      (p?.running_tasks > 0) ||
+      ["running", "starting", "queued", "validated", "init", "resuming"].includes(
+        stt
+      );
+    if (live) {
+      toast("该项目还在执行，请先停止后再从列表移除");
+      return;
+    }
+  }
+  const proj =
+    (state.projects || []).find((x) => x.path === path) || null;
+  const name =
+    proj?.name ||
+    String(path).split(/[/\\]/).filter(Boolean).pop() ||
+    path;
+  if (!opts.skipConfirm) {
+    const ok = window.confirm(
+      `从 cco 列表移除「${name}」？不会删除电脑上的文件夹。`
+    );
+    if (!ok) return;
+  }
   try {
-    const path = state.selectedPath;
     await requireGateway().removeProject(path);
-    toast("已移除项目");
-    host.clearPlanSession(path);
-    host.stopPlanJobPoll();
-    host.setAssignBusy(false);
-    state.planJobId = null;
-    state.planJob = null;
-    state.phase = "pick";
-    state.selectedPath = null;
-    state.live = null;
+    toast("已从列表移除（文件夹仍在）");
+    host.clearPlanSession?.(path);
+    if (isCurrent) {
+      host.stopPlanJobPoll?.();
+      host.setAssignBusy?.(false);
+      state.planJobId = null;
+      state.planJob = null;
+      state.phase = "pick";
+      state.selectedPath = null;
+      state.live = null;
+    }
+    if (state.planSessions && state.planSessions[path]) {
+      try {
+        delete state.planSessions[path];
+      } catch (_) {}
+    }
     await loadProjects();
-    goHome();
+    if (isCurrent) goHome();
+    else renderProjectList();
   } catch (e) {
     toast(String(e));
   }

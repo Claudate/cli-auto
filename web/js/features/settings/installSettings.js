@@ -6,7 +6,13 @@
  */
 
 import * as settingsApi from "./settingsApi.js";
-import { loadSettings, saveSettings } from "./settingsForm.js";
+import {
+  loadSettings,
+  saveSettings,
+  loadProjectPins,
+  addProjectPin,
+  deleteProjectPin,
+} from "./settingsForm.js";
 import {
   loadDoctor,
   ensureDoctor,
@@ -32,6 +38,9 @@ export function createSettingsDesk() {
     api: settingsApi,
     loadSettings,
     saveSettings,
+    loadProjectPins,
+    addProjectPin,
+    deleteProjectPin,
     loadDoctor,
     ensureDoctor,
     renderDoctorWarn,
@@ -64,6 +73,9 @@ export function installSettingsHost(opts = {}) {
   // Classic global names (strangler) — overwrite any earlier stubs
   window.loadSettings = loadSettings;
   window.saveSettings = saveSettings;
+  window.loadProjectPins = loadProjectPins;
+  window.addProjectPin = addProjectPin;
+  window.deleteProjectPin = deleteProjectPin;
   window.loadDoctor = loadDoctor;
   window.ensureDoctor = ensureDoctor;
   window.renderDoctorWarn = renderDoctorWarn;

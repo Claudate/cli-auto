@@ -235,6 +235,30 @@ export async function renderPlansMgmtDetail(item) {
   }
   const btnPreview = $("#btn-plans-preview");
   if (btnPreview) btnPreview.dataset.plan = path;
+  // shell-chrome C1：已有拆分（当前 job 指向该计划）→「查看拆分结果」
+  const btnViewSplit = $("#btn-plans-view-split");
+  if (btnViewSplit) {
+    const job = state.planJob;
+    const jobPath =
+      typeof normalizePlanPath === "function"
+        ? normalizePlanPath(job?.plan_path || job?.planPath || "", root) ||
+          job?.plan_path ||
+          job?.planPath ||
+          ""
+        : job?.plan_path || job?.planPath || "";
+    const st = String(job?.status || "").toLowerCase();
+    const hasSplit =
+      !!job &&
+      !!path &&
+      jobPath &&
+      (jobPath === path || String(jobPath) === String(path)) &&
+      ["planned", "confirmed", "running", "done"].includes(st);
+    btnViewSplit.hidden = !hasSplit;
+    btnViewSplit.dataset.plan = path || "";
+    btnViewSplit.title = hasSplit
+      ? "查看拆分结果（可重新规划）"
+      : "暂无该计划的拆分结果";
+  }
 }
 
 /** 计划管理页：单击选中并刷新详情 */
@@ -275,5 +299,38 @@ export async function assignFromPlansMgmt() {
   } catch (e) {
     toast(String(e?.message || e || "无法打开执行选项"));
   }
+}
+
+/** shell-chrome C1：从计划管理回看拆分台（只读/可再规划） */
+export function viewSplitFromPlansMgmt() {
+  const path =
+    $("#btn-plans-view-split")?.dataset?.plan ||
+    state.planRailSelected ||
+    state.selectedPlan;
+  if (!path) {
+    toast("请先选中一份计划");
+    return;
+  }
+  if (!state.planJob) {
+    toast("还没有拆分结果，请先点「拆成步骤」");
+    return;
+  }
+  host.selectPlanRailItem?.(path);
+  state.chatDraftPlan = path;
+  state.selectedPlan = path;
+  if (typeof window.showSplitPlanConfirm === "function") {
+    window.showSplitPlanConfirm({ keepReturn: true });
+    return;
+  }
+  if (typeof host.showSplitPlanConfirm === "function") {
+    host.showSplitPlanConfirm({ keepReturn: true });
+    return;
+  }
+  showPage("workspace");
+  state.phase = "confirm";
+  try {
+    host.renderPhasePanels?.();
+    host.renderPlanPicker?.();
+  } catch (_) {}
 }
 
