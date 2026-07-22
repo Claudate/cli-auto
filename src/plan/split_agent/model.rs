@@ -95,7 +95,12 @@ fn call_messages_http(req: &SplitRequest) -> Result<String> {
         .and_then(|s| s.to_str())
         .unwrap_or("project");
     let plan_md = truncate_plan(&req.plan_md, 40_000);
-    let user = user_prompt(project_label, req.max_parallel, &plan_md);
+    let user = user_prompt(
+        project_label,
+        req.max_parallel,
+        &plan_md,
+        req.grain_hint.as_deref(),
+    );
     let body = json!({
         "model": model,
         "max_tokens": SPLIT_MAX_TOKENS,
@@ -181,7 +186,12 @@ fn call_claude_cli_print(config: &Config, req: &SplitRequest) -> Result<String> 
         .and_then(|s| s.to_str())
         .unwrap_or("project");
     let plan_md = truncate_plan(&req.plan_md, 40_000);
-    let user = user_prompt(project_label, req.max_parallel, &plan_md);
+    let user = user_prompt(
+        project_label,
+        req.max_parallel,
+        &plan_md,
+        req.grain_hint.as_deref(),
+    );
     // CLI print: single user-ish prompt with system rules inlined (no separate system role).
     let prompt = format!("{}\n\n{}", system_prompt(), user);
     std::fs::write(task_dir.join("prompt.md"), &prompt)?;
@@ -291,6 +301,7 @@ mod tests {
             max_parallel: 2,
             created_at: "t0".into(),
             updated_at: "t0".into(),
+            grain_hint: None,
         };
         let job = agent.split(&req).unwrap();
         assert_eq!(job.tasks.len(), 2);

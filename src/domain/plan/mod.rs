@@ -23,8 +23,10 @@ pub use cco_split::{
     CcoTaskKind, CcoTaskStatus, CCO_SPLIT_SCHEMA,
 };
 pub use materialize::{materialize_role_defaults, materialize_selected_tasks};
-pub use optional::{normalize_optional_title, title_is_meta_heading, title_looks_optional};
-pub use routing::apply_tag_routing;
+pub use optional::{
+    looks_like_work_task_id, normalize_optional_title, title_is_meta_heading, title_looks_optional,
+};
+pub use routing::{apply_tag_routing, tag_implied_provider};
 pub use soften::soften_plan_for_accept;
 pub use system_ids::{
     is_system_post_task, SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID, SYS_POST_OPEN_PR_ID,
@@ -35,7 +37,7 @@ pub use types::{
     MAX_PROMPT_CHARS, MAX_TASKS, MAX_TIMEOUT_SECS, PLANNER_MAX_BUDGET_USD, PLANNER_MAX_TASKS,
 };
 
-// Crate-private helpers used by `plan` facade unit tests (A1 migration).
+// Crate-private helpers (soft_accept uses validate::* via super::super; tests need re-export).
 #[cfg(test)]
 pub(crate) use materialize::materialize_inspect_task;
 #[cfg(test)]

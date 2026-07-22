@@ -37,6 +37,7 @@ pub fn run(
             mode,
             max_parallel: None,
             preserve_from_job_id: None,
+            grain_hint: None,
         },
     )?;
     let mut view = view;

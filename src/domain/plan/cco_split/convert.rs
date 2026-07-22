@@ -55,7 +55,20 @@ fn task_from_ir(ord: i32, t: &TaskIR) -> CcoSplitTask {
     } else {
         CcoTaskKind::Do
     };
-    let summary = first_line_summary(&t.prompt);
+    let done_when = t
+        .acceptance
+        .clone()
+        .or_else(|| super::humanize::parse_done_when(&t.prompt));
+    let summary = super::humanize::human_summary(
+        &t.title,
+        &t.prompt,
+        done_when.as_deref().or(t.acceptance.as_deref()),
+    );
+    let summary = if summary.is_empty() {
+        first_line_summary(&t.prompt)
+    } else {
+        summary
+    };
     let scope_paths = t
         .scope
         .as_ref()
@@ -92,14 +105,14 @@ fn task_from_ir(ord: i32, t: &TaskIR) -> CcoSplitTask {
     CcoSplitTask {
         task_id: t.id.clone(),
         ord,
-        title: t.title.clone(),
+        title: super::humanize::display_title(&t.title),
         summary,
         body: t.prompt.clone(),
         depends_on: t.depends_on.clone(),
         wave: 0,
         enabled: if t.optional { t.include } else { true },
         optional: t.optional,
-        done_when: t.acceptance.clone(),
+        done_when,
         plan_ref: t.group.clone(),
         kind,
         status: CcoTaskStatus::Pending,
@@ -217,6 +230,15 @@ fn task_to_ir(t: &CcoSplitTask, default_provider: &str, default_mode: &str) -> T
         .filter(|p| !p.is_empty())
         .unwrap_or_else(|| default_provider.to_string());
 
+    // W2-3: worker scaffold must not be the first line the executor sees.
+    let prompt = {
+        let stripped = super::humanize::strip_worker_scaffold(&t.body);
+        if stripped.trim().is_empty() {
+            t.body.clone()
+        } else {
+            stripped
+        }
+    };
     TaskIR {
         id: t.task_id.clone(),
         title: t.title.clone(),
@@ -224,7 +246,7 @@ fn task_to_ir(t: &CcoSplitTask, default_provider: &str, default_mode: &str) -> T
         group,
         provider,
         mode,
-        prompt: t.body.clone(),
+        prompt,
         acceptance: t.done_when.clone(),
         timeout_secs: None,
         worktree,

@@ -40,6 +40,7 @@ pub(crate) fn plan_then_load_ir(
             mode,
             max_parallel,
             preserve_from_job_id: None,
+            grain_hint: None,
         },
     )?;
     let mut view = view;

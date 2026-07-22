@@ -88,7 +88,8 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
         j.updated_at = Utc::now();
         let _ = j.save(config);
     }
-    let prompt = planner_system_prompt(&job.project, &source_text, max_parallel, &digest);
+    let prompt =
+        planner_system_prompt_with_memory(Some(config), &job.project, &source_text, max_parallel, &digest);
     std::fs::write(task_dir.join("prompt.md"), &prompt)?;
     append_log(config, &job.job_id, "starting intelligent planner…");
 
@@ -279,6 +280,15 @@ pub(super) struct LlmCriticOutcome {
     pub duration_ms: Option<u64>,
 }
 
+/// Plan modes that promise a local/fast split — never start a second Claude critic.
+/// (Settings may still show critic enabled; that only applies to `ai`.)
+pub(super) fn plan_mode_skips_llm_critic(plan_mode: &str) -> bool {
+    matches!(
+        plan_mode.trim().to_ascii_lowercase().as_str(),
+        "fast" | "heuristic" | "parse" | "fake"
+    )
+}
+
 /// Optional second-pass LLM critic: only drop bad edges + notes.
 /// Soft-fail: any error is logged and ignored (rule critic already ran).
 pub(super) fn run_optional_llm_critic(
@@ -291,6 +301,17 @@ pub(super) fn run_optional_llm_critic(
         apply_llm_critic_patch, parse_llm_critic_patch, tasks_skeleton_json, CriticReport,
     };
 
+    if plan_mode_skips_llm_critic(&job.plan_mode) {
+        append_log(
+            config,
+            &job.job_id,
+            &format!(
+                "LLM critic skipped (plan_mode={}; local/fast path)",
+                job.plan_mode
+            ),
+        );
+        return LlmCriticOutcome::default();
+    }
     if !llm_critic_enabled(config) {
         return LlmCriticOutcome::default();
     }
@@ -458,13 +479,15 @@ fn run_short_claude_print(
         provider.validate_task(&planner_task)?;
         let handle = provider.start(&planner_task, &ctx).await?;
         let mut ticks = 0u32;
+        let mut timed_out = false;
         loop {
             match provider.poll(&handle).await? {
                 WorkerStatus::Running => {
                     ticks += 1;
-                    if ticks > 450 {
-                        // ~3 min
-                        bail!("llm critic timeout");
+                    // ~2 min — must soft-fail well before planning hard timeout (5 min).
+                    if ticks > 300 {
+                        timed_out = true;
+                        break;
                     }
                     tokio::time::sleep(Duration::from_millis(400)).await;
                 }
@@ -474,6 +497,14 @@ fn run_short_claude_print(
                 | WorkerStatus::Timeout => break,
             }
         }
+        if timed_out {
+            // Kill the hung Claude so hard-timeout reaper / next split are not blocked.
+            let _ = provider.stop(&handle).await;
+            if let Some(pid) = handle.pid {
+                super::job::kill_pid_best_effort(pid);
+            }
+            bail!("llm critic timeout");
+        }
         let result = provider.collect(&handle).await?;
         let cost = result.cost_usd;
         let stdout = result
@@ -482,6 +513,8 @@ fn run_short_claude_print(
             .and_then(|p| std::fs::read_to_string(p).ok())
             .unwrap_or_default();
         if !matches!(result.status, crate::runtime::provider::TaskStatus::Done) {
+            // Failed/stopped workers may still leave a live child briefly — best-effort stop.
+            let _ = provider.stop(&handle).await;
             let err = result.error.unwrap_or_else(|| "critic worker failed".into());
             bail!("critic worker not done: {err}");
         }
@@ -499,7 +532,9 @@ pub(super) fn read_planner_cost(config: &Config, job_id: &str) -> Option<f64> {
         .or_else(|| v.get("planner_cost_usd").and_then(|x| x.as_f64()))
 }
 
-pub(super) fn planner_system_prompt(
+/// Planner system prompt with optional project memory context (P2-2 · context only).
+pub(super) fn planner_system_prompt_with_memory(
+    config: Option<&Config>,
     project: &Path,
     source: &str,
     max_parallel: usize,
@@ -540,7 +575,7 @@ pub(super) fn planner_system_prompt(
     } else {
         source.to_string()
     };
-    format!(
+    let base = format!(
         r#"你是 cco 编排器的「规划器」。用户只会提供 **Markdown 计划**（不会写 YAML）。你的产出是给确认屏看的**可执行工作包 DAG**，不是文档目录。
 
 项目路径: {project}
@@ -628,7 +663,15 @@ pub(super) fn planner_system_prompt(
         mode = mode,
         mode_rules = mode_rules,
         source = source,
-    )
+    );
+    // P2-2: pin/summary as context only — does not rewrite route or auto-confirm.
+    if let Some(cfg) = config {
+        let mem = crate::app::memory::prompt_context(cfg, project);
+        if !mem.is_empty() {
+            return format!("{base}\n{mem}");
+        }
+    }
+    base
 }
 
 #[derive(Debug, Deserialize)]
@@ -1043,4 +1086,114 @@ pub(super) fn find_matching_brace(bytes: &[u8], start: usize) -> Option<usize> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod llm_critic_gate_tests {
+    use super::{plan_mode_skips_llm_critic, run_optional_llm_critic};
+    use super::super::digest::PlanModeKind;
+    use super::super::job::{job_dir, PlanJob, PlanJobStatus};
+    use crate::config::Config;
+    use crate::plan::{OnFailure, PlanIR, TaskIR};
+    use chrono::Utc;
+    use std::path::PathBuf;
+    use tempfile::tempdir;
+
+    #[test]
+    fn plan_mode_skips_llm_critic_for_local_modes() {
+        for m in ["fast", "heuristic", "parse", "fake", "FAST", " Parse "] {
+            assert!(plan_mode_skips_llm_critic(m), "mode={m}");
+        }
+        assert!(!plan_mode_skips_llm_critic("ai"));
+        assert!(!plan_mode_skips_llm_critic(""));
+    }
+
+    #[test]
+    fn run_optional_llm_critic_skips_on_fast_even_if_setting_on() {
+        let dir = tempdir().unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        cfg.default.planner_critic_enabled = true;
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let job_id = "plan-fast-skip-critic";
+        let job = PlanJob {
+            job_id: job_id.into(),
+            status: PlanJobStatus::Planning,
+            project: dir.path().to_path_buf(),
+            plan_path: PathBuf::from("idea.md"),
+            plan_mode: "fast".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: None,
+            run_id: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            plan_name: None,
+            task_count: None,
+            max_parallel: Some(2),
+            adapter: None,
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+            grain_hint: None,
+        };
+        job.save(&cfg).unwrap();
+
+        let mut ir = PlanIR {
+            schema: "cco-plan/v1".into(),
+            name: "n".into(),
+            adapter: "planner-ai-heuristic".into(),
+            source_path: PathBuf::from("idea.md"),
+            max_parallel: 2,
+            on_failure: OnFailure::Pause,
+            retry_max: 0,
+            default_provider: "claude".into(),
+            default_mode: "print".into(),
+            worktree: false,
+            require_inspect: false,
+            tasks: vec![TaskIR {
+                id: "t1".into(),
+                title: "A".into(),
+                depends_on: vec![],
+                group: None,
+                provider: "claude".into(),
+                mode: "print".into(),
+                prompt: "p\nCCO_DONE ok".into(),
+                acceptance: None,
+                timeout_secs: None,
+                worktree: None,
+                provider_opts: serde_json::json!({}),
+                optional: false,
+                include: true,
+                role: None,
+                scope: None,
+                outputs: vec![],
+                tags: vec![],
+            }],
+        };
+        let out = run_optional_llm_critic(
+            &cfg,
+            &job,
+            &mut ir,
+            PlanModeKind::Greenfield,
+        );
+        assert!(!out.used);
+        assert!(out.duration_ms.is_none());
+        // No __critic__ task dir should be created when skipped by plan_mode.
+        let critic = job_dir(&cfg, job_id).join("llm_work/tasks/__critic__");
+        assert!(!critic.exists(), "critic dir should not be created on fast skip");
+        let log = std::fs::read_to_string(job_dir(&cfg, job_id).join("planner.log")).unwrap_or_default();
+        assert!(
+            log.contains("LLM critic skipped") && log.contains("fast"),
+            "log={log}"
+        );
+    }
 }

@@ -93,6 +93,9 @@ pub struct PlanJob {
     /// Wall time of optional LLM critic in milliseconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub critic_llm_ms: Option<u64>,
+    /// W4: grain line forwarded to ModelSplitAgent (empty = omit).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grain_hint: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -109,6 +112,9 @@ pub struct StartPlanJobRequest {
     /// onto the fresh split (match by title; rebuild depends_on by dep titles).
     #[serde(default)]
     pub preserve_from_job_id: Option<String>,
+    /// W4: optional grain line for ModelSplitAgent user prompt (偏粗/偏细); never forces fast.
+    #[serde(default)]
+    pub grain_hint: Option<String>,
 }
 
 pub fn plan_jobs_dir(config: &Config) -> PathBuf {
@@ -214,6 +220,11 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
+    let grain_hint = req
+        .grain_hint
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
     let mut job = PlanJob {
         job_id: job_id.clone(),
         status: PlanJobStatus::Planning,
@@ -240,6 +251,7 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         critic_llm_used: None,
         critic_llm_cost_usd: None,
         critic_llm_ms: None,
+        grain_hint,
     };
     std::fs::create_dir_all(job_dir(config, &job_id))?;
     // P2-2: copy user-edits sidecar before planner finishes so async path can apply it.
@@ -404,6 +416,18 @@ fn job_marked_cancelled(config: &Config, job_id: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Cancelled **or** reaped to plan_failed while a long critic/worker was in-flight.
+fn job_finish_aborted(config: &Config, job_id: &str) -> bool {
+    PlanJob::load(config, job_id)
+        .map(|j| {
+            matches!(
+                j.status,
+                PlanJobStatus::Cancelled | PlanJobStatus::PlanFailed
+            )
+        })
+        .unwrap_or(false)
+}
+
 pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
     let job_id = job.job_id.clone();
     if matches!(job.status, PlanJobStatus::Cancelled) || job_marked_cancelled(config, &job_id) {
@@ -416,11 +440,11 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
     }
     match run_planner(config, job) {
         Ok(mut ir) => {
-            if job_marked_cancelled(config, &job_id) {
+            if job_finish_aborted(config, &job_id) {
                 append_log(
                     config,
                     &job_id,
-                    "finish aborted after planner: job cancelled/superseded",
+                    "finish aborted after planner: job cancelled/superseded/reaped",
                 );
                 return;
             }
@@ -445,7 +469,16 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
                 .unwrap_or(super::digest::PlanModeKind::Greenfield);
             let mut critic = super::digest::critic_plan_tasks(&mut ir.tasks, mode);
             // Optional second-pass LLM critic (settings / CCO_PLANNER_CRITIC). Soft-fail.
+            // Skipped for plan_mode=fast|heuristic|parse (local path must not call Claude).
             let llm_out = super::llm::run_optional_llm_critic(config, job, &mut ir, mode);
+            if job_finish_aborted(config, &job_id) {
+                append_log(
+                    config,
+                    &job_id,
+                    "finish aborted after critic: job cancelled/superseded/reaped",
+                );
+                return;
+            }
             critic.edges_removed += llm_out.report.edges_removed;
             critic.titles_rewritten += llm_out.report.titles_rewritten;
             critic.prompts_tagged += llm_out.report.prompts_tagged;
@@ -518,11 +551,11 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
                     }
                 }
             }
-            if job_marked_cancelled(config, &job_id) {
+            if job_finish_aborted(config, &job_id) {
                 append_log(
                     config,
                     &job_id,
-                    "finish aborted before write: job cancelled/superseded",
+                    "finish aborted before write: job cancelled/superseded/reaped",
                 );
                 return;
             }
@@ -534,11 +567,11 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
                 append_log(config, &job_id, &format!("write proposed failed: {e:#}"));
                 return;
             }
-            if job_marked_cancelled(config, &job_id) {
+            if job_finish_aborted(config, &job_id) {
                 append_log(
                     config,
                     &job_id,
-                    "finish aborted after write: job cancelled/superseded (proposed left on disk)",
+                    "finish aborted after write: job cancelled/superseded/reaped (proposed left on disk)",
                 );
                 return;
             }
@@ -677,18 +710,28 @@ pub(super) fn try_reap_zombie_planning(
     Some(job.clone())
 }
 
-/// Best-effort SIGTERM (then SIGKILL) of planner meta.pid under job llm_work.
+/// Best-effort SIGTERM (then SIGKILL) of **all** live pids under
+/// `llm_work/tasks/*/meta.json` (`__planner__`, `__critic__`, …).
 fn kill_planner_pid(config: &Config, job_id: &str) {
     let dir = job_dir(config, job_id);
-    let Some(pid) = read_planner_meta_pid(&dir) else {
+    let pids = collect_llm_work_pids(&dir);
+    if pids.is_empty() {
         return;
-    };
+    }
+    for pid in pids {
+        if kill_pid_best_effort(pid) {
+            append_log(config, job_id, &format!("killed planner/worker pid={pid}"));
+        }
+    }
+}
+
+/// Public for planner LLM short-calls (critic timeout) that already hold a pid.
+pub(super) fn kill_pid_best_effort(pid: u32) -> bool {
     if pid == 0 || !process_alive(pid) {
-        return;
+        return false;
     }
     #[cfg(unix)]
     {
-        // Same pattern as services::util / process_alive — no libc crate dep.
         unsafe {
             extern "C" {
                 fn kill(pid: i32, sig: i32) -> i32;
@@ -699,29 +742,57 @@ fn kill_planner_pid(config: &Config, job_id: &str) {
                 let _ = kill(pid as i32, 9); // SIGKILL
             }
         }
-        append_log(config, job_id, &format!("killed planner pid={pid}"));
+        true
     }
     #[cfg(not(unix))]
     {
         let _ = std::process::Command::new("taskkill")
             .args(["/PID", &pid.to_string(), "/F"])
             .output();
-        append_log(config, job_id, &format!("taskkill planner pid={pid}"));
+        true
     }
 }
 
+/// First live (or any known) pid among planner task metas — used for dead-pid reap heuristics.
 fn read_planner_meta_pid(job_dir: &std::path::Path) -> Option<u32> {
-    let meta = job_dir
-        .join("llm_work")
-        .join("tasks")
-        .join("__planner__")
-        .join("meta.json");
-    let text = std::fs::read_to_string(meta).ok()?;
-    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
-    v.get("pid")
-        .and_then(|p| p.as_u64())
-        .map(|p| p as u32)
-        .filter(|p| *p > 0)
+    let pids = collect_llm_work_pids(job_dir);
+    // Prefer a still-alive pid (critic hang) so dead-pid / kill logic sees the real worker.
+    pids.iter()
+        .copied()
+        .find(|p| process_alive(*p))
+        .or_else(|| pids.into_iter().next())
+}
+
+/// Scan `llm_work/tasks/*/meta.json` for pids (planner + critic + future short workers).
+fn collect_llm_work_pids(job_dir: &std::path::Path) -> Vec<u32> {
+    let tasks = job_dir.join("llm_work").join("tasks");
+    let Ok(entries) = std::fs::read_dir(&tasks) else {
+        return Vec::new();
+    };
+    let mut pids = Vec::new();
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let meta = entry.path().join("meta.json");
+        let Ok(text) = std::fs::read_to_string(&meta) else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        if let Some(pid) = v
+            .get("pid")
+            .and_then(|p| p.as_u64())
+            .map(|p| p as u32)
+            .filter(|p| *p > 0)
+        {
+            if !pids.contains(&pid) {
+                pids.push(pid);
+            }
+        }
+    }
+    pids
 }
 
 fn planner_log_stale(job_dir: &std::path::Path, quiet_secs: i64) -> bool {
@@ -991,8 +1062,9 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
 ///
 /// Delegates pure route fill to [`crate::domain::worker::apply_worker_defaults`].
 /// Soft: never overwrites explicit non-default engines. Aligns with CLI `--provider`.
+/// Report is discarded here (plan-job path); confirm stamps provenance at materialize.
 pub(super) fn apply_worker_defaults(ir: &mut PlanIR, provider: &str, exec_mode: &str) {
-    crate::domain::worker::apply_worker_defaults(ir, provider, exec_mode);
+    let _ = crate::domain::worker::apply_worker_defaults(ir, provider, exec_mode);
 }
 
 #[cfg(test)]
@@ -1064,5 +1136,92 @@ mod apply_worker_defaults_tests {
         apply_worker_defaults(&mut ir, "claude", "print");
         assert_eq!(ir.tasks[0].provider, "claude");
         assert_eq!(ir.tasks[1].provider, "codex");
+    }
+}
+
+#[cfg(test)]
+mod reap_pid_scan_tests {
+    use super::{collect_llm_work_pids, get_plan_job, job_dir, PlanJob, PlanJobStatus};
+    use crate::config::Config;
+    use chrono::{Duration, Utc};
+    use std::path::PathBuf;
+    use tempfile::tempdir;
+
+    #[test]
+    fn collect_llm_work_pids_reads_critic_and_planner_meta() {
+        let dir = tempdir().unwrap();
+        let job = dir.path().join("job");
+        for (name, pid) in [("__planner__", 111u32), ("__critic__", 222u32)] {
+            let t = job.join("llm_work/tasks").join(name);
+            std::fs::create_dir_all(&t).unwrap();
+            std::fs::write(
+                t.join("meta.json"),
+                format!(r#"{{"pid": {pid}, "opaque_id": "pid:{pid}"}}"#),
+            )
+            .unwrap();
+        }
+        let pids = collect_llm_work_pids(&job);
+        assert!(pids.contains(&111), "pids={pids:?}");
+        assert!(pids.contains(&222), "pids={pids:?}");
+    }
+
+    #[test]
+    fn get_plan_job_reaps_zombie_when_only_critic_meta_exists() {
+        // Repro: fast path hung on __critic__ only; old reaper looked solely at __planner__.
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let zombie_id = "plan-reap-critic-only-test";
+        let zombie_dir = job_dir(&cfg, zombie_id);
+        std::fs::create_dir_all(zombie_dir.join("llm_work/tasks/__critic__")).unwrap();
+        std::fs::write(
+            zombie_dir.join("llm_work/tasks/__critic__/meta.json"),
+            r#"{"pid": 999999, "opaque_id": "pid:999999"}"#,
+        )
+        .unwrap();
+        std::fs::write(zombie_dir.join("planner.log"), "using fast local splitter\n").unwrap();
+        let zombie = PlanJob {
+            job_id: zombie_id.into(),
+            status: PlanJobStatus::Planning,
+            project: project.clone(),
+            plan_path: PathBuf::from("idea.md"),
+            plan_mode: "fast".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: None,
+            run_id: None,
+            created_at: Utc::now() - Duration::minutes(6),
+            updated_at: Utc::now() - Duration::minutes(6),
+            plan_name: None,
+            task_count: None,
+            max_parallel: Some(2),
+            adapter: None,
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+            grain_hint: None,
+        };
+        zombie.save(&cfg).unwrap();
+
+        let view = get_plan_job(&cfg, zombie_id).unwrap();
+        assert_eq!(view.status, "plan_failed", "err={:?}", view.error);
+        assert!(
+            view.error
+                .as_deref()
+                .map(|e| e.contains("process gone") || e.contains("timeout") || e.contains("stale"))
+                .unwrap_or(false),
+            "expected reap reason, got {:?}",
+            view.error
+        );
     }
 }

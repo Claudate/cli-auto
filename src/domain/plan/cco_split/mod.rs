@@ -9,12 +9,19 @@
 
 mod accept;
 mod convert;
+mod humanize;
 mod types;
 
 pub use accept::{
     recompute_waves, run_gate_ok, sanitize_cco_split_deps, soft_accept_split, split_topo_layers,
 };
 pub use convert::{from_plan_ir, to_plan_ir};
+pub use humanize::{
+    dep_cell_is_none, display_title, human_summary, is_worker_noise_line, parse_dep_cell,
+    parse_done_when, resolve_deps_from_sections, strip_worker_scaffold, work_id_from_title,
+};
+
+// Re-export names used by split_agent parse without deep paths in callers.
 pub use types::{
     CcoSplitJob, CcoSplitSource, CcoSplitStatus, CcoSplitTask, CcoTaskKind, CcoTaskStatus,
     CCO_SPLIT_SCHEMA,
@@ -233,5 +240,162 @@ mod tests {
         // After drop, t2 can share wave 0 with t1.
         assert_eq!(doc.tasks[0].wave, 0);
         assert_eq!(doc.tasks[1].wave, 0);
+    }
+
+    #[test]
+    fn soft_accept_serializes_overlapping_scope_to_different_waves() {
+        let mut a = sample_task("x", &[]);
+        a.scope_paths = vec!["web/index.html".into()];
+        a.body = "【做什么】改 index A".into();
+        let mut b = sample_task("y", &[]);
+        b.scope_paths = vec!["web/index.html".into()];
+        b.body = "【做什么】改 index B".into();
+        let mut doc = CcoSplitJob {
+            job_id: "j1".into(),
+            project: PathBuf::from("/p"),
+            plan_path: PathBuf::from("docs/x.md"),
+            status: CcoSplitStatus::Ready,
+            title: "ov".into(),
+            max_parallel: 2,
+            source: CcoSplitSource::Llm,
+            error: None,
+            run_id: None,
+            created_at: "t0".into(),
+            updated_at: "t0".into(),
+            tasks: vec![a, b],
+        };
+        soft_accept_split(&mut doc);
+        let x = doc.tasks.iter().find(|t| t.task_id == "x").unwrap();
+        let y = doc.tasks.iter().find(|t| t.task_id == "y").unwrap();
+        assert!(y.depends_on.iter().any(|d| d == "x") || x.depends_on.iter().any(|d| d == "y"));
+        assert_ne!(x.wave, y.wave, "same-file tasks must not share a wave");
+    }
+
+    #[test]
+    fn soft_accept_empty_scopes_stay_parallel() {
+        let mut a = sample_task("p1", &[]);
+        a.body = "文案任务甲".into();
+        let mut b = sample_task("p2", &[]);
+        b.body = "文案任务乙".into();
+        let mut doc = CcoSplitJob {
+            job_id: "j1".into(),
+            project: PathBuf::from("/p"),
+            plan_path: PathBuf::from("docs/x.md"),
+            status: CcoSplitStatus::Ready,
+            title: "empty-scope".into(),
+            max_parallel: 2,
+            source: CcoSplitSource::Llm,
+            error: None,
+            run_id: None,
+            created_at: "t0".into(),
+            updated_at: "t0".into(),
+            tasks: vec![a, b],
+        };
+        soft_accept_split(&mut doc);
+        assert_eq!(doc.tasks[0].wave, 0);
+        assert_eq!(doc.tasks[1].wave, 0);
+        assert!(doc.tasks[0].depends_on.is_empty());
+        assert!(doc.tasks[1].depends_on.is_empty());
+    }
+
+    #[test]
+    fn soft_accept_dir_and_file_scope_overlap_serializes() {
+        // W2-1: directory vs file under it → same ownership, not parallel.
+        let mut a = sample_task("dir", &[]);
+        a.scope_paths = vec!["web/js/features/split/".into()];
+        a.body = "【做什么】改 split 目录".into();
+        let mut b = sample_task("file", &[]);
+        b.scope_paths = vec!["web/js/features/split/splitDetail.js".into()];
+        b.body = "【做什么】改 splitDetail".into();
+        let mut doc = CcoSplitJob {
+            job_id: "j1".into(),
+            project: PathBuf::from("/p"),
+            plan_path: PathBuf::from("docs/x.md"),
+            status: CcoSplitStatus::Ready,
+            title: "dir-file".into(),
+            max_parallel: 2,
+            source: CcoSplitSource::Llm,
+            error: None,
+            run_id: None,
+            created_at: "t0".into(),
+            updated_at: "t0".into(),
+            tasks: vec![a, b],
+        };
+        soft_accept_split(&mut doc);
+        let d = doc.tasks.iter().find(|t| t.task_id == "dir").unwrap();
+        let f = doc.tasks.iter().find(|t| t.task_id == "file").unwrap();
+        assert!(
+            f.depends_on.iter().any(|x| x == "dir") || d.depends_on.iter().any(|x| x == "file"),
+            "dir∩file must serialize, got dir={:?} file={:?}",
+            d.depends_on,
+            f.depends_on
+        );
+        assert_ne!(d.wave, f.wave, "dir and file scopes must not share a wave");
+    }
+
+    #[test]
+    fn soft_accept_strips_worker_scaffold_from_body() {
+        let mut t = sample_task("w1", &[]);
+        t.body = "你是执行任务 w1 的 worker\n项目根目录：/p\n\n【做什么】真正要干的事\n【改哪里】src/x.rs".into();
+        t.scope_paths = vec!["src/x.rs".into()];
+        let mut doc = CcoSplitJob {
+            job_id: "j1".into(),
+            project: PathBuf::from("/p"),
+            plan_path: PathBuf::from("docs/x.md"),
+            status: CcoSplitStatus::Ready,
+            title: "strip-body".into(),
+            max_parallel: 1,
+            source: CcoSplitSource::Llm,
+            error: None,
+            run_id: None,
+            created_at: "t0".into(),
+            updated_at: "t0".into(),
+            tasks: vec![t],
+        };
+        soft_accept_split(&mut doc);
+        let body = &doc.tasks[0].body;
+        assert!(
+            !body.lines().next().unwrap_or("").starts_with("你是执行"),
+            "soft_accept body first line must not be worker scaffold: {body:?}"
+        );
+        assert!(body.contains("【做什么】") || body.contains("真正要干"));
+        assert!(!doc.tasks[0].summary.contains("你是执行"));
+    }
+
+    #[test]
+    fn to_plan_ir_strips_worker_scaffold_from_prompt() {
+        let mut t = sample_task("w1", &[]);
+        t.body = "你是执行任务 w1 的 worker\n项目根目录：/p\n\n【做什么】真正要干的事\n【改哪里】src/x.rs".into();
+        t.scope_paths = vec!["src/x.rs".into()];
+        // Bypass soft_accept so convert itself must strip (desk may already be clean).
+        let doc = CcoSplitJob {
+            job_id: "j1".into(),
+            project: PathBuf::from("/p"),
+            plan_path: PathBuf::from("docs/x.md"),
+            status: CcoSplitStatus::Ready,
+            title: "strip".into(),
+            max_parallel: 1,
+            source: CcoSplitSource::Llm,
+            error: None,
+            run_id: None,
+            created_at: "t0".into(),
+            updated_at: "t0".into(),
+            tasks: vec![t],
+        };
+        let ir = to_plan_ir(&doc, "claude", "print");
+        let prompt = &ir.tasks[0].prompt;
+        assert!(
+            !prompt.lines().next().unwrap_or("").starts_with("你是执行"),
+            "first line must not be worker scaffold: {prompt:?}"
+        );
+        assert!(prompt.contains("【做什么】") || prompt.contains("真正要干"));
+        assert_eq!(
+            ir.tasks[0]
+                .scope
+                .as_ref()
+                .map(|s| s.paths.clone())
+                .unwrap_or_default(),
+            vec!["src/x.rs".to_string()]
+        );
     }
 }

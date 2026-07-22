@@ -1,0 +1,85 @@
+{
+  "schema": "cco-split/v1",
+  "title": "壳层减法 · 派工金样（示意）",
+  "max_parallel": 2,
+  "tasks": [
+    {
+      "id": "a1",
+      "title": "去掉顶栏阶段条",
+      "summary": "顶栏不再出现写计划→拆分→执行那一串阶段条",
+      "body": "【做什么】去掉顶栏阶段条\n【改哪里】web/index.html · web/js/features/project/shellChrome.js\n【怎样算做完】顶栏无「写计划→…」阶段条\n【先等谁】无\n【不要做什么】不旁路 confirm\n【自测】打开拆分台目视",
+      "depends_on": [],
+      "optional": false,
+      "enabled": true,
+      "kind": "do",
+      "done_when": "顶栏无阶段条",
+      "can_parallel": true,
+      "scope_paths": ["web/index.html", "web/js/features/project/shellChrome.js"]
+    },
+    {
+      "id": "a2",
+      "title": "拆分台只留重新规划与执行规划",
+      "summary": "拆分台顶上只留两个主按钮",
+      "body": "【做什么】拆分台主路径仅两键\n【改哪里】web/index.html · web/js/features/split/**\n【怎样算做完】仅「重新规划/拆分」与「执行规划/确认并开始」；仍走 confirmStart\n【先等谁】无\n【不要做什么】禁止 UI start_run 旁路\n【自测】目视顶栏",
+      "depends_on": [],
+      "optional": false,
+      "enabled": true,
+      "kind": "do",
+      "done_when": "主路径仅两键且仍 confirmStart",
+      "can_parallel": true,
+      "scope_paths": ["web/js/features/split/splitFillMeta.js", "web/js/features/split/splitRender.js"]
+    },
+    {
+      "id": "a3",
+      "title": "去掉顶栏编辑任务入口",
+      "summary": "顶栏不再放编辑任务",
+      "body": "【做什么】去掉顶栏编辑任务\n【改哪里】web/index.html · web/js/features/project/projectPicker.js\n【怎样算做完】顶栏无编辑任务\n【先等谁】无\n【不要做什么】不删拆分台内编辑能力\n【自测】目视",
+      "depends_on": [],
+      "optional": false,
+      "enabled": true,
+      "kind": "do",
+      "done_when": "顶栏无编辑任务",
+      "can_parallel": true,
+      "scope_paths": ["web/js/features/project/projectPicker.js"]
+    },
+    {
+      "id": "a4",
+      "title": "顶栏三键图标化",
+      "summary": "聊天/计划/刷新等用图标，带说明",
+      "body": "【做什么】顶栏三键 icon 化\n【改哪里】web/index.html · web/js/shared/icons.js · projectPicker\n【怎样算做完】三 icon + aria\n【先等谁】a3\n【不要做什么】不用 emoji 作按钮图标\n【自测】目视",
+      "depends_on": ["a3"],
+      "optional": false,
+      "enabled": true,
+      "kind": "do",
+      "done_when": "三 icon + aria",
+      "can_parallel": false,
+      "scope_paths": ["web/js/shared/icons.js", "web/index.html"]
+    },
+    {
+      "id": "a5",
+      "title": "完整说明默认展开",
+      "summary": "拆分详情里完整说明默认打开，不用再点一次",
+      "body": "【做什么】完整说明默认展开\n【改哪里】web/js/features/split/splitDetail.js\n【怎样算做完】打开任一步，完整说明已展开\n【先等谁】无\n【不要做什么】不改 confirm 语义\n【自测】拆分台点步骤",
+      "depends_on": [],
+      "optional": false,
+      "enabled": true,
+      "kind": "do",
+      "done_when": "完整说明默认展开",
+      "can_parallel": true,
+      "scope_paths": ["web/js/features/split/splitDetail.js"]
+    },
+    {
+      "id": "b1",
+      "title": "侧栏可移除项目",
+      "summary": "侧栏能把项目从列表拿掉，不删磁盘",
+      "body": "【做什么】侧栏移除项目\n【改哪里】web/js/shared/shellUi.js · web/js/features/project/projectCrud.js\n【怎样算做完】× 确认；不删磁盘\n【先等谁】无\n【不要做什么】禁止删用户文件夹\n【自测】加项目再移除",
+      "depends_on": [],
+      "optional": false,
+      "enabled": true,
+      "kind": "do",
+      "done_when": "移除仅 conf 列表，不删磁盘",
+      "can_parallel": true,
+      "scope_paths": ["web/js/features/project/projectCrud.js", "web/js/shared/shellUi.js"]
+    }
+  ]
+}

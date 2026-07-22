@@ -35,7 +35,7 @@
 |------|------|
 | 换 React / 引入 LangGraph·CrewAI 运行时 | 栈与 PRODUCT 禁止 |
 | 像素抄 OpenHands / 做成 IDE | PRODUCT |
-| 默认 heuristic 当拆分主路径 | 用户明确：拆分走模型（桌面默认 **fast** 本地是体验兜底，**ai** 才走模型） |
+| 默认 heuristic 当拆分主路径 | 用户明确：拆分走模型（**2026-07-22 起桌面默认 ai**；fast 仅高级/显式） |
 | UI `start_run` 旁路 Mode B | L1 硬规则 |
 | 一次删光 plan.proposed.json | 迁移期 dual 快照可留 |
 | 默认打开巡检/push | 高级关 |
@@ -60,7 +60,7 @@
 | **僵尸 planning reap + kill pid** | job.rs `try_reap_zombie_planning` · `kill_planner_pid` | 5min hard timeout |
 | **supersede kill 旧 planner pid** | `supersede_planning_jobs` | P4-2 ✅ |
 | **LLM 心跳 updated_at** | llm.rs | 防误杀 |
-| **桌面默认 plan_mode=fast** | jobPoll.js | 防主路径卡 CLI；**ai** 仍可选 |
+| **桌面默认 plan_mode=ai**（Q0 ✅ · 2026-07-22） | index.html · jobPoll.js | **原**默认 fast 已废；fast=高级/显式 |
 | **critic LLM 默认关** | config `planner_critic_enabled=false` | P4-3 ✅ |
 | **规划 UX 已等待秒数** | flow.js `flowPlanningSub` | P4-1 大半 ✅（可再强化 >60s 取消提示） |
 
@@ -118,7 +118,7 @@ to_plan_ir + validate_run_gate → confirm_start → Scheduler/Worker
 2. 执行 Worker **不负责拆分**。  
 3. 代码识别靠 **固定参数**（depends_on / wave / enabled / optional / kind / body / done_when / plan_ref）。  
 4. 校验分层：**soft_accept（拆分）** vs **run_gate（开跑）**；禁止 collab scope 硬拒整图（已有 soften，Agent 路径默认不产出强 scope）。  
-5. **桌面默认 fast** 与 **ai 模型主路径** 并存：fast=本地不卡；用户/CLI 选 `ai` 才调 ModelSplitAgent。
+5. **桌面默认 ai**（2026-07-22 Q0）；**fast** 仅高级/显式本地不卡；CLI 与桌面一致默认 ModelSplitAgent。
 
 ---
 
@@ -236,7 +236,7 @@ to_plan_ir + validate_run_gate → confirm_start → Scheduler/Worker
 | **S5** | 僵尸 planning：进程死/超时 → `plan_failed`，UI 离开转圈 |
 | **S6** | 执行侧仍用现有 Worker；拆分 Agent 不替代执行 |
 | **S7** | 测试：domain cco_split · store · agent parse · planner fixture 集成 绿 |
-| **S8** | 桌面默认 **fast** 本地拆分仍可用（不卡主路径） |
+| **S8** | 桌面默认 **ai**；**fast** 本地拆分仍可用（高级/显式，不卡主路径） |
 
 ---
 
@@ -244,7 +244,7 @@ to_plan_ir + validate_run_gate → confirm_start → Scheduler/Worker
 
 | 风险 | 缓解 |
 |------|------|
-| Agent 仍走慢 CLI | Messages HTTP 优先（有 key）；fixture 测；5min reap；默认桌面 fast |
+| Agent 仍走慢 CLI | Messages HTTP 优先（有 key）；fixture 测；5min reap；默认桌面 ai · fast 兜底 |
 | 双写 JSON/SQLite 不一致 | 读路径 SoT 优先；写路径 write_proposed 再落 SoT |
 | 与旧 desk 字段不兼容 | PlanTaskView 已扩 summary/wave；保持 id 稳定 |
 | 提示词漂移 | 附录 A + parse fixture 单测 |
@@ -256,7 +256,7 @@ to_plan_ir + validate_run_gate → confirm_start → Scheduler/Worker
 
 ```text
 按 docs/openhands-style-split-agent-landing-2026-07-21.md 实施。
-已 ✅：C1–C7 SoT、reap/kill supersede、confirm/edit dual-write、critic 默认关、桌面 fast。
+已 ✅：C1–C7 SoT、reap/kill supersede、confirm/edit dual-write、critic 默认关、桌面 **ai**（Q0）。
 本轮只做：P1 SplitAgentPort+ModelSplitAgent + P2 ai 路径接入 + 测 + 勾选回写。
 禁止：heuristic 当 ai 主路径、旁路 confirm、换框架、重做类型/表、往 view.rs 巨石堆逻辑。
 ```

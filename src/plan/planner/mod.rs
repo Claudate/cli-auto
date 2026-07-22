@@ -64,6 +64,7 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -105,6 +106,7 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -168,6 +170,7 @@ mod tests {
                 // Explicit concurrency: 3 sections → one parallel wave.
                 max_parallel: Some(3),
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -208,6 +211,7 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -253,6 +257,7 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -298,6 +303,7 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -343,6 +349,7 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: Some(4),
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -381,6 +388,7 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -416,6 +424,7 @@ mod tests {
             critic_llm_used: None,
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
+            grain_hint: None,
         };
         zombie.save(&cfg).unwrap();
 
@@ -475,6 +484,7 @@ mod tests {
             critic_llm_used: None,
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
+            grain_hint: None,
         };
         zombie.save(&cfg).unwrap();
 
@@ -641,6 +651,7 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: Some(4),
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -761,6 +772,7 @@ t1
             critic_llm_used: None,
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
+            grain_hint: None,
         };
         std::fs::create_dir_all(job_dir(&cfg, &job.job_id)).unwrap();
         let ir = build_heuristic_ai_plan(&cfg, &job).expect("heuristic");
@@ -935,6 +947,142 @@ t1
             }),
             "must NOT use meta work-order titles for #### task plans, got {titles_d:?}"
         );
+        // PilotDeck-style #### P0-1 · … must win over bare `### 波次 1` split-summary junk.
+        let pilot = project.join("pilotdeck-borrow-landing.md");
+        let pilot_md = r#"# PilotDeck 借鉴 · 落地实施计划
+
+> 角色：横切体验/契约落地真源 · PROTOCOL · 勾选只认本文件
+
+## 0. 目标 / 非目标
+
+轻量。
+
+## 3. 任务表
+
+### 波次 P0 — 结果台账单 + report 人话/fallback
+
+#### P0-1 · 结果台消费 live 费用与用时 ☐
+
+| 项 | 内容 |
+|----|------|
+| **落点** | ResultView.js |
+| **步骤** | 计划行追加费用一句 |
+| **完成定义** | 终态结果台可见人话费用或未汇总 |
+| **依赖** | 无 |
+
+#### P0-2 · report.md 标题人话 + 元数据下沉 ☐
+
+| 项 | 内容 |
+|----|------|
+| **完成定义** | report 第一行无人话以外的 run_id |
+| **依赖** | 无 |
+
+#### P0-3 · 无巡检占位 report ☐
+
+| 项 | 内容 |
+|----|------|
+| **完成定义** | 关巡检仍有可读 report |
+| **依赖** | P0-2 |
+
+### 波次 P1 — route 来源
+
+#### P1-1 · 契约：TaskState route 溯源字段 ☐
+
+| 项 | 内容 |
+|----|------|
+| **完成定义** | 契约与代码字段一致 |
+| **依赖** | 无 |
+
+#### P1-2 · confirm 写入 provenance ☐
+
+| 项 | 内容 |
+|----|------|
+| **完成定义** | soft-fill 不盖 explicit |
+| **依赖** | P1-1 |
+
+## 4. 目标 DTO
+
+### 4.1 结果摘要
+
+示意。
+
+<!-- cco-split-summary:start -->
+
+## 拆分步骤摘要
+
+### 波次 1
+
+- [ ] 4.1 结果摘要
+
+### 波次 2
+
+- [ ] 步骤结果
+
+### 波次 3
+
+- [ ] 8. 回写清单
+
+<!-- cco-split-summary:end -->
+"#;
+        std::fs::write(&pilot, pilot_md).unwrap();
+        let job_p = PlanJob {
+            job_id: "plan-test-pilotdeck".into(),
+            plan_path: PathBuf::from("pilotdeck-borrow-landing.md"),
+            ..job.clone()
+        };
+        std::fs::create_dir_all(job_dir(&cfg, &job_p.job_id)).unwrap();
+        let ir_p = build_heuristic_ai_plan(&cfg, &job_p).expect("pilotdeck heuristic");
+        let titles_p: Vec<_> = ir_p.tasks.iter().map(|t| t.title.clone()).collect();
+        assert!(
+            titles_p.iter().any(|t| t.contains("P0-1") || t.contains("结果台消费")),
+            "pilotdeck must yield #### P0-1 task, got {titles_p:?}"
+        );
+        assert!(
+            titles_p.iter().any(|t| t.contains("P0-2") || t.contains("report.md")),
+            "expected P0-2, got {titles_p:?}"
+        );
+        assert!(
+            titles_p
+                .iter()
+                .all(|t| t != "波次 1" && t != "波次 2" && t != "波次 3"),
+            "must ignore cco-split-summary junk waves, got {titles_p:?}"
+        );
+        assert!(
+            ir_p.tasks.len() >= 4,
+            "expected several P* tasks, got {} {titles_p:?}",
+            ir_p.tasks.len()
+        );
+        // S0/S2: 依赖 column → P0-1 & P0-2 no edge; P0-3 waits P0-2; acceptance filled
+        let t1 = ir_p.tasks.iter().find(|t| t.title.contains("P0-1")).expect("t P0-1");
+        let t2 = ir_p.tasks.iter().find(|t| t.title.contains("P0-2")).expect("t P0-2");
+        let t3 = ir_p.tasks.iter().find(|t| t.title.contains("P0-3")).expect("t P0-3");
+        assert!(
+            t1.depends_on.is_empty(),
+            "P0-1 依赖=无 → empty deps, got {:?}",
+            t1.depends_on
+        );
+        assert!(
+            t2.depends_on.is_empty(),
+            "P0-2 依赖=无 → empty deps, got {:?}",
+            t2.depends_on
+        );
+        assert!(
+            t3.depends_on.iter().any(|d| d == &t2.id),
+            "P0-3 should wait P0-2, got {:?}",
+            t3.depends_on
+        );
+        assert!(
+            t1.acceptance.as_ref().map(|a| a.contains("费用") || a.contains("未汇总")).unwrap_or(false),
+            "P0-1 acceptance from 完成定义, got {:?}",
+            t1.acceptance
+        );
+        // Not a full serial chain of 5 when 依赖 table present
+        let layers = crate::graph::topo_layers(&ir_p);
+        assert!(
+            layers.iter().any(|l| l.len() >= 2) || layers.len() < ir_p.tasks.len(),
+            "expected some parallelism or fewer layers than tasks, layers={layers:?}"
+        );
+
         assert!(
             ir_d.tasks.len() >= 4,
             "expected several #### tasks, got {} {titles_d:?}",
@@ -1053,6 +1201,7 @@ t1
                 mode: Some("print".into()),
                 max_parallel: Some(5),
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -1125,6 +1274,7 @@ t1
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -1167,6 +1317,7 @@ t1
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -1232,6 +1383,7 @@ t1
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -1306,6 +1458,7 @@ t1
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -1359,6 +1512,7 @@ t1
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: Some(view.job_id.clone()),
+                grain_hint: None,
             },
         )
         .unwrap();

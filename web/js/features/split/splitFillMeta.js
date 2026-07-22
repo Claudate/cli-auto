@@ -72,18 +72,21 @@ export function fillSplitMeta(job, ctx = {}) {
   const titleEl = $("confirm-title") || $("#confirm-title");
   if (titleEl) {
     titleEl.textContent = reused
-      ? "历史拆分（可再次确认并开始）"
+      ? "历史拆分（可再次执行规划）"
       : "拆分结果";
   }
 
-  const mpCap = job.max_parallel ?? job.maxParallel ?? "—";
   const widestWave = layers.reduce((m, l) => Math.max(m, (l || []).length), 0);
-  const parallelHint =
-    typeof mpCap === "number" && widestWave > 0 && widestWave < mpCap
-      ? ` · 最宽波 ${widestWave} 路（上限 ${mpCap}）`
-      : widestWave > 1
-        ? ` · 最多同时 ${widestWave} 路`
-        : "";
+  const nBatches = layers.length || 1;
+  // S1: product-manager tone — not scheduler jargon.
+  let scheduleHint = "";
+  if (nBatches <= 1 && widestWave <= 1) {
+    scheduleHint = "将按顺序一个一个做";
+  } else if (widestWave <= 1) {
+    scheduleHint = `大约分 ${nBatches} 批 · 将按顺序做`;
+  } else {
+    scheduleHint = `大约分 ${nBatches} 批 · 同一批最多 ${widestWave} 步一起`;
+  }
 
   const optTasks = tasks.filter((t) => !!t.optional);
   const sysOpt = optTasks.filter((t) => isSysPost(t));
@@ -109,20 +112,25 @@ export function fillSplitMeta(job, ctx = {}) {
     : paused
       ? "已暂停 · 仅未执行步骤可编辑"
       : bizOpt.length > 0
-        ? "业务可选默认不跑 · 请勾选后再确认并开始"
+        ? "业务可选默认不跑 · 请勾选后再点「执行规划」"
         : sysOpt.length > 0
-          ? "系统收尾默认已勾选 · 可取消后开始"
+          ? "系统收尾默认已勾选 · 可取消后执行规划"
           : reused
-            ? "可编辑未执行步骤后再次确认并开始"
-            : "可编辑 · 确认并开始";
+            ? "可编辑未执行步骤后再点「执行规划」"
+            : "核对后点「执行规划」";
 
   const modeRaw = job.digest_mode || job.digestMode || "";
   // 模式只走 badge 行（label+hint），不塞进 meta，避免「从零落地」双份
   const nSteps = job.task_count || tasks.length;
+  // Q1: always-visible split source (智能 / 本地规则 / …) — not engine jargon.
+  const sourceLabel = splitSourceLabel(job);
   const metaEl = $("confirm-meta") || $("#confirm-meta");
   if (metaEl) {
-    metaEl.textContent = `共 ${nSteps} 步 · 约 ${layers.length} 波${parallelHint}${optHint} · ${confirmHint}`;
+    const sourceBit = sourceLabel ? `${sourceLabel} · ` : "";
+    metaEl.textContent = `共 ${nSteps} 步 · ${sourceBit}${scheduleHint}${optHint} · ${confirmHint}`;
   }
+  // W3-1: when local / smart-missed, offer one-click smart re-split (sets plan_mode=ai).
+  paintSmartResplitHint(sourceLabel, { runLocked });
 
   // B6：业务可选未勾 — 固定非 dismiss 提示条（与卡片 include===false 同构）
   let optBanner = $("split-optional-banner") || $("#split-optional-banner");
@@ -140,12 +148,15 @@ export function fillSplitMeta(job, ctx = {}) {
     const offCount = bizOpt.filter((t) => t.include === false).length;
     if (offCount > 0 && !runLocked) {
       optBanner.hidden = false;
-      optBanner.textContent = `有 ${offCount} 个可选步骤未勾选：点「确认并开始」后它们不会执行。需要跑的请先在列表里勾选。`;
+      optBanner.textContent = `有 ${offCount} 个可选步骤未勾选：点「执行规划」后它们不会执行。需要跑的请先在列表里勾选。`;
     } else {
       optBanner.hidden = true;
       optBanner.textContent = "";
     }
   }
+
+  // P1-4: plan acceptance stub/missing — yellow bar; never disables confirm.
+  paintAcceptanceBanner(job, { runLocked });
 
   const applyFlowModeBadge = g("applyFlowModeBadge");
   if (typeof applyFlowModeBadge === "function") {
@@ -166,6 +177,153 @@ export function fillSplitMeta(job, ctx = {}) {
   });
 }
 
+/**
+ * P1-4: yellow bar when plan-level acceptance is stub/missing.
+ * Does **not** disable confirm; CTA demotion lives in paintChrome.
+ */
+function paintAcceptanceBanner(job, { runLocked } = {}) {
+  let bar = $("split-acceptance-banner") || $("#split-acceptance-banner");
+  if (!bar) {
+    const head = document.querySelector("#plan-phase-confirm .split-head-main");
+    if (head) {
+      bar = document.createElement("div");
+      bar.id = "split-acceptance-banner";
+      bar.className = "split-acceptance-banner";
+      bar.setAttribute("role", "status");
+      // After optional banner if present, else at end of head-main.
+      const opt = $("split-optional-banner") || head.querySelector("#split-optional-banner");
+      if (opt && opt.parentNode === head) {
+        opt.insertAdjacentElement("afterend", bar);
+      } else {
+        head.appendChild(bar);
+      }
+    }
+  }
+  if (!bar) return;
+
+  const isStub =
+    job.acceptance_is_stub === true ||
+    job.acceptanceIsStub === true ||
+    String(job.acceptance_is_stub || job.acceptanceIsStub || "") === "true";
+  const hint = String(
+    job.acceptance_hint || job.acceptanceHint || ""
+  ).trim();
+
+  if (isStub && hint && !runLocked) {
+    bar.hidden = false;
+    bar.textContent = hint;
+  } else if (isStub && !runLocked) {
+    bar.hidden = false;
+    bar.textContent =
+      "计划验收仍是占位或未写清，建议补充「怎样算做完」后再开始（仍可确认）";
+  } else {
+    bar.hidden = true;
+    bar.textContent = "";
+  }
+}
+
+/** Q1 · 人话：本次拆分来源（禁止 adapter / layers 裸词） */
+function splitSourceLabel(job) {
+  const mode = String(job.plan_mode || job.planMode || "").toLowerCase();
+  const adapter = String(job.adapter || "").toLowerCase();
+  if (mode === "fake" || adapter.includes("fake")) return "演练拆分";
+  if (mode === "parse" || adapter.includes("parse")) return "按文档结构拆分";
+  if (
+    adapter.includes("llm") ||
+    adapter.includes("split-agent") ||
+    (mode === "ai" && !adapter.includes("heuristic"))
+  ) {
+    return "智能拆分";
+  }
+  if (mode === "fast" || adapter.includes("heuristic") || mode === "ai") {
+    // ai 失败落到 heuristic 时 adapter 含 heuristic
+    if (mode === "ai" && adapter.includes("heuristic")) {
+      return "本地规则拆分（智能未用上）";
+    }
+    if (mode === "fast" || adapter.includes("heuristic")) return "本地规则拆分";
+  }
+  if (mode === "ai") return "智能拆分";
+  return "";
+}
+
+/**
+ * W3-1: local-source desk shows a secondary CTA → force ai + replan.
+ * @param {string} sourceLabel
+ * @param {{ runLocked?: boolean }} [ctx]
+ */
+function paintSmartResplitHint(sourceLabel, ctx = {}) {
+  const head =
+    document.querySelector("#plan-phase-confirm .split-head-main") ||
+    document.querySelector("#plan-phase-confirm");
+  let el = $("split-smart-resplit") || $("#split-smart-resplit");
+  if (!el && head) {
+    el = document.createElement("p");
+    el.id = "split-smart-resplit";
+    el.className = "split-smart-resplit muted";
+    el.setAttribute("role", "note");
+    const meta = $("confirm-meta") || $("#confirm-meta");
+    if (meta && meta.parentNode) {
+      meta.parentNode.insertBefore(el, meta.nextSibling);
+    } else {
+      head.appendChild(el);
+    }
+  }
+  if (!el) return;
+  const local =
+    sourceLabel === "本地规则拆分" ||
+    sourceLabel === "本地规则拆分（智能未用上）";
+  if (!local || ctx.runLocked) {
+    el.hidden = true;
+    el.textContent = "";
+    el.onclick = null;
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML =
+    '这次没走智能拆分。' +
+    '<button type="button" class="linkish" data-smart-resplit="1">用智能再拆一次</button>' +
+    '（会想依赖与并行，可能要几分钟）';
+  el.onclick = (e) => {
+    const btn = e.target?.closest?.("[data-smart-resplit]");
+    if (!btn) return;
+    e.preventDefault();
+    // Force next analyzePlanFromPicker to ai even if #pp-plan-mode still fast.
+    try {
+      if (typeof window !== "undefined" && window.state) {
+        window.state.forcePlanModeAi = true;
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    const pm = $("pp-plan-mode") || $("#pp-plan-mode");
+    if (pm) {
+      pm.value = "ai";
+      try {
+        pm.dataset.touched = "1";
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    const replan =
+      $("btn-replan") ||
+      document.getElementById("btn-replan") ||
+      document.querySelector("[data-action='replan']");
+    if (replan && typeof replan.click === "function") {
+      replan.click();
+      return;
+    }
+    const start =
+      typeof g("replanFromConfirm") === "function"
+        ? g("replanFromConfirm")
+        : typeof g("startPlanFromChooser") === "function"
+          ? g("startPlanFromChooser")
+          : typeof window !== "undefined" &&
+            (window.ccoProject?.replanFromConfirm ||
+              window.ccoProject?.startPlanFromChooser);
+    if (typeof start === "function") start();
+  };
+}
+
 function paintCriticStrip(job) {
   const criticEl = $("confirm-critic-note") || $("#confirm-critic-note");
   if (!criticEl) return;
@@ -174,11 +332,24 @@ function paintCriticStrip(job) {
   if (critic && typeof humanize === "function") {
     critic = humanize(critic);
   }
+  // S1-3: serial graph + "未发现可疑" → honest plain language (no adapter/layers).
+  const layers = job.layers || [];
+  const widest = layers.reduce((m, l) => Math.max(m, (l || []).length), 0);
+  const nSteps = (job.tasks || []).length || job.task_count || 0;
+  const looksSerial = widest <= 1 && nSteps >= 4;
+  const cleanish =
+    critic &&
+    /无需改动|未发现可疑|无需/.test(String(critic)) &&
+    !/去掉|改写|钉入|手动清理 · 去掉/.test(String(critic));
+  if (looksSerial && cleanish) {
+    critic =
+      "当前按顺序执行；未检测出互相打架的等待关系";
+  }
   if (critic && String(critic).trim()) {
     criticEl.hidden = false;
     criticEl.textContent = String(critic).trim();
     const clean =
-      /无需改动|未发现可疑|无需/.test(critic) &&
+      /无需改动|未发现可疑|无需|按顺序执行/.test(critic) &&
       !/去掉|改写|钉入|手动清理 · 去掉/.test(critic);
     criticEl.classList.toggle("is-clean", clean);
   } else {

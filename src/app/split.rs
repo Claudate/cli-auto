@@ -37,8 +37,14 @@ use crate::state::RunState;
 /// Desktop / async path. CLI foreground uses [`confirm_materialize`] then
 /// `app::run::prepare_scheduler` so the same materialize + optional-drop runs.
 pub fn confirm(config: Config, job_id: &str) -> Result<String> {
-    let (job, ir) = load_proposed_for_exec(&config, job_id)?;
-    let run_id = crate::services::start_run_from_plan(config.clone(), job.project.clone(), &ir)?;
+    let (job, ir, soft_report) = load_proposed_for_exec(&config, job_id)?;
+    // P1-2: pass soft-fill report so run.json stamps route_source (kept → explicit).
+    let run_id = crate::services::start_run_from_plan_with_route(
+        config.clone(),
+        job.project.clone(),
+        &ir,
+        Some(&soft_report),
+    )?;
     mark_confirmed(&config, job_id, &run_id, &ir)?;
     Ok(run_id)
 }
@@ -59,21 +65,26 @@ pub struct ConfirmPatches {
 /// not spawn a background scheduler.
 ///
 /// Steps: `load_proposed_for_exec` (optional drop + job soft defaults) →
-/// apply [`ConfirmPatches`] → [`crate::app::run::materialize_run`] →
+/// apply [`ConfirmPatches`] → [`crate::app::run::materialize_run_with_route`] →
 /// [`mark_confirmed`]. Caller runs the loop via `app::run::prepare_scheduler`.
 ///
 /// Returns `(run_id, state, ir, soft_fill_log_line)`.
+///
+/// P1-2: last CLI soft/force report stamps `route_source`; when no override,
+/// worker soft defaults + tag inference still write provenance at materialize.
 pub fn confirm_materialize(
     config: &Config,
     job_id: &str,
     patches: ConfirmPatches,
 ) -> Result<(String, RunState, PlanIR, Option<String>)> {
-    let (job, mut ir) = load_proposed_for_exec(config, job_id)?;
-    let fill_msg = crate::app::run::apply_provider_override(
+    let (job, mut ir, soft_report) = load_proposed_for_exec(config, job_id)?;
+    // Soft defaults already applied; CLI override is **last write** (force/soft wins).
+    let override_report = crate::app::run::apply_provider_override(
         &mut ir,
         patches.provider,
         patches.force_provider,
     );
+    let fill_msg = override_report.as_ref().map(|r| r.summary_line());
     if let Some(m) = patches.mode {
         for t in &mut ir.tasks {
             t.mode = m.clone();
@@ -83,9 +94,14 @@ pub fn confirm_materialize(
     if let Some(mp) = patches.max_parallel {
         ir.max_parallel = mp;
     }
-    // materialize_run re-applies optional drop (idempotent) and returns the IR to schedule.
-    let (run_id, st, ir) =
-        crate::app::run::materialize_run(config, job.project.clone(), &ir)?;
+    // Last-write route report: override if present, else job soft defaults.
+    let route_report = override_report.as_ref().or(Some(&soft_report));
+    let (run_id, st, ir) = crate::app::run::materialize_run_with_route(
+        config,
+        job.project.clone(),
+        &ir,
+        route_report,
+    )?;
     mark_confirmed(config, job_id, &run_id, &ir)?;
     Ok((run_id, st, ir, fill_msg))
 }
@@ -195,6 +211,7 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: Some(1),
                 preserve_from_job_id: None,
+                grain_hint: None,
             },
         )
         .unwrap();
@@ -202,6 +219,100 @@ mod tests {
         assert_eq!(view.status, "planned", "err={:?}", view.error);
 
         let run_id = confirm(cfg.clone(), &view.job_id).unwrap();
-        assert!(cfg.runs_dir().join(&run_id).join("run.json").exists());
+        let run_json = cfg.runs_dir().join(&run_id).join("run.json");
+        assert!(run_json.exists());
+        // P1-2: new runs stamp route_source on each task.
+        let st = crate::state::RunState::load(&cfg.runs_dir().join(&run_id)).unwrap();
+        assert!(
+            st.tasks.values().all(|t| t.route_source.is_some()),
+            "every task must have route_source after confirm"
+        );
+    }
+
+    /// P1-2: mixed plan kept explicit after soft-fill at confirm.
+    #[test]
+    fn confirm_materialize_stamps_mixed_explicit() {
+        use crate::domain::plan::{OnFailure, TaskIR};
+        use crate::state::RouteSource;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        std::fs::create_dir_all(&project).unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = tmp.path().join("state");
+        cfg.default.default_provider = "fake".into();
+        cfg.default.worktree = true;
+        cfg.default.post_inspect_enabled = false;
+        cfg.default.post_git_push_enabled = false;
+        cfg.default.post_open_pr_enabled = false;
+        std::fs::create_dir_all(cfg.runs_dir()).unwrap();
+
+        // Build a job with mixed providers without full plan file parse.
+        let mut ir = PlanIR {
+            schema: "cco-plan/v1".into(),
+            name: "mixed".into(),
+            adapter: "cco-plan/v1".into(),
+            source_path: project.join("docs/plans/mixed.cco.yaml"),
+            max_parallel: 1,
+            on_failure: OnFailure::Pause,
+            retry_max: 0,
+            default_provider: "claude".into(),
+            default_mode: "print".into(),
+            worktree: true,
+            require_inspect: false,
+            tasks: vec![
+                TaskIR {
+                    id: "a".into(),
+                    title: "default-ish".into(),
+                    depends_on: vec![],
+                    group: None,
+                    provider: "claude".into(),
+                    mode: "print".into(),
+                    prompt: "a\nCCO_DONE ok".into(),
+                    acceptance: None,
+                    timeout_secs: None,
+                    worktree: Some(true),
+                    provider_opts: serde_json::json!({}),
+                    optional: false,
+                    include: true,
+                    role: None,
+                    scope: None,
+                    outputs: vec![],
+                    tags: vec![],
+                },
+                TaskIR {
+                    id: "b".into(),
+                    title: "explicit codex".into(),
+                    depends_on: vec![],
+                    group: None,
+                    provider: "codex".into(),
+                    mode: "print".into(),
+                    prompt: "b\nCCO_DONE ok".into(),
+                    acceptance: None,
+                    timeout_secs: None,
+                    worktree: Some(true),
+                    provider_opts: serde_json::json!({}),
+                    optional: false,
+                    include: true,
+                    role: None,
+                    scope: None,
+                    outputs: vec![],
+                    tags: vec![],
+                },
+            ],
+        };
+        // Soft job defaults (fake) then materialize with report.
+        let report =
+            crate::domain::worker::apply_worker_defaults(&mut ir, "fake", "print");
+        let (_run_id, st, _out) = crate::app::run::materialize_run_with_route(
+            &cfg,
+            project,
+            &ir,
+            Some(&report),
+        )
+        .unwrap();
+        assert_eq!(st.tasks["a"].route_source, Some(RouteSource::SoftFill));
+        assert_eq!(st.tasks["b"].route_source, Some(RouteSource::Explicit));
+        assert_eq!(st.tasks["b"].provider, "codex");
     }
 }

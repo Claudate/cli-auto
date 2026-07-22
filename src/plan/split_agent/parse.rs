@@ -8,6 +8,7 @@
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
+use super::extract::extract_json_object;
 use crate::domain::plan::{
     soft_accept_split, CcoSplitJob, CcoSplitSource, CcoSplitStatus, CcoSplitTask, CcoTaskKind,
     CcoTaskStatus, CCO_SPLIT_SCHEMA, PLANNER_MAX_TASKS,
@@ -50,67 +51,55 @@ struct AgentTask {
     plan_ref: Option<String>,
     #[serde(default)]
     can_parallel: Option<bool>,
+    /// File ownership for parallel waves (Q2).
+    #[serde(default, alias = "scope")]
+    scope_paths: Vec<String>,
 }
 
-/// Extract JSON object from raw model output (fence or bare).
-pub fn extract_json_object(raw: &str) -> Result<String> {
-    let t = raw.trim();
-    if t.is_empty() {
-        bail!("拆分 Agent 输出为空");
-    }
-    // ```json ... ``` or ``` ... ```
-    if let Some(start) = t.find("```") {
-        let after = &t[start + 3..];
-        let after = after
-            .strip_prefix("json")
-            .or_else(|| after.strip_prefix("JSON"))
-            .unwrap_or(after);
-        let after = after.trim_start_matches(|c: char| c == '\r' || c == '\n' || c == ' ');
-        if let Some(end) = after.find("```") {
-            let block = after[..end].trim();
-            if block.starts_with('{') {
-                return Ok(block.to_string());
-            }
+/// Trim · drop empty · dedupe · collapse `.`/`..` · reject absolute / drive paths.
+fn normalize_scope_paths(raw: Vec<String>) -> Vec<String> {
+    let mut out = Vec::new();
+    for s in raw {
+        let mut p = s.trim().replace('\\', "/");
+        while p.starts_with("./") {
+            p = p[2..].to_string();
         }
-    }
-    // First balanced { ... }
-    if let Some(i) = t.find('{') {
-        if let Some(slice) = balanced_object(&t[i..]) {
-            return Ok(slice.to_string());
-        }
-    }
-    bail!("拆分 Agent 输出中找不到 JSON 对象")
-}
-
-fn balanced_object(s: &str) -> Option<&str> {
-    let bytes = s.as_bytes();
-    let mut depth = 0i32;
-    let mut in_str = false;
-    let mut esc = false;
-    for (i, &b) in bytes.iter().enumerate() {
-        if in_str {
-            if esc {
-                esc = false;
-            } else if b == b'\\' {
-                esc = true;
-            } else if b == b'"' {
-                in_str = false;
-            }
+        p = p.trim_matches('/').to_string();
+        if p.is_empty() {
             continue;
         }
-        match b {
-            b'"' => in_str = true,
-            b'{' => depth += 1,
-            b'}' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(&s[..=i]);
-                }
+        // Absolute / drive / home — too broad or non-repo; drop.
+        if p.starts_with('/')
+            || p.starts_with('~')
+            || (p.len() >= 2 && p.as_bytes()[1] == b':' && p.as_bytes()[0].is_ascii_alphabetic())
+        {
+            continue;
+        }
+        // Collapse `.` / `..` (drop path if `..` escapes repo root).
+        let mut stack: Vec<&str> = Vec::new();
+        let mut escaped = false;
+        for seg in p.split('/') {
+            if seg.is_empty() || seg == "." {
+                continue;
             }
-            _ => {}
+            if seg == ".." {
+                if stack.pop().is_none() {
+                    escaped = true;
+                    break;
+                }
+                continue;
+            }
+            stack.push(seg);
+        }
+        if escaped || stack.is_empty() {
+            continue;
+        }
+        let p = stack.join("/");
+        if !out.iter().any(|x: &String| x == &p) {
+            out.push(p);
         }
     }
-    None
+    out
 }
 
 /// Parse agent text into a soft-accepted CcoSplitJob.
@@ -181,6 +170,20 @@ pub fn parse_agent_output(raw: &str, req: &SplitRequest) -> Result<CcoSplitJob> 
         if let Some(cp) = t.can_parallel {
             meta.insert("can_parallel".into(), serde_json::json!(cp));
         }
+        let scope_paths = normalize_scope_paths(t.scope_paths);
+        // Humanize title/summary (never worker noise from model slip).
+        let title = crate::domain::plan::cco_split::display_title(&title);
+        let summary = if summary.is_empty()
+            || crate::domain::plan::cco_split::is_worker_noise_line(&summary)
+        {
+            crate::domain::plan::cco_split::human_summary(
+                &title,
+                &body,
+                t.done_when.as_deref(),
+            )
+        } else {
+            summary
+        };
         tasks.push(CcoSplitTask {
             task_id,
             ord: i as i32,
@@ -197,7 +200,7 @@ pub fn parse_agent_output(raw: &str, req: &SplitRequest) -> Result<CcoSplitJob> 
             status: CcoTaskStatus::Pending,
             provider: None,
             role: None,
-            scope_paths: vec![],
+            scope_paths,
             meta_json: if meta.is_empty() {
                 None
             } else {
@@ -243,6 +246,7 @@ mod tests {
             max_parallel: 2,
             created_at: "t0".into(),
             updated_at: "t0".into(),
+            grain_hint: None,
         }
     }
 
@@ -256,8 +260,8 @@ Here is the plan:
   "title": "demo",
   "max_parallel": 2,
   "tasks": [
-    {"id": "a", "title": "做 A", "body": "完成 A", "depends_on": [], "optional": false, "enabled": true, "kind": "do"},
-    {"id": "b", "title": "做 B", "summary": "B 一步", "depends_on": ["a"], "optional": true, "kind": "check", "can_parallel": false}
+    {"id": "a", "title": "做 A", "body": "完成 A", "depends_on": [], "optional": false, "enabled": true, "kind": "do", "scope_paths": ["web/a.js"]},
+    {"id": "b", "title": "做 B", "summary": "B 一步", "depends_on": ["a"], "optional": true, "kind": "check", "can_parallel": false, "scope_paths": ["web/b.js"]}
   ]
 }
 ```
@@ -269,6 +273,8 @@ Here is the plan:
         assert!(job.tasks[1].optional);
         assert!(!job.tasks[1].enabled);
         assert_eq!(job.source, CcoSplitSource::Llm);
+        assert_eq!(job.tasks[0].scope_paths, vec!["web/a.js".to_string()]);
+        assert_eq!(job.tasks[1].scope_paths, vec!["web/b.js".to_string()]);
     }
 
     #[test]
@@ -280,8 +286,170 @@ Here is the plan:
     }
 
     #[test]
+    fn parse_pretty_multiline_bare_json() {
+        // First line alone is incomplete (`"tasks":[`); must use balanced_object on full text.
+        let raw = r#"{"schema":"cco-split/v1","title":"T","tasks":[
+          {"id":"t1","title":"写入口","body":"实现 main","depends_on":[],"kind":"do"},
+          {"id":"t2","title":"补测","body":"单测","depends_on":["t1"],"kind":"check"}
+        ]}"#;
+        let job = parse_agent_output(raw, &req()).unwrap();
+        assert_eq!(job.tasks.len(), 2);
+        assert_eq!(job.tasks[1].depends_on, vec!["t1".to_string()]);
+    }
+
+    #[test]
     fn empty_tasks_err() {
         let raw = r#"{"schema":"cco-split/v1","tasks":[]}"#;
         assert!(parse_agent_output(raw, &req()).is_err());
+    }
+
+    #[test]
+    fn fixture_dual_audience_parses_with_scope_and_parallel() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/cco_split/dual_audience_pilotdeck_sample.json"
+        );
+        let raw = std::fs::read_to_string(path).expect("fixture");
+        let job = parse_agent_output(&raw, &req()).unwrap();
+        assert_eq!(job.tasks.len(), 4);
+        assert!(job.tasks[0].scope_paths.iter().any(|p| p.contains("result")));
+        assert!(job.tasks[0].depends_on.is_empty());
+        assert!(job.tasks[1].depends_on.is_empty());
+        // t1∥t2 → wave 0 both; t3 waits t2
+        assert_eq!(job.tasks[0].wave, 0);
+        assert_eq!(job.tasks[1].wave, 0);
+        assert!(job.tasks[2].depends_on.iter().any(|d| d == "t2"));
+        assert!(!job.tasks[0].summary.contains("worker"));
+    }
+
+    #[test]
+    fn fixture_shell_chrome_parses() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/cco_split/shell_chrome_sample.json"
+        );
+        let raw = std::fs::read_to_string(path).expect("fixture");
+        let job = parse_agent_output(&raw, &req()).unwrap();
+        // W1-4: ≥6 steps, a4 depends a3, scopes non-empty, independent work not force-chained.
+        assert!(
+            job.tasks.len() >= 6,
+            "shell-chrome golden needs ≥6 tasks, got {}",
+            job.tasks.len()
+        );
+        let a1 = job.tasks.iter().find(|t| t.task_id == "a1").unwrap();
+        let a2 = job.tasks.iter().find(|t| t.task_id == "a2").unwrap();
+        let a3 = job.tasks.iter().find(|t| t.task_id == "a3").unwrap();
+        let a4 = job.tasks.iter().find(|t| t.task_id == "a4").unwrap();
+        let a5 = job.tasks.iter().find(|t| t.task_id == "a5").unwrap();
+        let b1 = job.tasks.iter().find(|t| t.task_id == "b1").unwrap();
+        assert!(a4.depends_on.iter().any(|d| d == "a3"));
+        for t in [&a1, &a2, &a3, &a4, &a5, &b1] {
+            assert!(
+                !t.scope_paths.is_empty(),
+                "{} scope_paths empty",
+                t.task_id
+            );
+        }
+        // W1-4: independent work packages must not chain each other.
+        // (a1 may serialize with a4 via shared index.html — a4 is outside this set.)
+        let independent = ["a1", "a2", "a5", "b1"];
+        for &id in &independent {
+            let t = job.tasks.iter().find(|t| t.task_id == id).unwrap();
+            for &other in &independent {
+                if other == id {
+                    continue;
+                }
+                assert!(
+                    !t.depends_on.iter().any(|d| d == other),
+                    "{id} must not depend on {other}, got {:?}",
+                    t.depends_on
+                );
+            }
+        }
+        // a4 wave after a3
+        assert!(a4.wave > a3.wave, "a4 wave {} must be after a3 {}", a4.wave, a3.wave);
+        // body keeps work-order labels (no worker scaffold on golden)
+        assert!(a1.body.contains("【做什么】") || a1.body.contains("去掉顶栏"));
+    }
+
+    #[test]
+    fn scope_overlap_serializes_in_soft_accept() {
+        let raw = r#"{
+  "schema":"cco-split/v1","title":"ov","max_parallel":2,
+  "tasks":[
+    {"id":"x","title":"改同一文件 A","body":"a","depends_on":[],"scope_paths":["web/index.html"]},
+    {"id":"y","title":"改同一文件 B","body":"b","depends_on":[],"scope_paths":["web/index.html"]}
+  ]
+}"#;
+        let job = parse_agent_output(raw, &req()).unwrap();
+        let x = job.tasks.iter().find(|t| t.task_id == "x").unwrap();
+        let y = job.tasks.iter().find(|t| t.task_id == "y").unwrap();
+        assert!(
+            y.depends_on.iter().any(|d| d == "x"),
+            "overlapping scope must serialize y after x, got {:?}",
+            y.depends_on
+        );
+        assert_ne!(
+            x.wave, y.wave,
+            "same-file tasks must not share a wave after soft_accept"
+        );
+    }
+
+    #[test]
+    fn normalize_drops_absolute_and_dotdot_scope() {
+        let raw = r#"{
+  "schema":"cco-split/v1","title":"n","tasks":[
+    {"id":"t1","title":"一步","body":"做","scope_paths":[
+      "/etc/passwd","web/js/foo.js","../secrets","web/js/../js/bar.js","","  web/js/foo.js  "
+    ]}
+  ]
+}"#;
+        let job = parse_agent_output(raw, &req()).unwrap();
+        let paths = &job.tasks[0].scope_paths;
+        assert!(paths.iter().all(|p| !p.starts_with('/')));
+        assert!(paths.iter().all(|p| !p.contains("..")));
+        assert!(paths.iter().any(|p| p == "web/js/foo.js"));
+        // web/js/../js/bar.js → web/js/bar.js
+        assert!(
+            paths.iter().any(|p| p == "web/js/bar.js"),
+            "collapsed bar path, got {paths:?}"
+        );
+        // ../secrets escapes → dropped; foo.js deduped
+        assert_eq!(
+            paths.iter().filter(|p| *p == "web/js/foo.js").count(),
+            1
+        );
+        assert!(!paths.iter().any(|p| p.contains("secrets")));
+    }
+
+    #[test]
+    fn stream_json_result_envelope_not_first_brace() {
+        // Repro: ModelSplitAgent CLI stdout is NDJSON; plan is only in type=result.
+        // Old extract took first `{` (system event) → "未返回任何任务".
+        let result_body = r#"```json
+{
+  "schema": "cco-split/v1",
+  "title": "demo",
+  "max_parallel": 2,
+  "tasks": [
+    {"id": "p0-1", "title": "结果台费用", "body": "做费用", "depends_on": [], "scope_paths": ["web/js/features/result/**"]},
+    {"id": "p0-2", "title": "report 标题", "body": "做人话标题", "depends_on": [], "scope_paths": ["src/report/**"]}
+  ]
+}
+```"#;
+        let escaped = serde_json::to_string(result_body).unwrap();
+        let raw = format!(
+            r#"{{"type":"system","subtype":"init","session_id":"x"}}
+{{"type":"assistant","message":{{"role":"assistant","content":[{{"type":"text","text":"thinking..."}}]}}}}
+{{"type":"result","subtype":"success","is_error":false,"result":{escaped}}}
+"#
+        );
+        let job = parse_agent_output(&raw, &req()).expect("must parse stream-json result");
+        assert_eq!(job.tasks.len(), 2);
+        assert_eq!(job.tasks[0].task_id, "p0-1");
+        assert!(job.tasks[0]
+            .scope_paths
+            .iter()
+            .any(|p| p.contains("result")));
     }
 }

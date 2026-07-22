@@ -585,7 +585,9 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Allow the prompt body to own vertical scroll; head stays pinned. */
   overflow: hidden;
+  max-height: 100%;
 }
 .confirm-detail-head {
   display: flex;
@@ -802,6 +804,51 @@
 .split-optional-banner[hidden] {
   display: none !important;
 }
+/* P1-4: plan acceptance stub/missing (non-dismiss; never blocks confirm) */
+.split-acceptance-banner {
+  margin: 0.4rem 0 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--warn, #c9a227) 55%, var(--border));
+  background: color-mix(in srgb, var(--warn, #c9a227) 16%, transparent);
+  color: var(--text, inherit);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  flex-shrink: 0;
+}
+.split-acceptance-banner[hidden] {
+  display: none !important;
+}
+/* W3-1: local-source desk — secondary CTA to force smart re-split */
+.split-smart-resplit {
+  margin: 0.25rem 0 0.35rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  flex-shrink: 0;
+}
+.split-smart-resplit[hidden] {
+  display: none !important;
+}
+.split-smart-resplit .linkish {
+  margin: 0 0.15rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent, #0071e3);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.split-smart-resplit .linkish:hover {
+  opacity: 0.85;
+}
+/* Secondary emphasis when acceptance is stub — still clickable primary */
+#btn-confirm-start.is-acceptance-stub {
+  opacity: 0.92;
+  box-shadow: none;
+  font-weight: 600;
+}
 /* B5: short-read detail + full body fold */
 .split-detail-short {
   margin: 0 0 0.55rem;
@@ -834,10 +881,13 @@
 }
 .confirm-prompt {
   flex: 1 1 auto;
-  min-height: 180px;
-  max-height: none;
+  min-height: 120px;
+  /* Cap so overflow creates a real scrollbar instead of growing the page. */
+  max-height: min(52vh, 100%);
   margin: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   font-family: var(--font);
   font-size: 0.9rem;
   line-height: 1.55;
@@ -858,7 +908,7 @@
     width: 100%;
     max-height: 160px;
   }
-  .field-row, .advanced-body, .settings-grid { grid-template-columns: 1fr; }
+  .field-row, .advanced-body { grid-template-columns: 1fr; }
   .confirm-layout { grid-template-columns: 1fr; }
 }
 
@@ -1427,6 +1477,49 @@
   background: #f7f8fa;
   border: 1px dashed var(--border);
 }
+/* P2-1: plan checklist vs inspect side-by-side */
+.result-desk-verify {
+  margin: 0.15rem 0 0;
+  padding: 0.35rem 0.5rem 0.45rem;
+  border-radius: 8px;
+  background: #f7f8fa;
+  border: 1px solid var(--border);
+}
+.result-desk-verify[hidden] { display: none !important; }
+.result-desk-verify-sum {
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  list-style: none;
+}
+.result-desk-verify-sum::-webkit-details-marker { display: none; }
+.result-desk-verify-sum::before {
+  content: "▸ ";
+  color: var(--muted);
+}
+.result-desk-verify[open] .result-desk-verify-sum::before {
+  content: "▾ ";
+}
+.result-desk-verify-note {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.result-desk-verify-list,
+.result-desk-verify-tasks {
+  margin-top: 0.25rem;
+  max-height: 140px;
+}
+.result-desk-item.is-plan-check {
+  background: #f4f7ff;
+  border-color: #dce4f5;
+}
+.result-desk-item.is-plan-task {
+  background: #faf8ff;
+  border-color: #e6e0f5;
+}
 .cli-empty-ai { padding: 0.75rem 0.5rem; font-size: 0.8rem; color: #9aa3ad; }
 
 
@@ -1479,12 +1572,22 @@
 }
 
 .task-dash.collapsed {
-  max-height: none;
+  max-height: none !important;
+  flex: 0 0 auto !important;
   padding-bottom: 0.55rem;
+  overflow: visible;
 }
 .task-dash.collapsed .task-dash-body,
-.task-dash.collapsed .task-strip-err {
+.task-dash.collapsed #task-strip-body,
+.task-dash.collapsed .task-strip-err,
+.task-dash.collapsed .result-desk {
   display: none !important;
+}
+/* 折叠时 banner/巡检条也不占大块空白 */
+.task-dash.collapsed #stall-banner:not([hidden]),
+.task-dash.collapsed #inspect-loop-strip:not([hidden]) {
+  max-height: 4.5rem;
+  overflow: auto;
 }
 .task-dash-toggle {
   width: 28px;
@@ -1591,6 +1694,31 @@
 #workspace-body.mode-plan #cli-empty,
 #workspace-body.mode-plan #result-card {
   display: none !important;
+}
+
+/* 拆分失败：停在规划壳，不进历史执行/结果台 */
+#plan-phase-planning.is-plan-failed .planning-progress {
+  display: none;
+}
+#plan-phase-planning.is-plan-failed .planning-title-row h3 {
+  color: var(--danger, #c0392b);
+}
+#plan-phase-planning.is-plan-failed #planning-sub {
+  color: var(--text);
+  max-width: 36rem;
+}
+#plan-phase-planning.is-plan-failed .planning-fail-detail {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 40rem;
+}
+#plan-phase-planning.is-plan-failed .plan-actions {
+  gap: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 /* 确认相位同样铺满 */

@@ -125,8 +125,11 @@ pub(super) fn build_fake_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
 /// Split markdown-ish text into tasks by `##` / `###` headings; sequential deps.
 pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
     let abs = crate::plan::resolve_plan_path(&job.project, &job.plan_path)?;
-    let text = std::fs::read_to_string(&abs)
+    let raw = std::fs::read_to_string(&abs)
         .with_context(|| format!("read plan {}", abs.display()))?;
+    // Always drop prior split-summary write-back before any path — bare `### 波次 1`
+    // junk must never compete with real #### P0-1 / A1 work packages.
+    let text = strip_cco_split_summary_region(&raw);
     let name = abs
         .file_stem()
         .and_then(|s| s.to_str())
@@ -134,103 +137,131 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
         .to_string();
     let opts = default_provider_opts(config, &job.provider);
 
-    let mut sections = split_sections(&text);
-    append_log(
-        config,
-        &job.job_id,
-        &format!("heuristic found {} section(s)", sections.len()),
-    );
+    let mut force_serial = false;
 
-    // Prefer ##-only boundaries when ### made the graph too fine-grained.
-    if sections.len() > PLANNER_MAX_TASKS {
-        let coarse = split_sections_level(&text, /*include_h3=*/ false);
-        if coarse.len() > 1 && coarse.len() <= PLANNER_MAX_TASKS {
-            append_log(
-                config,
-                &job.job_id,
-                &format!(
-                    "heuristic coarsened to {} ## section(s) (was {}, max {PLANNER_MAX_TASKS})",
-                    coarse.len(),
-                    sections.len()
-                ),
-            );
-            sections = coarse;
-        }
-    }
-
-    // Drop document-chrome headings (Board / P0 勾选 / 修订历史 / 表头…).
-    let before_meta = sections.len();
-    sections.retain(|(title, _)| !crate::plan::title_is_meta_heading(title));
-    if sections.len() != before_meta {
+    // **Universal first path**: #### task ids (P0-1 / A1 / U1-1…), any doc shape.
+    // Must not wait for looks_like_spec_document — landing plans with few chrome
+    // needles used to fall through to ### 波次 1 summary stubs.
+    // S0/S2: do NOT force_serial here — prefer 依赖 table / max_parallel batches.
+    let mut from_task_ids = false;
+    let task_id_phases = extract_task_id_headings(&text);
+    let sections = if task_id_phases.len() >= 1 {
         append_log(
             config,
             &job.job_id,
             &format!(
-                "heuristic dropped {} meta heading(s); {} work-like section(s) left",
-                before_meta - sections.len(),
-                sections.len()
+                "heuristic: {} #### task-id package(s) from plan (primary path)",
+                task_id_phases.len()
             ),
         );
-    }
+        from_task_ids = true;
+        trim_phase_bodies(task_id_phases)
+    } else {
+        let mut sections = split_sections(&text);
+        append_log(
+            config,
+            &job.job_id,
+            &format!("heuristic found {} section(s)", sections.len()),
+        );
 
-    // Spec / contract docs:
-    // 1) Prefer real work phases (#### A1 / W0/W1… / 波次 / 阶段) carved from the plan.
-    // 2) If phase extract misses → **diagnose why**, then **recover from plan headings**
-    //    (non-meta ##/### with body). Do NOT skip solving by jumping to meta template.
-    // 3) Meta "scope→breakdown→implement→inspect" only when the MD is pure product
-    //    chrome with no recoverable work structure — and always log the failure reason.
-    let mut force_serial = false;
-    let sections = if looks_like_spec_document(&text) {
-        let phases = extract_work_phases(&text);
-        if !phases.is_empty() {
+        // Prefer ##-only boundaries when ### made the graph too fine-grained.
+        if sections.len() > PLANNER_MAX_TASKS {
+            let coarse = split_sections_level(&text, /*include_h3=*/ false);
+            if coarse.len() > 1 && coarse.len() <= PLANNER_MAX_TASKS {
+                append_log(
+                    config,
+                    &job.job_id,
+                    &format!(
+                        "heuristic coarsened to {} ## section(s) (was {}, max {PLANNER_MAX_TASKS})",
+                        coarse.len(),
+                        sections.len()
+                    ),
+                );
+                sections = coarse;
+            }
+        }
+
+        // Drop document-chrome headings (Board / P0 勾选 / 修订历史 / 表头…).
+        let before_meta = sections.len();
+        sections.retain(|(title, _)| !crate::plan::title_is_meta_heading(title));
+        if sections.len() != before_meta {
             append_log(
                 config,
                 &job.job_id,
                 &format!(
-                    "heuristic: product/spec MD → {} work phase(s) from plan (not meta template)",
-                    phases.len()
+                    "heuristic dropped {} meta heading(s); {} work-like section(s) left",
+                    before_meta - sections.len(),
+                    sections.len()
                 ),
             );
-            force_serial = true;
-            phases
-        } else {
-            // Failure path: find cause, then solve with document content if any.
-            let diag = diagnose_phase_extraction_miss(&text, sections.len());
-            append_log(
-                config,
-                &job.job_id,
-                &format!("heuristic: work-phase extract failed — {diag}"),
-            );
-            let recovered = recover_actionable_sections(&text);
-            if !recovered.is_empty() {
+        }
+
+        // Spec / contract docs without #### task ids:
+        // 1) Prefer work phases (W0/W1… / 波次 / 阶段) carved from the plan.
+        // 2) If phase extract misses → diagnose + recover from headings.
+        // 3) Meta template only when pure chrome.
+        if looks_like_spec_document(&text) {
+            let phases = extract_work_phases(&text);
+            if !phases.is_empty() {
                 append_log(
                     config,
                     &job.job_id,
                     &format!(
-                        "heuristic: recovered {} task(s) from plan headings (solved extract miss; not meta template)",
-                        recovered.len()
+                        "heuristic: product/spec MD → {} work phase(s) from plan (not meta template)",
+                        phases.len()
                     ),
                 );
                 force_serial = true;
-                recovered
+                phases
             } else {
+                let diag = diagnose_phase_extraction_miss(&text, sections.len());
                 append_log(
                     config,
                     &job.job_id,
-                    &format!(
-                        "heuristic: no recoverable work structure ({diag}) → last-resort work-order template"
-                    ),
+                    &format!("heuristic: work-phase extract failed — {diag}"),
+                );
+                let recovered = recover_actionable_sections(&text);
+                if !recovered.is_empty() {
+                    append_log(
+                        config,
+                        &job.job_id,
+                        &format!(
+                            "heuristic: recovered {} task(s) from plan headings (solved extract miss; not meta template)",
+                            recovered.len()
+                        ),
+                    );
+                    force_serial = true;
+                    recovered
+                } else {
+                    append_log(
+                        config,
+                        &job.job_id,
+                        &format!(
+                            "heuristic: no recoverable work structure ({diag}) → last-resort work-order template"
+                        ),
+                    );
+                    force_serial = true;
+                    work_order_template_from_spec(&text)
+                }
+            }
+        } else if sections.len() <= 1 {
+            force_serial = true;
+            chunk_prose(&text, 3)
+        } else {
+            // Still prefer wave slices with substance over bare heading soup.
+            let waves = extract_wave_headings(&text);
+            if waves.len() >= 2 {
+                append_log(
+                    config,
+                    &job.job_id,
+                    &format!("heuristic: {} wave slice(s) from plan", waves.len()),
                 );
                 force_serial = true;
-                work_order_template_from_spec(&text)
+                trim_phase_bodies(waves)
+            } else {
+                sections
             }
         }
-    } else if sections.len() <= 1 {
-        // Fall back to chunking long prose into up to 3 sequential tasks.
-        force_serial = true;
-        chunk_prose(&text, 3)
-    } else {
-        sections
     };
 
     let sections = if sections.len() > PLANNER_MAX_TASKS {
@@ -254,10 +285,37 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
 
     // Wave-sized parallel groups from split-time concurrency (not a full serial chain).
     // Work-order templates / prose chunks stay sequential so the user sees a pipeline.
+    // #### packages: honor 依赖 column when present; else max_parallel batches (S2).
     let max_parallel = job
         .max_parallel
         .unwrap_or(config.default.max_parallel)
         .clamp(1, 32);
+
+    let (table_deps, has_dep_info) = if from_task_ids {
+        crate::domain::plan::cco_split::resolve_deps_from_sections(&sections)
+    } else {
+        (vec![], false)
+    };
+    let use_table_deps = from_task_ids && has_dep_info;
+    let use_batch_parallel = from_task_ids && !has_dep_info;
+    if use_table_deps {
+        append_log(
+            config,
+            &job.job_id,
+            "heuristic: #### packages → depends from plan 依赖 column (not serial chain)",
+        );
+        force_serial = false;
+    } else if use_batch_parallel {
+        append_log(
+            config,
+            &job.job_id,
+            &format!(
+                "heuristic: #### packages → no 依赖 column; batch by max_parallel={max_parallel}"
+            ),
+        );
+        force_serial = false;
+    }
+
     let wave_size = if force_serial { 1 } else { max_parallel };
 
     let mut tasks = Vec::new();
@@ -279,17 +337,22 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
 
     for (i, (title, body)) in sections.iter().enumerate() {
         let id = format!("t{}", i + 1);
-        let wave = i / wave_size;
-        let depends_on = if wave == 0 {
-            vec![]
+        let depends_on = if use_table_deps {
+            table_deps.get(i).cloned().unwrap_or_default()
         } else {
-            // Barrier: wait for the previous wave so at most wave_size run together.
-            let start = (wave - 1) * wave_size;
-            let end = wave * wave_size;
-            (start..end).map(|j| format!("t{}", j + 1)).collect()
+            let wave = i / wave_size;
+            if wave == 0 {
+                vec![]
+            } else {
+                // Barrier: wait for the previous wave so at most wave_size run together.
+                let start = (wave - 1) * wave_size;
+                let end = wave * wave_size;
+                (start..end).map(|j| format!("t{}", j + 1)).collect()
+            }
         };
         let optional = crate::plan::title_looks_optional(title);
         let title = crate::plan::normalize_optional_title(title, optional);
+        let title = crate::domain::plan::cco_split::display_title(&title);
         let is_inspect = last_is_inspect && i + 1 == n_sections;
         let (role, outputs, scope) = if is_inspect {
             (
@@ -307,6 +370,7 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
         } else {
             (None, vec![], None)
         };
+        let acceptance = crate::domain::plan::cco_split::parse_done_when(body);
         let dep_note = if depends_on.is_empty() {
             String::new()
         } else {
@@ -315,23 +379,21 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
                 depends_on.join("、")
             )
         };
-        let prompt = format!(
-            "你是执行任务 `{id}`（{title}）的 worker。\n\
-             项目根目录即当前工作目录。\n\
-             依据下列说明完成工作；不要做范围外改动。\n\
-             {dep_note}\n\
-             ## 任务说明\n{body}\n\n\
-             全部完成后在最后一行输出：CCO_DONE ok\n"
-        );
+        // W2-3: no worker-identity scaffold (desk + exec share human work orders).
+        let prompt = if dep_note.is_empty() {
+            format!("{body}\n\n完成后输出一行: CCO_DONE ok\n")
+        } else {
+            format!("{body}{dep_note}\n完成后输出一行: CCO_DONE ok\n")
+        };
         tasks.push(TaskIR {
             id,
             title,
             depends_on,
-            group: Some(format!("G{}", wave + 1)),
+            group: Some(format!("G{}", i + 1)),
             provider: job.provider.clone(),
             mode: job.exec_mode.clone(),
             prompt,
-            acceptance: None,
+            acceptance,
             timeout_secs: None,
             worktree: Some(false),
             provider_opts: opts.clone(),
@@ -342,6 +404,11 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
             outputs,
             tags: vec![],
         });
+    }
+
+    // Recompute group by topo wave for display (after depends set).
+    if use_table_deps || use_batch_parallel {
+        // group filled after validate via soft_accept waves; keep G{i} ok for now
     }
 
     // P-loop L1: spec work-order / inspect tail → require_inspect so Unknown≡FAIL.
@@ -456,6 +523,14 @@ pub(super) fn looks_like_spec_document(text: &str) -> bool {
         "geb 入口",
         "附录 a",
         "附录 b",
+        // Landing / 派工 plans (PilotDeck / nondev) — fewer classic chrome needles
+        "任务表",
+        "完成定义",
+        "落地实施",
+        "勾选只认",
+        "波次 p0",
+        "波次 p1",
+        "实施真源",
     ] {
         if lower.contains(needle) {
             score += 1;
@@ -468,6 +543,10 @@ pub(super) fn looks_like_spec_document(text: &str) -> bool {
     }
     if text.len() > 8_000 {
         score += 1;
+    }
+    // #### task-id packages strongly imply a 派工 plan even when chrome score is low.
+    if extract_task_id_headings(text).len() >= 2 {
+        score += 2;
     }
     score >= 3
 }
@@ -694,7 +773,11 @@ fn title_looks_like_implement_heading(title: &str) -> bool {
 /// Returns empty when the doc has no actionable phases — caller diagnoses + recovers,
 /// and only then may use the meta work-order template (product chrome only).
 pub(super) fn extract_work_phases(text: &str) -> Vec<(String, String)> {
-    // 0) Task-id headings first (#### A1 · … / #### B2 · … / #### U1-1 · …).
+    // Strip prior split-summary write-back first — it invents bare `### 波次 1` junk
+    // that used to beat real #### P0-1 tasks when meta chrome swallowed task ids.
+    let text = strip_cco_split_summary_region(text);
+    let text = text.as_str();
+    // 0) Task-id headings first (#### A1 · … / #### P0-1 · … / #### U1-1 · …).
     // Landing/派工 plans write implementation as #### tasks under ### 波次 — not W0 windows.
     // Without this, looks_like_spec_document docs fall into the meta 4-wave template
     // (读懂目标 → 拆包 → 落地 → 巡检) and ignore the real checklist.
@@ -745,15 +828,36 @@ pub(super) fn extract_work_phases(text: &str) -> Vec<(String, String)> {
     Vec::new()
 }
 
-/// `#### A1 · title` / `#### B2 · …` / `#### U1-1 · …` / `#### PR1 · …` / `#### S0 · …`
+/// `#### A1 · title` / `#### B2 · …` / `#### U1-1 · …` / `#### PR1 · …` / `#### S0 · …` / `#### P0-1 · …`
 /// Body = lines until next #### or ### / ## heading.
+/// Skips `<!-- cco-split-summary -->` regions (prior bad splits written back into the plan).
 fn extract_task_id_headings(text: &str) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
     let mut cur_title: Option<String> = None;
     let mut cur_body = String::new();
+    let mut in_split_summary = false;
 
     for line in text.lines() {
         let trimmed = line.trim_start();
+        if trimmed.contains("cco-split-summary:start") {
+            // Flush open task before junk region.
+            if let Some(prev) = cur_title.take() {
+                let body = cur_body.trim().to_string();
+                if !body.is_empty() {
+                    out.push((prev, body));
+                }
+                cur_body.clear();
+            }
+            in_split_summary = true;
+            continue;
+        }
+        if trimmed.contains("cco-split-summary:end") {
+            in_split_summary = false;
+            continue;
+        }
+        if in_split_summary {
+            continue;
+        }
         if let Some(rest) = trimmed.strip_prefix("#### ") {
             let title = rest.trim().to_string();
             if let Some(prev) = cur_title.take() {
@@ -765,7 +869,8 @@ fn extract_task_id_headings(text: &str) -> Vec<(String, String)> {
             } else {
                 cur_body.clear();
             }
-            if title_looks_like_task_id(&title) && !crate::plan::title_is_meta_heading(&title) {
+            // Domain SoT: work task ids are never meta (P0-1 · …, A1 · …).
+            if title_looks_like_task_id(&title) {
                 cur_title = Some(title);
             } else {
                 cur_title = None;
@@ -797,66 +902,111 @@ fn extract_task_id_headings(text: &str) -> Vec<(String, String)> {
     out
 }
 
-/// True for landing-plan task titles: `A1 · …`, `B2`, `U1-1 ·`, `S0 ·`, `PR1 ·`, `D3 ·`, `C5 ·`.
+/// True for landing-plan task titles: `A1 · …`, `P0-1 · …`, `U1-1 ·`, `S0 ·`, `PR1 ·`.
 fn title_looks_like_task_id(title: &str) -> bool {
-    let t = title.trim();
-    if t.is_empty() {
-        return false;
-    }
-    // Strip optional leading checkbox / bullet noise.
-    let t = t
-        .trim_start_matches(['-', '*', '☐', '✅', '░', '[', ']', ' '])
-        .trim();
-    let chars: Vec<char> = t.chars().collect();
-    if chars.is_empty() {
-        return false;
-    }
-    // Leading letters (A–Z / a–z), at least one digit, optional -digit groups, then sep or end.
-    // Examples: A1, A10, B2, U1-1, S0, PR1, D4, C5, F0, X3
-    let mut i = 0;
-    let mut letters = 0;
-    while i < chars.len() && chars[i].is_ascii_alphabetic() {
-        letters += 1;
-        i += 1;
-        if letters > 4 {
-            return false;
-        }
-    }
-    if letters == 0 || i >= chars.len() || !chars[i].is_ascii_digit() {
-        return false;
-    }
-    while i < chars.len() && chars[i].is_ascii_digit() {
-        i += 1;
-    }
-    // optional -N (U1-1)
-    if i < chars.len() && chars[i] == '-' {
-        i += 1;
-        if i >= chars.len() || !chars[i].is_ascii_digit() {
-            return false;
-        }
-        while i < chars.len() && chars[i].is_ascii_digit() {
-            i += 1;
-        }
-    }
-    // Must end or be followed by separator before human title
-    if i >= chars.len() {
-        return true;
-    }
-    matches!(
-        chars[i],
-        '·' | '•' | '—' | '–' | '-' | ' ' | '：' | ':' | '（' | '(' | '|' | '/' | '　'
-    )
+    crate::plan::looks_like_work_task_id(title)
 }
 
-/// `### 波次 A — …` / `### 波次 B` as coarse implementation slices.
+/// `### 波次 A — …` / `### 波次 P0 — …` as coarse implementation slices.
+/// Ignores prior split-summary junk (`### 波次 1` with only a checkbox line).
 fn extract_wave_headings(text: &str) -> Vec<(String, String)> {
-    let mut sections = split_sections_level(text, /*include_h3=*/ true);
+    // Prefer body above cco-split-summary so a previous bad write-back cannot win.
+    let text = strip_cco_split_summary_region(text);
+    let mut sections = split_sections_level(&text, /*include_h3=*/ true);
     sections.retain(|(title, body)| {
         !body.trim().is_empty()
             && !crate::plan::title_is_meta_heading(title)
             && title_looks_like_wave_slice(title)
+            && !wave_body_is_summary_junk(body)
     });
+    // Prefer real 派工 waves (`波次 P0 — …`) over bare `波次 1` stubs.
+    let rich: Vec<_> = sections
+        .iter()
+        .filter(|(t, _)| wave_title_has_substance(t))
+        .cloned()
+        .collect();
+    if rich.len() >= 2 {
+        return rich;
+    }
     sections
+}
+
+/// Drop `<!-- cco-split-summary:start -->…end -->` so heuristic never sees prior empty waves.
+fn strip_cco_split_summary_region(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut skip = false;
+    for line in text.lines() {
+        let t = line.trim();
+        if t.contains("cco-split-summary:start") {
+            skip = true;
+            continue;
+        }
+        if t.contains("cco-split-summary:end") {
+            skip = false;
+            continue;
+        }
+        if skip {
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
+fn wave_title_has_substance(title: &str) -> bool {
+    let t = title.trim();
+    // `波次 P0 — …` / `波次 A — …` / `Wave 1 · …` vs bare `波次 1`
+    if t.contains('—') || t.contains('–') || t.contains('·') || t.contains(':') || t.contains('：')
+    {
+        return true;
+    }
+    // letter after 波次 / Wave (P0, A, B…)
+    let lower = t.to_ascii_lowercase();
+    if let Some(rest) = lower
+        .strip_prefix("波次")
+        .or_else(|| lower.strip_prefix("wave"))
+    {
+        let rest = rest.trim();
+        return rest
+            .chars()
+            .next()
+            .map(|c| c.is_ascii_alphabetic())
+            .unwrap_or(false);
+    }
+    t.chars().count() > 8
+}
+
+/// Bodies that are only a single checkbox / empty — from split-summary write-back.
+fn wave_body_is_summary_junk(body: &str) -> bool {
+    let b = body.trim();
+    if b.is_empty() {
+        return true;
+    }
+    // only checkbox lines and whitespace
+    let meaningful: Vec<_> = b
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with("<!--"))
+        .collect();
+    if meaningful.is_empty() {
+        return true;
+    }
+    if meaningful.len() <= 2
+        && meaningful.iter().all(|l| {
+            l.starts_with("- [")
+                || l.starts_with("* [")
+                || l.starts_with("- [x]")
+                || l.starts_with("- [ ]")
+                || *l == "- [ ]"
+                || l.starts_with("- ☐")
+                || l.starts_with("☐")
+        })
+    {
+        return true;
+    }
+    // no nested #### task and very short → junk summary
+    !b.contains("#### ") && b.chars().count() < 80
 }
 
 fn title_looks_like_wave_slice(title: &str) -> bool {
@@ -865,7 +1015,7 @@ fn title_looks_like_wave_slice(title: &str) -> bool {
         return false;
     }
     let lower = t.to_ascii_lowercase();
-    // 波次 A / 波次1 / Wave A / Wave 1
+    // 波次 A / 波次 P0 / Wave A / Wave 1
     if t.contains("波次") {
         return true;
     }

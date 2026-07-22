@@ -57,9 +57,33 @@ pub fn soft_accept_split(doc: &mut CcoSplitJob) -> Vec<String> {
             };
             notes.push(format!("task {}: empty body → filled", t.task_id));
         }
-        if t.summary.trim().is_empty() {
-            t.summary = first_line_summary(&t.body);
+        // W2-3: desk + SQLite body match exec (convert also strips at to_plan_ir).
+        let stripped = super::humanize::strip_worker_scaffold(&t.body);
+        if !stripped.trim().is_empty() && stripped != t.body {
+            t.body = stripped;
+            notes.push(format!("task {}: stripped worker scaffold from body", t.task_id));
         }
+        // Always prefer human one-liner (worker scaffold must not win).
+        let hum = super::humanize::human_summary(
+            &t.title,
+            &t.body,
+            t.done_when.as_deref(),
+        );
+        if t.summary.trim().is_empty()
+            || super::humanize::is_worker_noise_line(t.summary.trim())
+            || t.summary.contains("的 worker")
+            || t.summary.contains("你是执行")
+        {
+            t.summary = if hum.is_empty() {
+                first_line_summary(&t.body)
+            } else {
+                hum
+            };
+        }
+        if t.done_when.is_none() {
+            t.done_when = super::humanize::parse_done_when(&t.body);
+        }
+        t.title = super::humanize::display_title(&t.title);
         if !t.optional {
             t.enabled = true;
         }
@@ -80,6 +104,8 @@ pub fn soft_accept_split(doc: &mut CcoSplitJob) -> Vec<String> {
     }
 
     break_cycles(doc, &mut notes);
+    // Q3: same-wave / parallel-ready tasks with overlapping scope_paths → serialize.
+    serialize_scope_overlaps(doc, &mut notes);
     recompute_waves(doc);
 
     if doc.max_parallel == 0 {
@@ -98,13 +124,103 @@ pub fn soft_accept_split(doc: &mut CcoSplitJob) -> Vec<String> {
     notes
 }
 
+/// If two tasks can run in parallel (neither is ancestor of the other) but their
+/// scope_paths overlap, make the later ord wait on the earlier (safe for multi-window).
+fn serialize_scope_overlaps(doc: &mut CcoSplitJob, notes: &mut Vec<String>) {
+    use super::super::validate::first_overlapping_paths;
+
+    let n = doc.tasks.len();
+    if n < 2 {
+        return;
+    }
+    let mut guard = 0usize;
+    loop {
+        guard += 1;
+        if guard > n * 3 {
+            notes.push("scope serialize: stop after many fixes".into());
+            break;
+        }
+        let id_to_deps: HashMap<String, Vec<String>> = doc
+            .tasks
+            .iter()
+            .map(|t| (t.task_id.clone(), t.depends_on.clone()))
+            .collect();
+        let mut ancestors: HashMap<String, HashSet<String>> = HashMap::new();
+        for t in &doc.tasks {
+            let mut seen = HashSet::new();
+            let mut stack = t.depends_on.clone();
+            while let Some(d) = stack.pop() {
+                if !seen.insert(d.clone()) {
+                    continue;
+                }
+                if let Some(more) = id_to_deps.get(&d) {
+                    stack.extend(more.iter().cloned());
+                }
+            }
+            ancestors.insert(t.task_id.clone(), seen);
+        }
+
+        let mut fix: Option<(String, String)> = None; // (later_id, earlier_id)
+        'pairs: for i in 0..n {
+            for j in (i + 1)..n {
+                let a_id = doc.tasks[i].task_id.clone();
+                let b_id = doc.tasks[j].task_id.clone();
+                let a_anc = ancestors.get(&a_id).cloned().unwrap_or_default();
+                let b_anc = ancestors.get(&b_id).cloned().unwrap_or_default();
+                if a_anc.contains(&b_id) || b_anc.contains(&a_id) {
+                    continue;
+                }
+                let pa = &doc.tasks[i].scope_paths;
+                let pb = &doc.tasks[j].scope_paths;
+                if pa.is_empty() || pb.is_empty() {
+                    continue;
+                }
+                if first_overlapping_paths(pa, pb).is_none() {
+                    continue;
+                }
+                let (earlier, later) = if doc.tasks[i].ord <= doc.tasks[j].ord {
+                    (a_id, b_id)
+                } else {
+                    (b_id, a_id)
+                };
+                fix = Some((later, earlier));
+                break 'pairs;
+            }
+        }
+        let Some((later_id, earlier_id)) = fix else {
+            break;
+        };
+        if let Some(t) = doc.tasks.iter_mut().find(|t| t.task_id == later_id) {
+            if !t.depends_on.iter().any(|d| d == &earlier_id) {
+                t.depends_on.push(earlier_id.clone());
+                notes.push(format!(
+                    "serialize {later_id} after {earlier_id} (scope_paths overlap)"
+                ));
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+}
+
 pub(crate) fn first_line_summary(body: &str) -> String {
-    let line = body
+    // Prefer human summary (never worker scaffold first line).
+    let s = super::humanize::human_summary("", body, None);
+    if !s.is_empty() && s != "查看步骤说明" {
+        return s;
+    }
+    let plain = super::humanize::strip_worker_scaffold(body);
+    let line = plain
         .lines()
         .map(str::trim)
-        .find(|l| !l.is_empty() && !l.starts_with('#'))
-        .unwrap_or(body)
+        .find(|l| !l.is_empty() && !l.starts_with('#') && !super::humanize::is_worker_noise_line(l))
+        .unwrap_or("")
         .trim();
+    if line.is_empty() {
+        return "查看步骤说明".into();
+    }
     let s: String = line.chars().take(80).collect();
     if line.chars().count() > 80 {
         format!("{s}…")

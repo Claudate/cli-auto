@@ -1,7 +1,7 @@
 //! SQLite store for plan jobs + cco split SoT.
 //!
 //! [INPUT]: Config.state_root · PlanJob · PlanIR · CcoSplitJob
-//! [OUTPUT]: ~/.cco/cco.db — plan_jobs/plan_tasks（过渡索引）+ cco_split_*（拆分 SoT）
+//! [OUTPUT]: ~/.cco/cco.db — plan_jobs/plan_tasks（过渡索引）+ cco_split_*（拆分 SoT）+ project_last_summary/project_pins（P2-2）
 //! [POS]: state adapter
 //! [PROTOCOL]: 变更时更新此头部与 src/state/CLAUDE.md
 //!
@@ -107,6 +107,22 @@ pub(crate) fn ensure_schema(conn: &Connection) -> Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_cco_split_tasks_job
           ON cco_split_tasks(job_id, ord);
+
+        -- P2-2 project light memory (last_summary + pins ≤3)
+        CREATE TABLE IF NOT EXISTS project_last_summary (
+          project_id TEXT PRIMARY KEY,
+          text TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS project_pins (
+          project_id TEXT NOT NULL,
+          key TEXT NOT NULL,
+          value TEXT NOT NULL,
+          pinned_at TEXT NOT NULL,
+          PRIMARY KEY (project_id, key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_pins_project
+          ON project_pins(project_id, pinned_at DESC);
         "#,
     )?;
     Ok(())
@@ -305,6 +321,7 @@ mod tests {
             critic_llm_used: None,
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
+            grain_hint: None,
         };
         upsert_plan_job(&cfg, &job).unwrap();
         let ir = PlanIR {

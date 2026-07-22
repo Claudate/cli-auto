@@ -49,6 +49,24 @@ import {
   requireGateway,
 } from "./legacy.js";
 import { host } from "./host.js";
+import {
+  suggestedMaxParallel,
+  suggestedGrainHint,
+} from "../../shared/workStyle.js";
+
+/** Humanize planner hard-timeout / engine errors for toast + failure panel. */
+function humanPlanFail(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/hard timeout|301s|planner worker did not finish/i.test(s)) {
+    return "智能拆分超时未完成。可点「再拆一次」，或在更多选项改用本地规则拆分。";
+  }
+  if (/未返回任何任务|找不到.*JSON|empty/i.test(s)) {
+    return "智能拆分没有产出可用步骤。请再拆一次，或改用本地规则拆分。";
+  }
+  // Keep short; full text still in pp-error / planning-fail-detail
+  return s.length > 160 ? s.slice(0, 158) + "…" : s;
+}
 
 /** Mode B: analyze plan → plan job (does NOT start workers). */
 /** 拆成步骤：AI 拆分后进入拆分台（可编辑）；入口文案统一为「拆成步骤」 */
@@ -70,12 +88,45 @@ export async function analyzePlanFromPicker() {
     return;
   }
 
-  // C6: default fast local split — avoid multi-minute Claude CLI planning spin.
-  const planMode = $("#pp-plan-mode")?.value || "fast";
+  // Product default: AI split (ModelSplitAgent). Fast/heuristic is opt-in only —
+  // defaulting to fast made "拆成步骤" feel fake (instant title scrape, no model).
+  // Work-style may bias concurrency seed + grain (never forces plan_mode=fast).
+  // W3 smart-resplit / one-shot force: state.forcePlanModeAi wins once then clears.
+  let planMode = $("#pp-plan-mode")?.value || "ai";
+  if (state.forcePlanModeAi) {
+    planMode = "ai";
+    state.forcePlanModeAi = false;
+    const pm = $("#pp-plan-mode");
+    if (pm) {
+      pm.value = "ai";
+      try {
+        pm.dataset.touched = "1";
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
   const provider = $("#pp-provider")?.value || "claude";
   const mode = $("#pp-mode")?.value || "print";
+  // Seed concurrency from work-style if pickers untouched (sync — no race with commit).
+  // W4-2: pass selected project so project override can win.
+  const projectPath = state.selectedPath || null;
+  try {
+    const mpEl = $("#chooser-max-parallel") || $("#pp-max-parallel");
+    if (mpEl && !mpEl.dataset.touched) {
+      mpEl.value = String(
+        suggestedMaxParallel(Number(mpEl.value) || 2, projectPath)
+      );
+    }
+  } catch (_) {}
   // Commit any in-progress concurrency edit before reading.
   const maxParallel = host.commitSplitMaxParallel($("#chooser-max-parallel") || $("#pp-max-parallel"));
+  let grainHint = "";
+  try {
+    grainHint = suggestedGrainHint(projectPath) || "";
+  } catch (_) {
+    grainHint = "";
+  }
 
   const doc = await host.ensureDoctor(true);
   if (doc && !doc.ok && provider !== "fake" && planMode !== "fake") {
@@ -98,6 +149,7 @@ export async function analyzePlanFromPicker() {
   state.planJob = null;
   state.planJobId = null;
   state.confirmEditing = false;
+  // C2：仅「新开拆分」supersede 旧 session；非旁路静默丢
   host.clearPlanSession(state.selectedPath);
   stopPlanJobPoll();
   host.openPlanChooser(false);
@@ -107,21 +159,30 @@ export async function analyzePlanFromPicker() {
   host.renderPlanPicker();
   host.renderWorkspaceShell();
   const logEl0 = $("#planner-log");
+  const smartSplit = planMode === "ai";
   if (logEl0) {
     logEl0.dataset.sig = "";
-    logEl0.innerHTML =
-      '<div class="cli-empty-ai muted">正在理解计划并拆分步骤…</div>';
+    logEl0.innerHTML = smartSplit
+      ? '<div class="cli-empty-ai muted">正在智能拆分：会想依赖、并行与文件地界…</div>'
+      : planMode === "fast"
+        ? '<div class="cli-empty-ai muted">正在用本地规则拆分（不调用模型）…</div>'
+        : '<div class="cli-empty-ai muted">正在理解计划并拆分步骤…</div>';
   }
   const sub0 = $("#planning-sub");
   if (sub0) {
     const name = planDisplayName(state.selectedPlan);
+    const core = smartSplit
+      ? `正在智能拆分「${name}」…（会想依赖与并行，可能要几分钟 · 同时最多 ${maxParallel} 步）`
+      : planMode === "fast"
+        ? `正在用本地规则拆分「${name}」…（不调用模型 · 同时最多 ${maxParallel} 步）`
+        : `正在拆分「${name}」…（同时最多 ${maxParallel} 步）`;
     sub0.textContent =
       typeof flowJoinSeriousFun === "function"
         ? flowJoinSeriousFun(
-            `正在拆分「${name}」…（同时最多 ${maxParallel} 步）`,
+            core,
             typeof flowPickBlurb === "function" ? flowPickBlurb("planning", name) : ""
           )
-        : `正在拆分「${name}」…（同时最多 ${maxParallel} 步）`;
+        : core;
   }
 
   try {
@@ -138,6 +199,8 @@ export async function analyzePlanFromPicker() {
         max_parallel: maxParallel,
         // P2-2: re-apply confirm-screen edits from previous job (by title).
         preserve_from_job_id: preserveFrom || null,
+        // W4: grain line for ModelSplitAgent (omit when empty).
+        grain_hint: grainHint || null,
       },
     });
     state.planJob = view;
@@ -152,12 +215,18 @@ export async function analyzePlanFromPicker() {
     if (status === "planned") {
       await advancePlannedJob(view);
     } else if (status === "plan_failed") {
-      state.phase = "pick";
+      // Stay on split path — never fall through to historical run/result desk.
+      state.phase = "plan_failed";
       if (err) {
-        err.textContent = view.error || "规划失败";
+        err.textContent = view.error || "拆分失败";
         err.hidden = false;
       }
-      toast(view.error || "规划失败");
+      toast(humanPlanFail(view.error) || "拆分失败");
+      try {
+        if (window.ccoApp && typeof window.ccoApp.goSplit === "function") {
+          window.ccoApp.goSplit();
+        }
+      } catch (_) {}
       host.renderPhasePanels();
       host.renderPlanPicker();
       host.setAssignBusy(false);
@@ -304,13 +373,18 @@ export async function refreshPlanJob() {
     } else if (status === "plan_failed") {
       stopPlanJobPoll();
       host.setAssignBusy(false);
-      state.phase = "pick";
+      state.phase = "plan_failed";
       const err = $("#pp-error");
       if (err) {
-        err.textContent = view.error || "规划失败";
+        err.textContent = view.error || "拆分失败";
         err.hidden = false;
       }
-      toast(view.error || "规划失败");
+      toast(humanPlanFail(view.error) || "拆分失败");
+      try {
+        if (window.ccoApp && typeof window.ccoApp.goSplit === "function") {
+          window.ccoApp.goSplit();
+        }
+      } catch (_) {}
       host.renderPhasePanels();
       host.renderPlanPicker();
     } else if (status === "planning") {
@@ -319,8 +393,8 @@ export async function refreshPlanJob() {
       if (state.planStartedAt && Date.now() - state.planStartedAt > 12 * 60 * 1000) {
         stopPlanJobPoll();
         host.setAssignBusy(false);
-        state.phase = "pick";
-        toast("拆分超时：智能拆分可能无响应。请检查环境，或在更多选项里改用「模拟拆分」。");
+        state.phase = "plan_failed";
+        toast("拆分超时：智能拆分可能无响应。请检查环境，或在更多选项里改用「本地规则拆分」。");
         host.renderPhasePanels();
         host.renderPlanPicker();
         return;
@@ -330,9 +404,14 @@ export async function refreshPlanJob() {
         const elapsed = state.planStartedAt
           ? Math.round((Date.now() - state.planStartedAt) / 1000)
           : 0;
+        const mode =
+          view.plan_mode ||
+          view.planMode ||
+          $("#pp-plan-mode")?.value ||
+          "ai";
         sub.textContent =
           typeof flowPlanningSub === "function"
-            ? flowPlanningSub(elapsed)
+            ? flowPlanningSub(elapsed, mode)
             : `正在拆分计划步骤（已等待 ${elapsed}s）…`;
       }
       host.renderPhasePanels();

@@ -83,16 +83,23 @@ function flowJoinSeriousFun(serious, fun) {
 }
 
 /** Planning phase subtitle (no Claude/CLI brand). */
-function flowPlanningSub(elapsedSec) {
+/** Planning wait line; optional planMode: ai|fast|… (W3-2) */
+function flowPlanningSub(elapsedSec, planMode) {
   const sec = Math.max(0, Number(elapsedSec) || 0);
+  const mode = String(planMode || "").toLowerCase();
   let serious;
-  if (sec >= 60) {
+  if (mode === "fast") {
+    serious =
+      sec > 0
+        ? `正在用本地规则拆分（不调用模型 · 已等待 ${sec}s）…`
+        : "正在用本地规则拆分（不调用模型）…";
+  } else if (sec >= 60) {
     // P4-1: long wait — human copy + cancel affordance (btn-cancel-planning).
-    serious = `正在用 AI 拆分计划（已等待 ${sec}s）…可点「取消回计划」停止等待`;
+    serious = `正在智能拆分计划（已等待 ${sec}s）…可点「取消回计划」停止等待`;
   } else if (sec > 0) {
-    serious = `正在把计划拆成可执行步骤（已等待 ${sec}s）…`;
+    serious = `正在智能拆分：想依赖与并行（已等待 ${sec}s）…`;
   } else {
-    serious = "正在把计划拆成可执行步骤…";
+    serious = "正在智能拆分：会想依赖、并行与文件地界…";
   }
   return flowJoinSeriousFun(serious, flowPickBlurb("planning", String(sec)));
 }
@@ -123,9 +130,13 @@ function flowChooserSub(hasSelected) {
 function flowConfirmDepsLine(kind, depTitles, opts = {}) {
   const k = kind || "必选步骤";
   if (depTitles && depTitles.length) {
-    return `${k} · 等待：${depTitles.join(" · ")}`;
+    const titles =
+      depTitles.length <= 2
+        ? depTitles.join(" · ")
+        : `${depTitles.slice(0, 2).join(" · ")} 等 ${depTitles.length} 项`;
+    return `${k} · 等：${titles}`;
   }
-  return `${k} · 无依赖，可进首波`;
+  return `${k} · 可马上开始`;
 }
 
 function flowConfirmMetaLine(chars, editing) {
@@ -140,10 +151,10 @@ function flowPromptLabel(editing) {
 }
 
 function flowConfirmStartLabel(kind) {
+  // shell-chrome A2：主路径固定「执行规划」；stub 不改成长句
   if (kind === "running") return "运行中…";
   if (kind === "paused") return "继续运行";
-  if (kind === "again") return "再次确认并开始";
-  return "确认并开始";
+  return "执行规划";
 }
 
 function flowSplitCtaLabel() {
@@ -151,7 +162,7 @@ function flowSplitCtaLabel() {
 }
 
 function flowReplanLabel() {
-  return "重新拆分（保留你的修改）";
+  return "重新规划";
 }
 
 function flowSanitizeDepsLabel() {
@@ -199,7 +210,7 @@ function flowBoardSectionLabel() {
 }
 
 function flowEmptyBoard() {
-  return "暂无执行窗口 · 确认并开始后这里会按步骤出现";
+  return "暂无执行窗口 · 执行规划后这里会按步骤出现";
 }
 
 function flowRunningMonitorTitle() {
@@ -291,7 +302,7 @@ function flowStageStripHtml(phase, opts = {}) {
     (phase === "planning"
       ? "正在把计划拆成可执行步骤"
       : phase === "confirm"
-        ? "看清波次后点「确认并开始」"
+        ? "看清波次后点「执行规划」"
         : phase === "running"
           ? "按波次推进中"
           : phase === "done"
@@ -328,8 +339,28 @@ function flowStageStripHtml(phase, opts = {}) {
       let cls = "flow-stage";
       if (i < active) cls += " is-done";
       else if (i === active) cls += " is-active";
-      const mark = i < active ? "✓" : i === active ? "●" : "○";
-      return `<span class="${cls}" data-stage="${s.id}"><span class="flow-stage-mark" aria-hidden="true">${mark}</span>${s.label}</span>`;
+      const ico =
+        typeof window.ccoIcon === "function"
+          ? i < active
+            ? window.ccoIcon("check", {
+                size: 12,
+                className: "flow-step-ico is-done",
+              })
+            : i === active
+              ? window.ccoIcon("circle-dot", {
+                  size: 12,
+                  className: "flow-step-ico is-active",
+                })
+              : window.ccoIcon("circle", {
+                  size: 12,
+                  className: "flow-step-ico is-todo",
+                })
+          : i < active
+            ? "✓"
+            : i === active
+              ? "●"
+              : "○";
+      return `<span class="${cls}" data-stage="${s.id}"><span class="flow-stage-mark" aria-hidden="true">${ico}</span>${s.label}</span>`;
     })
     .join('<span class="flow-stage-sep" aria-hidden="true">→</span>');
   return (

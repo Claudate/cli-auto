@@ -26,6 +26,8 @@ pub struct SplitRequest {
     pub max_parallel: usize,
     pub created_at: String,
     pub updated_at: String,
+    /// Optional grain line for the model user prompt (W4 · 偏粗/偏细); empty = omit.
+    pub grain_hint: Option<String>,
 }
 
 /// Port: plan document → cco-native split graph.

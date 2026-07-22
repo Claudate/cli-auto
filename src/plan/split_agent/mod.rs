@@ -5,12 +5,14 @@
 //! [POS]: plan — OpenHands Plan Mode 气质；执行仍走 Worker
 //! [PROTOCOL]: 变更时更新此头部与 src/plan/CLAUDE.md · docs/openhands-style-split-agent-landing-2026-07-21.md
 
+mod extract;
 mod model;
 mod parse;
 mod prompt;
 
+pub use extract::extract_json_object;
 pub use model::{FixtureSplitAgent, ModelSplitAgent};
-pub use parse::{extract_json_object, parse_agent_output};
+pub use parse::parse_agent_output;
 pub use prompt::{system_prompt, user_prompt};
 
 use anyhow::{Context, Result};
@@ -43,8 +45,18 @@ pub fn build_split_agent_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
         max_parallel,
         created_at: job.created_at.to_rfc3339(),
         updated_at: now.clone(),
+        grain_hint: job.grain_hint.clone(),
     };
 
+    if let Some(ref g) = job.grain_hint {
+        if !g.trim().is_empty() {
+            append_log(
+                config,
+                &job.job_id,
+                &format!("ModelSplitAgent grain: {}", g.trim()),
+            );
+        }
+    }
     append_log(
         config,
         &job.job_id,
@@ -148,6 +160,7 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();
@@ -202,6 +215,7 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
+            grain_hint: None,
             },
         )
         .unwrap();

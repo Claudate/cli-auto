@@ -1,11 +1,18 @@
 /**
- * [INPUT]: settingsApi · DOM #s-* · local prefs (flowFun / chatAssignDirect)
- * [OUTPUT]: loadSettings / saveSettings（只读写 DTO + 表单，无策略）
+ * [INPUT]: settingsApi · gateway pins · DOM #s-* · local prefs (flowFun / chatAssignDirect)
+ * [OUTPUT]: loadSettings / saveSettings / pin CRUD（P2-2）
  * [POS]: A5-2d features/settings
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
 import * as settingsApi from "./settingsApi.js";
+import * as gateway from "../../shared/gateway.js";
+import {
+  loadWorkStyleSetting,
+  saveWorkStyleSetting,
+  suggestedMaxParallel,
+  resolvedWorkStyle,
+} from "../../shared/workStyle.js";
 
 function $(sel) {
   return typeof window.$ === "function"
@@ -38,9 +45,7 @@ export async function loadSettings() {
     if ($("#s-failover-enabled")) {
       $("#s-failover-enabled").checked = s.failover_enabled !== false;
     }
-    if ($("#s-failover-order-note") && s.failover_order_note) {
-      $("#s-failover-order-note").textContent = s.failover_order_note;
-    }
+    // keep short static #s-failover-order-note; long DTO stays for CLI/docs
     if ($("#s-post-inspect")) {
       $("#s-post-inspect").checked = !!s.post_inspect_enabled;
     }
@@ -53,9 +58,7 @@ export async function loadSettings() {
     if ($("#s-planner-critic")) {
       $("#s-planner-critic").checked = !!s.planner_critic_enabled;
     }
-    if ($("#s-post-tasks-note") && s.post_tasks_note) {
-      $("#s-post-tasks-note").textContent = s.post_tasks_note;
-    }
+    // UI keeps short static copy under #s-post-tasks-note; do not paste long DTO note.
     if ($("#s-flow-fun") && typeof window.flowFunEnabled === "function") {
       $("#s-flow-fun").checked = window.flowFunEnabled();
     }
@@ -66,20 +69,138 @@ export async function loadSettings() {
     ) {
       $("#s-chat-assign-direct").checked = !window.chatAssignDirectEnabled();
     }
-    const fontEl = $("#s-log-font");
     const st = state();
+    const projectPath = st?.selectedPath || null;
+    try {
+      loadWorkStyleSetting(projectPath);
+    } catch (_) {}
+    const fontEl = $("#s-log-font");
     if (fontEl && st) fontEl.value = String(st.logFontSize);
-    // Seed split-time concurrency when user hasn't touched pickers
+    // Seed split-time concurrency: config × work-style hint when user hasn't touched pickers
+    const seedMp = suggestedMaxParallel(s.max_parallel || 2, projectPath);
     if ($("#pp-max-parallel") && !$("#pp-max-parallel").dataset.touched) {
-      $("#pp-max-parallel").value = String(s.max_parallel || 2);
+      $("#pp-max-parallel").value = String(seedMp);
     }
     if ($("#chooser-max-parallel") && !$("#chooser-max-parallel").dataset.touched) {
-      $("#chooser-max-parallel").value = String(s.max_parallel || 2);
+      $("#chooser-max-parallel").value = String(seedMp);
     }
+    // Soft-seed plan_mode only when unset and user never touched chooser
+    const pm = $("#pp-plan-mode");
+    if (pm && !pm.dataset.touched) {
+      const style = resolvedWorkStyle(projectPath);
+      // Product default remains AI; profiles never force fast (W4 / Q0).
+      void style;
+    }
+    // P2-2: load pins for selected project (best-effort)
+    try {
+      await loadProjectPins();
+    } catch (_) {}
     return s;
   } catch (_) {
     /* ignore cold-load failures */
     return null;
+  }
+}
+
+function escPin(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** P2-2: render pin list (≤3) for current project. */
+export async function loadProjectPins() {
+  const list = $("#s-pins-list");
+  const empty = $("#s-pins-empty");
+  const status = $("#s-pins-status");
+  const st = state();
+  const project = st?.selectedPath;
+  if (!list) return [];
+  if (!project) {
+    list.innerHTML =
+      `<p class="field-hint" id="s-pins-empty">请先在左侧选中项目</p>`;
+    return [];
+  }
+  try {
+    const pins = (await gateway.projectPinsList(project)) || [];
+    if (!pins.length) {
+      list.innerHTML =
+        `<p class="field-hint" id="s-pins-empty">暂无 pin（最多 3 条）</p>`;
+    } else {
+      list.innerHTML = pins
+        .map(
+          (p) =>
+            `<div class="pin-row" data-pin-key="${escPin(p.key)}">` +
+            `<span class="pin-key"><strong>${escPin(p.key)}</strong></span>` +
+            `<span class="pin-val muted">${escPin(p.value)}</span>` +
+            `<button type="button" class="linkish sm" data-pin-delete="${escPin(
+              p.key
+            )}" title="删除">删除</button>` +
+            `</div>`
+        )
+        .join("");
+    }
+    if (status) {
+      status.hidden = true;
+      status.textContent = "";
+    }
+    return pins;
+  } catch (e) {
+    list.innerHTML = `<p class="field-hint" id="s-pins-empty">加载 pin 失败</p>`;
+    if (status) {
+      status.hidden = false;
+      status.textContent = String(e?.message || e);
+    }
+    return [];
+  }
+}
+
+/** P2-2: add pin from settings form. */
+export async function addProjectPin() {
+  const st = state();
+  const project = st?.selectedPath;
+  const toast =
+    typeof window.toast === "function" ? window.toast : (m) => console.log(m);
+  if (!project) {
+    toast("请先选择项目");
+    return null;
+  }
+  const key = ($("#s-pin-key")?.value || "").trim();
+  const value = ($("#s-pin-value")?.value || "").trim();
+  if (!key || !value) {
+    toast("请填写 pin 键与值");
+    return null;
+  }
+  try {
+    const pin = await gateway.projectPinUpsert(project, key, value);
+    if ($("#s-pin-key")) $("#s-pin-key").value = "";
+    if ($("#s-pin-value")) $("#s-pin-value").value = "";
+    toast(`已保存 pin：${key}`);
+    await loadProjectPins();
+    return pin;
+  } catch (e) {
+    toast(String(e?.message || e));
+    return null;
+  }
+}
+
+/** P2-2: delete pin by key. */
+export async function deleteProjectPin(key) {
+  const st = state();
+  const project = st?.selectedPath;
+  const toast =
+    typeof window.toast === "function" ? window.toast : (m) => console.log(m);
+  if (!project || !key) return false;
+  try {
+    await gateway.projectPinDelete(project, key);
+    toast(`已删除 pin：${key}`);
+    await loadProjectPins();
+    return true;
+  } catch (e) {
+    toast(String(e?.message || e));
+    return false;
   }
 }
 
@@ -97,6 +218,9 @@ export async function saveSettings() {
   ) {
     window.setChatAssignDirectEnabled(!$("#s-chat-assign-direct").checked);
   }
+  try {
+    saveWorkStyleSetting(state()?.selectedPath || null);
+  } catch (_) {}
   const pollVal = parseInt($("#s-poll-interval")?.value, 10);
   const modeVal = parseInt($("#s-default-mode")?.value, 10);
   const providerVal = ($("#s-default-provider")?.value || "").trim();
@@ -179,9 +303,7 @@ export async function saveSettings() {
     if ($("#chooser-max-parallel") && !$("#chooser-max-parallel").dataset.touched) {
       $("#chooser-max-parallel").value = String(maxParallelVal || 2);
     }
-    if ($("#s-failover-order-note") && updated.failover_order_note) {
-      $("#s-failover-order-note").textContent = updated.failover_order_note;
-    }
+    // keep short static #s-failover-order-note
     if ($("#s-failover-enabled") && typeof updated.failover_enabled === "boolean") {
       $("#s-failover-enabled").checked = updated.failover_enabled;
     }
@@ -206,9 +328,7 @@ export async function saveSettings() {
     ) {
       $("#s-post-open-pr").checked = updated.post_open_pr_enabled;
     }
-    if ($("#s-post-tasks-note") && updated.post_tasks_note) {
-      $("#s-post-tasks-note").textContent = updated.post_tasks_note;
-    }
+    // keep short static #s-post-tasks-note; ignore long DTO note
     if (status) {
       status.className = "save-status ok";
       status.textContent = "已保存";

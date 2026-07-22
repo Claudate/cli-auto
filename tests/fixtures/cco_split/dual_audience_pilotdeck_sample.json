@@ -1,0 +1,59 @@
+{
+  "schema": "cco-split/v1",
+  "title": "PilotDeck 借鉴 · 双受众金样（示意）",
+  "max_parallel": 2,
+  "tasks": [
+    {
+      "id": "t1",
+      "title": "结果台显示费用与用时",
+      "summary": "做完能看见大概花了多少钱、跑了多久",
+      "body": "【做什么】结果台人话展示费用与用时\n【改哪里】web/js/features/result/**\n【怎样算做完】终态可见费用或「未汇总」；不假装 $0\n【先等谁】无；可与 report 标题人话并行\n【不要做什么】不旁路确认开跑；不把 run_id 当第一句\n【自测】fake 一跑看费用句",
+      "depends_on": [],
+      "optional": false,
+      "enabled": true,
+      "kind": "do",
+      "done_when": "终态结果台可见人话费用或未汇总",
+      "can_parallel": true,
+      "scope_paths": ["web/js/features/result/**"]
+    },
+    {
+      "id": "t2",
+      "title": "report 标题改人话",
+      "summary": "报告第一行是计划名，不是乱码编号",
+      "body": "【做什么】report.md 标题人话 + 元数据下沉\n【改哪里】src/report/**\n【怎样算做完】打开 report 第一行无人话以外的 run_id\n【先等谁】无\n【不要做什么】不伪造 PASS\n【自测】手跑一局看 report.md",
+      "depends_on": [],
+      "optional": false,
+      "enabled": true,
+      "kind": "do",
+      "done_when": "report 第一行无人话以外的 run_id",
+      "can_parallel": true,
+      "scope_paths": ["src/report/**"]
+    },
+    {
+      "id": "t3",
+      "title": "无巡检时也有占位报告",
+      "summary": "没开巡检也能看到一页结果说明",
+      "body": "【做什么】缺 VERDICT 时写占位 report\n【改哪里】src/report/**\n【怎样算做完】关巡检仍有可读 report，对照计划节不写假 PASS\n【先等谁】t2\n【不要做什么】不伪造 PASS\n【自测】单测无 handoff 构造",
+      "depends_on": ["t2"],
+      "optional": false,
+      "enabled": true,
+      "kind": "do",
+      "done_when": "关巡检仍有可读 report",
+      "can_parallel": false,
+      "scope_paths": ["src/report/**"]
+    },
+    {
+      "id": "t4",
+      "title": "结果台与 report 用语对齐",
+      "summary": "界面和报告说的是同一套对照结论",
+      "body": "【做什么】结果台与 report 叙事对齐\n【改哪里】web/js/features/result/** · src/report/**\n【怎样算做完】UI 与 report 同轮结论不矛盾\n【先等谁】t1 · t3\n【不要做什么】不在 JS 复制调度策略\n【自测】目视一局",
+      "depends_on": ["t1", "t3"],
+      "optional": false,
+      "enabled": true,
+      "kind": "do",
+      "done_when": "UI 与 report 同轮结论不矛盾",
+      "can_parallel": false,
+      "scope_paths": ["web/js/features/result/**", "src/report/**"]
+    }
+  ]
+}
