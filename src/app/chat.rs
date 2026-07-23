@@ -67,14 +67,16 @@ pub fn cleanup_expired(project: &Path, hours: i64) -> Result<usize> {
 // --- send / stream ---
 
 /// One chat round-trip (fake or Claude print). Writes draft markdown only — **no** open-run.
+/// `effort`: optional per-send override (`low`…`max`|`ultracode`).
 pub fn send(
     config: &Config,
     project: &Path,
     message: &str,
     session_id: Option<&str>,
     attachments: Option<Vec<ChatAttachment>>,
+    effort: Option<&str>,
 ) -> Result<ChatSendResponse> {
-    chat_send(config, project, message, session_id, attachments)
+    chat_send(config, project, message, session_id, attachments, effort)
 }
 
 /// Best-effort partial assistant text while send is in flight.
@@ -146,7 +148,7 @@ mod tests {
         std::fs::create_dir_all(&state).unwrap();
         let cfg = fake_cfg(&state);
 
-        let r = send(&cfg, &project, "帮我写个登录页计划", None, None).unwrap();
+        let r = send(&cfg, &project, "帮我写个登录页计划", None, None, None).unwrap();
         assert!(r.fake);
         assert!(r.reply.contains("```plan") || r.draft_plan.is_some());
 

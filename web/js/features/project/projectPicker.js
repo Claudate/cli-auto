@@ -116,12 +116,16 @@ export async function startExecuteFromSelection(planPath, opts = {}) {
     toastRunLocked("拆成步骤");
     return;
   }
-  const path =
+  const raw =
     planPath ||
     state.selectedPlan ||
     state.chatDraftPlan ||
     state.planRailSelected ||
     null;
+  const path =
+    (typeof normalizePlanPath === "function"
+      ? normalizePlanPath(raw, state.selectedPath)
+      : null) || raw;
   if (!path) {
     toast("请先选中一份计划");
     if (state.page !== "plans") {
@@ -137,18 +141,60 @@ export async function startExecuteFromSelection(planPath, opts = {}) {
   if (opts.fakeNote || state.chatFake) {
     toast("注意：当前计划来自本地模板（非真实 AI），确认后仍将进入执行");
   }
+
+  // Explicit path from chat / full-view / plans: this is the plan to split.
+  // If a prior planning/confirm session still holds another plan, tear it down
+  // so selectPlan cannot refuse the switch (toast said chat-*.md while job
+  // kept pilotdeck).
+  const prev = state.selectedPlan;
+  const prevKey =
+    typeof normalizePlanPath === "function"
+      ? normalizePlanPath(prev, state.selectedPath) || prev
+      : prev;
+  const nextKey =
+    typeof normalizePlanPath === "function"
+      ? normalizePlanPath(path, state.selectedPath) || path
+      : path;
+  const switching = !!(prevKey && nextKey && prevKey !== nextKey);
+  const forceSwitch =
+    !!opts.force ||
+    opts.source === "chat" ||
+    opts.source === "full-view" ||
+    opts.source === "plans" ||
+    switching;
+  if (forceSwitch && (host.isPlanSessionActive?.() || state.planJobId)) {
+    try {
+      host.stopPlanJobPoll?.();
+    } catch (_) {}
+    try {
+      host.clearPlanSession(state.selectedPath);
+    } catch (_) {}
+    state.planJob = null;
+    state.planJobId = null;
+    state.phase = "pick";
+    state.confirmEditing = false;
+    try {
+      host.setAssignBusy?.(false);
+    } catch (_) {}
+  }
+
   state.chatDraftPlan = path;
+  state.selectedPlan = path;
   if (typeof selectPlanRailItem === "function") {
     try {
       selectPlanRailItem(path);
     } catch (_) {}
   }
   try {
-    await host.selectPlan(path);
+    await host.selectPlan(path, { force: forceSwitch });
   } catch (e) {
     toast(String(e?.message || e));
     return;
   }
+  // selectPlan may no-op under race; re-assert identity.
+  state.selectedPlan = path;
+  state.chatDraftPlan = path;
+
   // A2：默认跳过选项层直开拆分（仍走 analyze → start_plan_job → confirm_start；禁止 start_run）。
   const direct =
     opts.direct === true ||
@@ -162,7 +208,8 @@ export async function startExecuteFromSelection(planPath, opts = {}) {
     const name =
       typeof planDisplayName === "function" ? planDisplayName(path) : path;
     toast(`正在拆成步骤…「${name}」`);
-    await host.analyzePlanFromPicker();
+    // Pass path explicitly — never re-read a possibly stale selectedPlan alone.
+    await host.analyzePlanFromPicker(path);
     return;
   }
   // 设置「先确认选项」或 opts.direct===false：打开选项层
@@ -448,16 +495,22 @@ export function renderPlanPicker() {
     }
   }
 
-  // 顶栏「选择计划」：workspace 非拆分相位直出（系统页隐藏）
+  // 顶栏「选择计划」/「拆成步骤」：执行/结果台不露出（红框收口）；仅 author 相位 workspace
+  const hideTopPlanChrome =
+    hideForPhase ||
+    state.phase === "running" ||
+    state.phase === "done" ||
+    !!runActive ||
+    !!isLiveStatus(state.live?.run_status);
   if (btnChoose) {
-    btnChoose.hidden = isSystemPage || !inWorkspace || hideForPhase;
+    btnChoose.hidden = isSystemPage || !inWorkspace || hideTopPlanChrome;
     btnChoose.disabled = !!runActive;
     btnChoose.title = runActive ? "运行中，请先停止后再切换计划" : "选择计划";
   }
-  // 顶栏主 CTA「拆成步骤」：仅 workspace 且未在拆分中
+  // 顶栏主 CTA「拆成步骤」：仅 workspace 且未在拆分/执行中
   if (btnAssign) {
-    btnAssign.hidden = isSystemPage || !inWorkspace || hideForPhase;
-    if (!hideForPhase && !state.assigning) {
+    btnAssign.hidden = isSystemPage || !inWorkspace || hideTopPlanChrome;
+    if (!hideTopPlanChrome && !state.assigning) {
       btnAssign.textContent = runActive ? "运行中…" : "拆成步骤";
       btnAssign.title = runActive
         ? "运行中，请先停止后再拆分新计划"

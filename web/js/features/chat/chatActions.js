@@ -58,9 +58,8 @@ export async function openChatPage() {
   }
   // Leaving another page: keep current chat in cache first.
   if (state.chatProjectPath) stashChatSession(state.chatProjectPath);
-  // G0: re-read per-project rail open preference when switching projects
-  const railKey = `cco.planRailOpen:${state.selectedPath}`;
-  state.planRailOpen = localStorage.getItem(railKey) === "1";
+  // 聊天右栏已撤：强制关轨
+  state.planRailOpen = false;
   showPage("chat");
   // Restore immediately so history is never blank while disk loads.
   restoreChatSession(state.selectedPath);
@@ -69,6 +68,14 @@ export async function openChatPage() {
   state.chatLastSummary = null;
   renderChatPage();
   await loadChatSession();
+  // Plan-card footer hides 仅保存/拆成步骤 when path is already split —
+  // best-effort refresh SQLite index so reopening chat after 拆分 is correct.
+  try {
+    const loadIdx =
+      (typeof window !== "undefined" && window.loadPlanSplitIndex) ||
+      host.loadPlanSplitIndex;
+    if (typeof loadIdx === "function") await loadIdx(state.selectedPath);
+  } catch (_) {}
   // C3: session switcher list (best-effort)
   try {
     await loadChatSessionList();
@@ -77,12 +84,9 @@ export async function openChatPage() {
   try {
     await loadChatLastSummary();
   } catch (_) {}
-  // G0/G1: only scan rail when user has opened 计划管理
-  if (state.planRailOpen) {
-    try {
-      await host.loadPlanRail();
-    } catch (_) {}
-  }
+  // 计划列表数据在打开「计划管理」时再扫；聊天页不占右栏
+  // Re-paint after split index (and session) so card CTAs match disk state.
+  renderChatPage();
 }
 
 /**
@@ -164,7 +168,12 @@ export async function sendChatMessage() {
   state.chatProjectPath = projectPath;
   state.chatBusy = true;
   state.chatWaitStartedAt = Date.now();
+  // New stream generation: drop any leftover painted text; ignore late polls
+  // from a previous turn and refuse previous-turn `.done` stdout until live growth.
+  state.chatStreamGen = (state.chatStreamGen || 0) + 1;
   state.chatStreamText = "";
+  state.chatStreamBytes = 0;
+  state.chatStreamSeenLive = false;
   if (input) input.value = "";
   const pendingSnap = (state.chatPendingAttachments || []).slice();
   // optimistic user bubble + pending AI bubble (renderChatMessages)
@@ -203,12 +212,22 @@ export async function sendChatMessage() {
     }
     // Non-blocking for the webview: Tauri command is async + spawn_blocking.
     // User sees "思考中…" bubble; send is disabled only to avoid double-send.
+    const effortEl = $("#chat-effort");
+    const effortRaw = (effortEl?.value || "").trim().toLowerCase();
+    const effortOk = ["low", "medium", "high", "xhigh", "max", "ultracode"].includes(
+      effortRaw
+    );
     const sendArgs = {
       project: projectPath,
       message: text || (attachments.length ? "（见附件）" : ""),
       sessionId: state.chatSession.session_id || "default",
       attachments: attachments.length ? attachments : null,
+      effort: effortOk ? effortRaw : null,
     };
+    // Persist last chat pick so reopen keeps depth
+    try {
+      if (effortOk) localStorage.setItem("cco.chatEffort", effortRaw);
+    } catch (_) {}
     const resp = await chatApi.sendMessage(sendArgs);
     // If user switched project mid-send, still write into that project's cache.
     if (state.selectedPath !== projectPath) {
@@ -218,12 +237,11 @@ export async function sendChatMessage() {
         session_id: sid,
         messages: Array.isArray(resp.messages) ? resp.messages : [],
         draft_plan: resp.draft_plan || null,
+        // Unsaved new fence → null path (do not keep previous session draftPath).
         draftPath:
           resp.draft_plan?.saved && resp.draft_plan.path
             ? resp.draft_plan.path
-            : state.chatSessions[key]?.draftPath ||
-              state.chatSessions[projectPath]?.draftPath ||
-              null,
+            : null,
         fake: !!resp.fake,
         envNote: resp.env_note || null,
         busy: false,
@@ -237,9 +255,8 @@ export async function sendChatMessage() {
         messages: resp.messages,
         draft_plan: resp.draft_plan,
       });
-      if (resp.draft_plan?.saved && resp.draft_plan.path) {
-        state.chatDraftPlan = resp.draft_plan.path;
-      }
+      // applyChatDraftFromSession already mirrors server saved path / clears unsaved.
+      // Do not re-promote a stale chatDraftPlan when the new fence is unsaved.
       // 有 markdown 时记 fake；真实 AI 成功则清掉
       state.chatFake = !!resp.fake;
       // 生产 soft-fallback：env_note 进系统条；forced fake 无 env_note 时用简短 mock 提示
@@ -278,6 +295,10 @@ export async function sendChatMessage() {
       state.chatBusy = false;
       state.chatWaitStartedAt = 0;
       state.chatStreamText = "";
+      state.chatStreamBytes = 0;
+      state.chatStreamSeenLive = false;
+      // Bump gen so in-flight poll promises cannot re-paint into the next idle frame.
+      state.chatStreamGen = (state.chatStreamGen || 0) + 1;
       stopChatWaitTicker();
       stashChatSession(projectPath);
       renderChatPage();

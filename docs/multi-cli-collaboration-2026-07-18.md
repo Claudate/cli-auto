@@ -1,11 +1,12 @@
 # cco 多 CLI 协作（Claude + Codex 并跑）
 
-> 状态：**P0–P1 全绿 · P2 主线已落地**（P2-1/2/3/4/5/6 ✅ · **t33** tags 路由 + planner provider/role/scope；**不阻塞** D0–D4）  
+> **状态：规则有效 · 阶段勾选勿继承**  
+> 阶段勾选史：**P0–P1 全绿 · P2 主线已落地**（P2-1/2/3/4/5/6 ✅ · **t33** tags 路由 + planner provider/role/scope；**不阻塞** D0–D4）——**勿**当未做工作再开。  
 > 日期：2026-07-18  
 > 范围：同 run 内多 `WorkerProvider` 混部 · 任务级 provider/role/scope · 越界约束 · 终闸检验员 · 事中 handoff 账本  
 > 角色：编排主路径**增强**子计划——在已有 claude/codex/fake 总线上把「能混跑」收成「可控协作」；**不**另开第二套 Scheduler；**不**替代 Mode B / 分配主路径  
 > 关联真源：
-> - 编排器 → [`../claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md)（M0–M4 已落地；Codex 已出池；M5 → D5）
+> - 编排器 → [`archive/claude-cli-orchestrator-plan.md`](./archive/claude-cli-orchestrator-plan.md)（M0–M4 已落地；Codex 已出池；M5 → D5）
 > - 总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md)（未完善唯一总账；本计划增强项入 **D5 池**，不排期则不碰）
 > - Mode B → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)（confirm_start 唯一业务 worker 入口）
 > - 聊天共建 → [`chat-plan-builder-2026-07-18.md`](./archive/chat-plan-builder-2026-07-18.md)（产出散文计划；本计划约束结构化混部字段）
@@ -13,10 +14,10 @@
 > GEB 入口：[`/CLAUDE.md`](../CLAUDE.md)（L1）· [`./CLAUDE.md`](./CLAUDE.md)（L2 docs）
 
 > **定稿（t1）**：本前言 + §0–§9 冻结角色、契约、字段、阶段与非目标。  
-> 实施勾选真源 = **§6**（P0/P1/P2）；**禁止**第二份 P0–P2 总览；**禁止**回灌已冻 D0–D4。  
+> 实施勾选史 = **§6**（P0/P1/P2）；**禁止**第二份 P0–P2 总览；**禁止**回灌已冻 D0–D4；**阶段勾选勿继承**。  
 > 与总账边界：本增强 → D5；发现即改文档债可顺手，不占主排期。
 
-[PROTOCOL]: 变更时更新此头部与阶段勾选；落地后检查 `docs/CLAUDE.md` 与 `/CLAUDE.md`
+[PROTOCOL]: 变更时更新此头部；**阶段勾选勿继承**；落地后检查 `docs/CLAUDE.md` 与 `/CLAUDE.md`
 
 ---
 

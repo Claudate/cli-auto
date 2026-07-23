@@ -43,7 +43,21 @@ pub async fn run(
     auto_open_terminal: bool,
     terminal_kind: Option<TermKindArg>,
     max_budget: Option<f64>,
+    effort: Option<String>,
 ) -> Result<i32> {
+    // Session-level effort override (config clone so we don't mutate shared disk state).
+    let mut config = config.clone();
+    if let Some(raw) = effort.as_deref() {
+        if let Some(n) = crate::config::normalize_effort(raw) {
+            config.default.effort = n;
+            println!("effort: {}", config.default.effort);
+        } else {
+            eprintln!(
+                "warning: unknown --effort {raw:?}; expected low|medium|high|xhigh|max|ultracode (ignored)"
+            );
+        }
+    }
+    let config = &config;
     let project = interactive::resolve_project(project, true)?;
     interactive::ensure_project_dir(&project)?;
     let plan = interactive::resolve_plan(&project, plan, true)?;
@@ -122,6 +136,8 @@ pub async fn run(
             force_provider,
             mode,
             max_parallel,
+            // Session effort already on config.default; also force onto tasks at open-run.
+            effort: Some(config.default.effort.clone()),
         };
         // Sole Mode B open-run (optional drop + soft defaults + materialize + mark).
         let (run_id, st, ir, _fill) =

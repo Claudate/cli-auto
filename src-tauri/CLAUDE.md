@@ -14,9 +14,9 @@ build.rs: tauri build 钩子
 | Tauri command | Application |
 |---------------|-------------|
 | confirm_start_cmd | app::split::confirm |
-| start_plan_job_cmd / get_plan_job_cmd / latest_plan_job_cmd | app::split::* |
+| start_plan_job_cmd / get_plan_job_cmd / latest_plan_job_cmd / latest_plan_job_for_plan_cmd / list_plan_split_index_cmd | app::split::* |
 | update/remove/sanitize plan task | app::split::* |
-| stop_run_cmd / stop_task_cmd / resume_run_cmd / rework / residual | app::run::* |
+| stop_run_cmd / stop_task_cmd / resume_run_cmd / **retry_task_cmd** / rework / residual | app::run::* |
 | get_runs / get_run / plan meta / preview / start_run（ParseOnly） | app::run::* |
 | chat_* / read_plan_md | app::chat::* |
 | live / projects / settings / doctor | services thin（未建 app 模块） |

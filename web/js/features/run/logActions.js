@@ -202,6 +202,16 @@ export async function resumeRun() {
   toast("执行台未就绪，请稍后重试");
 }
 
+/** Card「再跑一次」: re-run one failed task (not re-split). */
+export async function retryTask(taskId) {
+  const cco = g("ccoRun");
+  const id = taskId || S().selectedTaskId;
+  if (cco && typeof cco.retryTask === "function") {
+    return cco.retryTask(id);
+  }
+  toast("执行台未就绪，请稍后重试");
+}
+
 /** P-loop L2: rework via app start_rework (ccoResult). */
 export async function startReworkWave() {
   const cco = g("ccoResult");

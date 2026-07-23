@@ -9,6 +9,16 @@ use crate::domain::chat::extract_assistant_text;
 use super::paths::chat_work_task_dir;
 use super::types::ChatStreamPartial;
 
+/// Wipe leftover stdout / `.done` from a previous chat turn so polls never
+/// re-surface the last reply as if it were the new stream.
+pub(crate) fn clear_chat_stream_work(project: &Path) {
+    let task_dir = chat_work_task_dir(project);
+    let _ = std::fs::create_dir_all(&task_dir);
+    let _ = std::fs::remove_file(task_dir.join(".done"));
+    let _ = std::fs::write(task_dir.join("stdout.json"), "");
+    let _ = std::fs::write(task_dir.join("stdout.raw.ndjson"), "");
+}
+
 /// C3 streaming partial: best-effort assistant text while `chat_send` is still running.
 /// Reads the same `__chat__` stdout file that `call_claude_chat` writes; never panics on
 /// truncated NDJSON / CJK mid-rune (uses char-safe extract). Empty when idle or unavailable.

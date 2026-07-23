@@ -1,11 +1,12 @@
 /**
  * [INPUT]: gateway only（禁止 __TAURI__/invoke）
- * [OUTPUT]: Run 控制薄封装（stop / resume / stopTask / openTerminal）
+ * [OUTPUT]: Run 控制薄封装（stop / resume / stopTask / retryTask / openTerminal）
  * [POS]: A4-1 features/run；策略在 Rust app/run
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
  * 禁止：start_run 旁路、复制 stall-failover / soft-fill。
  * 回补走 features/result → startRework（非第二开跑入口）。
+ * 卡片「再跑一次」→ retryTask（单任务，非 re-split）。
  */
 
 import * as gateway from "../../shared/gateway.js";
@@ -23,6 +24,15 @@ export function stopTask(runId, taskId) {
 /** @param {string} runId */
 export function resumeRun(runId) {
   return gateway.resumeRun(runId);
+}
+
+/**
+ * Re-run one failed/stopped/timeout task in the same run (not re-split).
+ * @param {string} runId
+ * @param {string} taskId
+ */
+export function retryTask(runId, taskId) {
+  return gateway.retryTask(runId, taskId);
 }
 
 /** @param {Record<string, unknown>} args open_task_terminal_cmd payload */

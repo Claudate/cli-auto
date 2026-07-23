@@ -1,7 +1,7 @@
 /* [INPUT]: 无；被 app.css @import
- * [OUTPUT]: 聊天页消息气泡 · 计划卡片 · 底栏 CTA · 右轨 plan-rail · 全文 modal
+ * [OUTPUT]: 聊天页消息气泡 · 计划卡片 · 底栏 CTA · 全文 modal · badge（管理页复用）
  * [POS]: web/css 聊天共建计划
- * note: G0 右栏默认 hidden + 标题 line-clamp；G1 选中态
+ * note: 聊天右栏 plan-rail DOM 已撤；.plan-rail-* 样式仍服务 page-plans badge / 管理列表
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -16,7 +16,7 @@
   display: flex;
 }
 
-/* H1/G0: 主列 + 右轨（默认全宽；.plan-rail-open 时分栏） */
+/* 主列全宽（聊天右栏已撤） */
 .chat-layout {
   display: flex;
   flex: 1;
@@ -37,10 +37,6 @@
   padding: 0.75rem 1.25rem 1rem;
   gap: 0.6rem;
   min-width: 0;
-}
-.chat-layout.plan-rail-open .chat-shell {
-  max-width: none;
-  margin: 0;
 }
 
 .chat-head {
@@ -63,7 +59,7 @@
   gap: 0.4rem;
   flex-shrink: 0;
 }
-/* B3: session switcher tucked under details */
+/* B3: session switcher tucked under details · 默认收起，展开后点空白/Esc/操作后自动收 */
 .chat-session-more {
   position: relative;
 }
@@ -74,7 +70,12 @@
 .chat-session-more > summary::-webkit-details-marker {
   display: none;
 }
+/* 关闭时强制不占位（防增强 select 壳层残留可见） */
+.chat-session-more:not([open]) > .chat-session-switch {
+  display: none !important;
+}
 .chat-session-more[open] .chat-session-switch {
+  display: flex;
   position: absolute;
   right: 0;
   top: calc(100% + 0.25rem);
@@ -82,7 +83,7 @@
   padding: 0.4rem;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: var(--bg2, var(--panel, #1e1e24));
+  background: var(--bg, #fff);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
 }
 /* C3 multi-session switcher */
@@ -114,24 +115,7 @@
   height: 1.85rem;
   line-height: 1;
 }
-.chat-rail-toggle {
-  flex-shrink: 0;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg, #fff);
-  color: var(--muted);
-  font-size: 0.95rem;
-  line-height: 1;
-  cursor: pointer;
-}
-.chat-rail-toggle:hover,
-.chat-rail-toggle.is-on {
-  border-color: color-mix(in srgb, var(--accent, #2563eb) 45%, var(--border));
-  color: var(--accent, #2563eb);
-  background: #f4f8fd;
-}
+/* .chat-rail-toggle 已随右栏撤掉 */
 
 /* ── 计划管理页 page-plans ── */
 #page-plans {
@@ -310,14 +294,20 @@
   min-height: 0;
   overflow: auto;
   margin: 0;
-  padding: 0.65rem 0.75rem;
+  padding: 0.65rem 0.85rem;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: #f8f9fb;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  white-space: pre-wrap;
+  background: var(--bg, #fff);
+  font-size: 0.85rem;
+  line-height: 1.55;
   word-break: break-word;
+  color: var(--text);
+}
+.plans-mgmt-detail-body.md-body .md-local-link {
+  color: var(--accent, #0071e3);
+  text-decoration: underline;
+  text-decoration-color: rgba(0, 113, 227, 0.35);
+  cursor: default;
 }
 .plans-mgmt-detail-foot {
   display: flex;
@@ -394,6 +384,40 @@
   line-height: 1.5;
   word-break: break-word;
 }
+/* Chat bubbles render full markdown (headings / tables / lists) via shared renderMarkdown. */
+.chat-msg-body.md-body {
+  overflow-x: auto;
+}
+.chat-msg-body.md-body > :first-child {
+  margin-top: 0;
+}
+.chat-msg-body.md-body > :last-child {
+  margin-bottom: 0;
+}
+.chat-msg-body.md-body .md-h {
+  margin: 0.65rem 0 0.3rem;
+}
+.chat-msg-body.md-body h1.md-h { font-size: 1.05rem; }
+.chat-msg-body.md-body h2.md-h { font-size: 1rem; }
+.chat-msg-body.md-body h3.md-h,
+.chat-msg-body.md-body h4.md-h,
+.chat-msg-body.md-body h5.md-h,
+.chat-msg-body.md-body h6.md-h { font-size: 0.95rem; }
+.chat-msg-body.md-body .md-p { margin: 0.35rem 0; }
+.chat-msg-body.md-body .md-table {
+  font-size: 0.82rem;
+  margin: 0.4rem 0;
+}
+.chat-msg-body.md-body .md-table th,
+.chat-msg-body.md-body .md-table td {
+  padding: 0.3rem 0.45rem;
+}
+.chat-msg-body.md-body .md-hr {
+  margin: 0.6rem 0;
+}
+.chat-msg-body.md-body pre.md-code {
+  max-height: 280px;
+}
 .chat-msg-user .chat-msg-body {
   background: #e8f1fc;
   border-color: #c5daf5;
@@ -407,6 +431,11 @@
 
 /* Waiting for Claude CLI (send already accepted; UI stays interactive). */
 .chat-msg-pending .chat-msg-body-pending {
+  /* Stream body looks like a normal assistant bubble; wait-only keeps soft pending look. */
+  background: var(--bg2);
+  border-style: solid;
+}
+.chat-msg-pending .chat-msg-body-pending.chat-msg-body-wait-only {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -543,12 +572,35 @@
   max-height: 280px;
   overflow-y: auto;
 }
-.chat-plan-pre.chat-plan-full {
+/* Plan card expand: rendered markdown (raw stored in .chat-plan-raw). */
+.chat-plan-full {
   border-top: 1px solid #d5e4f5;
-  max-height: 320px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  background: #fafcfe;
 }
-.chat-plan-pre.chat-plan-full[hidden] {
+.chat-plan-full[hidden],
+.chat-plan-raw[hidden] {
   display: none !important;
+}
+.chat-plan-full.md-body > :first-child {
+  margin-top: 0;
+}
+.chat-plan-full.md-body > :last-child {
+  margin-bottom: 0;
+}
+.chat-plan-full.md-body .md-h {
+  margin: 0.55rem 0 0.25rem;
+}
+.chat-plan-full.md-body h1.md-h { font-size: 1.05rem; }
+.chat-plan-full.md-body h2.md-h { font-size: 1rem; }
+.chat-plan-full.md-body h3.md-h,
+.chat-plan-full.md-body h4.md-h { font-size: 0.95rem; }
+.chat-plan-full.md-body .md-table {
+  font-size: 0.8rem;
 }
 
 /* 系统环境条：CLI/fake 故障提示（非 assistant 气泡） */
@@ -647,6 +699,37 @@
   align-items: flex-end;
   border-top: 1px solid var(--border);
   padding-top: 0.65rem;
+}
+.chat-effort-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.12rem;
+  flex-shrink: 0;
+  min-width: 5.5rem;
+}
+.chat-effort-label {
+  font-size: 0.68rem;
+  line-height: 1;
+  padding-left: 0.15rem;
+}
+.chat-effort-select,
+#chat-effort {
+  min-width: 5.5rem;
+  max-width: 7.5rem;
+  height: 2.1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg2, #fff);
+  color: var(--text);
+  font-size: 0.82rem;
+  padding: 0 0.35rem;
+  cursor: pointer;
+}
+.chat-effort-select:focus,
+#chat-effort:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--accent);
 }
 .chat-composer textarea {
   flex: 1;
@@ -1194,6 +1277,17 @@
   background: #fceee8;
   border: 1px solid #efc5b4;
 }
+/* Restorable split on disk/SQLite, not yet fully executed */
+.plan-rail-badge-split {
+  color: #3d2a7a;
+  background: #efe9fb;
+  border: 1px solid #d2c4f0;
+}
+.plan-rail-badge-planning {
+  color: #6b4a12;
+  background: #fbf3e0;
+  border: 1px solid #efd9a8;
+}
 .plan-rail-loading {
   display: flex;
   align-items: center;
@@ -1262,13 +1356,18 @@
 .plan-full-md {
   margin: 0;
   padding: 0.85rem 1rem;
-  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 0.82rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
+  font-size: 0.88rem;
+  line-height: 1.55;
   word-break: break-word;
   max-height: min(52vh, 480px);
   overflow: auto;
+  color: var(--text);
+}
+.plan-full-md.md-body .md-local-link {
+  color: var(--accent, #0071e3);
+  text-decoration: underline;
+  text-decoration-color: rgba(0, 113, 227, 0.35);
+  cursor: default;
 }
 .plan-full-editor {
   display: block;
@@ -1387,12 +1486,34 @@
   font-style: italic;
 }
 
-/* C3 streaming partial in pending bubble */
+/* C3 streaming partial in pending bubble — rendered markdown, not raw source. */
 .chat-msg-body-pending.chat-msg-streaming {
-  white-space: pre-wrap;
   word-break: break-word;
-  font-size: 0.9rem;
-  line-height: 1.45;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  font-style: normal;
+  color: var(--text);
+  overflow-x: auto;
+}
+.chat-msg-body-pending.chat-msg-streaming.md-body > :first-child {
+  margin-top: 0;
+}
+.chat-msg-body-pending.chat-msg-streaming.md-body > :last-child {
+  margin-bottom: 0;
+}
+.chat-msg-body-pending.chat-msg-streaming .md-h {
+  margin: 0.55rem 0 0.25rem;
+}
+.chat-msg-body-pending.chat-msg-streaming h1.md-h { font-size: 1.05rem; }
+.chat-msg-body-pending.chat-msg-streaming h2.md-h { font-size: 1rem; }
+.chat-msg-body-pending.chat-msg-streaming h3.md-h,
+.chat-msg-body-pending.chat-msg-streaming h4.md-h { font-size: 0.95rem; }
+.chat-msg-body-pending.chat-msg-streaming .md-table {
+  font-size: 0.82rem;
+}
+.chat-stream-trunc {
+  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
 }
 .chat-stream-cursor {
   display: inline-block;
@@ -1401,6 +1522,7 @@
   animation: chat-stream-blink 1s step-end infinite;
   color: var(--accent, #1677ff);
   font-weight: 700;
+  vertical-align: baseline;
 }
 @keyframes chat-stream-blink {
   50% { opacity: 0; }

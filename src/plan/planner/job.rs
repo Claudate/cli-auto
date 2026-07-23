@@ -96,6 +96,9 @@ pub struct PlanJob {
     /// W4: grain line forwarded to ModelSplitAgent (empty = omit).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grain_hint: Option<String>,
+    /// Per-split reasoning depth (`low`…`max`|`ultracode`); omit → config default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -115,6 +118,9 @@ pub struct StartPlanJobRequest {
     /// W4: optional grain line for ModelSplitAgent user prompt (偏粗/偏细); never forces fast.
     #[serde(default)]
     pub grain_hint: Option<String>,
+    /// Optional per-split reasoning depth (`low`…`max`|`ultracode`); else config default.
+    #[serde(default)]
+    pub effort: Option<String>,
 }
 
 pub fn plan_jobs_dir(config: &Config) -> PathBuf {
@@ -225,6 +231,10 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         .as_ref()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
+    let effort = req
+        .effort
+        .as_ref()
+        .and_then(|s| crate::config::normalize_effort(s));
     let mut job = PlanJob {
         job_id: job_id.clone(),
         status: PlanJobStatus::Planning,
@@ -252,6 +262,7 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         critic_llm_cost_usd: None,
         critic_llm_ms: None,
         grain_hint,
+        effort,
     };
     std::fs::create_dir_all(job_dir(config, &job_id))?;
     // P2-2: copy user-edits sidecar before planner finishes so async path can apply it.
@@ -275,7 +286,8 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         config,
         &job_id,
         &format!(
-            "plan job started mode={plan_mode} max_parallel={max_parallel} project={} plan={}",
+            "plan job started mode={plan_mode} max_parallel={max_parallel} effort={} project={} plan={}",
+            job.effort.as_deref().unwrap_or("(default)"),
             project.display(),
             req.plan.display()
         ),
@@ -440,7 +452,9 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
     }
     match run_planner(config, job) {
         Ok(mut ir) => {
-            if job_finish_aborted(config, &job_id) {
+            // UI poll may falsely reap when CLI pid exits *before* we write proposed.
+            // If we still hold a valid IR, recover from process-gone plan_failed and continue.
+            if !finish_may_continue_with_ir(config, &job_id, job) {
                 append_log(
                     config,
                     &job_id,
@@ -551,7 +565,7 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
                     }
                 }
             }
-            if job_finish_aborted(config, &job_id) {
+            if !finish_may_continue_with_ir(config, &job_id, job) {
                 append_log(
                     config,
                     &job_id,
@@ -567,13 +581,22 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
                 append_log(config, &job_id, &format!("write proposed failed: {e:#}"));
                 return;
             }
-            if job_finish_aborted(config, &job_id) {
+            if !finish_may_continue_with_ir(config, &job_id, job) {
+                // proposed already on disk — if false reap, still promote to planned below
+                if !is_false_zombie_reap(config, &job_id) {
+                    append_log(
+                        config,
+                        &job_id,
+                        "finish aborted after write: job cancelled/superseded/reaped (proposed left on disk)",
+                    );
+                    return;
+                }
                 append_log(
                     config,
                     &job_id,
-                    "finish aborted after write: job cancelled/superseded/reaped (proposed left on disk)",
+                    "finish continues after write despite false zombie reap (proposed on disk)",
                 );
-                return;
+                let _ = refresh_job_from_disk(config, &job_id, job);
             }
             job.status = PlanJobStatus::Planned;
             job.plan_name = Some(ir.name.clone());
@@ -631,7 +654,143 @@ pub fn get_plan_job(config: &Config, job_id: &str) -> Result<PlanJobView> {
     if let Some(reaped) = try_reap_zombie_planning(config, &mut job) {
         job = reaped;
     }
+    // Recover desks that already hit the false-reap race (split artifact ready, no proposed).
+    if try_salvage_plan_job(config, &mut job) {
+        // reloaded inside salvage
+    }
     job_view(config, &job, 96_000)
+}
+
+/// Latest restorable plan job for a **plan document path** (not whole-project latest).
+///
+/// Prefer SQLite `plan_jobs` index (dual-write), then fall back to scanning plan_jobs dirs
+/// so older installs without a fresh dual-write still work. Skips cancelled / failed
+/// without salvageable artifact.
+pub fn latest_plan_job_for_plan_path(
+    config: &Config,
+    project: &Path,
+    plan_path: &str,
+) -> Result<Option<PlanJobView>> {
+    // 1) SQLite index (fast, written on every job.save)
+    if let Ok(Some(job_id)) =
+        crate::state::sqlite::latest_job_id_for_plan_path(config, project, plan_path)
+    {
+        match get_plan_job(config, &job_id) {
+            Ok(view) => {
+                let st = view.status.to_ascii_lowercase();
+                if matches!(
+                    st.as_str(),
+                    "planning" | "planned" | "confirmed"
+                ) {
+                    return Ok(Some(view));
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    job_id = %job_id,
+                    "latest_plan_job_for_plan_path: sqlite id load failed, scan disk"
+                );
+            }
+        }
+    }
+
+    // 2) Disk scan (same project + plan_path match)
+    let root = plan_jobs_dir(config);
+    if !root.is_dir() {
+        return Ok(None);
+    }
+    let project_c = project
+        .canonicalize()
+        .unwrap_or_else(|_| project.to_path_buf());
+    let want = crate::state::sqlite::plan_path_key(plan_path);
+    if want.is_empty() {
+        return Ok(None);
+    }
+
+    let mut best: Option<PlanJob> = None;
+    for entry in std::fs::read_dir(&root)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let job_path = entry.path().join("job.json");
+        if !job_path.is_file() {
+            continue;
+        }
+        let mut job: PlanJob = match std::fs::read_to_string(&job_path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+        {
+            Some(j) => j,
+            None => continue,
+        };
+        let jp = job
+            .project
+            .canonicalize()
+            .unwrap_or_else(|_| job.project.clone());
+        if jp != project_c {
+            continue;
+        }
+        let job_plan = job.plan_path.to_string_lossy();
+        let same_path = crate::state::sqlite::plan_path_key(&job_plan) == want
+            || crate::state::sqlite::plan_path_key(&job_plan).ends_with(&want)
+            || want.ends_with(&crate::state::sqlite::plan_path_key(&job_plan));
+        if !same_path {
+            continue;
+        }
+        match job.status {
+            PlanJobStatus::Planning | PlanJobStatus::Planned | PlanJobStatus::Confirmed => {}
+            PlanJobStatus::PlanFailed => {
+                if !try_salvage_plan_job(config, &mut job) {
+                    continue;
+                }
+            }
+            PlanJobStatus::Cancelled => continue,
+        }
+        if matches!(job.status, PlanJobStatus::Planning) {
+            if try_salvage_plan_job(config, &mut job) {
+                // became planned
+            } else if try_reap_zombie_planning(config, &mut job).is_some() {
+                continue;
+            }
+        }
+        if matches!(job.status, PlanJobStatus::Confirmed | PlanJobStatus::Planned) {
+            let dir = entry.path();
+            if !dir.join("plan.proposed.json").is_file()
+                && !dir.join("plan.resolved.json").is_file()
+                && !dir.join("cco_split_agent.json").is_file()
+            {
+                continue;
+            }
+        }
+        let replace = match &best {
+            None => true,
+            Some(b) => {
+                // Prefer confirmed > planned > planning; then newer updated_at.
+                // Incomplete re-splits (newer planned residual) must not hide a prior confirmed graph.
+                fn rank(s: &PlanJobStatus) -> u8 {
+                    match s {
+                        PlanJobStatus::Confirmed => 3,
+                        PlanJobStatus::Planned => 2,
+                        PlanJobStatus::Planning => 1,
+                        _ => 0,
+                    }
+                }
+                let rj = rank(&job.status);
+                let rb = rank(&b.status);
+                rj > rb || (rj == rb && job.updated_at > b.updated_at)
+            }
+        };
+        if replace {
+            best = Some(job);
+        }
+    }
+
+    match best {
+        Some(job) => Ok(Some(job_view(config, &job, 96_000)?)),
+        None => Ok(None),
+    }
 }
 
 /// Absolute wall clock since job created — cap so desk does not fake-spin for 10+ min (C6).
@@ -644,6 +803,10 @@ const STALE_PLANNING_SECS: i64 = 6 * 60;
 
 /// If `planning` but worker process is gone / timed out → `plan_failed` + log.
 /// Returns updated job when reaped; `None` if still live or not planning.
+///
+/// **Do not** treat a normal CLI exit as zombie while finish still holds the IR:
+/// ModelSplitAgent / LLM writes `.done` + `exit_code` then parent converts → write_proposed.
+/// UI poll used to see dead pid and flip `plan_failed` in that window → desk "共 0 步".
 pub(super) fn try_reap_zombie_planning(
     config: &Config,
     job: &mut PlanJob,
@@ -662,6 +825,19 @@ pub(super) fn try_reap_zombie_planning(
         None => false, // no pid yet (not started) or fake — don't reap on pid alone
     };
     let log_stale = planner_log_stale(&dir, PLANNING_DEAD_PID_GRACE_SECS);
+
+    // Worker finished successfully (or split artifact already on disk) → finish thread
+    // is still materializing; never reap as zombie.
+    if llm_work_finished_successfully(&dir) || has_recoverable_split_artifact(&dir) {
+        if pid_dead && age_created > PLANNING_DEAD_PID_GRACE_SECS {
+            append_log(
+                config,
+                &job.job_id,
+                "skip zombie reap: worker finished or split artifact present (finish in progress)",
+            );
+        }
+        return None;
+    }
 
     let reason = if age_created > PLANNING_HARD_TIMEOUT_SECS {
         Some(format!(
@@ -708,6 +884,201 @@ pub(super) fn try_reap_zombie_planning(
         &format!("reaped zombie planning → plan_failed: {reason}"),
     );
     Some(job.clone())
+}
+
+/// True when any `llm_work/tasks/*` wrote `.done` and (if present) `exit_code == 0`.
+fn llm_work_finished_successfully(job_dir: &std::path::Path) -> bool {
+    let tasks = job_dir.join("llm_work").join("tasks");
+    let Ok(entries) = std::fs::read_dir(&tasks) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let dir = entry.path();
+        if !dir.join(".done").is_file() {
+            continue;
+        }
+        let meta_path = dir.join("meta.json");
+        let Ok(text) = std::fs::read_to_string(&meta_path) else {
+            // .done without meta → treat as finished
+            return true;
+        };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+            return true;
+        };
+        match v.get("exit_code").and_then(|c| c.as_i64()) {
+            Some(0) => return true,
+            Some(_) => continue, // failed worker exit
+            None => return true, // .done, no exit field yet / legacy
+        }
+    }
+    false
+}
+
+/// Split agent / proposed graph already on disk — finish or salvage can complete.
+fn has_recoverable_split_artifact(job_dir: &std::path::Path) -> bool {
+    if job_dir.join("plan.proposed.json").is_file() {
+        return true;
+    }
+    let agent = job_dir.join("cco_split_agent.json");
+    if !agent.is_file() {
+        return false;
+    }
+    std::fs::read_to_string(&agent)
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get("tasks").and_then(|t| t.as_array()).map(|a| !a.is_empty()))
+        .unwrap_or(false)
+}
+
+fn error_is_false_zombie_reap(err: Option<&str>) -> bool {
+    err.map(|e| e.contains("process gone") || e.contains("job left in planning"))
+        .unwrap_or(false)
+}
+
+fn is_false_zombie_reap(config: &Config, job_id: &str) -> bool {
+    PlanJob::load(config, job_id)
+        .map(|j| {
+            matches!(j.status, PlanJobStatus::PlanFailed) && error_is_false_zombie_reap(j.error.as_deref())
+        })
+        .unwrap_or(false)
+}
+
+fn refresh_job_from_disk(config: &Config, job_id: &str, job: &mut PlanJob) -> Result<()> {
+    *job = PlanJob::load(config, job_id)?;
+    Ok(())
+}
+
+/// After run_planner produced IR: continue unless truly cancelled / hard-failed.
+/// Clears false `plan_failed` from dead-pid reap so write_proposed can promote to planned.
+fn finish_may_continue_with_ir(config: &Config, job_id: &str, job: &mut PlanJob) -> bool {
+    if matches!(job.status, PlanJobStatus::Cancelled) || job_marked_cancelled(config, job_id) {
+        return false;
+    }
+    let Ok(disk) = PlanJob::load(config, job_id) else {
+        return !job_finish_aborted(config, job_id);
+    };
+    match disk.status {
+        PlanJobStatus::Cancelled => false,
+        PlanJobStatus::Confirmed | PlanJobStatus::Planned => {
+            // Already finalized elsewhere — don't double-write status; still ok to no-op finish.
+            *job = disk;
+            false
+        }
+        PlanJobStatus::PlanFailed => {
+            if error_is_false_zombie_reap(disk.error.as_deref()) {
+                append_log(
+                    config,
+                    job_id,
+                    "finish recovers from false zombie reap (holding IR)",
+                );
+                *job = disk;
+                job.status = PlanJobStatus::Planning;
+                job.error = None;
+                job.updated_at = Utc::now();
+                let _ = job.save(config);
+                true
+            } else {
+                *job = disk;
+                false
+            }
+        }
+        PlanJobStatus::Planning => {
+            *job = disk;
+            true
+        }
+    }
+}
+
+/// If job was plan_failed by false reap but `cco_split_agent.json` is ready → planned + proposed.
+/// Also salvages when proposed exists but status never flipped.
+fn try_salvage_plan_job(config: &Config, job: &mut PlanJob) -> bool {
+    if matches!(job.status, PlanJobStatus::Planned | PlanJobStatus::Confirmed) {
+        return false;
+    }
+    let dir = job_dir(config, &job.job_id);
+    // Only salvage false-reap / still-planning-with-artifact (not user cancel).
+    let salvageable = match job.status {
+        PlanJobStatus::PlanFailed => error_is_false_zombie_reap(job.error.as_deref()),
+        PlanJobStatus::Planning => {
+            llm_work_finished_successfully(&dir) || has_recoverable_split_artifact(&dir)
+        }
+        _ => false,
+    };
+    if !salvageable {
+        return false;
+    }
+
+    // Prefer proposed already on disk (finish aborted after write).
+    if dir.join("plan.proposed.json").is_file() {
+        if let Ok(ir) = super::view::load_proposed(config, &job.job_id) {
+            if !ir.tasks.is_empty() {
+                job.status = PlanJobStatus::Planned;
+                job.plan_name = Some(ir.name.clone());
+                job.task_count = Some(ir.tasks.len());
+                job.max_parallel = Some(ir.max_parallel);
+                job.adapter = Some(ir.adapter.clone());
+                job.error = None;
+                job.updated_at = Utc::now();
+                let _ = job.save(config);
+                append_log(
+                    config,
+                    &job.job_id,
+                    &format!(
+                        "salvaged planned from plan.proposed.json ({} tasks)",
+                        ir.tasks.len()
+                    ),
+                );
+                return true;
+            }
+        }
+    }
+
+    let agent_path = dir.join("cco_split_agent.json");
+    let Ok(text) = std::fs::read_to_string(&agent_path) else {
+        return false;
+    };
+    let Ok(doc) = serde_json::from_str::<crate::domain::plan::CcoSplitJob>(&text) else {
+        return false;
+    };
+    if doc.tasks.is_empty() {
+        return false;
+    }
+    let Ok(ir) = crate::plan::split_agent::cco_split_to_plan_ir(&doc, job) else {
+        append_log(
+            config,
+            &job.job_id,
+            "salvage: cco_split_agent.json present but convert to PlanIR failed",
+        );
+        return false;
+    };
+    if let Err(e) = write_proposed(config, &job.job_id, &ir) {
+        append_log(
+            config,
+            &job.job_id,
+            &format!("salvage write_proposed failed: {e:#}"),
+        );
+        return false;
+    }
+    job.status = PlanJobStatus::Planned;
+    job.plan_name = Some(ir.name.clone());
+    job.task_count = Some(ir.tasks.len());
+    job.max_parallel = Some(ir.max_parallel);
+    job.adapter = Some(ir.adapter.clone());
+    job.error = None;
+    job.updated_at = Utc::now();
+    let _ = job.save(config);
+    append_log(
+        config,
+        &job.job_id,
+        &format!(
+            "salvaged planned from cco_split_agent.json ({} tasks) after false zombie reap",
+            ir.tasks.len()
+        ),
+    );
+    true
 }
 
 /// Best-effort SIGTERM (then SIGKILL) of **all** live pids under
@@ -864,19 +1235,27 @@ pub fn latest_plan_job_for_project(
         if jp != project {
             continue;
         }
-        // 只恢复仍有价值的状态
+        // 只恢复仍有价值的状态；plan_failed 若可从 cco_split_agent 抢救则继续
         match job.status {
             PlanJobStatus::Planning | PlanJobStatus::Planned | PlanJobStatus::Confirmed => {}
-            PlanJobStatus::PlanFailed | PlanJobStatus::Cancelled => continue,
+            PlanJobStatus::PlanFailed => {
+                if !try_salvage_plan_job(config, &mut job) {
+                    continue;
+                }
+            }
+            PlanJobStatus::Cancelled => continue,
         }
         // Reap or skip zombie planning (process gone / timeout)
         if matches!(job.status, PlanJobStatus::Planning) {
-            if try_reap_zombie_planning(config, &mut job).is_some() {
+            if try_salvage_plan_job(config, &mut job) {
+                // became planned from artifact
+            } else if try_reap_zombie_planning(config, &mut job).is_some() {
                 continue; // now plan_failed
-            }
-            let age = now.signed_duration_since(job.updated_at).num_seconds();
-            if age > STALE_PLANNING_SECS {
-                continue;
+            } else {
+                let age = now.signed_duration_since(job.updated_at).num_seconds();
+                if age > STALE_PLANNING_SECS {
+                    continue;
+                }
             }
         }
         // confirmed/planned 必须仍有图文件
@@ -890,7 +1269,21 @@ pub fn latest_plan_job_for_project(
         }
         let replace = match &best {
             None => true,
-            Some(b) => job.updated_at > b.updated_at,
+            Some(b) => {
+                // Prefer confirmed > planned > planning; then newer.
+                // Residual planned must not hide an older confirmed success.
+                fn rank(s: &PlanJobStatus) -> u8 {
+                    match s {
+                        PlanJobStatus::Confirmed => 3,
+                        PlanJobStatus::Planned => 2,
+                        PlanJobStatus::Planning => 1,
+                        _ => 0,
+                    }
+                }
+                let rj = rank(&job.status);
+                let rb = rank(&b.status);
+                rj > rb || (rj == rb && job.updated_at > b.updated_at)
+            }
         };
         if replace {
             best = Some(job);
@@ -1032,7 +1425,7 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
                         append_log(
                             config,
                             &job.job_id,
-                            &format!("LLM planner failed ({e:#}); falling back to heuristic"),
+                            &format!("LLM planner failed ({e:#})"),
                         );
                     }
                 }
@@ -1044,11 +1437,69 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
                 );
             }
 
-            // 2) Heuristic fallback
+            // Product rule: only a **complete** split may become the desk graph.
+            // plan_mode=ai must not silently publish heuristic residual (5 C-headings, etc.)
+            // — that covered prior success and showed incomplete graphs as if planned.
+            // Explicit local path: force_heuristic (fake / CCO_PLANNER_HEURISTIC) or
+            // CCO_PLANNER_ALLOW_HEURISTIC_FALLBACK=1, or plan_mode=fast (handled above).
+            let allow_heuristic_fallback = force_heuristic
+                || std::env::var("CCO_PLANNER_ALLOW_HEURISTIC_FALLBACK")
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+
+            if !allow_heuristic_fallback {
+                if let Some(prior) =
+                    find_prior_successful_split(config, &job.project, &job.plan_path, &job.job_id)
+                {
+                    let n = prior.task_count.unwrap_or(0);
+                    append_log(
+                        config,
+                        &job.job_id,
+                        &format!(
+                            "ai incomplete: plan_failed; keep prior {} ({} tasks); no residual desk",
+                            prior.job_id, n
+                        ),
+                    );
+                    bail!(
+                        "智能拆分未完整完成，已保留上次成功的拆分（{} 步）。\
+失败结果不展示、不覆盖。可「再拆一次」或更多选项显式「本地规则拆分」。",
+                        n
+                    );
+                }
+                append_log(
+                    config,
+                    &job.job_id,
+                    "ai incomplete: plan_failed; no prior success; nothing to show on desk",
+                );
+                bail!(
+                    "智能拆分未完整完成，没有可展示的完整拆分结果。\
+（不会用残图充数。）可「再拆一次」，或在更多选项显式选「本地规则拆分」。"
+                );
+            }
+
+            // Intentional local path only (tests / explicit env / fake).
+            if let Some(prior) =
+                find_prior_successful_split(config, &job.project, &job.plan_path, &job.job_id)
+            {
+                let n = prior.task_count.unwrap_or(0);
+                append_log(
+                    config,
+                    &job.job_id,
+                    &format!(
+                        "refuse heuristic cover of prior {} ({} tasks) even with allow-fallback",
+                        prior.job_id, n
+                    ),
+                );
+                bail!(
+                    "智能拆分未完整完成，已保留上次成功的拆分（{} 步）。未用本地残图覆盖。",
+                    n
+                );
+            }
+
             append_log(
                 config,
                 &job.job_id,
-                "using ai heuristic splitter (heading/paragraph)",
+                "using ai heuristic splitter (heading/paragraph; explicit fallback allowed)",
             );
             let mut ir = build_heuristic_ai_plan(config, job)?;
             apply_worker_defaults(&mut ir, &job.provider, &job.exec_mode);
@@ -1056,6 +1507,89 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
         }
         other => bail!("unsupported plan_mode {other}"),
     }
+}
+
+/// Prior planned/confirmed job for the same plan path (not this job).
+/// Used so incomplete AI fallback cannot become the restorable desk graph.
+fn find_prior_successful_split(
+    config: &Config,
+    project: &Path,
+    plan_path: &Path,
+    exclude_job_id: &str,
+) -> Option<PlanJob> {
+    let want = crate::state::sqlite::plan_path_key(&plan_path.to_string_lossy());
+    if want.is_empty() {
+        return None;
+    }
+    let project_c = project
+        .canonicalize()
+        .unwrap_or_else(|_| project.to_path_buf());
+    let root = plan_jobs_dir(config);
+    if !root.is_dir() {
+        return None;
+    }
+    let mut best: Option<PlanJob> = None;
+    let Ok(entries) = std::fs::read_dir(&root) else {
+        return None;
+    };
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let id = entry.file_name().to_string_lossy().to_string();
+        if id == exclude_job_id {
+            continue;
+        }
+        let job_path = entry.path().join("job.json");
+        let Ok(text) = std::fs::read_to_string(&job_path) else {
+            continue;
+        };
+        let Ok(other) = serde_json::from_str::<PlanJob>(&text) else {
+            continue;
+        };
+        if !matches!(
+            other.status,
+            PlanJobStatus::Planned | PlanJobStatus::Confirmed
+        ) {
+            continue;
+        }
+        // Must have a real proposed graph (complete enough to restore).
+        if other.task_count.unwrap_or(0) == 0 {
+            continue;
+        }
+        if !entry.path().join("plan.proposed.json").is_file() {
+            continue;
+        }
+        let jp = other
+            .project
+            .canonicalize()
+            .unwrap_or_else(|_| other.project.clone());
+        if jp != project_c {
+            continue;
+        }
+        let other_plan = crate::state::sqlite::plan_path_key(&other.plan_path.to_string_lossy());
+        if !crate::state::sqlite::plan_paths_match(&other_plan, &want) {
+            continue;
+        }
+        let replace = match &best {
+            None => true,
+            Some(b) => {
+                // Prefer confirmed, then newer updated_at.
+                let rank = |s: &PlanJobStatus| match s {
+                    PlanJobStatus::Confirmed => 2,
+                    PlanJobStatus::Planned => 1,
+                    _ => 0,
+                };
+                let rb = rank(&b.status);
+                let ro = rank(&other.status);
+                ro > rb || (ro == rb && other.updated_at >= b.updated_at)
+            }
+        };
+        if replace {
+            best = Some(other);
+        }
+    }
+    best
 }
 
 /// Soft-fill job defaults onto tasks (H4 / Q6 / A1-4).
@@ -1210,6 +1744,7 @@ mod reap_pid_scan_tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            effort: None,
         };
         zombie.save(&cfg).unwrap();
 
@@ -1222,6 +1757,214 @@ mod reap_pid_scan_tests {
                 .unwrap_or(false),
             "expected reap reason, got {:?}",
             view.error
+        );
+    }
+
+    /// Repro: ModelSplitAgent CLI exits (pid dead + .done) while finish still converting.
+    /// Old reaper flipped plan_failed → desk "共 0 步". Must NOT reap.
+    #[test]
+    fn try_reap_skips_when_worker_done_successfully() {
+        use super::{llm_work_finished_successfully, try_reap_zombie_planning};
+
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let job_id = "plan-reap-skip-done-test";
+        let jdir = job_dir(&cfg, job_id);
+        let agent = jdir.join("llm_work/tasks/__split_agent__");
+        std::fs::create_dir_all(&agent).unwrap();
+        std::fs::write(
+            agent.join("meta.json"),
+            r#"{"pid": 999998, "exit_code": 0, "mode": "print"}"#,
+        )
+        .unwrap();
+        std::fs::write(agent.join(".done"), b"1").unwrap();
+        std::fs::write(jdir.join("planner.log"), "ModelSplitAgent ok\n").unwrap();
+        assert!(llm_work_finished_successfully(&jdir));
+
+        let mut job = PlanJob {
+            job_id: job_id.into(),
+            status: PlanJobStatus::Planning,
+            project: project.clone(),
+            plan_path: PathBuf::from("docs/x.md"),
+            plan_mode: "ai".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: None,
+            run_id: None,
+            created_at: Utc::now() - Duration::minutes(3),
+            updated_at: Utc::now() - Duration::minutes(3),
+            plan_name: None,
+            task_count: None,
+            max_parallel: Some(2),
+            adapter: None,
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+            grain_hint: None,
+            effort: None,
+        };
+        job.save(&cfg).unwrap();
+
+        assert!(
+            try_reap_zombie_planning(&cfg, &mut job).is_none(),
+            "must not reap successful worker exit"
+        );
+        let reloaded = PlanJob::load(&cfg, job_id).unwrap();
+        assert_eq!(reloaded.status, PlanJobStatus::Planning);
+    }
+
+    /// Desk poll after false reap: salvage from cco_split_agent.json → planned + tasks.
+    #[test]
+    fn get_plan_job_salvages_false_reap_from_cco_split_agent() {
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(&cfg.state_root).unwrap();
+
+        let job_id = "plan-salvage-split-agent-test";
+        let jdir = job_dir(&cfg, job_id);
+        std::fs::create_dir_all(jdir.join("llm_work/tasks/__split_agent__")).unwrap();
+        std::fs::write(
+            jdir.join("llm_work/tasks/__split_agent__/meta.json"),
+            r#"{"pid": 999997, "exit_code": 0}"#,
+        )
+        .unwrap();
+        std::fs::write(jdir.join("llm_work/tasks/__split_agent__/.done"), b"1").unwrap();
+
+        let agent_json = format!(
+            r#"{{
+  "job_id": "{job_id}",
+  "project": {},
+  "plan_path": "docs/x.md",
+  "status": "ready",
+  "title": "salvage demo",
+  "max_parallel": 2,
+  "source": "llm",
+  "created_at": "2026-07-22T00:00:00Z",
+  "updated_at": "2026-07-22T00:01:00Z",
+  "tasks": [
+    {{
+      "task_id": "t1",
+      "ord": 0,
+      "title": "补齐模板五节",
+      "summary": "新建计划有五节",
+      "body": "做模板",
+      "depends_on": [],
+      "wave": 0,
+      "enabled": true,
+      "optional": false,
+      "done_when": "可见五节",
+      "plan_ref": "D0-1",
+      "kind": "do",
+      "status": "pending",
+      "scope_paths": []
+    }},
+    {{
+      "task_id": "t2",
+      "ord": 1,
+      "title": "黄条不拦确认",
+      "summary": "空心有提醒",
+      "body": "黄条",
+      "depends_on": ["t1"],
+      "wave": 1,
+      "enabled": true,
+      "optional": false,
+      "done_when": "有黄条",
+      "plan_ref": "D0-2",
+      "kind": "do",
+      "status": "pending",
+      "scope_paths": []
+    }}
+  ]
+}}"#,
+            serde_json::to_string(project.to_str().unwrap_or(".")).unwrap()
+        );
+        std::fs::write(jdir.join("cco_split_agent.json"), agent_json).unwrap();
+
+        let failed = PlanJob {
+            job_id: job_id.into(),
+            status: PlanJobStatus::PlanFailed,
+            project: project.clone(),
+            plan_path: PathBuf::from("docs/x.md"),
+            plan_mode: "ai".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: Some("planner process gone (pid=Some(999997)); job left in planning".into()),
+            run_id: None,
+            created_at: Utc::now() - Duration::minutes(3),
+            updated_at: Utc::now() - Duration::minutes(1),
+            plan_name: None,
+            task_count: None,
+            max_parallel: Some(2),
+            adapter: None,
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+            grain_hint: None,
+            effort: None,
+        };
+        failed.save(&cfg).unwrap();
+
+        let view = get_plan_job(&cfg, job_id).unwrap();
+        assert_eq!(
+            view.status,
+            "planned",
+            "err={:?} tasks={:?}",
+            view.error,
+            view.task_count
+        );
+        assert!(
+            view.task_count.unwrap_or(0) >= 2,
+            "expected salvaged tasks, got {:?}",
+            view.task_count
+        );
+        assert!(
+            jdir.join("plan.proposed.json").is_file(),
+            "salvage must write plan.proposed.json"
+        );
+    }
+
+    /// Live salvage of the user's failed smart-split (needs ~/.cco job on disk).
+    /// Run: `CCO_SALVAGE_JOB=plan-… cargo test -p cco salvage_real_failed -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn salvage_real_failed_plan_job_from_env() {
+        let id = std::env::var("CCO_SALVAGE_JOB").expect("set CCO_SALVAGE_JOB");
+        let cfg = Config::load().expect("Config::load");
+        let before = PlanJob::load(&cfg, &id).expect("load job");
+        println!(
+            "before status={:?} err={:?}",
+            before.status, before.error
+        );
+        let view = get_plan_job(&cfg, &id).expect("get_plan_job");
+        println!(
+            "after status={} tasks={:?} err={:?}",
+            view.status, view.task_count, view.error
+        );
+        assert_eq!(view.status, "planned");
+        assert!(view.task_count.unwrap_or(0) >= 1);
+        assert!(
+            job_dir(&cfg, &id).join("plan.proposed.json").is_file(),
+            "proposed missing after salvage"
         );
     }
 }

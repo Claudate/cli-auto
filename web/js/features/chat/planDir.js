@@ -1,6 +1,6 @@
 /**
- * [INPUT]: legacy · host rail/mgmt
- * [OUTPUT]: rail visibility · plansDir · mgmt scope · partition
+ * [INPUT]: legacy · host mgmt
+ * [OUTPUT]: rail closed · plansDir · mgmt scope · partition（聊天右栏 UI 已撤）
  * [POS]: A5-2a features/chat/planDir.js
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -8,52 +8,36 @@ import { state, $, toast, openNativeDialog, normalizePlanPath, pickPlanFileForPi
 import { host } from "./host.js";
 import { ensureChatState } from "./chatState.js";
 
-export function setPlanRailOpen(open, { persist = true } = {}) {
+/**
+ * 聊天右栏已撤：强制关闭、不写 localStorage、不画轨。
+ * 计划列表能力在 page-plans（顶栏「计划管理」）。
+ */
+export function setPlanRailOpen(_open, { persist: _persist = true } = {}) {
   ensureChatState();
-  state.planRailOpen = !!open;
-  if (persist && state.selectedPath) {
-    localStorage.setItem(
-      `cco.planRailOpen:${state.selectedPath}`,
-      state.planRailOpen ? "1" : "0"
-    );
-  }
+  state.planRailOpen = false;
   applyPlanRailVisibility();
 }
 
 export function applyPlanRailVisibility() {
   ensureChatState();
+  state.planRailOpen = false;
   const rail = $("#plan-rail");
   const layout = document.querySelector("#page-chat .chat-layout");
-  const toggle = $("#btn-chat-rail-toggle");
-  const open = !!state.planRailOpen;
-  if (rail) {
-    if (open) rail.removeAttribute("hidden");
-    else rail.setAttribute("hidden", "");
-  }
-  if (layout) layout.classList.toggle("plan-rail-open", open);
-  if (toggle) {
-    toggle.setAttribute("aria-pressed", open ? "true" : "false");
-    toggle.setAttribute("aria-label", open ? "收起右侧计划列表" : "展开右侧计划列表");
-    toggle.title = open ? "收起右侧计划列表" : "展开右侧计划列表";
-    toggle.classList.toggle("is-on", open);
-    if (typeof window.ccoIcon === "function") {
-      toggle.innerHTML = window.ccoIcon(open ? "chevron-left" : "panel-right", {
-        size: 14,
-      });
-    } else {
-      toggle.textContent = open ? "◀" : "☰";
-    }
-  }
+  if (rail) rail.setAttribute("hidden", "");
+  if (layout) layout.classList.remove("plan-rail-open");
 }
 
-/** 聊天页右侧列表：仅 icon 切换（≠ 计划管理页） */
+/** 兼容旧入口：打开「计划管理」页（右栏已撤） */
 export function toggleChatPlanRail() {
   ensureChatState();
-  setPlanRailOpen(!state.planRailOpen);
-  if (state.planRailOpen) {
-    Promise.resolve(host.loadPlanRail()).catch(() => {});
+  setPlanRailOpen(false);
+  if (typeof host.openPlanManagement === "function") {
+    Promise.resolve(host.openPlanManagement()).catch(() => {});
+    return;
   }
-  host.renderPlanRail();
+  if (typeof window.openPlanManagement === "function") {
+    Promise.resolve(window.openPlanManagement()).catch(() => {});
+  }
 }
 
 export function syncPlansDirLabels() {

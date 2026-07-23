@@ -12,6 +12,7 @@ import {
   esc,
   engineLabel,
 } from "./splitRender.js";
+import { formatTaskDetailBody } from "./splitTaskBody.js";
 
 function g(name) {
   const w = typeof window !== "undefined" ? window : globalThis;
@@ -245,13 +246,13 @@ export function paintDetail(ctx) {
         }
       }
     } else {
-      // S0：默认三块 — 要做什么 · 怎样算做完 · （等待在 deps 行）
-      // 技术说明默认折叠；完整说明可展开（不强制 open，对齐双受众短读）
+      // 任务信息：要做什么 · 怎样算做完 · 下方固定「本步说明」（拆解后的详细计划）
+      // 不出现「技术说明 / 完整说明」壳；行业文案后期可换标签
       if (editForm) editForm.hidden = true;
       if (promptLabel) {
-        promptLabel.textContent = "这一步做什么";
+        promptLabel.textContent = "这一步";
       }
-      const bodyText = displayBody || full || "";
+      const bodyText = String(displayBody || full || "").trim();
       const ol = oneLiner(cur) || "";
       let doneLine = "";
       if (cur.acceptance || cur.done_when || cur.doneWhen) {
@@ -260,79 +261,56 @@ export function paintDetail(ctx) {
         ).trim();
       }
       if (!doneLine) {
-        const m = String(bodyText).match(
-          /\|\s*\*?\*?完成定义\*?\*?\s*\|\s*([^|\n]+)/
+        const m = bodyText.match(
+          /(?:\|\s*\*?\*?完成定义\*?\*?\s*\|\s*([^|\n]+)|【怎样算做完】\s*([^\n【]+))/
         );
-        if (m) doneLine = m[1].trim();
+        if (m) doneLine = (m[1] || m[2] || "").trim();
       }
-      const shortParts = [];
-      if (ol) {
-        shortParts.push(
-          `<p class="split-detail-short"><strong>要做什么</strong> · ${esc(ol)}</p>`
+      // 从正文抽「要做什么」若 oneLiner 只是标题重复
+      let doLine = ol;
+      {
+        const m = bodyText.match(/【做什么】\s*([^\n【]+)/);
+        if (m) {
+          const fromBody = m[1].trim();
+          if (
+            fromBody &&
+            (!doLine ||
+              doLine === String(cur.title || "").trim() ||
+              doLine.length < 12)
+          ) {
+            doLine = fromBody.length > 120 ? fromBody.slice(0, 118) + "…" : fromBody;
+          }
+        }
+      }
+      const parts = [];
+      if (doLine) {
+        parts.push(
+          `<p class="split-detail-short"><strong>要做什么</strong> · ${esc(doLine)}</p>`
         );
       }
-      if (doneLine && doneLine !== ol) {
-        shortParts.push(
+      if (doneLine && doneLine !== doLine) {
+        parts.push(
           `<p class="split-detail-short"><strong>怎样算做完</strong> · ${esc(doneLine)}</p>`
         );
       }
-      const shortHtml = shortParts.length
-        ? shortParts.join("")
-        : `<p class="split-detail-short muted">下方可展开完整说明；也可点「编辑」改写</p>`;
-
-      // S3-1: 技术说明 — 落点/步骤；自测不进默认技术说明（进完整说明）
-      const techBits = [];
-      const tableCell = (labels) => {
-        for (const lab of labels) {
-          const re = new RegExp(
-            String.raw`\|\s*\*?\*?${lab}\*?\*?\s*\|\s*([^|\n]+)`,
-            "i"
-          );
-          const m = String(bodyText).match(re);
-          if (m) return m[1].trim();
-        }
-        return "";
-      };
-      const touch = tableCell(["落点", "文件", "改哪里"]);
-      const steps = tableCell(["步骤", "改法", "Steps"]);
-      const scopePaths = cur?.scope?.paths || cur?.scope_paths || cur?.scopePaths;
-      if (touch) techBits.push(`**改哪里** · ${touch}`);
-      if (Array.isArray(scopePaths) && scopePaths.length) {
-        techBits.push(
-          `**范围** · ${scopePaths.slice(0, 6).join(" · ")}${
-            scopePaths.length > 6 ? "…" : ""
-          }`
-        );
-      }
-      if (steps) techBits.push(`**怎么做** · ${steps}`);
-      const hasTech = techBits.length > 0;
-      const fullHtml = md(bodyText);
+      // 详细计划：始终在「怎样算做完」下展示拆解正文（人读字段，非折叠壳）
+      const detailMd = formatTaskDetailBody(bodyText);
       if (promptEl) {
         promptEl.hidden = false;
         promptEl.classList.add("md-body");
         const sameTask = promptEl.dataset.forTask === cur.id;
-        const wasTech = sameTask
-          ? !!promptEl.querySelector("details.split-detail-tech")?.open
-          : false;
-        const wasOpen = sameTask
-          ? !!promptEl.querySelector("details.split-detail-full")?.open
-          : false;
         const prevScroll = sameTask ? promptEl.scrollTop : 0;
         promptEl.dataset.forTask = cur.id;
-        let html = shortHtml;
-        if (hasTech) {
+        let html = parts.length
+          ? parts.join("")
+          : `<p class="split-detail-short muted">暂无摘要；下方可看本步说明，也可点「编辑」改写</p>`;
+        if (detailMd) {
           html +=
-            `<details class="split-detail-tech"${wasTech ? " open" : ""}>` +
-            `<summary>技术说明</summary>` +
-            `<div class="split-detail-tech-body md-body">${md(techBits.join("\n\n"))}</div>` +
-            `</details>`;
+            `<div class="split-detail-task-block">` +
+            `<p class="split-detail-task-label muted">本步说明</p>` +
+            `<div class="split-detail-task-body md-body">${md(detailMd)}</div>` +
+            `</div>`;
         }
-        // shell-chrome A5 纠偏：默认不强制 open（短读优先）；同任务 re-paint 尊重 wasOpen
-        html +=
-          `<details class="split-detail-full"${wasOpen ? " open" : ""}>` +
-          `<summary>完整说明</summary>` +
-          `<div class="split-detail-full-body md-body">${fullHtml}</div>` +
-          `</details>`;
         promptEl.innerHTML = html;
         if (sameTask) {
           promptEl.scrollTop = prevScroll;
@@ -345,7 +323,7 @@ export function paintDetail(ctx) {
       metaEl.hidden = false;
       metaEl.textContent = editing
         ? "编辑中 · 保存后生效"
-        : "左侧选步骤 · 下方可展开完整说明 · 可编辑";
+        : "左侧选步骤 · 可编辑";
     }
   } else {
     const titleEl = $("confirm-task-title");
@@ -357,12 +335,12 @@ export function paintDetail(ctx) {
     if (promptEl) {
       promptEl.hidden = false;
       promptEl.innerHTML =
-        `<p class="muted">点左侧步骤查看「要做什么 / 怎样算做完」；可展开完整说明，也可编辑后再执行规划。</p>`;
+        `<p class="muted">点左侧步骤查看「要做什么 / 怎样算做完」；也可编辑后再执行规划。</p>`;
     }
     if (editForm) editForm.hidden = true;
     if (metaEl) {
       metaEl.hidden = false;
-      metaEl.textContent = "左侧选步骤 · 下方可展开完整说明 · 可编辑";
+      metaEl.textContent = "左侧选步骤 · 可编辑";
     }
   }
 

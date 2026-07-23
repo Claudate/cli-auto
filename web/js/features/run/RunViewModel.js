@@ -209,6 +209,44 @@ export function createRunViewModel(deps = {}) {
     },
 
     /**
+     * Re-run one failed/stopped/timeout task (same run; not re-split).
+     * @param {string} [taskId]
+     */
+    async retryTask(taskId) {
+      const live = snap().live;
+      const runId = runIdOf(live);
+      const id = taskId || snap().selectedTaskId;
+      if (!runId || typeof runId !== "string" || !runId.trim()) {
+        toast("无运行记录可再跑");
+        return null;
+      }
+      if (!id) {
+        toast("请先选择失败的任务");
+        return null;
+      }
+      if (snap().busy) return null;
+      setPatch({ busy: true, lastError: null, selectedTaskId: id });
+      try {
+        await runApi.retryTask(runId, id);
+        toast(`正在再跑 ${id}…`);
+        if (typeof deps.onPhaseRun === "function") {
+          try {
+            deps.onPhaseRun();
+          } catch (_) {}
+        }
+        await after();
+        return { ok: true, runId, taskId: id };
+      } catch (e) {
+        const msg = e?.message || String(e);
+        setPatch({ lastError: msg });
+        toast(msg);
+        return null;
+      } finally {
+        setPatch({ busy: false });
+      }
+    },
+
+    /**
      * Open external terminal for a task (advanced).
      * @param {Record<string, unknown>} args
      */

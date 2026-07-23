@@ -1,76 +1,42 @@
-# cco 独立拆分格式 + SQLite 存储（产品真源）
+# cco 独立拆分格式 + SQLite 存储（存储真源）
 
-> 日期：2026-07-21  
-> 角色：**拆分数据模型与存储真源**（纠正「只存 ord/wave/optional」的窄理解）  
-> 状态：**C1–C7 ✅**（CcoSplit 类型 + SQLite SoT + confirm 物化 + desk DTO + fast 默认 + 僵尸杀 pid）  
-> 后续 **ModelSplitAgent 主路径** 见 [`openhands-style-split-agent-landing-2026-07-21.md`](./openhands-style-split-agent-landing-2026-07-21.md) · 勿把 dual-write 当终态
+> 日期：2026-07-21 · 修订 2026-07-22  
+> 角色：**拆分数据模型与存储真源**（`CcoSplit*` · `cco_split_*` 表 · confirm 物化）  
+> 状态：**C1–C7 ✅**（类型 + SQLite SoT + confirm 物化 + desk DTO + fast 默认 + 僵尸杀 pid）  
+> 产品行为短规则：[`split-product-rules.md`](./split-product-rules.md)  
+> ModelSplitAgent 主路径史：[`archive/openhands-style-split-agent-landing-2026-07-21.md`](./archive/openhands-style-split-agent-landing-2026-07-21.md)
 
-[PROTOCOL]: 勾选只认本文 §4。`split-soft-sqlite` 波次 1 = 过渡；**不以 PlanIR 双写当最终方案**。
-
----
-
-## 0. 听进去的产品意图（完整）
-
-用户原意（归纳，不缩水）：
-
-1. **拆分结果后面仍给 AI 跑**（confirm 后走 Worker）。  
-2. 拆分阶段要区分的信息 **至少**包括但不限于：  
-   - **顺序**（谁先谁后 / depends）  
-   - **并发**（谁可同波 / max_parallel）  
-   - **是否执行**（optional · include / 用户勾选）  
-   - 以及软件展示与后续执行所需的 **完整合理字段**（标题、说明、完成标志、状态、计划来源…）  
-3. **不要拆分太严格**：校验不能把「能显示、能勾选、能开跑」的图整包扔掉。  
-4. **拆分用 cco 自己的独立格式**（不是把 Claude 吐的 PlanIR / 协作 scope 规则当唯一真源）。  
-5. **拆分后的任务进 SQLite**，由 **cco 存储**（SoT），不是仅给 JSON 做索引表。
+[PROTOCOL]: 勾选只认本文 §3（C1–C7 ✅）与文末 §5（残余债 S2–S6）。  
+**不以** [`archive/split-soft-sqlite-2026-07-21.md`](./archive/split-soft-sqlite-2026-07-21.md) 为开项真源；**不以 PlanIR dual-write 当最终方案**。S2–S6 **唯一**在本文文末。
 
 ---
 
-## 1. 和已做工作的差距（诚实）
+## 0. 产品意图（存储侧）
 
-| 已做（过渡） | 用户要的 |
-|--------------|----------|
-| `soften_plan_for_accept`：LLM PlanIR 软修再 validate | ✅ 方向对（少整图丢弃） |
-| SQLite **dual-write** `plan_jobs` / `plan_tasks` 子集字段 | ❌ 仍是 PlanIR 镜像索引 |
-| JSON `job.json` + `plan.proposed.json` 仍是真源 | ❌ 要 cco 格式 + SQLite 为拆分 SoT |
-| 字段偏 `ord/wave/optional/include` | ❌ 字段不够、格式不独立 |
+1. 拆分结果 confirm 后仍给 AI Worker 跑。  
+2. 拆分阶段至少保留：顺序（depends）· 并发（wave / max_parallel）· 是否执行（optional / enabled）· 标题/说明/完成标志等展示与执行字段。  
+3. 校验不能把「能显示、能勾选、能开跑」的图整包扔掉（soft_accept）。  
+4. **cco 独立格式** `cco-split/v1`，不是把 PlanIR / 协作 scope 规则当唯一真源。  
+5. 拆分任务进 **SQLite SoT**（`cco_split_jobs` / `cco_split_tasks`），不是仅 JSON 索引。
 
-**结论：波次 1 没有完成「独立格式 + cco SQLite 存储」。**
-
----
-
-## 2. 若继续「现在这种方式」拆分，还会卡吗？
-
-**会，软校验解决不了卡顿。**
-
-| 原因 | 软 accept 是否解决 | 说明 |
-|------|-------------------|------|
-| 等 Claude CLI 出完整规划（常 3–6 分钟，上限 ~600s） | **否** | 卡在 planning 转圈的主因 |
-| CLI 死掉 / 无心跳 → 僵尸 `planning` | **否** | 需收尸；supersede 只标 cancelled 不杀进程 |
-| LLM 出图后 collab 硬拒 → 整图 heuristic | **部分** | soften 减少「白等再丢图」，但已等的分钟数不退回 |
-| critic 第二跳 Claude | **否** | 设置开着会再加一轮 |
-| 桌面绑错旧 job | **否** | 状态绑定问题 |
-
-所以：
-
-- **只靠 soften + dual-write** → 仍可能 **等很久 / 假转圈**。  
-- 要「不卡」必须改路径：**本地/快路径出 cco 图** 或 **轻量 API 分段出图**，CLI 不当默认 planner；并 **僵尸收尸**。
+过渡期 soft + PlanIR dual-write 已归档，见 archive soft-sqlite；当前 SoT = `cco_split_*`。
 
 ---
 
-## 3. 目标架构（cco 独立格式）
+## 1. 目标架构
 
 ```text
 计划 md
-  → SplitProducer（heuristic | 轻量 LLM | 人工）
-  → CcoSplitDoc（独立格式，内存）
+  → SplitProducer（ModelSplitAgent | heuristic | 人工）
+  → CcoSplitDoc（cco-split/v1，内存）
   → SQLite cco.db  【拆分 SoT】
-  → 桌面拆分台读 SQLite（顺序/波次/是否执行/说明…）
+  → 桌面拆分台读 SQLite
   → 用户确认
-  → materialize → PlanIR / Run（仅执行边界需要时再生成）
+  → materialize → PlanIR / Run（仅执行边界）
   → Worker 跑
 ```
 
-### 3.1 `CcoSplitDoc` / `CcoSplitTask`（建议字段 · 完整展示 + 可跑）
+### 1.1 `CcoSplitJob` / `CcoSplitTask`（字段）
 
 **Job 级 `cco_split_jobs`**
 
@@ -108,9 +74,9 @@
 | `meta_json` | 扩展袋（避免再改表） |
 
 **原则**：主路径只依赖 title / body / depends / wave / enabled / optional；高级字段可空。  
-**materialize 到 PlanIR** 只在 `confirm_start`：prompt←body，include←enabled，optional 保留。
+**materialize 到 PlanIR** 只在 `confirm_start`：prompt←body，include←enabled，optional 保留；`scope_paths` → TaskScope（执行路由）。
 
-### 3.2 校验分层
+### 1.2 校验分层
 
 | 层 | 规则 | 失败时 |
 |----|------|--------|
@@ -118,7 +84,7 @@
 | **Run gate（硬）** | 开跑前：至少 1 个 enabled；依赖指向存在 | 拦开跑，人话提示 |
 | **Collab 高级** | scope 重叠、多 provider worktree | **警告或自动串行**，默认不否决整图 |
 
-### 3.3 与现 PlanIR 关系
+### 1.3 与 PlanIR 关系
 
 - **拆分台 / SQLite**：只认 `CcoSplit*`  
 - **Worker / Scheduler**：confirm 时 **一次性** `CcoSplit → PlanIR`  
@@ -126,34 +92,53 @@
 
 ---
 
-## 4. 实施勾选
+## 2. 明确不要
+
+- ❌ 只存四个字段 ord/wave/optional/include  
+- ❌ SQLite 仅 dual-write 镜像 PlanIR 就算完事（过渡已归档，非终态）  
+- ❌ 以 Claude CLI 完整 JSON + 硬 validate 为唯一拆分路径还声称「不卡」  
+- ❌ 在 soft archive 与本文各维护一份 S2–S6 开项表  
+
+---
+
+## 3. 实施勾选（C1–C7 · 已全部 ✅）
 
 | ID | 任务 | 完成定义 | 状态 |
 |----|------|----------|------|
-| **C0** | 本文为拆分存储真源；纠正 soft-sqlite 文档口径 | 文档互链 | ✅ 本文件 |
-| **C1** | 定义 `CcoSplitJob` / `CcoSplitTask` Rust 类型（domain 或 state） | 无 IO 类型 + 测 | ✅ `domain/plan/cco_split/` |
-| **C2** | SQLite 表 `cco_split_jobs` / `cco_split_tasks` 为 SoT 写入 | 拆完必进库；可读回 desk DTO | ✅ `state/cco_split_store` |
-| **C3** | Producer：heuristic / 现 LLM 结果 → **先转 CcoSplit 再入库** | 不经「硬 collab 否决整图」 | ✅ `write_proposed` → SoT |
-| **C4** | `confirm_start`：从 SQLite 读 → materialize PlanIR → run | 唯一开跑不变 | ✅ `load_proposed` / run_gate |
+| **C0** | 本文为拆分存储真源 | 文档互链 | ✅ |
+| **C1** | `CcoSplitJob` / `CcoSplitTask` Rust 类型 | 无 IO 类型 + 测 | ✅ `domain/plan/cco_split/` |
+| **C2** | SQLite 表 `cco_split_*` 为 SoT 写入 | 拆完必进库；可读回 desk DTO | ✅ `state/cco_split_store` |
+| **C3** | Producer → 先转 CcoSplit 再入库 | 不经硬 collab 否决整图 | ✅ `write_proposed` → SoT |
+| **C4** | `confirm_start`：SQLite → materialize PlanIR → run | 唯一开跑不变 | ✅ `load_proposed` / run_gate |
 | **C5** | 桌面拆分台读 SQLite DTO | 顺序/波次/是否执行/说明完整 | ✅ job_view 优先 SoT |
-| **C6** | 规划不卡：默认快路径（heuristic 或 cap）+ 僵尸收尸 | planning 不再假转圈数分钟无结果 | ✅ `fast` 默认 + kill pid |
-| **C7** | 迁移：旧 plan.proposed 可导入 CcoSplit 一次 | 兼容 | ✅ load 时 import |
+| **C6** | 规划不卡：快路径能力 + 僵尸收尸 | planning 不再假转圈 | ✅ kill pid；**产品默认 ai** 见短规则 |
+| **C7** | 旧 plan.proposed 可导入 CcoSplit | 兼容 | ✅ load 时 import |
 
-**推荐序**：C1→C2→C3→C4→C5 并行 C6。
-
----
-
-## 5. 明确不听成什么
-
-- ❌ 只存四个字段 ord/wave/optional/include  
-- ❌ SQLite 仅 dual-write 镜像 PlanIR 就算完事  
-- ❌ 继续以 Claude CLI 完整 JSON + 硬 validate 为唯一拆分路径还声称「不卡」  
+说明：C6 的「快路径」是能力与兜底；**产品默认 `plan_mode=ai`**（见 [`split-product-rules.md`](./split-product-rules.md)），`fast` 仅高级/显式。
 
 ---
 
-## 6. 修订
+## 4. 修订
 
 | 日期 | 说明 |
 |------|------|
-| 2026-07-21 | 用户纠正：独立 cco 格式 + SQLite SoT；补「现路径仍会卡」 |
-| 2026-07-21 | C1–C7 落地：domain cco_split · SQLite SoT · confirm 物化 · 桌面 DTO · fast 默认 · 杀僵尸 pid |
+| 2026-07-21 | 独立 cco 格式 + SQLite SoT；C1–C7 落地 |
+| 2026-07-22 | soft-sqlite 归档；并入残余债 S2–S6（唯一勾选落点） |
+| 2026-07-22 | C1 文档合并：删过时 dual-write 差距控诉；链短规则 + archive；角色=存储真源 |
+
+---
+
+## 5. 残余债 S2–S6
+
+> 来源：原 `docs/split-soft-sqlite-2026-07-21.md` §2（已 `git mv` → [`archive/split-soft-sqlite-2026-07-21.md`](./archive/split-soft-sqlite-2026-07-21.md)）。  
+> **本表为 S2–S6 唯一勾选真源**；archive 中 soft 文不得再当开项真源。中间摘录：`.cco-out/docs-cleanup/S2-S6-EXTRACT.md`。
+
+| ID | 任务 | 完成定义 | 状态 |
+|----|------|----------|------|
+| **S2** | 桌面/API 读 SQLite 列表 job/tasks（可选） | 查询比扫盘快；失败回落 JSON | ☐ |
+| **S3** | 僵尸 planning 心跳/PID 收尸写 SQLite status | 无永久 planning | ☐ |
+| **S4** | 默认 critic LLM 关（配置） | 少一轮 Claude | ☐ |
+| **S5** | 规划两段式 / 轻量 API（中长期） | 不必等完整 CLI JSON | ☐ |
+| **S6** | 可选：runs/task_state 进 SQLite | 与 plan_jobs 同库 | ☐ |
+
+说明：C1–C7 已落地 `cco_split_*` SoT + 杀僵尸 pid；上表为 soft 波次遗留的**可选/中长期**债（S3 与 C6 部分重叠、S4 与 config `planner_critic_enabled=false` 可能已满足时可对照实现再勾，**勿**在 archive 或其它文再开第二份表）。

@@ -222,14 +222,18 @@ export function attachDocumentClick(deps) {
       if (rerunBtn?.dataset?.rerun) {
         e.preventDefault();
         e.stopPropagation();
+        const taskId = rerunBtn.dataset.rerun;
         const st = state();
-        if (st) st.selectedTaskId = rerunBtn.dataset.rerun;
-        const fn = UI_ACTIONS["btn-rerun"];
-        if (fn) {
-          Promise.resolve(fn()).catch((err) =>
+        if (st) st.selectedTaskId = taskId;
+        // 卡片「再跑一次」= 只重跑该失败任务，不是整轮重拆
+        const cco = typeof window !== "undefined" ? window.ccoRun : null;
+        if (cco && typeof cco.retryTask === "function") {
+          Promise.resolve(cco.retryTask(taskId)).catch((err) =>
             toast(String(err?.message || err))
           );
+          return;
         }
+        toast("执行台未就绪，请稍后重试");
         return;
       }
       const taskChip = e.target?.closest?.(

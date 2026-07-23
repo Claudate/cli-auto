@@ -3,12 +3,13 @@
 //! [INPUT]: PlanIR
 //! [OUTPUT]: materialize_selected_tasks · materialize_role_defaults
 //! [POS]: domain/plan
-//! [PROTOCOL]: 变更时更新此头部
+//! [PROTOCOL]: 变更时更新此头部；inspect 空 depends_on 接线变更须同步单测
 
 use std::collections::HashSet;
 
 use anyhow::{bail, Result};
 
+use super::system_ids::is_system_post_task;
 use super::types::{
     PlanIR, TaskIR, TaskRole, INSPECT_DEFAULT_ALLOWED_TOOLS, INSPECT_DEFAULT_WRITE_SCOPE,
     INSPECT_SYSTEM_PROMPT, INSPECT_SYSTEM_PROMPT_MARKER, INSPECT_STRIP_TOOLS,
@@ -54,14 +55,64 @@ pub fn materialize_selected_tasks(mut ir: PlanIR) -> Result<PlanIR> {
 /// - ensure Write is present (VERDICT/ISSUES)
 /// - empty `scope.paths` → `[.cco-out/inspect/**]`
 /// - inject `INSPECT_SYSTEM_PROMPT` into `append_system_prompt` (idempotent)
+/// - **empty `depends_on` → wire to business DAG leaves** so terminal inspect
+///   never races implement/scout (LLM/split often leave inspect with `[]`)
 ///
 /// Non-inspect roles and plans without `role` are untouched (legacy back-compat).
 /// Call sites: [`load_plan`], [`materialize_selected_tasks`].
 pub fn materialize_role_defaults(plan: &mut PlanIR) {
+    wire_empty_inspect_depends_on(plan);
     for task in &mut plan.tasks {
         if task.role == Some(TaskRole::Inspect) {
             materialize_inspect_task(task);
         }
+    }
+}
+
+/// Business leaves = non-inspect, non-system-post tasks that no *other* business
+/// task lists in `depends_on` (DAG sinks of implement/scout work).
+///
+/// Inspect with empty `depends_on` waits on those leaves (transitively covers the
+/// whole business wave). Explicit inspect edges are left alone.
+pub(crate) fn wire_empty_inspect_depends_on(plan: &mut PlanIR) {
+    let business_ids: Vec<String> = plan
+        .tasks
+        .iter()
+        .filter(|t| t.role != Some(TaskRole::Inspect) && !is_system_post_task(&t.id))
+        .map(|t| t.id.clone())
+        .collect();
+    if business_ids.is_empty() {
+        return;
+    }
+
+    let mut is_predecessor: HashSet<String> = HashSet::new();
+    for t in &plan.tasks {
+        if t.role == Some(TaskRole::Inspect) || is_system_post_task(&t.id) {
+            continue;
+        }
+        for d in &t.depends_on {
+            is_predecessor.insert(d.clone());
+        }
+    }
+    let mut leaves: Vec<String> = business_ids
+        .iter()
+        .filter(|id| !is_predecessor.contains(*id))
+        .cloned()
+        .collect();
+    if leaves.is_empty() {
+        // Degenerate cycle or all intermediate — fall back to every business task.
+        leaves = business_ids;
+    }
+    leaves.sort();
+
+    for t in plan.tasks.iter_mut() {
+        if t.role != Some(TaskRole::Inspect) {
+            continue;
+        }
+        if !t.depends_on.is_empty() {
+            continue;
+        }
+        t.depends_on = leaves.clone();
     }
 }
 
@@ -155,5 +206,124 @@ pub(crate) fn inject_inspect_system_prompt(opts: &mut serde_json::Value, allow_b
         format!("{existing}\n\n{segment}")
     };
     opts["append_system_prompt"] = serde_json::json!(merged);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::plan::types::{OnFailure, TaskScope};
+
+    fn task(id: &str, role: Option<TaskRole>, deps: &[&str]) -> TaskIR {
+        TaskIR {
+            id: id.into(),
+            title: id.into(),
+            depends_on: deps.iter().map(|s| (*s).into()).collect(),
+            group: None,
+            provider: "fake".into(),
+            mode: "print".into(),
+            prompt: "p".into(),
+            acceptance: None,
+            timeout_secs: None,
+            worktree: None,
+            provider_opts: serde_json::json!({}),
+            optional: false,
+            include: true,
+            role,
+            scope: Some(TaskScope {
+                paths: vec![format!(".cco-out/{id}/**")],
+                readonly: vec![],
+                forbid: vec![],
+            }),
+            outputs: vec![],
+            tags: vec![],
+        }
+    }
+
+    fn plan(tasks: Vec<TaskIR>) -> PlanIR {
+        PlanIR {
+            schema: "cco-plan/v1".into(),
+            name: "t".into(),
+            adapter: "test".into(),
+            source_path: std::path::PathBuf::from("test.md"),
+            max_parallel: 4,
+            on_failure: OnFailure::Pause,
+            retry_max: 0,
+            default_provider: "fake".into(),
+            default_mode: "print".into(),
+            worktree: false,
+            require_inspect: false,
+            tasks,
+        }
+    }
+
+    #[test]
+    fn empty_inspect_depends_wires_to_business_leaves() {
+        // t1 → t2, t3; leaves = t2,t3; inspect had []
+        let mut ir = plan(vec![
+            task("t1", Some(TaskRole::Scout), &[]),
+            task("t2", Some(TaskRole::Implement), &["t1"]),
+            task("t3", Some(TaskRole::Implement), &["t1"]),
+            task("t7-inspect", Some(TaskRole::Inspect), &[]),
+        ]);
+        materialize_role_defaults(&mut ir);
+        let insp = ir.tasks.iter().find(|t| t.id == "t7-inspect").unwrap();
+        assert!(
+            insp.depends_on.iter().any(|d| d == "t2"),
+            "deps={:?}",
+            insp.depends_on
+        );
+        assert!(insp.depends_on.iter().any(|d| d == "t3"));
+        assert!(!insp.depends_on.iter().any(|d| d == "t1"), "only leaves");
+    }
+
+    #[test]
+    fn explicit_inspect_depends_preserved() {
+        let mut ir = plan(vec![
+            task("t1", Some(TaskRole::Implement), &[]),
+            task("t2", Some(TaskRole::Implement), &[]),
+            task("t7-inspect", Some(TaskRole::Inspect), &["t1"]),
+        ]);
+        materialize_role_defaults(&mut ir);
+        let insp = ir.tasks.iter().find(|t| t.id == "t7-inspect").unwrap();
+        assert_eq!(insp.depends_on, vec!["t1".to_string()]);
+    }
+
+    #[test]
+    fn docs_cleanup_shape_inspect_not_parallel_to_t1() {
+        // Real failure shape: t7-inspect [] raced t1-inventory at run start.
+        let mut ir = plan(vec![
+            task("t1-inventory", Some(TaskRole::Scout), &[]),
+            task("t2-delete-one", Some(TaskRole::Implement), &["t1-inventory"]),
+            task("t3-archive-b", Some(TaskRole::Implement), &["t1-inventory"]),
+            task(
+                "t4-c1-split-merge",
+                Some(TaskRole::Implement),
+                &["t3-archive-b"],
+            ),
+            task(
+                "t5-c2c3c4-light",
+                Some(TaskRole::Implement),
+                &["t3-archive-b"],
+            ),
+            task(
+                "t6-index-refresh",
+                Some(TaskRole::Integrate),
+                &["t3-archive-b"],
+            ),
+            task("t7-inspect", Some(TaskRole::Inspect), &[]),
+        ]);
+        materialize_role_defaults(&mut ir);
+        let insp = ir.tasks.iter().find(|t| t.id == "t7-inspect").unwrap();
+        for leaf in ["t2-delete-one", "t4-c1-split-merge", "t5-c2c3c4-light", "t6-index-refresh"]
+        {
+            assert!(
+                insp.depends_on.iter().any(|d| d == leaf),
+                "missing leaf {leaf}; deps={:?}",
+                insp.depends_on
+            );
+        }
+        assert!(!insp.depends_on.iter().any(|d| d == "t1-inventory"));
+        assert!(!insp.depends_on.iter().any(|d| d == "t3-archive-b"));
+    }
 }
 

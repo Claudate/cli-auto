@@ -113,6 +113,11 @@ pub struct DefaultSection {
     /// Also enabled when env `CCO_PLANNER_CRITIC=1`. Default **false** (cost/latency).
     #[serde(default = "default_post_feature_off")]
     pub planner_critic_enabled: bool,
+    /// Claude CLI reasoning effort: `low` | `medium` | `high` | `xhigh` | `max` | `ultracode`.
+    /// `ultracode` = xhigh + multi-agent thoroughness hint. Default `high`.
+    /// Passed as `claude --effort <level>` (ultracode → xhigh on the flag).
+    #[serde(default = "default_effort")]
+    pub effort: String,
 }
 
 fn default_retry_max() -> u32 {
@@ -130,6 +135,46 @@ fn default_fallback_extra_attempts() -> u32 {
 fn default_post_feature_off() -> bool {
     false
 }
+fn default_effort() -> String {
+    "high".into()
+}
+
+/// Allowed effort tokens (product + Claude CLI).
+pub const EFFORT_LEVELS: &[&str] = &["low", "medium", "high", "xhigh", "max", "ultracode"];
+
+/// Normalize user/config effort token. Unknown → None.
+pub fn normalize_effort(raw: &str) -> Option<String> {
+    let s = raw.trim().to_ascii_lowercase();
+    if EFFORT_LEVELS.contains(&s.as_str()) {
+        Some(s)
+    } else {
+        None
+    }
+}
+
+/// CLI `--effort` value: `ultracode` maps to `xhigh` (Claude accepts only low…max).
+pub fn effort_cli_level(effort: &str) -> &'static str {
+    match effort.trim().to_ascii_lowercase().as_str() {
+        "low" => "low",
+        "medium" => "medium",
+        "high" => "high",
+        "xhigh" | "ultracode" => "xhigh",
+        "max" => "max",
+        _ => "high",
+    }
+}
+
+/// Whether product effort is ultracode (multi-agent thoroughness).
+pub fn effort_is_ultracode(effort: &str) -> bool {
+    effort.trim().eq_ignore_ascii_case("ultracode")
+}
+
+/// Extra system-prompt fragment when ultracode is on (workers + chat).
+pub const ULTRACODE_SYSTEM_HINT: &str = "\
+Ultracode is on for this turn: optimize for the most exhaustive, correct answer — \
+not the fastest or cheapest. Prefer multi-agent style decomposition (find → verify \
+→ synthesize), adversarial checks on claims, and thorough coverage. Token cost is \
+not a constraint; do not skip verification for speed.";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -190,6 +235,7 @@ impl Default for DefaultSection {
             post_git_push_enabled: default_post_feature_off(),
             post_open_pr_enabled: default_post_feature_off(),
             planner_critic_enabled: default_post_feature_off(),
+            effort: default_effort(),
         }
     }
 }
@@ -344,6 +390,11 @@ impl Config {
         if let Ok(p) = std::env::var("CCO_DEFAULT_PROVIDER") {
             cfg.default.default_provider = p;
         }
+        if let Ok(e) = std::env::var("CCO_EFFORT") {
+            if let Some(n) = normalize_effort(&e) {
+                cfg.default.effort = n;
+            }
+        }
 
         Ok(cfg)
     }
@@ -382,6 +433,9 @@ post_git_push_enabled = false
 post_open_pr_enabled = false
 # Optional second-pass LLM critic after rule critic (also CCO_PLANNER_CRITIC=1).
 planner_critic_enabled = false
+# Claude reasoning effort: low | medium | high | xhigh | max | ultracode
+# ultracode = xhigh + multi-agent thoroughness. Also CCO_EFFORT env.
+effort = "high"
 permission_mode = "dontAsk"
 allowed_tools = ["Read", "Edit", "Bash", "Glob", "Grep", "Write"]
 

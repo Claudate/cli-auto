@@ -13,6 +13,8 @@
 //! | `start_plan_job_cmd` / `cco plan` | [`start_job`] |
 //! | `get_plan_job_cmd` / poll | [`get_job`] |
 //! | `latest_plan_job_cmd` | [`latest_job_for_project`] |
+//! | `latest_plan_job_for_plan_cmd` | [`latest_job_for_plan_path`] |
+//! | `list_plan_split_index_cmd` | [`list_plan_split_index`] |
 //! | `update_plan_task_cmd` | [`edit_task`] |
 //! | `remove_plan_task_cmd` | [`remove_task`] |
 //! | `sanitize_plan_deps_cmd` | [`sanitize_deps`] |
@@ -21,10 +23,11 @@ use anyhow::Result;
 
 use crate::config::Config;
 use crate::plan::planner::{
-    get_plan_job, latest_plan_job_for_project, load_proposed, load_proposed_for_exec,
-    mark_confirmed, remove_proposed_task, sanitize_proposed_deps, start_plan_job,
-    update_proposed_task, PlanJobView, SanitizeDepsResult, StartPlanJobRequest,
+    get_plan_job, latest_plan_job_for_plan_path, latest_plan_job_for_project, load_proposed,
+    load_proposed_for_exec, mark_confirmed, remove_proposed_task, sanitize_proposed_deps,
+    start_plan_job, update_proposed_task, PlanJobView, SanitizeDepsResult, StartPlanJobRequest,
 };
+use crate::state::sqlite::PlanSplitIndexRow;
 use crate::plan::PlanIR;
 use crate::state::RunState;
 
@@ -34,10 +37,15 @@ use crate::state::RunState;
 /// with `include=false` are dropped before spawn (A0-R4); soft-fill does not
 /// overwrite explicit provider routes (A0-R3).
 ///
+/// `effort`: optional UI/CLI pick (`low`…`max`|`ultracode`) forced onto claude/fake
+/// tasks at open-run. When `None`, soft-fills from config only if missing.
+///
 /// Desktop / async path. CLI foreground uses [`confirm_materialize`] then
 /// `app::run::prepare_scheduler` so the same materialize + optional-drop runs.
-pub fn confirm(config: Config, job_id: &str) -> Result<String> {
-    let (job, ir, soft_report) = load_proposed_for_exec(&config, job_id)?;
+pub fn confirm(config: Config, job_id: &str, effort: Option<&str>) -> Result<String> {
+    let (job, mut ir, soft_report) = load_proposed_for_exec(&config, job_id)?;
+    // UI/CLI depth pick at execute time (split desk · --effort).
+    crate::app::run::apply_effort(&mut ir, &config, effort);
     // P1-2: pass soft-fill report so run.json stamps route_source (kept → explicit).
     let run_id = crate::services::start_run_from_plan_with_route(
         config.clone(),
@@ -59,6 +67,8 @@ pub struct ConfirmPatches {
     pub force_provider: Option<String>,
     pub mode: Option<String>,
     pub max_parallel: Option<usize>,
+    /// Force Claude effort at open-run (`low`…`max`|`ultracode`).
+    pub effort: Option<String>,
 }
 
 /// Mode B open-run for **foreground** CLI: same contract as [`confirm`] but does
@@ -94,6 +104,8 @@ pub fn confirm_materialize(
     if let Some(mp) = patches.max_parallel {
         ir.max_parallel = mp;
     }
+    // Execute-time effort (CLI --effort or desktop split desk).
+    crate::app::run::apply_effort(&mut ir, config, patches.effort.as_deref());
     // Last-write route report: override if present, else job soft defaults.
     let route_report = override_report.as_ref().or(Some(&soft_report));
     let (run_id, st, ir) = crate::app::run::materialize_run_with_route(
@@ -119,6 +131,23 @@ pub fn get_job(config: &Config, job_id: &str) -> Result<PlanJobView> {
 /// Latest job for a project (desktop attach).
 pub fn latest_job_for_project(config: &Config, project: &std::path::Path) -> Result<Option<PlanJobView>> {
     latest_plan_job_for_project(config, project)
+}
+
+/// Latest restorable job for one plan document (plan list → 查看拆分结果).
+pub fn latest_job_for_plan_path(
+    config: &Config,
+    project: &std::path::Path,
+    plan_path: &str,
+) -> Result<Option<PlanJobView>> {
+    latest_plan_job_for_plan_path(config, project, plan_path)
+}
+
+/// SQLite index of restorable splits per plan path (badge / 查看拆分).
+pub fn list_plan_split_index(
+    config: &Config,
+    project: &std::path::Path,
+) -> Result<Vec<PlanSplitIndexRow>> {
+    crate::state::sqlite::list_plan_split_index(config, project)
 }
 
 /// Load proposed PlanIR (pre-confirm edit surface).
@@ -212,13 +241,14 @@ mod tests {
                 max_parallel: Some(1),
                 preserve_from_job_id: None,
                 grain_hint: None,
+                effort: None,
             },
         )
         .unwrap();
         let view = wait_planned(&cfg, &view.job_id);
         assert_eq!(view.status, "planned", "err={:?}", view.error);
 
-        let run_id = confirm(cfg.clone(), &view.job_id).unwrap();
+        let run_id = confirm(cfg.clone(), &view.job_id, None).unwrap();
         let run_json = cfg.runs_dir().join(&run_id).join("run.json");
         assert!(run_json.exists());
         // P1-2: new runs stamp route_source on each task.

@@ -62,13 +62,29 @@ export function isPlanSessionActive(phase = state.phase) {
  * project_live 返回的是「项目最近一次 run」（含历史 completed）。
  * 打开拆分会话且尚未/不匹配本 job 的 run 时，不得把旧 run 当成「本轮结果」。
  * plan_failed 同样不得用历史 completed 当「本轮结果」。
+ *
+ * 例外：live 仍在跑 / 暂停时一律算本轮——重开项目、单任务再跑、续跑都不能因
+ * planJob 缺 run_id 而把执行台刷成空白（cli-empty）。
  */
 export function liveBelongsToOpenPlan() {
   const live = state.live;
   if (!live?.run_id) return false;
+  // 真在执行或暂停：进度台必须可见（不看 planJob 是否已写 run_id）
+  if (typeof isLiveStatus === "function" && isLiveStatus(live.run_status)) {
+    return true;
+  }
+  if (typeof isRunPaused === "function" && isRunPaused()) {
+    return true;
+  }
+  const rs = String(live.run_status || "").toLowerCase();
+  if (rs === "paused") return true;
   // 拆分失败/进行中：没有本 job 的 run，历史 live 一律不算本轮
   if (state.phase === "plan_failed" || state.phase === "planning") {
     return false;
+  }
+  // 本轮已进入执行/结果：允许用项目 live 画台（重开项目 / 再跑一步）
+  if (state.phase === "running" || state.phase === "done") {
+    return true;
   }
   const job = state.planJob;
   if (!job) return true;
@@ -76,7 +92,11 @@ export function liveBelongsToOpenPlan() {
   if (st === "plan_failed" || st === "planning") return false;
   if (st !== "planned" && st !== "confirmed") return true;
   const jrid = job.run_id || job.runId || null;
-  if (!jrid) return false;
+  // 仍在拆分台（confirm）：无 job.run_id 时隐藏历史 completed，避免假「本轮结果」
+  if (!jrid) {
+    if (state.phase === "confirm") return false;
+    return true;
+  }
   return String(jrid) === String(live.run_id);
 }
 
@@ -180,6 +200,117 @@ export async function tryRestorePersistedPlanJob(projectPath) {
     console.warn("restore persisted plan job", e);
     return false;
   }
+}
+
+/**
+ * Normalize plan path for split-index lookup (slash-unified, strip leading ./).
+ * @param {string} planPath
+ * @param {string} [projectRoot]
+ */
+export function planPathLookupKey(planPath, projectRoot = state.selectedPath) {
+  if (!planPath) return "";
+  let p =
+    typeof normalizePlanPath === "function"
+      ? normalizePlanPath(planPath, projectRoot) || planPath
+      : planPath;
+  p = String(p).trim().replace(/\\/g, "/").replace(/^file:\/\//, "");
+  while (p.startsWith("./")) p = p.slice(2);
+  return p.replace(/^\/+/, "");
+}
+
+/**
+ * Restore restorable split for a **specific plan path** (plan list → 查看拆分结果).
+ * Uses SQLite plan_jobs index + disk job_view; does not auto-start.
+ * @param {string} planPath
+ * @param {{ silent?: boolean, projectPath?: string }} [opts]
+ * @returns {Promise<boolean>}
+ */
+export async function tryRestorePlanJobForPlan(planPath, opts = {}) {
+  const projectPath = opts.projectPath || state.selectedPath;
+  if (!projectPath || !planPath) return false;
+  const silent = !!opts.silent;
+  try {
+    const view = await requireGateway().latestPlanJobForPlan(
+      projectPath,
+      planPath
+    );
+    if (!view) {
+      if (!silent) toast("还没有这份计划的拆分结果，请先点「拆成步骤」");
+      return false;
+    }
+    const ok = applyRestoredPlanJob(view, { resumePoll: true });
+    if (!ok) {
+      if (!silent) toast("这份计划的拆分结果已无法恢复，请重新规划");
+      return false;
+    }
+    const status = String(view.status || "").toLowerCase();
+    const n = view.task_count || view.tasks?.length || 0;
+    if (!silent) {
+      if (status === "planning") {
+        toast("已接上该计划未完成的拆分");
+      } else {
+        toast(
+          n
+            ? `已打开拆分结果（${n} 步），可继续核对或执行规划`
+            : "已打开拆分结果"
+        );
+      }
+    }
+    return true;
+  } catch (e) {
+    console.warn("restore plan job for plan", e);
+    if (!silent) toast(String(e?.message || e || "无法打开拆分结果"));
+    return false;
+  }
+}
+
+/**
+ * Load SQLite split index into state.planSplitByPath for list badges.
+ * @param {string} [projectPath]
+ */
+export async function loadPlanSplitIndex(projectPath = state.selectedPath) {
+  if (!projectPath) {
+    state.planSplitByPath = {};
+    return {};
+  }
+  try {
+    const rows = (await requireGateway().listPlanSplitIndex(projectPath)) || [];
+    const by = {};
+    for (const r of Array.isArray(rows) ? rows : []) {
+      const raw = r.plan_path || r.planPath || "";
+      const key = planPathLookupKey(raw, projectPath);
+      if (!key) continue;
+      // first row wins (query is newest-first)
+      if (by[key]) continue;
+      const entry = {
+        job_id: r.job_id || r.jobId || null,
+        status: String(r.status || "").toLowerCase(),
+        task_count: r.task_count ?? r.taskCount ?? null,
+        plan_name: r.plan_name || r.planName || null,
+        updated_at: r.updated_at || r.updatedAt || null,
+        plan_path: key,
+      };
+      by[key] = entry;
+      // also index by raw path variants
+      by[raw] = entry;
+      const base = key.split("/").pop();
+      if (base && !by[base]) by[base] = entry;
+    }
+    state.planSplitByPath = by;
+    return by;
+  } catch (e) {
+    console.warn("loadPlanSplitIndex", e);
+    state.planSplitByPath = state.planSplitByPath || {};
+    return state.planSplitByPath;
+  }
+}
+
+/** Lookup restorable split index row for a plan path. */
+export function planSplitForPath(planPath, projectRoot = state.selectedPath) {
+  if (!planPath) return null;
+  const by = state.planSplitByPath || {};
+  const key = planPathLookupKey(planPath, projectRoot);
+  return by[key] || by[planPath] || by[key.split("/").pop()] || null;
 }
 
 /** 离开 workspace 后仍可回看：规划中 / 待确认 / 运行中 / 暂停 / 刚结束 */
@@ -501,6 +632,12 @@ export async function selectProject(path) {
     if (hasActiveRun()) {
       state.phase = "running";
       state.planCollapsed = true;
+      if (state.planJob && state.live?.run_id) {
+        const jrid = state.planJob.run_id || state.planJob.runId || null;
+        if (!jrid) {
+          state.planJob = { ...state.planJob, run_id: state.live.run_id };
+        }
+      }
     }
     await applyEntryRoute();
     if (state.phase === "planning" && state.planJobId) {
@@ -534,6 +671,13 @@ export async function selectProject(path) {
   if (hasActiveRun()) {
     state.planCollapsed = true;
     state.phase = "running";
+    // 活动 run 已接管本轮：把 job.run_id 补上，避免后续 liveBelongs 再误判
+    if (state.planJob && state.live?.run_id) {
+      const jrid = state.planJob.run_id || state.planJob.runId || null;
+      if (!jrid) {
+        state.planJob = { ...state.planJob, run_id: state.live.run_id };
+      }
+    }
   } else if (
     state.live?.run_id &&
     ["completed", "done", "failed", "aborted", "stopped", "paused"].includes(

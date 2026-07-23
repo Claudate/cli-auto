@@ -129,6 +129,9 @@ export function createUiActions() {
     },
     "btn-ws-resume": () =>
       window.ccoRun?.resume ? window.ccoRun.resume() : call("resumeRun"),
+    // 日志栏「继续」= 原结果台继续
+    "btn-log-resume": () =>
+      window.ccoRun?.resume ? window.ccoRun.resume() : call("resumeRun"),
     "btn-ws-rework": () =>
       window.ccoResult?.startRework
         ? window.ccoResult.startRework()
@@ -150,6 +153,13 @@ export function createUiActions() {
         ? call("openChatPage")
         : call("showPage", "chat"),
     "btn-ws-finish": () =>
+      window.ccoResult?.finishRound
+        ? window.ccoResult.finishRound()
+        : typeof g("finishRunRound") === "function"
+          ? call("finishRunRound")
+          : toast("结束本轮不可用"),
+    // 日志栏「结束计划」= 结束本轮
+    "btn-log-end-plan": () =>
       window.ccoResult?.finishRound
         ? window.ccoResult.finishRound()
         : typeof g("finishRunRound") === "function"
@@ -313,6 +323,7 @@ export function createUiActions() {
       await navigator.clipboard.writeText(text || "");
       toast(text ? "AI 日志已复制" : "暂无 AI 交互可复制");
     },
+    /** 顶栏 hidden #btn-rerun：整轮重选计划（非卡片 data-rerun）。 */
     "btn-rerun": () => {
       const st = state();
       if (!st) return;
@@ -382,10 +393,13 @@ export function createUiActions() {
       typeof g("openPlanManagement") === "function"
         ? call("openPlanManagement")
         : call("showPage", "plans"),
+    // 聊天右栏已撤；旧 toggle 入口 → 计划管理页
     "btn-chat-rail-toggle": () =>
-      typeof g("toggleChatPlanRail") === "function"
-        ? call("toggleChatPlanRail")
-        : null,
+      typeof g("openPlanManagement") === "function"
+        ? call("openPlanManagement")
+        : typeof g("toggleChatPlanRail") === "function"
+          ? call("toggleChatPlanRail")
+          : call("showPage", "plans"),
     "btn-plans-refresh": () =>
       typeof g("loadPlanRail") === "function" ? call("loadPlanRail") : null,
     "btn-plans-to-chat": () =>
@@ -458,7 +472,9 @@ export function createUiActions() {
       typeof g("closeImageLightbox") === "function"
         ? call("closeImageLightbox")
         : null,
-    "btn-plan-rail-refresh": () => call("loadPlanRail"),
+    // 右栏 DOM 已撤；保留 no-op 键名防旧缓存点击
+    "btn-plan-rail-refresh": () =>
+      typeof g("loadPlanRail") === "function" ? call("loadPlanRail") : null,
     "btn-plan-rail-close": () => {
       if (typeof g("setPlanRailOpen") === "function") {
         call("setPlanRailOpen", false);

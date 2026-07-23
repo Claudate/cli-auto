@@ -1144,6 +1144,7 @@ mod llm_critic_gate_tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            effort: None,
         };
         job.save(&cfg).unwrap();
 

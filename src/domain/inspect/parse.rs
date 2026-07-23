@@ -95,13 +95,17 @@ pub fn parse_issues_text(text: &str) -> Vec<ParsedIssue> {
         if t.is_empty() {
             continue;
         }
+        // Field-only lines like `- **severity**: residual` must NOT open a new
+        // block (otherwise `### I-1` alone becomes fail-closed Blocking).
+        let severity_field_only = is_severity_field_only_line(t);
         let starts_block = t.starts_with("- id:")
             || t.starts_with("-id:")
             || t.starts_with("## I-")
             || t.starts_with("### I-")
             || (t.starts_with("- I-") || t.starts_with("* I-"))
-            || (t.starts_with('-') && t.contains("severity="))
-            || (t.starts_with('-') && t.contains("severity:"));
+            || (t.starts_with('-')
+                && (t.contains("severity=") || t.contains("severity:"))
+                && !severity_field_only);
         if starts_block && !cur.is_empty() {
             blocks.push(cur.trim().to_string());
             cur.clear();
@@ -144,26 +148,54 @@ pub fn parse_issues_text(text: &str) -> Vec<ParsedIssue> {
         if matches!(
             lower.as_str(),
             "无" | "none" | "n/a" | "na" | "no issues" | "no issue"
-        ) || lower.starts_with("# issues")
-            || lower == "## residual"
+        ) || lower == "## residual"
             || lower == "## blocking"
+            || lower == "## out-of-scope"
+            || lower == "## map"
         {
             // Section headers alone are not issues; content under them is.
-            if block.lines().count() <= 1 && (lower.starts_with('#') || lower.starts_with("##")) {
+            if block.lines().count() <= 1 {
                 continue;
             }
+        }
+        // Title / section preamble is not an ISSUE. Free-form bullets without
+        // severity still fail-closed → Blocking.
+        let has_issue_id = block.lines().any(|l| {
+            let t = l.trim().trim_start_matches('#').trim();
+            t.starts_with("I-")
+                || t.starts_with("- I-")
+                || t.starts_with("* I-")
+                || t.starts_with("id:")
+                || t.starts_with("- id:")
+        });
+        let first = block
+            .lines()
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase();
+        // Explicit field only — section titles like `## residual` must not promote preamble.
+        let has_field_sev = parse_severity_field_only(&block).is_some();
+        if !has_issue_id && !has_field_sev && first.starts_with('#') {
+            continue;
+        }
+        // Empty-set confirmation lines (`- **blocking**: 无`) are not ISSUES.
+        if !has_issue_id && is_empty_set_confirmation_block(&block) {
+            continue;
         }
         let severity = parse_severity_token(&block).unwrap_or(IssueSeverity::Blocking);
         let id = extract_kv(&block, "id")
             .or_else(|| {
                 block.lines().next().and_then(|l| {
+                    // `### I-1` / `- I-2 · title` / `I-3`
                     let t = l
                         .trim()
-                        .trim_start_matches('-')
-                        .trim_start_matches('*')
+                        .trim_start_matches('#')
+                        .trim_start_matches(|c: char| c == '-' || c == '*' || c == '•')
                         .trim();
-                    if t.starts_with('I') && t.contains('-') {
-                        Some(t.split_whitespace().next().unwrap_or(t).to_string())
+                    let token = t.split_whitespace().next().unwrap_or(t);
+                    if token.starts_with('I') && token.contains('-') {
+                        Some(token.trim_end_matches(|c: char| c == '·' || c == ':' || c == ',').to_string())
                     } else {
                         None
                     }
@@ -199,37 +231,122 @@ pub fn parse_issues_text(text: &str) -> Vec<ParsedIssue> {
     out
 }
 
-fn parse_severity_token(block: &str) -> Option<IssueSeverity> {
+/// `- **blocking**: 无` / `- **map**: 无` empty-set footnotes under ISSUES.
+fn is_empty_set_confirmation_block(block: &str) -> bool {
     let lower = block.to_ascii_lowercase();
-    // severity=… or severity: … (trim so "severity: residual" works)
-    for key in ["severity=", "severity:"] {
-        if let Some(idx) = lower.find(key) {
-            let rest = lower[idx + key.len()..].trim_start();
-            let token = rest
-                .split(|c: char| c.is_whitespace() || c == ',' || c == '|' || c == ';')
-                .next()
-                .unwrap_or("")
-                .trim()
-                .trim_matches(|c| c == '`' || c == '*' || c == '"' || c == '\'');
-            if token.is_empty() {
-                continue;
-            }
-            return Some(match token {
-                "blocking" | "block" | "p0" => IssueSeverity::Blocking,
-                "map" | "geb" => IssueSeverity::Map,
-                "residual" | "non-blocking" | "nonblocking" | "optional" => {
-                    IssueSeverity::Residual
-                }
-                "out-of-scope" | "outofscope" | "oos" => IssueSeverity::OutOfScope,
-                _ => IssueSeverity::Blocking,
-            });
-        }
+    if lower.contains("## 空集") || lower.contains("empty-set") || lower.contains("空集确认") {
+        return true;
     }
-    // Chinese / informal (whole-block hints only when no explicit severity=)
+    // Single-line "no blocking" confirmations without I-*.
+    let stripped: String = lower
+        .chars()
+        .filter(|c| *c != '*' && *c != '`' && *c != '_')
+        .collect();
+    let s = stripped.trim();
+    let s = s.trim_start_matches(|c: char| c == '-' || c == '•').trim();
+    (s.starts_with("blocking:") || s.starts_with("map:"))
+        && (s.contains("无") || s.contains("none") || s.contains("no "))
+}
+
+/// True when the line is only a severity field under a multi-line ISSUE
+/// (`- **severity**: residual`), not a single-line issue that embeds severity.
+fn is_severity_field_only_line(t: &str) -> bool {
+    let stripped = t
+        .trim()
+        .trim_start_matches(|c: char| c == '-' || c == '*' || c == '•')
+        .trim();
+    let s: String = stripped
+        .chars()
+        .filter(|c| *c != '*' && *c != '`' && *c != '_')
+        .collect();
+    let s = s.trim().to_ascii_lowercase();
+    let rest = if let Some(r) = s.strip_prefix("severity=") {
+        r
+    } else if let Some(r) = s.strip_prefix("severity:") {
+        r
+    } else {
+        return false;
+    };
+    // Single-line issues carry more keys: `severity=blocking plan_ref=… path=…`
+    let token_and_maybe_more = rest.trim();
+    let parts: Vec<&str> = token_and_maybe_more.split_whitespace().collect();
+    // field-only: one token (residual / blocking / …) optionally with punctuation
+    parts.len() <= 1
+        && !token_and_maybe_more.contains("plan_ref")
+        && !token_and_maybe_more.contains("path=")
+        && !token_and_maybe_more.contains("fix_wp")
+}
+
+fn severity_from_token(token: &str) -> Option<IssueSeverity> {
+    Some(match token {
+        "blocking" | "block" | "p0" => IssueSeverity::Blocking,
+        "map" | "geb" => IssueSeverity::Map,
+        "residual" | "non-blocking" | "nonblocking" | "optional" => IssueSeverity::Residual,
+        "out-of-scope" | "outofscope" | "oos" | "out_of_scope" => IssueSeverity::OutOfScope,
+        _ => IssueSeverity::Blocking,
+    })
+}
+
+/// Explicit `severity=` / `severity:` / `**severity**: residual` fields only.
+fn parse_severity_field_only(block: &str) -> Option<IssueSeverity> {
+    let lower = block.to_ascii_lowercase();
+    for line in lower.lines() {
+        let t = line
+            .trim()
+            .trim_start_matches(|c: char| c == '-' || c == '*' || c == '•')
+            .trim();
+        // Collapse markdown bold/code around the key: **severity**: residual
+        let stripped: String = t
+            .chars()
+            .filter(|c| *c != '*' && *c != '`' && *c != '_')
+            .collect();
+        let s = stripped.trim();
+        let rest = if let Some(r) = s.strip_prefix("severity=") {
+            Some(r)
+        } else if let Some(r) = s.strip_prefix("severity:") {
+            Some(r)
+        } else if let Some(r) = s.strip_prefix("severity ") {
+            Some(r)
+        } else if let Some(idx) = s.find("severity=") {
+            Some(&s[idx + "severity=".len()..])
+        } else if let Some(idx) = s.find("severity:") {
+            Some(&s[idx + "severity:".len()..])
+        } else {
+            None
+        };
+        let Some(rest) = rest else {
+            continue;
+        };
+        let token = rest
+            .trim_start()
+            .split(|c: char| c.is_whitespace() || c == ',' || c == '|' || c == ';')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .trim_matches(|c| c == '`' || c == '*' || c == '"' || c == '\'' || c == '_');
+        if token.is_empty() {
+            continue;
+        }
+        // Empty-set footnotes: severity/key used as section label with 无
+        if token == "无" || token == "none" || token == "no" {
+            continue;
+        }
+        return severity_from_token(token);
+    }
+    None
+}
+
+fn parse_severity_token(block: &str) -> Option<IssueSeverity> {
+    if let Some(s) = parse_severity_field_only(block) {
+        return Some(s);
+    }
+    let lower = block.to_ascii_lowercase();
+    // Chinese / informal (whole-block hints only when no explicit severity=).
+    // Do NOT match bare `## residual` section headers (no issue body).
     if lower.contains("地图") || lower.contains("geb 指针") || lower.contains("l1/l2") {
         return Some(IssueSeverity::Map);
     }
-    if lower.contains("residual") || lower.contains("不阻塞") || lower.contains("可选残留") {
+    if lower.contains("不阻塞") || lower.contains("可选残留") {
         return Some(IssueSeverity::Residual);
     }
     if lower.contains("范围外") || lower.contains("out of scope") {
@@ -343,9 +460,76 @@ mod tests {
     }
 
     #[test]
+    fn markdown_bold_severity_residual_not_blocking() {
+        let text = r#"
+### I-1
+- **severity**: residual
+- **plan_ref**: 验收
+- **fix_wp**: polish
+- **说明**: archive soft 历史表
+"#;
+        let parsed = parse_issues_text(text);
+        assert!(!parsed.is_empty(), "parsed={parsed:?}");
+        let i1 = parsed.iter().find(|i| i.id.contains("I-1")).unwrap();
+        assert_eq!(i1.severity, IssueSeverity::Residual);
+        assert!(!i1.severity.is_blocking_for_gate());
+    }
+
+    #[test]
+    fn markdown_bold_severity_out_of_scope() {
+        let text = "- **severity**: out-of-scope\n- **plan_ref**: 后置\n";
+        let parsed = parse_issues_text(text);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].severity, IssueSeverity::OutOfScope);
+    }
+
+    #[test]
     fn parse_issues_fail_closed_without_severity() {
         let parsed = parse_issues_text("- missing plan pointer in CLAUDE.md\n");
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].severity, IssueSeverity::Blocking);
+    }
+
+    #[test]
+    fn real_t7_issues_markdown_all_non_blocking() {
+        let text = r#"
+# ISSUES · t7-inspect
+
+plan_ref: docs/chat §验收
+Result companion: VERDICT.md → **PASS**
+
+## residual
+
+### I-1
+- **severity**: residual
+- **plan_ref**: S2–S6
+- **fix_wp**: polish
+- **说明**: archive soft 历史表
+
+### I-2
+- **severity**: residual
+- **plan_ref**: 死链
+- **fix_wp**: polish
+
+## out-of-scope
+
+### I-4
+- **severity**: out-of-scope
+- **plan_ref**: 后置
+
+## 空集确认
+
+- **blocking**: 无
+- **map**: 无
+"#;
+        let parsed = parse_issues_text(text);
+        assert_eq!(parsed.len(), 3, "parsed={parsed:?}");
+        assert!(
+            parsed.iter().all(|i| !i.severity.is_blocking_for_gate()),
+            "parsed={parsed:?}"
+        );
+        assert!(parsed.iter().any(|i| i.id.contains("I-1")));
+        assert!(parsed.iter().any(|i| i.id.contains("I-2")));
+        assert!(parsed.iter().any(|i| i.id.contains("I-4")));
     }
 }

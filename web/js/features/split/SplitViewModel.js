@@ -345,7 +345,21 @@ export function createSplitViewModel(deps = {}) {
       }
       setPatch({ busy: true, lastError: null });
       try {
-        const res = await splitApi.confirmStart(s.jobId);
+        // Execute-time depth from split desk (or chooser / localStorage seed).
+        const EFFORT_OK = ["low", "medium", "high", "xhigh", "max", "ultracode"];
+        let effort = null;
+        try {
+          const raw = (
+            document.getElementById("split-effort")?.value ||
+            document.getElementById("pp-effort")?.value ||
+            localStorage.getItem("cco.splitEffort") ||
+            ""
+          )
+            .trim()
+            .toLowerCase();
+          if (EFFORT_OK.includes(raw)) effort = raw;
+        } catch (_) {}
+        const res = await splitApi.confirmStart(s.jobId, effort);
         const runId = res?.run_id || res?.runId || null;
         const job = s.job
           ? { ...s.job, status: "confirmed", run_id: runId }

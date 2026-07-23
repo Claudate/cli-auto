@@ -22,8 +22,8 @@ mod task_edit;
 mod view;
 
 pub use job::{
-    get_plan_job, job_dir, latest_plan_job_for_project, plan_jobs_dir, start_plan_job, PlanJob,
-    PlanJobStatus, StartPlanJobRequest,
+    get_plan_job, job_dir, latest_plan_job_for_plan_path, latest_plan_job_for_project,
+    plan_jobs_dir, start_plan_job, PlanJob, PlanJobStatus, StartPlanJobRequest,
 };
 /// Crate-internal planner log (split_agent / llm).
 pub(crate) use job::append_log;
@@ -65,6 +65,7 @@ mod tests {
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -107,6 +108,7 @@ mod tests {
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -171,6 +173,7 @@ mod tests {
                 max_parallel: Some(3),
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -212,6 +215,7 @@ mod tests {
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -258,6 +262,7 @@ mod tests {
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -304,6 +309,7 @@ mod tests {
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -350,6 +356,7 @@ mod tests {
                 max_parallel: Some(4),
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -389,6 +396,7 @@ mod tests {
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -425,6 +433,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            effort: None,
         };
         zombie.save(&cfg).unwrap();
 
@@ -485,6 +494,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            effort: None,
         };
         zombie.save(&cfg).unwrap();
 
@@ -652,6 +662,7 @@ mod tests {
                 max_parallel: Some(4),
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -773,6 +784,7 @@ t1
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            effort: None,
         };
         std::fs::create_dir_all(job_dir(&cfg, &job.job_id)).unwrap();
         let ir = build_heuristic_ai_plan(&cfg, &job).expect("heuristic");
@@ -1202,6 +1214,7 @@ t1
                 max_parallel: Some(5),
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -1275,6 +1288,7 @@ t1
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -1318,6 +1332,7 @@ t1
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -1384,6 +1399,7 @@ t1
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -1459,6 +1475,7 @@ t1
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -1513,6 +1530,7 @@ t1
                 max_parallel: None,
                 preserve_from_job_id: Some(view.job_id.clone()),
                 grain_hint: None,
+                effort: None,
             },
         )
         .unwrap();

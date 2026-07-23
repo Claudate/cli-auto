@@ -36,13 +36,8 @@ export function ensureChatState() {
   if (state.planRailLoading == null) state.planRailLoading = false;
   if (!Array.isArray(state.planMetaItems)) state.planMetaItems = [];
   if (!state.planMetaByPath) state.planMetaByPath = {};
-  // 聊天右栏：仅 icon 展开，默认关（per-project）
-  if (state.planRailOpen == null) {
-    const key = state.selectedPath
-      ? `cco.planRailOpen:${state.selectedPath}`
-      : "cco.planRailOpen";
-    state.planRailOpen = localStorage.getItem(key) === "1";
-  }
+  // 聊天右栏已撤：始终关；列表走 page-plans
+  state.planRailOpen = false;
   if (state.planRailSelected == null) state.planRailSelected = null;
   // G1: default plans dir (project-relative), persisted per project — 仅聊天落盘
   if (state.plansDir == null) {
@@ -78,6 +73,10 @@ export function ensureChatState() {
   }
   // C3 streaming partial text while chat_send runs (poll only; falls back to wait label)
   if (state.chatStreamText == null) state.chatStreamText = "";
+  // Stream gate: ignore leftover stdout from previous turn (done without live growth).
+  if (state.chatStreamGen == null) state.chatStreamGen = 0;
+  if (state.chatStreamBytes == null) state.chatStreamBytes = 0;
+  if (state.chatStreamSeenLive == null) state.chatStreamSeenLive = false;
 }
 
 /** G0: short list title from markdown H1 (cut at ## / max 80 chars). */
@@ -152,7 +151,11 @@ export function restoreChatSession(path, sessionId) {
     draft_plan: c.draft_plan ? { ...c.draft_plan } : null,
     title: c.title || null,
   };
-  state.chatDraftPlan = c.draftPath || null;
+  // Only restore path when draft is actually saved; unsaved fence must not revive
+  // a stale draftPath from an older cache entry.
+  const d = state.chatSession.draft_plan;
+  state.chatDraftPlan =
+    d?.saved && d?.path ? d.path : c.draftPath && d?.saved ? c.draftPath : null;
   state.chatFake = !!c.fake;
   state.chatEnvNote = c.envNote || null;
   // Do not restore busy across project/session switches; only same-session page hops.
@@ -184,22 +187,13 @@ export function applyChatDraftFromSession(sess) {
     draft_plan: d,
     title: sess.title || null,
   };
-  if (d && d.saved && d.path) {
-    state.chatDraftPlan = d.path;
-  } else if (d && d.path && d.saved) {
+  // Server draft is source of truth for plan file identity.
+  // Unsaved draft (new fence after prior save) MUST clear chatDraftPlan so the
+  // card does not show「已保存：旧路径」and 拆成步骤 does not reuse that path.
+  if (d?.saved && d.path) {
     state.chatDraftPlan = d.path;
   } else {
-    // keep path if previously saved in this UI session
-    if (d?.path && d.saved) state.chatDraftPlan = d.path;
-    else if (!d?.saved) {
-      /* unsaved draft markdown only */
-      if (!state.chatDraftPlan) state.chatDraftPlan = null;
-    }
-  }
-  // Prefer server truth for saved path
-  if (d?.saved && d.path) state.chatDraftPlan = d.path;
-  else if (!d?.saved) {
-    // do not clear a previously saved path unless server says different project load
+    state.chatDraftPlan = null;
   }
 }
 

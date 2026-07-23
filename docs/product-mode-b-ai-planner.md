@@ -1,12 +1,13 @@
 # 产品模式 B：AI 规划拆分 → 定序 → 按图执行
 
-> 状态：**B0/B1 主线已落地**；B2 主项已落地；**B3 已闭环**（D1/D3）；可选编辑 **P2-1/P2-2 已落地**（t30：删任务/改依赖 · replan 保人工修改）  
+> **状态：规则有效 · 阶段勾选勿继承**  
+> 阶段勾选史：**B0/B1 主线已落地**；B2 主项已落地；**B3 已闭环**（D1/D3）；可选编辑 **P2-1/P2-2 已落地**（t30：删任务/改依赖 · replan 保人工修改）——**勿**当未做工作再开。  
 > 日期：2026-07-17（状态校正 2026-07-18；**D1 决议 · D3 边界 · D5 池 t15**）  
 > 决议：用户明确选择 **B**（真·AI 规划定序），不是 A（仅解析计划里已有任务图）  
-> 关联：[`desktop-ux-redesign-plan.md`](./archive/desktop-ux-redesign-plan.md)、[`claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md)、监视日志 → [`terminal-console-plan.md`](./archive/terminal-console-plan.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) §1.3 / §4 D5、执行闭环 → [`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md)（拆分·巡检·回补 · D5/P2-11；**不**改 confirm_start）  
+> 关联：[`desktop-ux-redesign-plan.md`](./archive/desktop-ux-redesign-plan.md)、[`claude-cli-orchestrator-plan.md`](./archive/claude-cli-orchestrator-plan.md)、监视日志 → [`terminal-console-plan.md`](./archive/terminal-console-plan.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) §1.3 / §4 D5、执行闭环 → [`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md)（拆分·巡检·回补 · D5/P2-11；**不**改 confirm_start）  
 > **勿再当缺口**：B0–B3 主线见总账 §1.3 / D3；B2 可选编辑 **P2-1/P2-2 已落地**（t30）
 
-[PROTOCOL]: 变更本文件时更新状态与阶段勾选；与 UX 计划冲突时以本文件的「主流程」与 §4 默认规则为准。
+[PROTOCOL]: 变更本文件时更新状态；**阶段勾选史勿继承**。与 UX 计划冲突时以本文件的「主流程」与 §4 默认规则为准。
 
 ---
 

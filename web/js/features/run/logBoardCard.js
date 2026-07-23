@@ -63,6 +63,7 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
     bucket = callG("taskBucket", t) || "wait";
   }
   const failed = bucket === "fail";
+  const stopped = bucket === "stop";
   const stalled = bucket === "stall";
   const title = t.title || t.task_id;
   const elapsed = callG("formatElapsed", t.started_at, t.finished_at) || "";
@@ -89,8 +90,10 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
   }
 
   card.className = `cli-window${failed ? " failed" : ""}${
-    stalled ? " stalled" : ""
-  }${t.task_id === S().selectedTaskId ? " selected" : ""}`;
+    stopped ? " stopped" : ""
+  }${stalled ? " stalled" : ""}${
+    t.task_id === S().selectedTaskId ? " selected" : ""
+  }`;
   if (usableFree) {
     card.classList.add("free");
     card.style.left = pos.x + "px";
@@ -118,6 +121,7 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
     t.route_label || "",
     sum || "",
     failed ? 1 : 0,
+    stopped ? 1 : 0,
     stalled ? 1 : 0,
     !isLiveStatus(S().live?.run_status) && S().live?.run_id ? 1 : 0,
     isLiveStatus(st) ? 1 : 0,
@@ -145,7 +149,17 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
     card.classList.toggle("is-log-collapsed", !expanded);
     const dotCls =
       callG("statusDot", st, t) ||
-      (failed ? "err" : stalled ? "warn" : bucket === "done" ? "ok" : bucket === "run" ? "live" : "");
+      (failed
+        ? "err"
+        : stopped
+          ? "muted"
+          : stalled
+            ? "warn"
+            : bucket === "done"
+              ? "ok"
+              : bucket === "run"
+                ? "live"
+                : "");
     card.innerHTML = `
       <div class="cli-window-head" data-drag="${esc(t.task_id)}">
         <div class="cli-window-title">
@@ -156,18 +170,23 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
               ? "ok"
               : bucket === "fail"
                 ? "err"
-                : bucket === "stall"
-                  ? "warn"
-                  : bucket === "run"
+                : bucket === "stop"
+                  ? "muted"
+                  : bucket === "stall"
                     ? "warn"
-                    : ""
+                    : bucket === "run"
+                      ? "warn"
+                      : ""
           }">${esc(five)}</span>
           <span class="cli-elapsed muted" data-elapsed="${esc(t.task_id)}">· ${esc(elapsed)}</span>
         </div>
         <div class="cli-window-actions">
           ${
-            !isLiveStatus(S().live?.run_status) && S().live?.run_id
-              ? `<button type="button" class="btn primary sm cli-rerun-btn" data-rerun="${esc(t.task_id)}" title="再跑一次">再跑一次</button>`
+            // 失败/中止/超时：只重跑该步；完成态不显示（不是重拆分）
+            !isLiveStatus(S().live?.run_status) &&
+            S().live?.run_id &&
+            (bucket === "fail" || bucket === "stop")
+              ? `<button type="button" class="btn primary sm cli-rerun-btn" data-rerun="${esc(t.task_id)}" title="再跑这一步">再跑一次</button>`
               : ""
           }
           <button type="button" class="btn ghost sm cli-log-toggle" data-log-toggle="${esc(t.task_id)}" title="展开或折叠详细日志">${
@@ -212,14 +231,19 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
                 ? "较久没有新进展，可点「详细日志」或停止后重试"
                 : bucket === "done"
                   ? "本步已完成"
-                  : bucket === "fail"
-                    ? "本步未完成"
-                    : "等待开始"
+                  : bucket === "stop"
+                    ? "本步已随全部停止取消"
+                    : bucket === "fail"
+                      ? "本步未完成"
+                      : "等待开始"
         );
         // P1-3: fail card shows App-composed 执行方式（指定/默认/故障切换…）
         // Never surface raw route_source enum on the main path.
         const routeLabel = String(t.route_label || "").trim();
-        if (routeLabel && (failed || bucket === "fail" || bucket === "stall")) {
+        if (
+          routeLabel &&
+          (failed || bucket === "fail" || bucket === "stop" || bucket === "stall")
+        ) {
           lines.push(`执行方式：${routeLabel}`);
         }
         if (elapsed && elapsed !== "—" && elapsed !== "-") {

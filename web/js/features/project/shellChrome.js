@@ -74,7 +74,8 @@ export function applyFlowModeBadge(rowId, badgeId, hintId, mode) {
 export function resolveFlowPhaseForStrip() {
   if (typeof hasActiveRun === "function" && hasActiveRun()) {
     const liveSt = String(state.live?.run_status || "").toLowerCase();
-    if (["failed", "aborted", "error"].includes(liveSt)) return "fail";
+    // aborted = user stop, not business fail — keep running→done path neutral
+    if (["failed", "error"].includes(liveSt)) return "fail";
     return "running";
   }
   if (state.phase === "planning") return "planning";
@@ -83,7 +84,9 @@ export function resolveFlowPhaseForStrip() {
   if (state.phase === "running") return "running";
   const liveSt = String(state.live?.run_status || "").toLowerCase();
   if (["completed", "done", "success"].includes(liveSt)) return "done";
-  if (["failed", "aborted", "error"].includes(liveSt)) return "fail";
+  // pure abort: treat as finished/done strip, not fail
+  if (["aborted", "stopped"].includes(liveSt)) return "done";
+  if (["failed", "error"].includes(liveSt)) return "fail";
   // 写计划：chat / plans / welcome / pick
   if (
     state.page === "chat" ||
@@ -248,13 +251,20 @@ export function setPlanCollapsed(collapsed) {
 export function updateSplitPlanChip() {
   const chip = $("#split-plan-chip");
   if (!chip) return;
+  // 执行/结果台顶栏收口：不在 workspace 跑/结果态显示 chip（红框撤）
+  // 仍可在 chat/plans 等非 workspace 页作回跳入口
   const inWorkspace = !!state.selectedPath && state.page === "workspace";
+  if (inWorkspace) {
+    chip.hidden = true;
+    updateBudgetChip();
+    return;
+  }
   const job = state.planJob;
   const st = String(job?.status || "").toLowerCase();
   // 已在拆分台时不显示 chip（标题/meta 已在页内；chip 只作他页回跳）
   const onConfirmDesk = state.phase === "confirm";
   const show =
-    inWorkspace &&
+    !!state.selectedPath &&
     !onConfirmDesk &&
     job &&
     (state.phase === "running" ||
@@ -284,11 +294,17 @@ export function updateSplitPlanChip() {
   updateBudgetChip();
 }
 
-/** P1-5: 顶栏「规划 $x · 执行 $y」简版 */
+/**
+ * 规划/执行金额：显示在「本轮结果」标题右侧 #result-cost-chip。
+ * 顶栏 #budget-chip 永久 hidden（保留 DOM 钩子）。
+ */
 export function updateBudgetChip() {
-  const chip = $("#budget-chip");
-  const text = $("#budget-chip-text");
-  if (!chip || !text) return;
+  const topChip = $("#budget-chip");
+  if (topChip) topChip.hidden = true;
+
+  const costEl = $("#result-cost-chip");
+  if (!costEl) return;
+
   const inWorkspace = !!state.selectedPath && state.page === "workspace";
   const live = state.live;
   const job = state.planJob;
@@ -312,16 +328,21 @@ export function updateBudgetChip() {
         : null;
   const hasPlan = planCost != null && !Number.isNaN(planCost);
   const hasExec =
-    execCost != null && !Number.isNaN(execCost) && (execCost > 0 || (live?.tasks || []).some((t) => t.cost_usd != null));
+    execCost != null &&
+    !Number.isNaN(execCost) &&
+    (execCost > 0 || (live?.tasks || []).some((t) => t.cost_usd != null));
   const show = inWorkspace && (hasPlan || hasExec);
-  chip.hidden = !show;
-  if (!show) return;
+  costEl.hidden = !show;
+  if (!show) {
+    costEl.textContent = "—";
+    return;
+  }
   const fmt = (n) => `$${Number(n).toFixed(2)}`;
   const bits = [];
   bits.push(`规划 ${hasPlan ? fmt(planCost) : "—"}`);
   bits.push(`执行 ${hasExec ? fmt(execCost) : "—"}`);
-  text.textContent = bits.join(" · ");
-  chip.title = "规划成本（AI 拆分）与执行成本（worker）分栏";
+  costEl.textContent = bits.join(" · ");
+  costEl.title = "规划成本（AI 拆分）与执行成本（worker）分栏";
 }
 
 export function updateTopPlanInfo() {
@@ -329,21 +350,38 @@ export function updateTopPlanInfo() {
   const title = $("#page-title");
   const sub = $("#page-sub");
   const proj = (state.projects || []).find((p) => p.path === state.selectedPath);
-  // 打开拆分会话时以 job 计划为准，勿被项目历史 live.plan_path 顶替
+  // Open split/planning: job path wins so toast「chat-*.md」and top bar never diverge
+  // (selectedPlan may still hold a prior plan until analyze binds the new one).
   const jobPlan = state.planJob?.plan_path || state.planJob?.planPath || null;
+  const st = String(state.planJob?.status || state.phase || "").toLowerCase();
+  const openSplit =
+    !!state.planJobId ||
+    st === "planning" ||
+    st === "planned" ||
+    st === "confirm" ||
+    st === "confirmed" ||
+    state.phase === "planning" ||
+    state.phase === "confirm" ||
+    state.phase === "plan_failed";
   const allowLivePlan =
     !state.planJobId ||
     (typeof host.liveBelongsToOpenPlan === "function"
       ? host.liveBelongsToOpenPlan()
       : true);
-  let plan =
-    state.selectedPlan ||
-    normalizePlanPath(jobPlan) ||
-    (allowLivePlan ? normalizePlanPath(state.live?.plan_path) : null) ||
-    normalizePlanPath(proj?.default_plan) ||
-    normalizePlanPath(proj?.last_plan) ||
-    null;
-  if (plan && !state.selectedPlan) state.selectedPlan = plan;
+  let plan = openSplit
+    ? normalizePlanPath(jobPlan) ||
+      state.selectedPlan ||
+      (allowLivePlan ? normalizePlanPath(state.live?.plan_path) : null) ||
+      null
+    : state.selectedPlan ||
+      normalizePlanPath(jobPlan) ||
+      (allowLivePlan ? normalizePlanPath(state.live?.plan_path) : null) ||
+      normalizePlanPath(proj?.default_plan) ||
+      normalizePlanPath(proj?.last_plan) ||
+      null;
+  // Never silently re-bind selectedPlan from live/default while a split is open —
+  // that re-poisoned pilotdeck over a new chat plan.
+  if (plan && !state.selectedPlan && !openSplit) state.selectedPlan = plan;
 
   if (state.page === "workspace" && state.selectedPath) {
     const name =

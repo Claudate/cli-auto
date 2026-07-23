@@ -72,19 +72,47 @@ export function isPlanUnderProject(planPath, projectRoot = state.selectedPath) {
  * chooser 与 plan-rail 共用；数据源 = list_plan_meta（非 mtime）
  * ══════════════════════════════════════════════ */
 
-/** Badge from PlanMeta: 已执行 / 失败过 / 未执行 */
+/** Badge from PlanMeta: 已执行 / 已拆分 / 失败过 / 未执行 */
 export function planExecBadgeInfo(item) {
   if (!item) return { label: "未执行", cls: "plan-rail-badge-pending", kind: "pending" };
   if (item.ever_completed || item.everCompleted) {
     return { label: "已执行", cls: "plan-rail-badge-done", kind: "done" };
   }
   const st = String(item.last_run_status || item.lastRunStatus || "").toLowerCase();
-  if (st && ["failed", "aborted", "timeout", "stopped"].includes(st)) {
+  // user stop / abort is not a business failure
+  if (st && ["aborted", "stopped", "cancelled", "canceled"].includes(st)) {
+    return { label: "已中止", cls: "plan-rail-badge-pending", kind: "stopped" };
+  }
+  if (st && ["failed", "timeout"].includes(st)) {
     return { label: "失败过", cls: "plan-rail-badge-failed", kind: "failed" };
   }
-  if (st && st !== "completed" && st !== "done" && st !== "") {
+  if (st && st !== "completed" && st !== "done" && st !== "" && st !== "paused") {
     // had a non-success terminal/partial run
     return { label: "失败过", cls: "plan-rail-badge-failed", kind: "failed" };
+  }
+  // Split index (SQLite plan_jobs) — restorable without having executed
+  const path = item.path || item.plan_path || item.planPath || "";
+  const split =
+    item.split_status ||
+    item.splitStatus ||
+    (typeof host.planSplitForPath === "function"
+      ? host.planSplitForPath(path)
+      : (state.planSplitByPath &&
+          (state.planSplitByPath[path] ||
+            state.planSplitByPath[
+              typeof normalizePlanPath === "function"
+                ? normalizePlanPath(path, state.selectedPath) || path
+                : path
+            ]))) ||
+    null;
+  if (split) {
+    const ss = String(split.status || item.split_status || "").toLowerCase();
+    if (ss === "planning") {
+      return { label: "拆分中", cls: "plan-rail-badge-planning", kind: "split" };
+    }
+    if (ss === "planned" || ss === "confirmed" || ss === "ready" || !ss) {
+      return { label: "已拆分", cls: "plan-rail-badge-split", kind: "split" };
+    }
   }
   return { label: "未执行", cls: "plan-rail-badge-pending", kind: "pending" };
 }
@@ -166,7 +194,7 @@ export function syncShowExecutedToggles() {
   const on = !!state.showExecutedPlans;
   for (const id of [
     "chooser-show-executed",
-    "plan-rail-show-executed",
+    // plan-rail-show-executed 已随聊天右栏撤掉
     "plans-mgmt-show-executed",
   ]) {
     const el = document.getElementById(id);
@@ -201,6 +229,7 @@ export async function loadPlansForPicker() {
     state.plans = [];
     state.planMetaItems = [];
     state.planMetaByPath = {};
+    state.planSplitByPath = {};
     state.plansLoading = false;
     if (state.planChooserOpen) host.renderPlanChooser();
     host.updateChooserAssignState();
@@ -210,6 +239,12 @@ export async function loadPlansForPicker() {
   if (state.planChooserOpen) host.renderPlanChooser();
   try {
     const root = state.selectedPath;
+    // Parallel: run meta + SQLite split index (plan list reopen / 已拆分 badge)
+    try {
+      if (typeof host.loadPlanSplitIndex === "function") {
+        await host.loadPlanSplitIndex(root);
+      }
+    } catch (_) {}
     // H2: prefer list_plan_meta (path + ever_completed / last_run_*); fall back to paths
     let list = [];
     let metas = null;

@@ -120,9 +120,8 @@ impl CodexProvider {
     }
 
     fn apply_env(cmd: &mut Command, ctx: &StartCtx) {
-        for (k, v) in &ctx.env_extra {
-            cmd.env(k, v);
-        }
+        // GUI/.app PATH often lacks node; codex shebang needs Homebrew bins.
+        super::apply_worker_process_env(cmd, &ctx.env_extra);
     }
 
     async fn start_exec(
@@ -192,6 +191,7 @@ impl CodexProvider {
             let result = stream_child(child, timeout, &stdout_path_c, &stderr_path_c).await;
             match result {
                 Ok(code) => {
+                    let code = super::finalize_stream_exit(&done_flag, code);
                     let meta = serde_json::json!({
                         "provider": "codex",
                         "mode": "print",
@@ -213,17 +213,18 @@ impl CodexProvider {
                     {
                         let _ = writeln!(f, "{e:#}");
                     }
+                    let code = super::finalize_stream_exit(&done_flag, -1);
                     let meta = serde_json::json!({
                         "provider": "codex",
                         "error": format!("{e:#}"),
-                        "exit_code": -1,
+                        "exit_code": code,
                         "mode": "print",
                     });
                     let _ = std::fs::write(
                         &meta_path_c,
                         serde_json::to_string_pretty(&meta).unwrap_or_default(),
                     );
-                    let _ = std::fs::write(&done_flag, "-1");
+                    let _ = std::fs::write(&done_flag, format!("{code}"));
                 }
             }
         });
@@ -266,8 +267,11 @@ impl WorkerProvider for CodexProvider {
             )
         })?;
         // Best-effort version probe; do not fail hard on unknown flags.
+        // Inject GUI-safe PATH so `#!/usr/bin/env node` shebang resolves.
+        let path_env = super::worker_path_env();
         let out = Command::new(&path)
             .arg("--version")
+            .env("PATH", &path_env)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
@@ -279,6 +283,7 @@ impl WorkerProvider for CodexProvider {
                 // Some builds use `codex version`
                 let out2 = Command::new(&path)
                     .arg("version")
+                    .env("PATH", &path_env)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
                     .output()
@@ -328,12 +333,7 @@ impl WorkerProvider for CodexProvider {
                 .ok()
                 .and_then(|s| s.trim().parse::<i32>().ok())
                 .unwrap_or(-1);
-            return Ok(match code {
-                0 => WorkerStatus::Done,
-                124 => WorkerStatus::Timeout,
-                130 => WorkerStatus::Stopped,
-                _ => WorkerStatus::Failed,
-            });
+            return Ok(super::worker_status_from_exit(code));
         }
         if let Some(pid) = handle.pid {
             if process_alive(pid) {
@@ -401,17 +401,16 @@ impl WorkerProvider for CodexProvider {
         let meta: serde_json::Value =
             serde_json::from_str(&meta_text).unwrap_or(serde_json::json!({}));
 
-        let exit_code = meta
+        let meta_code = meta
             .get("exit_code")
             .and_then(|v| v.as_i64())
-            .map(|n| n as i32)
-            .or_else(|| {
-                handle
-                    .stdout_path
-                    .parent()
-                    .and_then(|p| std::fs::read_to_string(p.join(".done")).ok())
-                    .and_then(|s| s.trim().parse().ok())
-            });
+            .map(|n| n as i32);
+        let done_code = handle
+            .stdout_path
+            .parent()
+            .and_then(|p| std::fs::read_to_string(p.join(".done")).ok())
+            .and_then(|s| s.trim().parse().ok());
+        let exit_code = super::resolve_exit_code(meta_code, done_code);
 
         // Reuse lenient JSON finder; works for codex --json last object too.
         let parsed = parse_claude_result_json(&stdout).ok();
@@ -426,12 +425,8 @@ impl WorkerProvider for CodexProvider {
             .map(|s| s.to_string());
 
         let status = match exit_code {
-            Some(0) => TaskStatus::Done,
-            Some(124) => TaskStatus::Timeout,
-            Some(130) => TaskStatus::Stopped,
-            Some(_) => TaskStatus::Failed,
             None if ensure_done_marker(&stdout) => TaskStatus::Done,
-            None => TaskStatus::Failed,
+            other => super::task_status_from_exit(other),
         };
 
         let error = if status == TaskStatus::Failed {

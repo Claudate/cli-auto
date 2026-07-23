@@ -1,11 +1,11 @@
 /**
  * [INPUT]: ResultViewModel · live/tasks · 既有 #result-desk DOM
- * [OUTPUT]: 结果摘要 + inspect 人话 + live 费用句 + 回补/接受 CTA 可见性
+ * [OUTPUT]: 结果摘要 + inspect 人话；结果台 CTA 仅「结束」
  * [POS]: A4-3/A4-4 · P0-1/P0-4/P1-3/P2-1 ResultView；禁止 invoke / 解析 VERDICT 正文
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
- * P0-4: 对照计划用语经 inspectCopy（与 report fallback 同词）；费用仍用
- * resultSummary 本地拼句（未下沉 Rust — 规则简单、无第二套格式）。
+ * P0-4: 对照计划用语经 inspectCopy（与 report fallback 同词）。
+ * 费用展示在标题右侧 #result-cost-chip（shellChrome.updateBudgetChip）。
  * P1-3: miss 行展示 live.route_label（App 拼好人话）；主路径不露 raw route_source enum。
  * P2-1: live.verification → 可折叠「原计划要验收」副栏（巡检为准 / 未自动对照）。
  * 第一屏标题固定「本轮结果」，不写 run_id。
@@ -14,9 +14,7 @@
 import {
   inspectStripParts,
   honestInspectCopy,
-  inspectActionVisibility,
 } from "./inspectCopy.js";
-import { formatLiveCostPhrase } from "./resultSummary.js";
 import {
   taskBucket,
   fiveStateLabel,
@@ -109,8 +107,11 @@ export function bindResultView(vm, bridge = {}) {
    */
   function renderInspectLoopStrip(live, finished, active) {
     const strip = $("inspect-loop-strip");
+    // 结果台 CTA 收口：继续/回补/先这样结束 不再露出；仅「结束」
     const btnRework = $("btn-ws-rework");
     const btnAccept = $("btn-ws-accept-residual");
+    if (btnRework) btnRework.hidden = true;
+    if (btnAccept) btnAccept.hidden = true;
     const loop = live?.inspect_loop;
     if (!strip) return;
 
@@ -118,8 +119,6 @@ export function bindResultView(vm, bridge = {}) {
     if (parts.kind === "empty" || !parts.bits.length) {
       strip.hidden = true;
       strip.textContent = "";
-      if (btnRework) btnRework.hidden = true;
-      if (btnAccept) btnAccept.hidden = true;
       return;
     }
 
@@ -127,13 +126,8 @@ export function bindResultView(vm, bridge = {}) {
     strip.textContent = parts.bits.join(" · ");
     strip.classList.toggle("bad", parts.kind === "bad");
     strip.classList.toggle("ok", parts.kind === "ok");
-
-    const vis = inspectActionVisibility(loop, {
-      finished: !!finished,
-      active: !!active,
-    });
-    if (btnRework) btnRework.hidden = !vis.canRework;
-    if (btnAccept) btnAccept.hidden = !vis.showAccept;
+    void finished;
+    void active;
   }
 
   /**
@@ -172,7 +166,7 @@ export function bindResultView(vm, bridge = {}) {
 
     if (planLine) {
       const name = planLabel(live);
-      // First bits stay completion ratio / elapsed; cost is a trailing phrase only.
+      // 费用已挪到标题右侧 #result-cost-chip；计划行只留完成度/耗时
       const bits = [`《${name}》`];
       if (tasks && tasks.length) bits.push(`共 ${tasks.length} 步`);
       bits.push(`完成 ${done.length}`);
@@ -186,8 +180,6 @@ export function bindResultView(vm, bridge = {}) {
         const el = formatElapsed(live.started_at, runEnd || null);
         if (el) bits.push(el);
       }
-      // P0-1: always append human cost (or 「费用未汇总」); never fake $0.00.
-      bits.push(formatLiveCostPhrase(live));
       planLine.textContent = bits.join(" · ");
     }
 
@@ -253,35 +245,16 @@ export function bindResultView(vm, bridge = {}) {
     // P2-1: plan checklist vs inspect side-by-side (live.verification DTO)
     renderVerificationPanel(live?.verification);
 
-    // C3: decision tree — miss → rework/accept; clean → 完成并回写计划 + 再写一份
-    const hasMiss =
-      miss.length > 0 ||
-      (loop &&
-        (loop.can_rework ||
-          loop.blocking_count > 0 ||
-          String(loop.verdict || "").toUpperCase() === "FAIL" ||
-          loop.residual_count > 0));
+    // C3 收口：结果台仅「结束」；回补/再写/先这样结束 已撤
     const btnBack = $("btn-ws-back-chat");
     if (finishBtn) {
-      if (hasMiss && loop?.can_rework) {
-        // accept residual is the soft exit; avoid three similar CTAs
-        finishBtn.hidden = true;
-      } else if (hasMiss) {
-        finishBtn.hidden = false;
-        finishBtn.textContent = "先这样结束";
-        finishBtn.classList.remove("primary");
-        finishBtn.classList.add("ghost");
-      } else {
-        finishBtn.hidden = false;
-        finishBtn.textContent = "完成并回写计划";
-        finishBtn.classList.add("primary");
-        finishBtn.classList.remove("ghost");
-      }
+      finishBtn.hidden = false;
+      finishBtn.textContent = "结束";
+      finishBtn.title = "结束本轮";
+      finishBtn.classList.add("primary");
+      finishBtn.classList.remove("ghost");
     }
-    if (btnBack) {
-      btnBack.hidden = false;
-      btnBack.textContent = "再写一份";
-    }
+    if (btnBack) btnBack.hidden = true;
 
     const heading = $("task-dash-heading");
     if (heading) heading.textContent = "本轮结果";

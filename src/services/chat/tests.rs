@@ -71,7 +71,7 @@ fn chat_list_new_delete_sessions_roundtrip() {
 
     // Seed default with a user msg so list preview works
     let cfg = fake_cfg();
-    let _ = chat_send(&cfg, &project, "默认会话第一条", Some("default"), None).unwrap();
+    let _ = chat_send(&cfg, &project, "默认会话第一条", Some("default"), None, None).unwrap();
 
     let list = chat_list_sessions(&project).unwrap();
     assert!(list.len() >= 2, "got {list:?}");
@@ -191,6 +191,7 @@ fn chat_save_attachment_png_roundtrip() {
         "看这张图优化登录",
         None,
         Some(vec![att.clone()]),
+        None,
     )
     .unwrap();
     assert!(r.fake);
@@ -237,7 +238,7 @@ fn fake_send_persists_messages() {
     let project = dir.path().join("app");
     std::fs::create_dir_all(&project).unwrap();
     let cfg = fake_cfg();
-    let r = chat_send(&cfg, &project, "帮我写个登录页计划", None, None).unwrap();
+    let r = chat_send(&cfg, &project, "帮我写个登录页计划", None, None, None).unwrap();
     assert!(r.fake);
     assert!(!r.reply.is_empty());
     assert!(r.messages.len() >= 2);
@@ -249,6 +250,132 @@ fn fake_send_persists_messages() {
     assert!(r.env_note.is_none(), "forced fake has no env_note");
     // 联调路径仍产出 fence
     assert!(r.reply.contains("```plan"), "got: {}", r.reply);
+    // Fresh fence is never "already saved" to a plan path.
+    let d = r.draft_plan.as_ref().unwrap();
+    assert!(!d.saved, "new fence must be unsaved");
+    assert!(d.path.is_empty(), "new fence must not bind a plan path");
+}
+
+/// Regression: after saving plan A, a later ```plan fence must drop path/saved
+/// so save creates a new file instead of overwriting A (pilotdeck-style bug).
+#[test]
+fn new_fence_clears_saved_plan_path() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("proj");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+
+    let saved = chat_save_plan(
+        &project,
+        Some("default"),
+        Some("旧计划 PilotDeck"),
+        "# 旧计划 PilotDeck\n\n## 目标\n历史落地\n",
+        Some("docs/pilotdeck-borrow-landing-2026-07-21.md"),
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        saved.plan_rel,
+        "docs/pilotdeck-borrow-landing-2026-07-21.md"
+    );
+    let sess = chat_session_get(&project, Some("default")).unwrap();
+    let d0 = sess.draft_plan.as_ref().unwrap();
+    assert!(d0.saved);
+    assert_eq!(d0.path, saved.plan_rel);
+
+    let r = chat_send(&cfg, &project, "另起一份 Markdown 清理计划", None, None, None).unwrap();
+    let d = r
+        .draft_plan
+        .as_ref()
+        .expect("fake send yields ```plan draft");
+    assert!(
+        d.markdown.as_ref().map(|m| !m.is_empty()).unwrap_or(false),
+        "draft has markdown"
+    );
+    assert!(
+        !d.saved,
+        "new fence must clear saved; got saved={}",
+        d.saved
+    );
+    assert!(
+        d.path.is_empty(),
+        "new fence must clear path (was {}); got {}",
+        saved.plan_rel,
+        d.path
+    );
+
+    // Disk identity of the old plan must be untouched by chat_send.
+    let old_disk = read_plan_md(&project, &saved.plan_rel).unwrap();
+    assert!(
+        old_disk.contains("旧计划") || old_disk.contains("历史落地"),
+        "old plan body must remain; got:\n{old_disk}"
+    );
+
+    // Saving without plan_rel creates a *new* chat-*.md, not pilotdeck.
+    let md = d.markdown.as_ref().unwrap();
+    let resp2 = chat_save_plan(&project, Some("default"), None, md, None, None).unwrap();
+    assert!(
+        resp2.plan_rel.starts_with("plans/chat-"),
+        "expected new chat-*.md, got {}",
+        resp2.plan_rel
+    );
+    assert_ne!(resp2.plan_rel, saved.plan_rel);
+    let still = read_plan_md(&project, &saved.plan_rel).unwrap();
+    assert!(
+        still.contains("旧计划") || still.contains("历史落地"),
+        "old plan still intact after new save"
+    );
+}
+
+/// Polluted session (old build kept path/saved while markdown diverged) must heal on load.
+#[test]
+fn session_get_heals_stale_draft_path() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("proj");
+    std::fs::create_dir_all(project.join("docs")).unwrap();
+    let plan_rel = "docs/pilotdeck-borrow-landing-2026-07-21.md";
+    let abs = project.join(plan_rel);
+    std::fs::write(&abs, "# PilotDeck 真源\n\n## 目标\n历史落地\n").unwrap();
+
+    // Write a dirty session JSON like the pre-fix desktop bug.
+    // Use r## so markdown H1 `"# title` does not terminate the raw string.
+    let chat = project.join(".cco").join("chat");
+    std::fs::create_dir_all(&chat).unwrap();
+    let sess_json = format!(
+        r##"{{
+  "session_id": "default",
+  "project": "{proj}",
+  "messages": [],
+  "draft_plan": {{
+    "path": "{plan}",
+    "title": "仓库 Markdown 清理",
+    "markdown": "# 仓库 Markdown 清理\n\n## 目标\n删误放\n",
+    "saved": true
+  }},
+  "updated_at": "2026-07-22T08:00:00+00:00"
+}}"##,
+        proj = project.display(),
+        plan = plan_rel
+    );
+    std::fs::write(chat.join("default.json"), sess_json).unwrap();
+
+    let sess = chat_session_get(&project, Some("default")).unwrap();
+    let d = sess.draft_plan.as_ref().expect("draft");
+    assert!(!d.saved, "stale binding must clear saved");
+    assert!(d.path.is_empty(), "stale binding must clear path, got {}", d.path);
+    assert!(
+        d.markdown.as_ref().unwrap().contains("Markdown 清理"),
+        "markdown body kept"
+    );
+    // Disk plan file untouched.
+    let disk = std::fs::read_to_string(&abs).unwrap();
+    assert!(disk.contains("PilotDeck"));
+
+    // Healed session persisted.
+    let again = chat_session_get(&project, Some("default")).unwrap();
+    let d2 = again.draft_plan.as_ref().unwrap();
+    assert!(!d2.saved);
+    assert!(d2.path.is_empty());
 }
 
 #[test]

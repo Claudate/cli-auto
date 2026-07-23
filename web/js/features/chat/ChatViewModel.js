@@ -91,6 +91,7 @@ export function createChatViewModel(opts = {}) {
           message: text || "（见附件）",
           sessionId: input.sessionId || "default",
           attachments: input.attachments ?? null,
+          effort: input.effort || null,
         });
         store.set({ ...store.get(), busy: false, lastSendError: null });
         return resp;

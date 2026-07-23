@@ -126,6 +126,10 @@ export function createProjectDesk(opts = {}) {
     syncShowExecutedToggles: host.syncShowExecutedToggles,
     syncSplitMaxParallelInputs: host.syncSplitMaxParallelInputs,
     tryRestorePersistedPlanJob: host.tryRestorePersistedPlanJob,
+    tryRestorePlanJobForPlan: host.tryRestorePlanJobForPlan,
+    loadPlanSplitIndex: host.loadPlanSplitIndex,
+    planSplitForPath: host.planSplitForPath,
+    planPathLookupKey: host.planPathLookupKey,
     updateBgPlanBanner: host.updateBgPlanBanner,
     updateBudgetChip: host.updateBudgetChip,
     updateChooserAssignState: host.updateChooserAssignState,
@@ -218,6 +222,10 @@ export function installProjectHostGlobals(opts = {}) {
   window.syncShowExecutedToggles = host.syncShowExecutedToggles;
   window.syncSplitMaxParallelInputs = host.syncSplitMaxParallelInputs;
   window.tryRestorePersistedPlanJob = host.tryRestorePersistedPlanJob;
+  window.tryRestorePlanJobForPlan = host.tryRestorePlanJobForPlan;
+  window.loadPlanSplitIndex = host.loadPlanSplitIndex;
+  window.planSplitForPath = host.planSplitForPath;
+  window.planPathLookupKey = host.planPathLookupKey;
   window.updateBgPlanBanner = host.updateBgPlanBanner;
   window.updateBudgetChip = host.updateBudgetChip;
   window.updateChooserAssignState = host.updateChooserAssignState;

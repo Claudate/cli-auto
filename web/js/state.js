@@ -110,6 +110,11 @@ const state = {
   /** H2: plan meta (ever_completed / last_run_*) for chooser + plan-rail */
   planMetaItems: [],
   planMetaByPath: {},
+  /**
+   * Plan-list reopen index: plan_path → { job_id, status, task_count, plan_name, updated_at }
+   * Source: SQLite plan_jobs dual-write via list_plan_split_index_cmd.
+   */
+  planSplitByPath: {},
   /** H2: 默认隐藏已成功执行；开关「显示已执行」可展开（chooser/右轨共用） */
   showExecutedPlans: localStorage.getItem("cco.showExecutedPlans") === "1",
   planPollFails: 0,

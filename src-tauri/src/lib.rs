@@ -15,7 +15,7 @@
 //! | confirm_start_cmd | app::split::confirm |
 //! | start_plan_job_cmd / get_plan_job_cmd / latest_plan_job_cmd | app::split::* |
 //! | update/remove/sanitize plan task | app::split::* |
-//! | stop_run_cmd / resume_run_cmd / rework / residual | app::run::* |
+//! | stop_run_cmd / resume_run_cmd / retry_task_cmd / rework / residual | app::run::* |
 //! | get_runs / get_run / plan meta / preview | app::run::* |
 //! | start_run (legacy ParseOnly) | app::run::start_from_request |
 //! | chat_* / read_plan_md | app::chat::* |
@@ -273,6 +273,32 @@ fn latest_plan_job_cmd(
     split_uc::latest_job_for_project(&config, PathBuf::from(project).as_path()).map_err(map_err)
 }
 
+/// Plan-list reopen: latest restorable split for a plan **path** (SQLite index + disk).
+#[tauri::command]
+fn latest_plan_job_for_plan_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    #[allow(non_snake_case)] planPath: String,
+) -> Result<Option<PlanJobView>, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    split_uc::latest_job_for_plan_path(
+        &config,
+        PathBuf::from(project).as_path(),
+        planPath.trim(),
+    )
+    .map_err(map_err)
+}
+
+/// Plan list badge: which plan_paths already have a restorable split.
+#[tauri::command]
+fn list_plan_split_index_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<Vec<cco::state::sqlite::PlanSplitIndexRow>, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    split_uc::list_plan_split_index(&config, PathBuf::from(project).as_path()).map_err(map_err)
+}
+
 #[tauri::command]
 fn update_plan_task_cmd(
     state: tauri::State<'_, AppState>,
@@ -324,10 +350,12 @@ fn sanitize_plan_deps_cmd(
 }
 
 /// **Sole Mode B business open-run** — app::split::confirm (A0-R1).
+/// `effort`: optional execute-time pick from split desk (low…max|ultracode).
 #[tauri::command]
 fn confirm_start_cmd(
     state: tauri::State<'_, AppState>,
     #[allow(non_snake_case)] jobId: String,
+    effort: Option<String>,
 ) -> Result<Value, String> {
     let mut config = state.config.lock().map_err(|e| e.to_string())?;
     let cfg_for_job = config.clone();
@@ -341,7 +369,8 @@ fn confirm_start_cmd(
     }
     let cfg = config.clone();
     drop(config);
-    let run_id = split_uc::confirm(cfg, &jobId).map_err(map_err)?;
+    let run_id =
+        split_uc::confirm(cfg, &jobId, effort.as_deref()).map_err(map_err)?;
     Ok(json!({
         "run_id": run_id,
         "status": "started",
@@ -368,6 +397,23 @@ fn resume_run_cmd(
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
     run_uc::resume(config, &runId).map_err(map_err)?;
     Ok(json!({ "ok": true, "run_id": runId, "status": "resuming" }))
+}
+
+/// Manual re-run of one failed/stopped/timeout task (same run; not re-split).
+#[tauri::command]
+fn retry_task_cmd(
+    state: tauri::State<'_, AppState>,
+    #[allow(non_snake_case)] runId: String,
+    #[allow(non_snake_case)] taskId: String,
+) -> Result<Value, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?.clone();
+    run_uc::retry_task(config, &runId, &taskId).map_err(map_err)?;
+    Ok(json!({
+        "ok": true,
+        "run_id": runId,
+        "task_id": taskId,
+        "status": "retrying"
+    }))
 }
 
 #[tauri::command]
@@ -626,6 +672,8 @@ async fn chat_send_cmd(
     message: String,
     #[allow(non_snake_case)] sessionId: Option<String>,
     attachments: Option<Vec<ChatAttachment>>,
+    // Optional per-send: low|medium|high|xhigh|max|ultracode
+    effort: Option<String>,
 ) -> Result<ChatSendResponse, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
     tokio::task::spawn_blocking(move || {
@@ -635,6 +683,7 @@ async fn chat_send_cmd(
             &message,
             sessionId.as_deref(),
             attachments,
+            effort.as_deref(),
         )
         .map_err(map_err)
     })
@@ -764,12 +813,15 @@ pub fn run() {
             start_plan_job_cmd,
             get_plan_job_cmd,
             latest_plan_job_cmd,
+            latest_plan_job_for_plan_cmd,
+            list_plan_split_index_cmd,
             confirm_start_cmd,
             update_plan_task_cmd,
             remove_plan_task_cmd,
             sanitize_plan_deps_cmd,
             stop_run_cmd,
             resume_run_cmd,
+            retry_task_cmd,
             start_rework_cmd,
             accept_residual_cmd,
             writeback_memory_cmd,

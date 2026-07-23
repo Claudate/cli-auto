@@ -55,7 +55,7 @@ export const WORK_STYLES = {
   },
   semi: {
     label: "我会看一点实现，要对齐验收",
-    hint: "默认可读结果；需要时展开技术说明；更信计划里的先后",
+    hint: "默认可读结果；更信计划里的先后",
     planMode: "ai",
     maxParallelHint: 2,
     copyDensity: "dual",
@@ -65,7 +65,7 @@ export const WORK_STYLES = {
   },
   eng: {
     label: "我主要改代码 / 工程落地",
-    hint: "技术说明可含路径；可多步一起；高级仍默认折叠",
+    hint: "任务可含路径；可多步一起；高级仍默认折叠",
     planMode: "ai",
     maxParallelHint: 3,
     copyDensity: "tech_lean",

@@ -26,6 +26,7 @@
 //! |------------------|---------|
 //! | `stop` / `stop_run_cmd` / TUI `s` | [`stop`] / [`stop_task`] |
 //! | `resume` / `resume_run_cmd` | [`prepare_resume`] + [`prepare_scheduler`] / [`resume`] |
+//! | `retry_task_cmd`（卡片再跑一次） | [`retry_task`]（单任务，非 re-split） |
 //! | rework / residual | [`start_rework`] / [`accept_residual`] |
 //! | `get_runs` / `get_run` / `cco status` / TUI reload | [`list`] / [`load`] / [`load_by_dir`] / [`handoff_paths`] |
 //! | TUI Graph plan | [`load_resolved_plan`] |
@@ -42,7 +43,9 @@ mod route;
 pub use foreground::{
     finish_with_reports, preflight_plan, prepare_resume, prepare_scheduler, ForegroundOpts,
 };
-pub use materialize::{materialize_parse_only, materialize_run, materialize_run_with_route};
+pub use materialize::{
+    apply_effort, materialize_parse_only, materialize_run, materialize_run_with_route,
+};
 pub use provenance::{
     compose_route_label, provider_product_label, stamp_failover, stamp_route_fill,
     stamp_route_inferred,
@@ -61,9 +64,9 @@ use crate::plan::PlanIR;
 use crate::report;
 use crate::services::{
     accept_run_residual, list_plan_meta, list_plans, list_runs, load_run, preview_plan,
-    resume_run_async, start_rework_from_run, start_run_async, start_run_from_plan, stop_run,
-    stop_task as services_stop_task, PlanMeta, PlanPreview, ReworkStartResponse, RunSummary,
-    StartRunRequest,
+    resume_run_async, retry_task_async, start_rework_from_run, start_run_async, start_run_from_plan,
+    stop_run, stop_task as services_stop_task, PlanMeta, PlanPreview, ReworkStartResponse,
+    RunSummary, StartRunRequest,
 };
 use crate::state::{RunState, RunStatus};
 
@@ -113,6 +116,13 @@ pub fn stop_task(config: &Config, run_id: &str, task_id: Option<&str>) -> Result
 /// Resume a paused/aborted run in background (desktop) or via CLI scheduler loop.
 pub fn resume(config: Config, run_id: &str) -> Result<()> {
     resume_run_async(config, run_id)
+}
+
+/// Manual re-run of **one** failed/stopped/timeout task (same run dir).
+///
+/// Not a new Mode B open-run and not re-split. Done tasks stay Done.
+pub fn retry_task(config: Config, run_id: &str, task_id: &str) -> Result<()> {
+    retry_task_async(config, run_id, task_id)
 }
 
 /// List recent runs (newest first).

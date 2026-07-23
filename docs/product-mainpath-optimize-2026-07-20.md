@@ -1,7 +1,7 @@
 # cco 主路径大改计划（UI · 操作流 · 计划拆分优先）
 
-> 状态：**波次 1–5 ✅ 已闭环**（2026-07-20 · T1/T2/S14/S16/X1–X4）  
-
+> **状态：规则有效 · 阶段勾选勿继承**  
+> 阶段勾选史：**波次 1–5 ✅ 已闭环**（2026-07-20 · T1/T2/S14/S16/X1–X4）——**勿**当未做工作再开。  
 > 日期：2026-07-20  
 > 角色：**桌面主路径重构计划**——整页信息架构与五步操作流重做；**拆分是核心产品屏**，不是确认闪一下  
 > 范围：`web/` 为主 · 必要时薄改 `src/plan/planner` / `services`（拆分质量与确认 API）；**不**换 React/Vue；**不**旁路 `confirm_start`  
@@ -9,9 +9,27 @@
 > 总账：[`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) **P2-16 / P-product-light**（出池实施）  
 > Mode B 业务入口仍真源：[`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)（`confirm_start` 唯一开跑）  
 > 开源借鉴：§2.5（OpenHands / MetaGPT / CrewAI / AutoGen / Aider / planning-with-files / LangGraph 等**模式**，非拷代码）  
+> 体验全文（已归档，**不**继承其勾选）：[`archive/ux-nondev-mainpath-2026-07-21.md`](./archive/ux-nondev-mainpath-2026-07-21.md) · [`archive/ux-nondev-landing-2026-07-21.md`](./archive/ux-nondev-landing-2026-07-21.md) · [`archive/shell-chrome-simplify-2026-07-22.md`](./archive/shell-chrome-simplify-2026-07-22.md)  
 > GEB：[`/CLAUDE.md`](../CLAUDE.md) · [`./CLAUDE.md`](./CLAUDE.md)
 
-[PROTOCOL]: 阶段勾选以 **§6 任务表** 为准；落地后回写总账 P2-16 与 L1/L2；禁止把「大改」做成换框架或删五步能力。
+[PROTOCOL]: 阶段勾选史见 §6；**新工作不继承**本文 ☐/✅。落地规则以文首「仍有效产品规则」+ Mode B `confirm_start` 为准。禁止把「大改」做成换框架或删五步能力。
+
+---
+
+## 仍有效产品规则
+
+> 提炼自已归档体验文（ux-nondev-* / shell-chrome）；**全文 UX 只在** [`docs/archive/`](./archive/) · **不**再开第三份 UX 总计划。
+
+1. **唯一业务开跑**：只经 `confirm_start` / `split::confirm`；禁止 UI 旁路 `start_run`。  
+2. **拆分是核心屏**：`planned` / `confirmed` 待确认必须落拆分台，不得被聊天默认冲掉。  
+3. **拆分台第一屏只两键**：「重新规划」·「执行规划」；可并行 / 写回摘要等进高级或折叠。  
+4. **业务可选必人勾**：有 optional 时禁止 auto-start 跳过未勾选。  
+5. **主路径跳过执行选项层**：通道 / 并发 / 规划方式默认不挡「拆成步骤」；高级进设置。  
+6. **主表面 ≤4**：项目 · 写计划 · 拆分台 · 进度/结果；计划管理 / doctor / 日志调试台降权。  
+7. **概念预算**：主路径第一句人话，无 run_id / VERDICT / 引擎名；高级默认折叠。  
+8. **壳层减法**：顶栏无全局阶段条；聊天 / 计划管理 / 刷新为 icon + 悬停说明。  
+9. **能力保留不删**：replan · multi-provider · 写回摘要 · 监视窗等只藏不砍。  
+10. **硬边界**：不换 React/Vue · 不旁路 Mode B · 不重开第二套 Scheduler。
 
 ---
 

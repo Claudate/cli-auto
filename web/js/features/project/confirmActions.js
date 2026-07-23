@@ -231,8 +231,9 @@ export async function replanFromConfirm() {
         : "按当前计划重新规划…"
   );
   // Same entry as「开始拆分」— keeps chooser options (并发 / 通道)
+  // Pass explicit path so replan cannot pick up a stale selectedPlan.
   if (typeof host.analyzePlanFromPicker === "function") {
-    await host.analyzePlanFromPicker();
+    await host.analyzePlanFromPicker(state.selectedPlan);
   } else {
     host.openPlanChooser(true);
   }

@@ -16,6 +16,7 @@
 
 pub mod claude;
 pub mod codex;
+pub mod exit_status;
 pub mod fake;
 pub mod sdk;
 pub mod sdk_http;
@@ -23,6 +24,9 @@ pub mod sdk_tool_loop;
 
 // re-export parse helper for tests
 pub use claude::parse_agent_id;
+pub use exit_status::{
+    finalize_stream_exit, resolve_exit_code, task_status_from_exit, worker_status_from_exit,
+};
 pub use sdk::{InlineSdkBackend, SdkBackend, SdkProvider};
 pub use sdk_http::{AnthropicMessagesBackend, MessagesHttpClient, ReqwestMessagesClient};
 pub use sdk_tool_loop::{is_tools_bin, AnthropicToolLoopBackend};
@@ -199,6 +203,71 @@ pub fn resolve_bin_on_disk(name_or_path: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// PATH for worker children under GUI/.app (no login-shell PATH).
+///
+/// Codex is `#!/usr/bin/env node` — without Homebrew in PATH the child dies with
+/// `env: node: No such file or directory` (exit 127) even when `codex` itself was resolved.
+pub fn worker_path_env() -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let home = dirs::home_dir();
+    let extras = [
+        home.as_ref().map(|h| h.join(".local/bin")),
+        home.as_ref().map(|h| h.join(".claude/local/bin")),
+        home.as_ref().map(|h| h.join("bin")),
+        home.as_ref().map(|h| h.join(".cargo/bin")),
+        home.as_ref().map(|h| h.join(".bun/bin")),
+        Some(std::path::PathBuf::from("/opt/homebrew/bin")),
+        Some(std::path::PathBuf::from("/opt/homebrew/sbin")),
+        Some(std::path::PathBuf::from("/usr/local/bin")),
+        Some(std::path::PathBuf::from("/opt/local/bin")),
+    ];
+    for p in extras.into_iter().flatten() {
+        if p.is_dir() {
+            let s = p.display().to_string();
+            if !parts.iter().any(|x| x == &s) {
+                parts.push(s);
+            }
+        }
+    }
+    if let Ok(current) = std::env::var("PATH") {
+        for seg in current.split(':') {
+            if !seg.is_empty() && !parts.iter().any(|x| x == seg) {
+                parts.push(seg.to_string());
+            }
+        }
+    }
+    parts.join(":")
+}
+
+/// Apply GUI-safe PATH + caller's env_extra to a worker process command.
+pub fn apply_worker_process_env(
+    cmd: &mut tokio::process::Command,
+    env_extra: &[(String, String)],
+) {
+    cmd.env("PATH", worker_path_env());
+    for (k, v) in env_extra {
+        cmd.env(k, v);
+    }
+}
+
+#[cfg(test)]
+mod path_env_tests {
+    use super::*;
+
+    #[test]
+    fn worker_path_includes_homebrew_when_present() {
+        let path = worker_path_env();
+        // On CI without homebrew the string may still include inherited PATH; at least non-empty.
+        assert!(!path.is_empty());
+        if std::path::Path::new("/opt/homebrew/bin").is_dir() {
+            assert!(
+                path.split(':').any(|s| s == "/opt/homebrew/bin"),
+                "expected /opt/homebrew/bin in {path}"
+            );
+        }
+    }
 }
 
 pub fn ensure_done_marker(stdout: &str) -> bool {

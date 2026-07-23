@@ -58,11 +58,14 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
 
 pub(crate) fn default_provider_opts(config: &Config, provider: &str) -> serde_json::Value {
     if provider == "claude" || provider == "fake" {
+        let effort = crate::config::normalize_effort(&config.default.effort)
+            .unwrap_or_else(|| "high".into());
         serde_json::json!({
             "max_turns": config.default.max_turns,
             "max_budget_usd": config.default.max_budget_usd,
             "permission_mode": config.default.permission_mode,
             "allowed_tools": config.default.allowed_tools,
+            "effort": effort,
         })
     } else {
         serde_json::json!({})

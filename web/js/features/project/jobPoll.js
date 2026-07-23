@@ -64,13 +64,20 @@ function humanPlanFail(raw) {
   if (/未返回任何任务|找不到.*JSON|empty/i.test(s)) {
     return "智能拆分没有产出可用步骤。请再拆一次，或改用本地规则拆分。";
   }
+  if (/保留上次成功的拆分|refuse heuristic cover|未用本地残图覆盖|没有可展示的完整拆分|不展示、不覆盖/i.test(s)) {
+    return "智能拆分未完整完成：只展示成功结果，残图不显示、不覆盖。可再拆一次，或显式改用本地规则。";
+  }
   // Keep short; full text still in pp-error / planning-fail-detail
   return s.length > 160 ? s.slice(0, 158) + "…" : s;
 }
 
 /** Mode B: analyze plan → plan job (does NOT start workers). */
-/** 拆成步骤：AI 拆分后进入拆分台（可编辑）；入口文案统一为「拆成步骤」 */
-export async function analyzePlanFromPicker() {
+/** 拆成步骤：AI 拆分后进入拆分台（可编辑）；入口文案统一为「拆成步骤」
+ *  @param {string} [planPathArg]  显式计划路径（聊天/执行入口必传）。
+ *    禁止只信 state.selectedPlan：旧 confirm/planning 会话可能仍绑着上一份计划，
+ *    而 toast 已显示新 path → 顶栏/job 与 toast 分裂（pilotdeck vs chat-*.md）。
+ */
+export async function analyzePlanFromPicker(planPathArg) {
   const err = $("#pp-error");
   if (err) err.hidden = true;
   if (state.assigning) return;
@@ -78,15 +85,29 @@ export async function analyzePlanFromPicker() {
     toastRunLocked("拆成步骤");
     return;
   }
-  if (!state.selectedPlan) {
-    host.openPlanChooser(true);
-    toast("请先选择计划");
-    return;
-  }
   if (!state.selectedPath) {
     toast("请先选择项目");
     return;
   }
+  // Single identity for this split: arg > selectedPlan > chatDraftPlan.
+  const rawPlan =
+    (typeof planPathArg === "string" && planPathArg.trim()) ||
+    state.selectedPlan ||
+    state.chatDraftPlan ||
+    state.planRailSelected ||
+    null;
+  const plan =
+    (typeof normalizePlanPath === "function"
+      ? normalizePlanPath(rawPlan, state.selectedPath)
+      : null) || rawPlan;
+  if (!plan) {
+    host.openPlanChooser(true);
+    toast("请先选择计划");
+    return;
+  }
+  // Bind before any async work so top bar / job / toast cannot diverge mid-flight.
+  state.selectedPlan = plan;
+  state.chatDraftPlan = plan;
 
   // Product default: AI split (ModelSplitAgent). Fast/heuristic is opt-in only —
   // defaulting to fast made "拆成步骤" feel fake (instant title scrape, no model).
@@ -108,6 +129,33 @@ export async function analyzePlanFromPicker() {
   }
   const provider = $("#pp-provider")?.value || "claude";
   const mode = $("#pp-mode")?.value || "print";
+  // Prefer confirm-screen depth (#split-effort), then chooser (#pp-effort), else config seed.
+  const EFFORT_OK = ["low", "medium", "high", "xhigh", "max", "ultracode"];
+  let effortRaw = (
+    $("#split-effort")?.value ||
+    $("#pp-effort")?.value ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
+  if (!EFFORT_OK.includes(effortRaw)) {
+    try {
+      effortRaw = (localStorage.getItem("cco.splitEffort") || "").toLowerCase();
+    } catch (_) {
+      effortRaw = "";
+    }
+  }
+  const effort = EFFORT_OK.includes(effortRaw) ? effortRaw : null;
+  if (effort) {
+    try {
+      localStorage.setItem("cco.splitEffort", effort);
+    } catch (_) {}
+    // Keep both pickers in sync when present.
+    const se = $("#split-effort");
+    const pe = $("#pp-effort");
+    if (se && se.value !== effort) se.value = effort;
+    if (pe && pe.value !== effort) pe.value = effort;
+  }
   // Seed concurrency from work-style if pickers untouched (sync — no race with commit).
   // W4-2: pass selected project so project override can win.
   const projectPath = state.selectedPath || null;
@@ -144,6 +192,21 @@ export async function analyzePlanFromPicker() {
     }
   }
 
+  // Capture prior job path BEFORE clearing — used only to gate preserve_from.
+  const prevJobPlan =
+    state.planJob?.plan_path || state.planJob?.planPath || null;
+  let preserveFrom = state.preserveFromJobId || null;
+  if (
+    preserveFrom &&
+    prevJobPlan &&
+    normalizePlanPath(prevJobPlan, state.selectedPath) !==
+      normalizePlanPath(plan, state.selectedPath)
+  ) {
+    // Switching plans: never re-apply edits from the other plan's job.
+    preserveFrom = null;
+  }
+  state.preserveFromJobId = null;
+
   host.setAssignBusy(true);
   state.phase = "planning";
   state.planJob = null;
@@ -151,6 +214,9 @@ export async function analyzePlanFromPicker() {
   state.confirmEditing = false;
   // C2：仅「新开拆分」supersede 旧 session；非旁路静默丢
   host.clearPlanSession(state.selectedPath);
+  // Re-bind after clear — clearPlanSession must never wipe the path we are about to split.
+  state.selectedPlan = plan;
+  state.chatDraftPlan = plan;
   stopPlanJobPoll();
   host.openPlanChooser(false);
   // 规划 UI 在 workspace；从聊天/其它页分配时先切回
@@ -158,6 +224,7 @@ export async function analyzePlanFromPicker() {
   host.renderPhasePanels();
   host.renderPlanPicker();
   host.renderWorkspaceShell();
+  host.updateTopPlanInfo?.();
   const logEl0 = $("#planner-log");
   const smartSplit = planMode === "ai";
   if (logEl0) {
@@ -170,7 +237,7 @@ export async function analyzePlanFromPicker() {
   }
   const sub0 = $("#planning-sub");
   if (sub0) {
-    const name = planDisplayName(state.selectedPlan);
+    const name = planDisplayName(plan);
     const core = smartSplit
       ? `正在智能拆分「${name}」…（会想依赖与并行，可能要几分钟 · 同时最多 ${maxParallel} 步）`
       : planMode === "fast"
@@ -186,13 +253,12 @@ export async function analyzePlanFromPicker() {
   }
 
   try {
-    const preserveFrom = state.preserveFromJobId || null;
-    // One-shot: clear so a later fresh assign doesn't accidentally inherit.
-    state.preserveFromJobId = null;
+    // Final identity assertion — never send a different path than toast/top bar.
+    state.selectedPlan = plan;
     const view = await requireGateway().startPlanJob({
       req: {
         project: state.selectedPath,
-        plan: state.selectedPlan,
+        plan,
         plan_mode: planMode,
         provider,
         mode,
@@ -201,14 +267,25 @@ export async function analyzePlanFromPicker() {
         preserve_from_job_id: preserveFrom || null,
         // W4: grain line for ModelSplitAgent (omit when empty).
         grain_hint: grainHint || null,
+        // Per-split reasoning depth (ultracode = xhigh + multi-agent hint).
+        effort: effort || null,
       },
     });
     state.planJob = view;
     // Tauri/serde 字段兼容
     state.planJobId = view.job_id || view.jobId || null;
+    // Job is source of truth after start — top bar + selectedPlan follow job path.
+    const jobPlan =
+      normalizePlanPath(view.plan_path || view.planPath, state.selectedPath) ||
+      view.plan_path ||
+      view.planPath ||
+      plan;
+    state.selectedPlan = jobPlan;
+    state.chatDraftPlan = jobPlan;
     state.planStartedAt = Date.now();
     state.planPollFails = 0;
     host.stashPlanSession(state.selectedPath);
+    host.updateTopPlanInfo?.();
     fillPlannerLog(view);
 
     const status = String(view.status || "").toLowerCase();
@@ -373,13 +450,57 @@ export async function refreshPlanJob() {
     } else if (status === "plan_failed") {
       stopPlanJobPoll();
       host.setAssignBusy(false);
-      state.phase = "plan_failed";
-      const err = $("#pp-error");
-      if (err) {
-        err.textContent = view.error || "拆分失败";
-        err.hidden = false;
+      // Only complete success is shown on desk. Failed residual must not stick.
+      // Prefer prior planned/confirmed for this plan; else fail panel with no fake graph.
+      const planPath =
+        view.plan_path || view.planPath || state.selectedPlan || null;
+      let restored = false;
+      if (planPath && state.selectedPath) {
+        try {
+          const prior = await requireGateway().latestPlanJobForPlan(
+            state.selectedPath,
+            planPath
+          );
+          const pst = String(prior?.status || "").toLowerCase();
+          const priorId = prior?.job_id || prior?.jobId || null;
+          const failedId = state.planJobId;
+          const n = prior?.task_count || prior?.tasks?.length || 0;
+          if (
+            prior &&
+            priorId &&
+            priorId !== failedId &&
+            (pst === "planned" || pst === "confirmed") &&
+            n > 0
+          ) {
+            if (typeof host.applyRestoredPlanJob === "function") {
+              restored = !!host.applyRestoredPlanJob(prior, {
+                resumePoll: false,
+              });
+            } else if (typeof window.applyRestoredPlanJob === "function") {
+              restored = !!window.applyRestoredPlanJob(prior, {
+                resumePoll: false,
+              });
+            }
+          }
+        } catch (e) {
+          console.warn("restore prior split after plan_failed", e);
+        }
       }
-      toast(humanPlanFail(view.error) || "拆分失败");
+      if (restored) {
+        toast(
+          humanPlanFail(view.error) ||
+            "智能拆分未完整完成 · 已回到上次成功的拆分"
+        );
+      } else {
+        state.phase = "plan_failed";
+        state.planJob = view;
+        const err = $("#pp-error");
+        if (err) {
+          err.textContent = view.error || "拆分失败";
+          err.hidden = false;
+        }
+        toast(humanPlanFail(view.error) || "拆分失败 · 没有可展示的完整结果");
+      }
       try {
         if (window.ccoApp && typeof window.ccoApp.goSplit === "function") {
           window.ccoApp.goSplit();
@@ -387,6 +508,9 @@ export async function refreshPlanJob() {
       } catch (_) {}
       host.renderPhasePanels();
       host.renderPlanPicker();
+      if (restored && typeof host.renderConfirmPanel === "function") {
+        host.renderConfirmPanel();
+      }
     } else if (status === "planning") {
       state.phase = "planning";
       // 超时保护：超过 12 分钟仍 planning

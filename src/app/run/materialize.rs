@@ -53,7 +53,9 @@ pub fn materialize_run_with_route(
         bail!("项目路径不是目录: {}", project.display());
     }
     // Drop optional && !include before any disk write or scheduler handoff.
-    let ir = materialize_selected_tasks(ir.clone())?;
+    let mut ir = materialize_selected_tasks(ir.clone())?;
+    // Soft-fill Claude effort from config when task opts lack it (does not overwrite explicit).
+    apply_effort(&mut ir, config, None);
     let run_id = state::new_run_id();
     let run_dir = state::prepare_run_dir(&config.runs_dir(), &run_id)?;
     let project = project
@@ -69,6 +71,39 @@ pub fn materialize_run_with_route(
     let resolved = run_dir.join("plan.resolved.json");
     std::fs::write(&resolved, serde_json::to_string_pretty(&ir)?)?;
     Ok((run_id, run_state, ir))
+}
+
+/// Apply Claude reasoning effort onto task `provider_opts`.
+///
+/// - `override_effort` set → force all claude/fake tasks to that level (UI/CLI pick).
+/// - else soft-fill from `config.default.effort` only when the key is missing/empty.
+pub fn apply_effort(ir: &mut PlanIR, config: &Config, override_effort: Option<&str>) {
+    let force = override_effort
+        .and_then(crate::config::normalize_effort);
+    let soft = crate::config::normalize_effort(&config.default.effort)
+        .unwrap_or_else(|| "high".into());
+    for t in &mut ir.tasks {
+        let p = t.provider.to_ascii_lowercase();
+        if p != "claude" && p != "fake" {
+            continue;
+        }
+        if !t.provider_opts.is_object() {
+            t.provider_opts = serde_json::json!({});
+        }
+        if let Some(ref e) = force {
+            t.provider_opts["effort"] = serde_json::json!(e);
+            continue;
+        }
+        let missing = t
+            .provider_opts
+            .get("effort")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true);
+        if missing {
+            t.provider_opts["effort"] = serde_json::json!(soft);
+        }
+    }
 }
 
 /// ParseOnly / structured / `--skip-plan`: load plan from disk and materialize.

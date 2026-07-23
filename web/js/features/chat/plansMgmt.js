@@ -18,6 +18,62 @@ import {
 } from "./planDir.js";
 import { chatEsc } from "./chatFormat.js";
 import * as chatApi from "./chatApi.js";
+import { renderMarkdown } from "../../shared/markdown.js";
+
+/**
+ * Ensure selected / draft / split-index plans appear in the list even when
+ * list_plans skipped the filename (e.g. *-landing-*.md before filter expand).
+ * @param {Array} items
+ * @param {string[]} pinPaths
+ * @param {string} root
+ */
+function ensurePinnedPlanItems(items, pinPaths, root) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  const seen = new Set(
+    list.map((it) => {
+      const p = it?.path || it;
+      return typeof normalizePlanPath === "function"
+        ? normalizePlanPath(p, root) || p
+        : p;
+    })
+  );
+  const candidates = [
+    ...(pinPaths || []),
+    state.chatDraftPlan,
+    state.selectedPlan,
+    state.planRailSelected,
+  ].filter(Boolean);
+  // Also pin paths that already have a restorable split in SQLite
+  const splitBy = state.planSplitByPath || {};
+  for (const k of Object.keys(splitBy)) {
+    if (k && k.includes("/")) candidates.push(k);
+  }
+  for (const raw of candidates) {
+    const path =
+      typeof normalizePlanPath === "function"
+        ? normalizePlanPath(raw, root) || raw
+        : raw;
+    if (!path || seen.has(path)) continue;
+    // Only inject paths under project
+    if (
+      typeof host.isPlanUnderProject === "function" &&
+      !host.isPlanUnderProject(path, root)
+    ) {
+      continue;
+    }
+    seen.add(path);
+    const meta =
+      typeof host.planMetaForPath === "function"
+        ? host.planMetaForPath(path, root)
+        : { path, title: null, ever_completed: false, last_run_status: null };
+    list.unshift({
+      ...meta,
+      path,
+      title: meta.title || null,
+    });
+  }
+  return list;
+}
 
 export async function openPlanManagement() {
   if (!state.selectedPath) {
@@ -41,6 +97,14 @@ export async function openPlanManagement() {
   showPage("plans");
   try {
     if (typeof renderPlanPicker === "function") renderPlanPicker();
+  } catch (_) {}
+  // SQLite split index first so badges /「查看拆分结果」work without in-memory planJob
+  try {
+    if (typeof host.loadPlanSplitIndex === "function") {
+      await host.loadPlanSplitIndex(state.selectedPath);
+    } else if (typeof window.loadPlanSplitIndex === "function") {
+      await window.loadPlanSplitIndex(state.selectedPath);
+    }
   } catch (_) {}
   await host.loadPlanRail();
   if (selected) {
@@ -100,6 +164,9 @@ export function renderPlansMgmtPage() {
     });
     dirItems = dirParts.primary;
   }
+
+  // 当前/最近打开的计划必须出现在列表（list_plans 文件名过滤可能扫不到 landing 等）
+  dirItems = ensurePinnedPlanItems(dirItems, pinPaths, root);
 
   if (!dirItems.length) {
     list.innerHTML = "";
@@ -223,10 +290,11 @@ export async function renderPlansMgmtDetail(item) {
     badgeEl.textContent = badge.label;
     badgeEl.className = `plan-rail-badge ${badge.cls}`;
   }
-  // 全文展示：勿再 slice(12000)——中长计划（如 ux-nondev-landing）会被砍掉后半
+  // 预览态按 Markdown 渲染（非编辑）；全文勿再 slice——中长计划会被砍掉后半
   if (bodyEl) {
     const full = String(markdown || "");
-    bodyEl.textContent = full;
+    bodyEl.classList.add("md-body");
+    bodyEl.innerHTML = renderMarkdown(full);
     bodyEl.dataset.chars = String(full.length);
   }
   if (btnAssign) {
@@ -235,7 +303,8 @@ export async function renderPlansMgmtDetail(item) {
   }
   const btnPreview = $("#btn-plans-preview");
   if (btnPreview) btnPreview.dataset.plan = path;
-  // shell-chrome C1：已有拆分（当前 job 指向该计划）→「查看拆分结果」
+  // shell-chrome C1：已有拆分 →「查看拆分结果」
+  // Prefer SQLite index (planSplitByPath); fall back to in-memory planJob match.
   const btnViewSplit = $("#btn-plans-view-split");
   if (btnViewSplit) {
     const job = state.planJob;
@@ -247,12 +316,24 @@ export async function renderPlansMgmtDetail(item) {
           ""
         : job?.plan_path || job?.planPath || "";
     const st = String(job?.status || "").toLowerCase();
-    const hasSplit =
+    const memMatch =
       !!job &&
       !!path &&
       jobPath &&
       (jobPath === path || String(jobPath) === String(path)) &&
-      ["planned", "confirmed", "running", "done"].includes(st);
+      ["planning", "planned", "confirmed", "running", "done"].includes(st);
+    const idx =
+      (typeof host.planSplitForPath === "function"
+        ? host.planSplitForPath(path)
+        : null) ||
+      (state.planSplitByPath &&
+        (state.planSplitByPath[path] ||
+          state.planSplitByPath[
+            typeof normalizePlanPath === "function"
+              ? normalizePlanPath(path, root) || path
+              : path
+          ]));
+    const hasSplit = memMatch || !!idx;
     btnViewSplit.hidden = !hasSplit;
     btnViewSplit.dataset.plan = path || "";
     btnViewSplit.title = hasSplit
@@ -302,7 +383,7 @@ export async function assignFromPlansMgmt() {
 }
 
 /** shell-chrome C1：从计划管理回看拆分台（只读/可再规划） */
-export function viewSplitFromPlansMgmt() {
+export async function viewSplitFromPlansMgmt() {
   const path =
     $("#btn-plans-view-split")?.dataset?.plan ||
     state.planRailSelected ||
@@ -311,13 +392,48 @@ export function viewSplitFromPlansMgmt() {
     toast("请先选中一份计划");
     return;
   }
-  if (!state.planJob) {
-    toast("还没有拆分结果，请先点「拆成步骤」");
-    return;
-  }
   host.selectPlanRailItem?.(path);
   state.chatDraftPlan = path;
   state.selectedPlan = path;
+
+  // Memory job only counts if it is for this plan path
+  const root = state.selectedPath;
+  const job = state.planJob;
+  const jobPath =
+    typeof normalizePlanPath === "function"
+      ? normalizePlanPath(job?.plan_path || job?.planPath || "", root) ||
+        job?.plan_path ||
+        job?.planPath ||
+        ""
+      : job?.plan_path || job?.planPath || "";
+  const norm =
+    typeof normalizePlanPath === "function"
+      ? normalizePlanPath(path, root) || path
+      : path;
+  const memOk =
+    !!job &&
+    jobPath &&
+    (jobPath === norm || String(jobPath) === String(path)) &&
+    ["planning", "planned", "confirmed"].includes(
+      String(job.status || "").toLowerCase()
+    );
+
+  if (!memOk) {
+    // SQLite / disk restore by plan path
+    const restore =
+      typeof host.tryRestorePlanJobForPlan === "function"
+        ? host.tryRestorePlanJobForPlan
+        : typeof window.tryRestorePlanJobForPlan === "function"
+          ? window.tryRestorePlanJobForPlan
+          : null;
+    if (!restore) {
+      toast("还没有拆分结果，请先点「拆成步骤」");
+      return;
+    }
+    const ok = await restore(path);
+    if (!ok) return;
+  }
+
   if (typeof window.showSplitPlanConfirm === "function") {
     window.showSplitPlanConfirm({ keepReturn: true });
     return;

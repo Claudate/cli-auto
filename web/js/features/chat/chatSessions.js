@@ -14,7 +14,7 @@ import {
   restoreChatSession,
   applyChatDraftFromSession,
 } from "./chatState.js";
-import { chatEsc } from "./chatFormat.js";
+import { chatEsc, chatFormatStreamBody } from "./chatFormat.js";
 
 export function chatWaitLabel() {
   const started = state.chatWaitStartedAt || 0;
@@ -27,38 +27,84 @@ export function chatWaitLabel() {
   return `AI 正在思考…（已等 ${m}分${s}s，可稍候）`;
 }
 
-/** Paint the pending assistant bubble (wait label or streaming partial). */
+/** Paint the pending assistant bubble (wait label or streaming partial as rendered md). */
 export function paintChatPendingBubble() {
   const pending = document.querySelector(".chat-msg-pending .chat-msg-body");
   if (!pending) return;
   const stream = String(state.chatStreamText || "").trim();
   if (stream) {
-    pending.classList.add("chat-msg-streaming");
-    // Cap paint size so a huge partial doesn't thrash the DOM every tick.
-    const shown =
-      stream.length > 6000 ? "…\n" + stream.slice(-6000) : stream;
+    pending.classList.add("chat-msg-streaming", "md-body");
+    pending.classList.remove("chat-msg-body-wait-only");
+    // Stream as rendered markdown (not raw source / "template" text).
     pending.innerHTML =
-      chatEsc(shown) + '<span class="chat-stream-cursor" aria-hidden="true">▍</span>';
+      chatFormatStreamBody(stream) +
+      '<span class="chat-stream-cursor" aria-hidden="true">▍</span>';
   } else {
-    pending.classList.remove("chat-msg-streaming");
-    pending.textContent = chatWaitLabel();
+    pending.classList.remove("chat-msg-streaming", "md-body");
+    pending.classList.add("chat-msg-body-wait-only");
+    pending.innerHTML =
+      `<span class="chat-pending-dots" aria-hidden="true"></span>` +
+      chatEsc(chatWaitLabel());
   }
 }
 
-/** C3: poll stdout partial while chat_send runs; failure → keep wait label. */
+/**
+ * C3: poll stdout partial while chat_send runs.
+ * Must NOT paint previous-turn leftover (stdout still on disk until BE clears it).
+ * Gates: generation id · ignore done-without-live · allow reset when bytes shrink.
+ */
 export async function pollChatStreamPartial() {
   if (!state.chatBusy || !state.selectedPath) return;
+  const gen = state.chatStreamGen || 0;
   try {
     const resp = await chatApi.streamPartial({
       project: state.selectedPath,
       sessionId: state.chatSession?.session_id || "default",
     });
+    // Drop late responses from a prior send (or after finally cleared gen).
+    if (!state.chatBusy || (state.chatStreamGen || 0) !== gen) return;
+
     const text = String(resp?.text || "").trim();
-    // Only advance (never shrink) so a late shorter extract doesn't flicker.
-    if (text && text.length >= String(state.chatStreamText || "").length) {
+    const bytes = Number(resp?.bytes) || 0;
+    const done = !!resp?.done;
+    const prevBytes = Number(state.chatStreamBytes) || 0;
+    const prevText = String(state.chatStreamText || "");
+
+    // File wiped for new turn (or still empty): clear any painted stale content.
+    if (bytes === 0 || !text) {
+      if (prevText && bytes < prevBytes) {
+        state.chatStreamText = "";
+        state.chatStreamSeenLive = false;
+      }
+      state.chatStreamBytes = bytes;
+      return;
+    }
+
+    // Leftover from last completed turn: .done still true and we never saw
+    // this turn grow live. Wait until BE clears / new NDJSON arrives.
+    if (done && !state.chatStreamSeenLive && !prevText) {
+      state.chatStreamBytes = bytes;
+      return;
+    }
+
+    // Bytes shrank → new turn overwrote the file; reset stream buffer.
+    if (prevBytes > 0 && bytes + 32 < prevBytes) {
       state.chatStreamText = text;
-    } else if (text && !state.chatStreamText) {
+      state.chatStreamSeenLive = true;
+      state.chatStreamBytes = bytes;
+      return;
+    }
+
+    // Accept growth (or first live chunk). Never shrink text mid-turn unless
+    // bytes already proved a file reset above.
+    if (!prevText || text.length >= prevText.length) {
       state.chatStreamText = text;
+      state.chatStreamSeenLive = true;
+      state.chatStreamBytes = Math.max(prevBytes, bytes);
+    } else if (bytes > prevBytes) {
+      // Extract may flicker shorter while raw grows — keep longer text, track bytes.
+      state.chatStreamSeenLive = true;
+      state.chatStreamBytes = bytes;
     }
   } catch (_) {
     // Soft degrade: leave wait label; final reply still comes from chat_send.
@@ -148,6 +194,12 @@ export function chatSessionLabel(row) {
   return id;
 }
 
+/** 收起「会话…」面板（选中/新建/删除/点空白后） */
+export function collapseChatSessionMore() {
+  const el = document.getElementById("chat-session-more");
+  if (el && el.tagName === "DETAILS") el.open = false;
+}
+
 export function renderChatSessionSelect() {
   ensureChatState();
   const sel = $("#chat-session-select");
@@ -225,6 +277,7 @@ export async function switchChatSession(sessionId) {
   host.renderChatPage();
   await loadChatSession({ force: true });
   await loadChatSessionList();
+  collapseChatSessionMore();
 }
 
 /** C3: create empty session and switch to it. */
@@ -257,6 +310,7 @@ export async function newChatSession() {
     toast(`已新建会话`);
     host.renderChatPage();
     await loadChatSessionList();
+    collapseChatSessionMore();
   } catch (e) {
     toast(String(e?.message || e));
   }
@@ -312,6 +366,7 @@ export async function deleteChatSession() {
       state.chatSessionList?.[0]?.session_id ||
       "default";
     await switchChatSession(next);
+    collapseChatSessionMore();
   } catch (e) {
     toast(String(e?.message || e));
   }

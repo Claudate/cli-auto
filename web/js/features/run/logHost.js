@@ -85,7 +85,14 @@ export function isLiveStatus(s) {
 export function isFailedStatus(s) {
   const fn = g("isFailedStatus");
   if (typeof fn === "function") return fn(s);
-  return /fail|error|abort/i.test(String(s || ""));
+  // stop/abort are not business failures
+  return /fail|error|timeout/i.test(String(s || "")) && !/abort|stop|cancel/i.test(String(s || ""));
+}
+
+export function isStoppedStatus(s) {
+  const fn = g("isStoppedStatus");
+  if (typeof fn === "function") return fn(s);
+  return /stop|abort|cancel/i.test(String(s || ""));
 }
 
 /**

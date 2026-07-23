@@ -607,7 +607,7 @@ TUI：保持 **观察 + 轻控制** 适配器，消费同一 `Run` 查询；不�
 | [`product-mainpath-optimize-2026-07-20.md`](./product-mainpath-optimize-2026-07-20.md) | **交互参考**（拆分台三栏、结果台）；**不再**当实施勾选真源 |
 | [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md) | 业务规则参考：confirm 唯一开跑——**规则保留，实现搬家** |
 | [`multi-cli-collaboration-2026-07-18.md`](./multi-cli-collaboration-2026-07-18.md) | 混跑语义参考；执行迁入 Worker 上下文 |
-| [`claude-cli-orchestrator-plan.md`](../claude-cli-orchestrator-plan.md) | 历史 M0–M4 已落地说明；M5 仍池内；本轮重画内部边界 |
+| [`archive/claude-cli-orchestrator-plan.md`](./archive/claude-cli-orchestrator-plan.md) | 历史 M0–M4 已落地说明；M5 仍池内；本轮重画内部边界 |
 | [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) | 登记 P2-17；D0–D4 不回灌 |
 
 ---

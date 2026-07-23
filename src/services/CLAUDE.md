@@ -6,7 +6,7 @@ mod.rs: re-export live/projects/runs/settings/chat · **A1-7 deprecated facade**
 live.rs: project_live_view（含 inspect_loop · handoff_board/handoff_md_path P2-6 · **P1-3** task.route_source + App 拼 route_label · **P2-1** verification 清单 vs 巡检）· task_logs · open_task_terminal · stop_task（Pending 可停 · SIGTERM+KILL · 整 run 冻 pending→Aborted）
 projects.rs: list/add/remove projects
 runs.rs: list/start/stop/resume · plan job re-export · confirm_start（→ app::split::confirm）· start_run_from_plan（**materialize_selected_tasks 后写盘/spawn · A0-R4/D-T3-1**）· sanitize/update/remove proposed · list_plans · list_plan_meta · start_rework_from_run · accept_run_residual · **stop_run 含 Pending + meta.json pid + SIGKILL** · **新逻辑勿进本文件**
-settings.rs: get/set settings view（failover H4 · post_inspect/post_git_push/**post_open_pr** 系统收尾 · planner_critic_enabled 可选 LLM 第二跳）
+settings.rs: get/set settings view（failover H4 · post_inspect/post_git_push/**post_open_pr** 系统收尾 · planner_critic_enabled 可选 LLM 第二跳 · **effort** 推理深度）
 chat/: **A1-6 多文件 IO 适配**（单文件 ≤600；出巨石榜）
   · mod.rs: facade re-export + domain pure re-export
   · types.rs: ChatSession/Message/Draft/Send/Stream/Normalize DTO

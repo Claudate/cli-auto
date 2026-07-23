@@ -28,6 +28,8 @@ pub struct SplitRequest {
     pub updated_at: String,
     /// Optional grain line for the model user prompt (W4 · 偏粗/偏细); empty = omit.
     pub grain_hint: Option<String>,
+    /// Optional per-split reasoning depth (`low`…`max`|`ultracode`); else config default.
+    pub effort: Option<String>,
 }
 
 /// Port: plan document → cco-native split graph.

@@ -38,15 +38,19 @@ Cargo.toml — workspace（cco + cco-desktop）
 [`docs/contracts/`](./docs/contracts/) — A0 行为/run-dir/plan-job 契约
 
 ### 业务规则参考（改 confirm / 混跑 / 巡检 / 拆分台时读；**不**继承阶段勾选）
+[`docs/split-product-rules.md`](./docs/split-product-rules.md) — 拆分/拆分台/confirm **短规则**（无平行阶段表）
+[`docs/cco-split-format-sqlite-2026-07-21.md`](./docs/cco-split-format-sqlite-2026-07-21.md) — 拆分格式 + SQLite SoT · **S2–S6 唯一勾选落点**
 [`docs/product-mode-b-ai-planner.md`](./docs/product-mode-b-ai-planner.md) — Mode B · confirm 唯一开跑 · optional
 [`docs/multi-cli-collaboration-2026-07-18.md`](./docs/multi-cli-collaboration-2026-07-18.md) — provider/role/scope · handoff · tags 路由
 [`docs/plan-execute-inspect-rework-2026-07-19.md`](./docs/plan-execute-inspect-rework-2026-07-19.md) — 巡检对照勾选 · 回补波（P-loop）
 [`docs/product-mainpath-optimize-2026-07-20.md`](./docs/product-mainpath-optimize-2026-07-20.md) — 拆分台三栏/结果台交互意图（P2-16 UI 已闭环）
+[`docs/subjective-desire-cco-subset-landing-2026-07-22.md`](./docs/subjective-desire-cco-subset-landing-2026-07-22.md) — 主观渴望子集落地（D0–D2 ☐）
+[`docs/guided-plan-memory-decision-2026-07-21.md`](./docs/guided-plan-memory-decision-2026-07-21.md) — 引导/记忆/对抗草稿（G0–G4 ☐ · 后置）
 [`docs/gap-and-landing-plan-2026-07-18.md`](./docs/gap-and-landing-plan-2026-07-18.md) — 历史总账 + D5 池导航（D0–D4 已闭环；**不**新开阶段表）
-[`claude-cli-orchestrator-plan.md`](./claude-cli-orchestrator-plan.md) — 编排器设计（M0–M4 已落地；M5 → D5）
 
 ### 历史归档（主线已 ✅ · **`docs/archive/`** · **勿当缺口 · 勿继承勾选**）
-chat / 桌面 UX / terminal / 计划管理 / sys-post 等已迁 [`docs/archive/`](./docs/archive/)；索引 [`docs/archive/README.md`](./docs/archive/README.md) · 总表 [`docs/CLAUDE.md`](./docs/CLAUDE.md)。
+chat / 桌面 UX / terminal / 计划管理 / sys-post（**2026-07-21 档 B**）+ 非开发体验 / 壳层 / 拆分台与 Agent / PilotDeck / soft-sqlite / p2-7 / 主观渴望构思 / **编排器根计划**（**2026-07-22 再归档**）已迁 [`docs/archive/`](./docs/archive/)；索引 [`docs/archive/README.md`](./docs/archive/README.md) · 总表 [`docs/CLAUDE.md`](./docs/CLAUDE.md)。  
+编排器 M0–M4 考古：[`docs/archive/claude-cli-orchestrator-plan.md`](./docs/archive/claude-cli-orchestrator-plan.md)（**工程设计现行真源 = architecture**）。
 </config>
 
 能力要点: 轻量任务控制台 · Mode B 规划相位 · providers claude/codex/fake · log_events 可读监视 · 计划闭环五步 · 桌面 planSessions/auto-start

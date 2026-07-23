@@ -8,7 +8,7 @@
 //! Product: cco_split_jobs/tasks = split SoT (full fields). plan_tasks dual-write remains
 //! for legacy query until consumers migrate.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use anyhow::{Context, Result};
@@ -268,6 +268,141 @@ pub fn try_replace_plan_tasks(config: &Config, job_id: &str, ir: &PlanIR) {
     }
 }
 
+/// Lightweight row: plan list / rail「已拆分」索引（读 `plan_jobs` dual-write）。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PlanSplitIndexRow {
+    pub job_id: String,
+    pub plan_path: String,
+    pub status: String,
+    pub task_count: Option<i64>,
+    pub plan_name: Option<String>,
+    pub updated_at: String,
+}
+
+/// Normalize plan path for equality (relative preferred; slash-unified).
+pub fn plan_path_key(plan_path: &str) -> String {
+    let mut s = plan_path.trim().replace('\\', "/");
+    if let Some(rest) = s.strip_prefix("file://") {
+        s = rest.to_string();
+    }
+    while s.starts_with("./") {
+        s = s[2..].to_string();
+    }
+    s.trim_start_matches('/').to_string()
+}
+
+pub fn plan_paths_match(a: &str, b: &str) -> bool {
+    let ka = plan_path_key(a);
+    let kb = plan_path_key(b);
+    if ka.is_empty() || kb.is_empty() {
+        return false;
+    }
+    ka == kb || ka.ends_with(&kb) || kb.ends_with(&ka)
+}
+
+fn project_key(project: &Path) -> String {
+    project
+        .canonicalize()
+        .unwrap_or_else(|_| project.to_path_buf())
+        .to_string_lossy()
+        .to_string()
+}
+
+/// Latest recoverable job_id for a plan path (planned / confirmed / planning).
+///
+/// Source: SQLite `plan_jobs` (dual-write on every job.save). Used by plan list
+/// 「查看拆分结果」so memory `state.planJob` is not the only gate.
+///
+/// Prefer **confirmed** (already used to open a run) over a newer **planned**
+/// residual, then planning, then updated_at. Incomplete re-splits must not hide
+/// a successful desk graph.
+pub fn latest_job_id_for_plan_path(
+    config: &Config,
+    project: &Path,
+    plan_path: &str,
+) -> Result<Option<String>> {
+    let rows = list_plan_split_index(config, project)?;
+    let want = plan_path_key(plan_path);
+    if want.is_empty() {
+        return Ok(None);
+    }
+    let mut matched: Vec<PlanSplitIndexRow> = rows
+        .into_iter()
+        .filter(|r| plan_paths_match(&r.plan_path, plan_path))
+        .collect();
+    if matched.is_empty() {
+        return Ok(None);
+    }
+    fn status_rank(s: &str) -> u8 {
+        match s.to_ascii_lowercase().as_str() {
+            "confirmed" => 3,
+            "planned" => 2,
+            "planning" => 1,
+            _ => 0,
+        }
+    }
+    matched.sort_by(|a, b| {
+        status_rank(&b.status)
+            .cmp(&status_rank(&a.status))
+            .then_with(|| b.updated_at.cmp(&a.updated_at))
+    });
+    Ok(matched.into_iter().next().map(|r| r.job_id))
+}
+
+/// All recoverable split index rows for a project (newest first).
+/// Status filter: planning | planned | confirmed (desk-restorable).
+pub fn list_plan_split_index(
+    config: &Config,
+    project: &Path,
+) -> Result<Vec<PlanSplitIndexRow>> {
+    let proj = project_key(project);
+    let proj_raw = project.to_string_lossy().to_string();
+    with_conn(config, |conn| {
+        ensure_schema(conn)?;
+        let mut stmt = conn.prepare(
+            r#"SELECT job_id, plan_path, status, task_count, plan_name, updated_at, project
+               FROM plan_jobs
+               WHERE status IN ('planning','planned','confirmed')
+               ORDER BY updated_at DESC"#,
+        )?;
+        let mut out = Vec::new();
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, Option<i64>>(3)?,
+                r.get::<_, Option<String>>(4)?,
+                r.get::<_, String>(5)?,
+                r.get::<_, String>(6)?,
+            ))
+        })?;
+        for row in rows {
+            let (job_id, plan_path, status, task_count, plan_name, updated_at, row_project) =
+                row?;
+            // project column may be absolute or not-canonicalized
+            let rp = PathBuf::from(&row_project);
+            let same = project_key(&rp) == proj
+                || row_project == proj_raw
+                || row_project == proj
+                || proj.ends_with(&row_project)
+                || row_project.ends_with(&proj_raw);
+            if !same {
+                continue;
+            }
+            out.push(PlanSplitIndexRow {
+                job_id,
+                plan_path,
+                status,
+                task_count,
+                plan_name,
+                updated_at,
+            });
+        }
+        Ok(out)
+    })
+}
+
 /// Path of the DB file (tests / doctor).
 pub fn sqlite_path(config: &Config) -> PathBuf {
     db_path(config)
@@ -322,6 +457,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            effort: None,
         };
         upsert_plan_job(&cfg, &job).unwrap();
         let ir = PlanIR {
@@ -395,5 +531,186 @@ mod tests {
         })
         .unwrap();
         assert!(sqlite_path(&cfg).is_file());
+    }
+
+    #[test]
+    fn latest_job_id_for_plan_path_from_index() {
+        reset_for_test();
+        let dir = tempdir().unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().to_path_buf();
+        let project = PathBuf::from("/tmp/proj-split-idx");
+        let older = PlanJob {
+            job_id: "plan-old".into(),
+            status: PlanJobStatus::Planned,
+            project: project.clone(),
+            plan_path: PathBuf::from("docs/a.md"),
+            plan_mode: "ai".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: None,
+            run_id: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now() - chrono::Duration::seconds(60),
+            plan_name: Some("old".into()),
+            task_count: Some(1),
+            max_parallel: Some(1),
+            adapter: None,
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+            grain_hint: None,
+            effort: None,
+        };
+        let newer = PlanJob {
+            job_id: "plan-new".into(),
+            status: PlanJobStatus::Planned,
+            project: project.clone(),
+            plan_path: PathBuf::from("docs/a.md"),
+            plan_mode: "ai".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: None,
+            run_id: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            plan_name: Some("new".into()),
+            task_count: Some(3),
+            max_parallel: Some(2),
+            adapter: None,
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+            grain_hint: None,
+            effort: None,
+        };
+        let other = PlanJob {
+            job_id: "plan-other".into(),
+            status: PlanJobStatus::Planned,
+            project: project.clone(),
+            plan_path: PathBuf::from("docs/b.md"),
+            plan_mode: "ai".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: None,
+            run_id: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            plan_name: Some("b".into()),
+            task_count: Some(2),
+            max_parallel: Some(1),
+            adapter: None,
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+            grain_hint: None,
+            effort: None,
+        };
+        upsert_plan_job(&cfg, &older).unwrap();
+        upsert_plan_job(&cfg, &newer).unwrap();
+        upsert_plan_job(&cfg, &other).unwrap();
+
+        let id = latest_job_id_for_plan_path(&cfg, &project, "docs/a.md")
+            .unwrap()
+            .expect("job id");
+        assert_eq!(id, "plan-new");
+
+        // Confirmed (opened a run) must win over a newer residual planned job.
+        let confirmed = PlanJob {
+            job_id: "plan-confirmed".into(),
+            status: PlanJobStatus::Confirmed,
+            project: project.clone(),
+            plan_path: PathBuf::from("docs/a.md"),
+            plan_mode: "ai".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: None,
+            run_id: Some("run-1".into()),
+            created_at: Utc::now() - chrono::Duration::seconds(120),
+            updated_at: Utc::now() - chrono::Duration::seconds(90),
+            plan_name: Some("confirmed".into()),
+            task_count: Some(7),
+            max_parallel: Some(2),
+            adapter: Some("planner-ai-llm".into()),
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+            grain_hint: None,
+            effort: None,
+        };
+        let residual = PlanJob {
+            job_id: "plan-residual".into(),
+            status: PlanJobStatus::Planned,
+            project: project.clone(),
+            plan_path: PathBuf::from("docs/a.md"),
+            plan_mode: "ai".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: None,
+            run_id: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            plan_name: Some("residual-5".into()),
+            task_count: Some(5),
+            max_parallel: Some(2),
+            adapter: Some("planner-ai-heuristic".into()),
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+            grain_hint: None,
+            effort: None,
+        };
+        upsert_plan_job(&cfg, &confirmed).unwrap();
+        upsert_plan_job(&cfg, &residual).unwrap();
+        let prefer = latest_job_id_for_plan_path(&cfg, &project, "docs/a.md")
+            .unwrap()
+            .expect("prefer confirmed");
+        assert_eq!(
+            prefer, "plan-confirmed",
+            "confirmed must beat newer planned residual"
+        );
+
+        let idx = list_plan_split_index(&cfg, &project).unwrap();
+        assert!(idx.iter().any(|r| r.plan_path.contains("a.md")));
+        assert!(idx.iter().any(|r| r.plan_path.contains("b.md")));
+        assert_eq!(
+            latest_job_id_for_plan_path(&cfg, &project, "docs/missing.md").unwrap(),
+            None
+        );
     }
 }

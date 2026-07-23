@@ -2,7 +2,7 @@
 
 > **这是产品方向与思路，不是落地计划。**  
 > 不写阶段勾选、不写 backlog、不排期。  
-> 工程设计见 [`claude-cli-orchestrator-plan.md`](./claude-cli-orchestrator-plan.md)；实施缺口见 [`docs/gap-and-landing-plan-2026-07-18.md`](./docs/gap-and-landing-plan-2026-07-18.md)。
+> 工程设计见 [`docs/architecture-redesign-2026-07-20.md`](./docs/architecture-redesign-2026-07-20.md)（索引 [`docs/CLAUDE.md`](./docs/CLAUDE.md)）；历史编排考古见 [`docs/archive/claude-cli-orchestrator-plan.md`](./docs/archive/claude-cli-orchestrator-plan.md)；实施缺口见 [`docs/gap-and-landing-plan-2026-07-18.md`](./docs/gap-and-landing-plan-2026-07-18.md)。
 
 ---
 
@@ -156,8 +156,8 @@
 - Codex 气质：主区一事 · 状态一眼懂 · 结果收口 · 概念≤3；**不**换框架、不像素抄皮  
 
 **非开发体验**（2026-07-21 · 波次 A–D ✅ 工程收口；本机 §5 目视仍建议）：  
-- 诊断 / 原则：[`docs/ux-nondev-mainpath-2026-07-21.md`](./docs/ux-nondev-mainpath-2026-07-21.md)  
-- **落地实施真源**（勾选）：[`docs/ux-nondev-landing-2026-07-21.md`](./docs/ux-nondev-landing-2026-07-21.md)  
+- 诊断 / 原则（历史）：[`docs/archive/ux-nondev-mainpath-2026-07-21.md`](./docs/archive/ux-nondev-mainpath-2026-07-21.md)  
+- **落地全文**（历史 · 已收口 · **勿继承勾选**）：[`docs/archive/ux-nondev-landing-2026-07-21.md`](./docs/archive/ux-nondev-landing-2026-07-21.md)  
   待确认必见拆分台 · 默认跳过选项层 · 聊天主 CTA 拆成步骤 · 日志/结果报告态 · 欢迎模板闭环
 
 ---
@@ -169,7 +169,7 @@
 | 产品给谁用、主循环、轻不轻 | **本文件** |
 | **系统架构大改 / 实施真源** | [`docs/architecture-redesign-2026-07-20.md`](./docs/architecture-redesign-2026-07-20.md)（**A0–A5 ✅ 收口** · MVVM · 编排边界 · A5-5 可选不做） |
 | 拆分台/结果台等交互意图参考 | [`docs/product-mainpath-optimize-2026-07-20.md`](./docs/product-mainpath-optimize-2026-07-20.md) |
-| 历史编排设计（M0–M4 已落地） | [`claude-cli-orchestrator-plan.md`](./claude-cli-orchestrator-plan.md) |
+| 历史编排设计（M0–M4 已落地） | [`docs/archive/claude-cli-orchestrator-plan.md`](./docs/archive/claude-cli-orchestrator-plan.md) |
 | 规划/确认/开跑业务规则 | [`docs/product-mode-b-ai-planner.md`](./docs/product-mode-b-ai-planner.md) |
 | 还缺什么、排不排期 | [`docs/gap-and-landing-plan-2026-07-18.md`](./docs/gap-and-landing-plan-2026-07-18.md) |
 | 某一屏怎么改的历史 | [`docs/archive/`](./docs/archive/) 已闭环子计划（规格考古，不是方向） |

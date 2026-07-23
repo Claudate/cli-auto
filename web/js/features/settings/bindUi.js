@@ -49,7 +49,9 @@ export function bindGlobalUI() {
         return;
       }
     }
+    // Enter 发送；Shift+Enter 换行。拼音/IME 组字时回车只是落字，不得发送。
     if (e.target?.id === "chat-input" && e.key === "Enter" && !e.shiftKey) {
+      if (e.isComposing || e.keyCode === 229 || e.which === 229) return;
       e.preventDefault();
       if (!state()?.chatBusy) call("sendChatMessage");
     }
@@ -189,7 +191,6 @@ export function bindGlobalUI() {
     }
     if (
       t.id === "chooser-show-executed" ||
-      t.id === "plan-rail-show-executed" ||
       t.id === "plans-mgmt-show-executed"
     ) {
       if (typeof g("setShowExecutedPlans") === "function") {
@@ -211,6 +212,32 @@ export function bindGlobalUI() {
           call("renderPlansMgmtPage");
         }
       }
+    }
+  });
+
+  // Split / chooser / chat depth pickers — persist + keep in sync.
+  document.addEventListener("change", (e) => {
+    const t = e.target;
+    if (!t?.id) return;
+    const EFFORT_OK = ["low", "medium", "high", "xhigh", "max", "ultracode"];
+    if (t.id === "split-effort" || t.id === "pp-effort") {
+      const v = String(t.value || "").toLowerCase();
+      if (!EFFORT_OK.includes(v)) return;
+      try {
+        localStorage.setItem("cco.splitEffort", v);
+      } catch (_) {}
+      for (const id of ["split-effort", "pp-effort"]) {
+        const el = document.getElementById(id);
+        if (el && el !== t && el.value !== v) el.value = v;
+      }
+      return;
+    }
+    if (t.id === "chat-effort") {
+      const v = String(t.value || "").toLowerCase();
+      if (!EFFORT_OK.includes(v)) return;
+      try {
+        localStorage.setItem("cco.chatEffort", v);
+      } catch (_) {}
     }
   });
 

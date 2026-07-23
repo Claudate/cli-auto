@@ -1,6 +1,6 @@
 /**
  * [INPUT]: legacy · gateway · planDir · host mgmt/full/ready
- * [OUTPUT]: load/render plan-rail · select · badge
+ * [OUTPUT]: load plan meta/list · select · badge（聊天右栏 DOM 已撤；paint 仅 no-op）
  * [POS]: A5-2a features/chat/planRail.js
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -41,10 +41,13 @@ export function planRailBadgeInfo(item) {
     return { label: "已执行", cls: "plan-rail-badge-done", kind: "done" };
   }
   const st = String(item.last_run_status || item.lastRunStatus || "").toLowerCase();
-  if (st && ["failed", "aborted", "timeout", "stopped"].includes(st)) {
+  if (st && ["aborted", "stopped", "cancelled", "canceled"].includes(st)) {
+    return { label: "已中止", cls: "plan-rail-badge-pending", kind: "stopped" };
+  }
+  if (st && ["failed", "timeout"].includes(st)) {
     return { label: "失败过", cls: "plan-rail-badge-failed", kind: "failed" };
   }
-  if (st && st !== "completed" && st !== "done") {
+  if (st && st !== "completed" && st !== "done" && st !== "paused") {
     return { label: "失败过", cls: "plan-rail-badge-failed", kind: "failed" };
   }
   return { label: "未执行", cls: "plan-rail-badge-pending", kind: "pending" };
@@ -80,6 +83,14 @@ export async function loadPlanRail() {
   renderPlanRail();
   const root = state.selectedPath;
   try {
+    // SQLite split index for「已拆分」badge / reopen (best-effort)
+    try {
+      if (typeof host.loadPlanSplitIndex === "function") {
+        await host.loadPlanSplitIndex(root);
+      } else if (typeof window.loadPlanSplitIndex === "function") {
+        await window.loadPlanSplitIndex(root);
+      }
+    } catch (_) {}
     let items = [];
     // Prefer H2 meta when available; fall back to plain path list.
     try {
@@ -142,6 +153,31 @@ export async function loadPlanRail() {
         }
       }
     }
+    // 当前选中 / 草稿 / 已有拆分索引 必须留在列表（防「再进计划管理就消失」）
+    const pinInject = [
+      state.selectedPlan,
+      state.chatDraftPlan,
+      state.planRailSelected,
+      ...Object.keys(state.planSplitByPath || {}).filter((k) => k.includes("/")),
+    ];
+    for (const raw of pinInject) {
+      if (!raw) continue;
+      const path = normalizePlanPath(raw, root) || raw;
+      if (!path) continue;
+      if (
+        typeof isPlanUnderProject === "function" &&
+        !isPlanUnderProject(path, root)
+      ) {
+        continue;
+      }
+      if (items.some((it) => it.path === path)) continue;
+      items.unshift({
+        path,
+        title: null,
+        ever_completed: false,
+        last_run_status: null,
+      });
+    }
     // E4：全量保留在 planRailItemsAll；默认展示按 plans_dir 过滤
     state.planRailItemsAll = items;
     // Sync chooser path list when rail loads first（仍用全量，换文件可跨夹）
@@ -174,10 +210,11 @@ export function renderPlanRail() {
   ensureChatState();
   applyPlanRailVisibility();
   syncPlansDirLabels();
+  // 聊天右栏 DOM 已撤：仅维护 state / 目录标签；列表 UI 在 page-plans
   const list = $("#plan-rail-list");
   const empty = $("#plan-rail-empty");
   if (!list) return;
-  // G0: rail closed → skip heavy list paint
+  // 兼容旧壳：若残 DOM 仍存在也不展开
   if (!state.planRailOpen) return;
   if (typeof syncShowExecutedToggles === "function") syncShowExecutedToggles();
   if (state.planRailLoading) {
@@ -306,9 +343,10 @@ export function renderPlanRail() {
 
 /**
  * shell-chrome C1：从聊天 plan-rail 回看拆分台。
+ * Restores from SQLite/disk when memory planJob is missing or for another plan.
  * @param {string} [planPath]
  */
-export function viewSplitFromPlanRail(planPath) {
+export async function viewSplitFromPlanRail(planPath) {
   ensureChatState();
   const path =
     planPath ||
@@ -319,15 +357,48 @@ export function viewSplitFromPlanRail(planPath) {
     if (typeof window.toast === "function") window.toast("请先选中一份计划");
     return;
   }
-  if (!state.planJob) {
-    if (typeof window.toast === "function") {
-      window.toast("还没有拆分结果，请先点「拆成步骤」");
-    }
-    return;
-  }
   selectPlanRailItem(path);
   state.chatDraftPlan = path;
   state.selectedPlan = path;
+
+  const root = state.selectedPath;
+  const job = state.planJob;
+  const jobPath =
+    typeof normalizePlanPath === "function"
+      ? normalizePlanPath(job?.plan_path || job?.planPath || "", root) ||
+        job?.plan_path ||
+        job?.planPath ||
+        ""
+      : job?.plan_path || job?.planPath || "";
+  const norm =
+    typeof normalizePlanPath === "function"
+      ? normalizePlanPath(path, root) || path
+      : path;
+  const memOk =
+    !!job &&
+    jobPath &&
+    (jobPath === norm || String(jobPath) === String(path)) &&
+    ["planning", "planned", "confirmed"].includes(
+      String(job.status || "").toLowerCase()
+    );
+
+  if (!memOk) {
+    const restore =
+      typeof host.tryRestorePlanJobForPlan === "function"
+        ? host.tryRestorePlanJobForPlan
+        : typeof window.tryRestorePlanJobForPlan === "function"
+          ? window.tryRestorePlanJobForPlan
+          : null;
+    if (!restore) {
+      if (typeof window.toast === "function") {
+        window.toast("还没有拆分结果，请先点「拆成步骤」");
+      }
+      return;
+    }
+    const ok = await restore(path);
+    if (!ok) return;
+  }
+
   if (typeof window.showSplitPlanConfirm === "function") {
     window.showSplitPlanConfirm({ keepReturn: true });
     return;

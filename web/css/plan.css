@@ -849,26 +849,34 @@
   box-shadow: none;
   font-weight: 600;
 }
-/* B5: short-read detail + full body fold */
+/* B5: task info short-read + always-visible 本步说明 (no tech/full fold shells) */
 .split-detail-short {
   margin: 0 0 0.55rem;
   font-size: 0.92rem;
   line-height: 1.5;
 }
-.split-detail-full {
-  margin: 0.25rem 0 0;
+.split-detail-task-block {
+  margin-top: 0.55rem;
+  padding-top: 0.45rem;
   border-top: 1px solid var(--border);
-  padding-top: 0.35rem;
 }
-.split-detail-full > summary {
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--muted);
-  user-select: none;
+.split-detail-task-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
-.split-detail-full-body {
-  margin-top: 0.45rem;
+.split-detail-task-body {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.split-detail-task-body p {
+  margin: 0 0 0.45rem;
+}
+.split-detail-task-body p:last-child {
+  margin-bottom: 0;
 }
 .confirm-prompt-label {
   font-size: 0.72rem;
@@ -1253,6 +1261,28 @@
   letter-spacing: -0.02em;
   color: var(--text);
 }
+/* 本轮结果标题右侧：规划 / 执行金额 */
+.result-cost-chip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: #f8fafc;
+  font-size: 0.74rem;
+  line-height: 1.2;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: min(320px, 42vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+.result-cost-chip[hidden] {
+  display: none !important;
+}
 .run-status-pill {
   display: inline-flex;
   align-items: center;
@@ -1278,6 +1308,11 @@
   background: #fff0f0;
   color: #b42318;
   border-color: #f0c2c0;
+}
+.run-status-pill.is-stop {
+  background: #f3f4f6;
+  color: #4b5563;
+  border-color: #d1d5db;
 }
 .run-status-pill.is-done {
   background: #eefaf1;
@@ -1776,6 +1811,19 @@
   justify-content: flex-end;
   max-width: min(100%, 36rem);
 }
+/* Confirm-screen effort picker — reuse chat-effort styles, compact in toolbar */
+.split-effort-wrap {
+  margin-right: 0.15rem;
+}
+.split-effort-wrap .chat-effort-label {
+  text-align: right;
+  padding-right: 0.15rem;
+}
+.split-effort-wrap .chat-effort-select,
+.split-effort-wrap #split-effort {
+  min-width: 6.5rem;
+  max-width: 9rem;
+}
 /* A3：调整… 菜单（sanitize / 写回等） */
 .split-more-actions {
   position: relative;
@@ -2169,6 +2217,17 @@ body:has(#page-chat.active) .bg-plan-banner {
   background: rgba(0,0,0,.06);
   padding: 0.1em 0.35em;
   border-radius: 4px;
+}
+.md-body a {
+  color: var(--accent, #0071e3);
+  text-decoration: underline;
+  text-decoration-color: rgba(0, 113, 227, 0.35);
+}
+.md-body .md-local-link {
+  color: var(--accent, #0071e3);
+  text-decoration: underline;
+  text-decoration-color: rgba(0, 113, 227, 0.35);
+  cursor: default;
 }
 .md-body pre.md-code {
   margin: 0.55rem 0;

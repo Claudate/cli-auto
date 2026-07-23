@@ -23,7 +23,20 @@ pub fn run(
     provider: Option<String>,
     mode: Option<String>,
     json: bool,
+    effort: Option<String>,
 ) -> Result<i32> {
+    let mut config = config.clone();
+    if let Some(raw) = effort.as_deref() {
+        if let Some(n) = crate::config::normalize_effort(raw) {
+            config.default.effort = n;
+            println!("effort: {}", config.default.effort);
+        } else {
+            eprintln!(
+                "warning: unknown --effort {raw:?}; expected low|medium|high|xhigh|max|ultracode (ignored)"
+            );
+        }
+    }
+    let config = &config;
     let project = interactive::resolve_project(project, true)?;
     interactive::ensure_project_dir(&project)?;
     let plan = interactive::resolve_plan(&project, plan, true)?;
@@ -38,6 +51,8 @@ pub fn run(
             max_parallel: None,
             preserve_from_job_id: None,
             grain_hint: None,
+            // config.default.effort already set from --effort above
+            effort: Some(config.default.effort.clone()),
         },
     )?;
     let mut view = view;

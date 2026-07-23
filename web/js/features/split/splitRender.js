@@ -70,14 +70,14 @@ export function oneLiner(task) {
     .replace(/^#+\s+/gm, "")
     .replace(/^\s*[-*]\s+/gm, "")
     .trim();
-  if (!body) return "点选查看完整说明";
+  if (!body) return "点选查看本步";
   const line =
     body
       .split(/\n+/)
       .map((l) => l.trim())
       .find((l) => l.length > 4 && !isWorkerNoise(l)) || body;
   const s = line.replace(/\s+/g, " ").trim();
-  if (isWorkerNoise(s)) return displayTitle(task?.title) || "点选查看完整说明";
+  if (isWorkerNoise(s)) return displayTitle(task?.title) || "点选查看本步";
   return s.length > 72 ? s.slice(0, 70) + "…" : s;
 }
 

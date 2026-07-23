@@ -43,15 +43,24 @@ impl Scheduler {
                 continue;
             }
             if let Some(mts) = self.state.tasks.get_mut(id) {
-                if !mts.status.is_terminal() {
+                // stop_run wins over kill race: disk Stopped must override in-memory
+                // Failed from stream exit -1 (SIGKILL), even if already terminal.
+                let stop_overrides_fail = matches!(dts.status, TaskStatus::Stopped)
+                    && matches!(mts.status, TaskStatus::Failed | TaskStatus::Timeout);
+                if !mts.status.is_terminal() || stop_overrides_fail {
                     mts.status = dts.status;
                     mts.finished_at = dts.finished_at.or(mts.finished_at);
                     mts.pid = None;
+                    if stop_overrides_fail {
+                        mts.error = None;
+                        mts.exit_code = Some(130);
+                    }
                 }
             }
             match dts.status {
                 TaskStatus::Stopped | TaskStatus::Skipped | TaskStatus::Done => {
                     done.insert(id.clone());
+                    failed.remove(id);
                     started.insert(id.clone());
                 }
                 TaskStatus::Failed | TaskStatus::Timeout => {
@@ -210,11 +219,19 @@ impl Scheduler {
                         }
                     }
 
+                    // inspect VERDICT gate FAIL is semantic (needs rework), not a crash:
+                    // permanent — do not SameProvider-retry / provider-failover storm.
                     let reason_code = match other {
                         WorkerStatus::Timeout => "timeout",
                         WorkerStatus::Stopped => "stopped",
                         WorkerStatus::Failed => "fail",
-                        WorkerStatus::Done if result.status != TaskStatus::Done => "fail",
+                        WorkerStatus::Done if result.status != TaskStatus::Done => {
+                            if crate::domain::run::is_inspect_gate_error(result.error.as_deref()) {
+                                "inspect_fail"
+                            } else {
+                                "fail"
+                            }
+                        }
                         _ => "ok",
                     };
                     if reason_code == "ok" && result.status == TaskStatus::Done {
@@ -435,6 +452,12 @@ impl Scheduler {
                             let reason = match result.status {
                                 TaskStatus::Timeout => "timeout",
                                 TaskStatus::Stopped => "stopped",
+                                _ if crate::domain::run::is_inspect_gate_error(
+                                    result.error.as_deref(),
+                                ) =>
+                                {
+                                    "inspect_fail"
+                                }
                                 _ => "fail",
                             };
                             let _ = self

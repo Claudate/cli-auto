@@ -62,6 +62,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
           <button class="icon-btn" id="btn-plan-mgmt" type="button" hidden title="管理计划文件" aria-label="管理计划文件" data-icon="list" data-icon-size="16"></button>
           <button class="btn ghost sm" id="btn-plan-choose" type="button" hidden>选择计划</button>
           <!-- A3: 顶栏「编辑任务」已撤；步骤编辑仍在拆分台详情 -->
+          <!-- 费用改到 #result-cost-chip（本轮结果标题右侧）；顶栏 budget 钩子保留 hidden -->
           <div id="budget-chip" class="budget-chip muted" hidden title="规划成本 · 执行成本">
             <span id="budget-chip-text">—</span>
           </div>
@@ -213,6 +214,17 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                 </details>
               </div>
               <div class="plan-actions split-actions">
+                <label class="chat-effort-wrap split-effort-wrap" title="执行规划时的推理深度：影响各步 Claude 思考力度；重新规划时也用；ultracode = xhigh + 多 Agent">
+                  <span class="chat-effort-label muted">深度</span>
+                  <select id="split-effort" class="chat-effort-select" aria-label="执行推理深度">
+                    <option value="low">low · 浅</option>
+                    <option value="medium">medium</option>
+                    <option value="high" selected>high · 默认</option>
+                    <option value="xhigh">xhigh · 很深</option>
+                    <option value="max">max · 最深</option>
+                    <option value="ultracode">ultracode · 多 Agent</option>
+                  </select>
+                </label>
                 <!-- shell-chrome A2：第一屏仅「重新规划」+「执行规划」；调整… hidden 保 handler -->
                 <button class="btn ghost sm" id="btn-replan" type="button" title="按当前计划再拆一次；尽量保留你的修改">重新规划</button>
                 <button class="btn primary" id="btn-confirm-start" type="button" title="核对后开始执行（走确认开跑）">执行规划</button>
@@ -288,6 +300,8 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
               <div class="task-dash-title-row">
                 <h2 class="task-dash-heading" id="task-dash-heading">执行进度</h2>
                 <span class="run-status-pill" id="run-status-pill" hidden></span>
+                <!-- 规划/执行金额：本轮结果标题右侧（原顶栏 budget-chip） -->
+                <span id="result-cost-chip" class="result-cost-chip muted" hidden title="规划成本 · 执行成本">—</span>
               </div>
               <div class="task-dash-kpis">
                 <span id="run-status-badge" hidden></span>
@@ -299,15 +313,16 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                 <div class="kpi-meta muted" id="result-meta-text"></div>
               </div>
               <div class="task-dash-actions" id="result-actions">
+                <!-- 结果台仅「结束」+ 运行中「全部停止」；继续/回补/再写/监视 → 日志栏或撤 -->
+                <button class="btn primary sm" id="btn-ws-finish" type="button" hidden title="结束本轮">结束</button>
+                <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
+                <button class="icon-btn sm task-dash-toggle" id="btn-task-dash-toggle" type="button" title="折叠任务看板" aria-label="折叠任务看板" hidden data-icon="chevron-down" data-icon-size="14"></button>
+                <!-- legacy hooks（hidden 保留 id，handler/旧脚本不炸） -->
                 <button class="btn primary sm" id="btn-ws-resume" type="button" hidden>继续</button>
                 <button class="btn primary sm" id="btn-ws-rework" type="button" hidden title="根据遗漏再跑一轮回补">回补遗漏</button>
                 <button class="btn ghost sm" id="btn-ws-accept-residual" type="button" hidden title="接受当前遗漏并结束本轮">先这样结束</button>
-                <button class="btn primary sm" id="btn-ws-finish" type="button" hidden title="结束本轮，回到写计划">完成并回写计划</button>
                 <button class="btn ghost sm" id="btn-ws-back-chat" type="button" hidden title="回聊天写下一份计划">再写一份</button>
-                <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
-                <button class="btn ghost sm" id="btn-open-monitor-window" type="button" hidden title="在系统级独立窗口打开监视（可拖到另一显示器）">独立监视窗</button>
-                <button class="icon-btn sm task-dash-toggle" id="btn-task-dash-toggle" type="button" title="折叠任务看板" aria-label="折叠任务看板" hidden data-icon="chevron-down" data-icon-size="14"></button>
-                <!-- legacy hooks -->
+                <button class="btn ghost sm" id="btn-open-monitor-window" type="button" hidden title="在系统级独立窗口打开监视">独立监视窗</button>
                 <button id="btn-rerun" type="button" hidden>再跑一次</button>
                 <button id="btn-change-plan" type="button" hidden>换计划</button>
                 <button id="btn-ws-dismiss-run" type="button" hidden>收起运行</button>
@@ -381,10 +396,14 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                 </div>
                 <button type="button" class="btn ghost sm" id="btn-restore-panels" hidden>恢复已关闭</button>
               </div>
-              <!-- C1：调试工具默认收进「日志高级」 -->
-              <details class="log-advanced" id="log-advanced">
-                <summary class="btn ghost sm">日志高级…</summary>
-                <div class="log-advanced-body detail-tools">
+              <!-- 日志栏右侧：高度 + 继续 + 结束计划；原「日志高级」调试项收 hidden 钩子 -->
+              <div class="board-toolbar-side" id="log-toolbar-side">
+                <button type="button" class="cli-h-grip" id="cli-h-grip" title="按住上下拖动调整看板高度"><span data-icon="move-vertical" data-icon-size="14"></span> 高度</button>
+                <button type="button" class="btn primary sm" id="btn-log-resume" hidden title="继续执行已暂停/中止的计划">继续</button>
+                <button type="button" class="btn ghost sm" id="btn-log-end-plan" hidden title="结束本轮计划">结束计划</button>
+              </div>
+              <div id="log-advanced" class="log-advanced" hidden aria-hidden="true">
+                <div class="log-advanced-body detail-tools" hidden>
                   <div class="seg" id="log-event-filter" title="事件类型过滤" role="group" aria-label="事件过滤">
                     <button type="button" data-ev-filter="all" class="active">全部事件</button>
                     <button type="button" data-ev-filter="tool" title="仅工具调用/结果">工具</button>
@@ -402,9 +421,8 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                   </div>
                   <button type="button" class="btn ghost sm" id="btn-export-log-md" title="导出当前看板日志为 Markdown">导出 MD</button>
                   <button type="button" class="btn ghost sm" id="btn-cli-h-auto" title="恢复自适应高度">自适应高度</button>
-                  <button type="button" class="cli-h-grip" id="cli-h-grip" title="按住上下拖动调整看板高度"><span data-icon="move-vertical" data-icon-size="14"></span> 高度</button>
                 </div>
-              </details>
+              </div>
             </div>
             <!-- multi-cli handoff Board：进阶协作账本 -->
             <div id="handoff-board-strip" class="handoff-board-strip" hidden>
@@ -463,7 +481,6 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                       <button type="button" class="icon-btn sm" id="btn-chat-session-del" title="删除当前会话" aria-label="删除当前会话" data-icon="trash" data-icon-size="14"></button>
                     </div>
                   </details>
-                  <button type="button" class="icon-btn sm chat-rail-toggle" id="btn-chat-rail-toggle" title="展开/收起右侧计划列表（进阶）" aria-label="展开右侧计划列表" aria-pressed="false" data-icon="panel-right" data-icon-size="14"></button>
                 </div>
               </div>
             </div>
@@ -489,31 +506,26 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
               <input type="file" id="chat-file-input" accept="image/*,.pdf,.md,.markdown,.txt,.csv,.json,.yaml,.yml,.toml,.xml,.html,.htm,.css,.rs,.ts,.tsx,.js,.jsx,.py,.go,.java,.c,.h,.cpp,.hpp,.cs,.sql,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.log" multiple hidden />
               <button class="btn ghost sm icon-only" id="btn-chat-attach" type="button" title="上传附件：图片 / PDF / 文档 / 代码（点击选择 / 拖入 / Ctrl+V）" aria-label="上传附件" data-icon="paperclip" data-icon-size="16"></button>
               <textarea id="chat-input" rows="2" placeholder="说清目标与约束… 可附文件（点击别针 / 拖入 / Ctrl+V）" ></textarea>
+              <label class="chat-effort-wrap" title="推理深度：影响本机 Claude 思考力度；ultracode 等同 xhigh 并自动偏多 Agent 穷尽">
+                <span class="chat-effort-label muted">深度</span>
+                <select id="chat-effort" class="chat-effort-select" aria-label="推理深度">
+                  <option value="low">low · 浅</option>
+                  <option value="medium">medium</option>
+                  <option value="high" selected>high · 默认</option>
+                  <option value="xhigh">xhigh · 很深</option>
+                  <option value="max">max · 最深</option>
+                  <option value="ultracode">ultracode · 多 Agent</option>
+                </select>
+              </label>
               <button class="btn primary" id="btn-chat-send" type="button">发送</button>
             </div>
-            <p class="chat-composer-hint">Enter 发送 · Shift+Enter 换行 · 附件：图片 / PDF / md / 文档 / 代码 · 点图可放大</p>
+            <p class="chat-composer-hint">Enter 发送 · Shift+Enter 换行 · 拼音组字中回车落字不发送 · 附件：图片 / PDF / md / 文档 / 代码 · 点图可放大</p>
           </div>
-          <!-- 聊天侧栏：仅 icon 展开；完整管理进 page-plans -->
-          <aside id="plan-rail" class="plan-rail" aria-label="本项目计划快览" hidden>
-            <div class="plan-rail-head">
-              <h3 class="plan-rail-title">计划快览</h3>
-              <div class="plan-rail-head-actions">
-                <button class="btn ghost sm" id="btn-plan-rail-refresh" type="button" title="刷新列表">刷新</button>
-                <button class="icon-btn sm" id="btn-plan-rail-close" type="button" title="收起列表" aria-label="收起列表" data-icon="x" data-icon-size="14"></button>
-              </div>
-            </div>
-            <p class="plan-rail-hint muted">单击选中 · 顶栏「计划管理」细看 · 就绪条可直接执行 · 最新高亮</p>
-            <label class="plan-show-executed" title="默认隐藏已成功执行的计划">
-              <input type="checkbox" id="plan-rail-show-executed" />
-              <span>显示已执行</span>
-            </label>
-            <div id="plan-rail-list" class="plan-rail-list"></div>
-            <p id="plan-rail-empty" class="plan-rail-empty muted" hidden>暂无计划 · 保存后出现在这里</p>
-          </aside>
+          <!-- 聊天右栏 plan-rail 已撤：列表/选中/拆分回看走顶栏「计划管理」page-plans -->
         </div>
       </section>
 
-      <!-- 计划管理页：选中 / 预览 / 编辑文档 / 执行（≠ 聊天右栏） -->
+      <!-- 计划管理页：选中 / 预览 / 编辑文档 / 拆成步骤 / 查看拆分（聊天右栏已撤，本页为唯一列表 UI） -->
       <section id="page-plans" class="page">
         <div class="plans-mgmt">
           <div class="plans-mgmt-toolbar">
@@ -563,7 +575,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                   </div>
                   <span id="plans-mgmt-detail-badge" class="plan-rail-badge plan-rail-badge-pending">未执行</span>
                 </div>
-                <pre id="plans-mgmt-detail-body" class="plans-mgmt-detail-body"></pre>
+                <div id="plans-mgmt-detail-body" class="plans-mgmt-detail-body md-body"></div>
                 <div class="plans-mgmt-detail-foot">
                   <button class="btn ghost sm" id="btn-plans-preview" type="button">编辑文档</button>
                   <button class="btn ghost sm" id="btn-plans-view-split" type="button" hidden title="打开上次拆分的步骤列表">查看拆分结果</button>
@@ -688,6 +700,20 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                       <option value="claude">默认通道</option>
                       <option value="codex">备用通道</option>
                       <option value="fake">演练模式</option>
+                    </select>
+                  </label>
+                  <label class="settings-row" title="Claude 推理深度；ultracode = xhigh + 多 Agent 穷尽。聊天区可按次覆盖。">
+                    <span class="settings-row-text">
+                      <span class="settings-label">推理深度</span>
+                      <span class="field-hint">low→max；ultracode 自动开多 Agent</span>
+                    </span>
+                    <select id="s-effort" class="settings-select">
+                      <option value="low">low · 浅</option>
+                      <option value="medium">medium</option>
+                      <option value="high" selected>high · 默认</option>
+                      <option value="xhigh">xhigh · 很深</option>
+                      <option value="max">max · 最深</option>
+                      <option value="ultracode">ultracode · 多 Agent</option>
                     </select>
                   </label>
                   <label class="settings-row">
@@ -873,6 +899,17 @@ bin = "/Users/你/.local/bin/claude"</pre>
                   <option value="fake">模拟拆分</option>
                 </select>
               </label>
+              <label class="field" title="智能拆分时的推理深度；ultracode = xhigh + 多 Agent 穷尽">
+                <span>推理深度</span>
+                <select id="pp-effort" aria-label="拆分推理深度">
+                  <option value="low">low · 浅</option>
+                  <option value="medium">medium</option>
+                  <option value="high" selected>high · 默认</option>
+                  <option value="xhigh">xhigh · 很深</option>
+                  <option value="max">max · 最深</option>
+                  <option value="ultracode">ultracode · 多 Agent</option>
+                </select>
+              </label>
               <label class="field">
                 <span>执行通道（高级）</span>
                 <select id="pp-provider">
@@ -953,7 +990,7 @@ bin = "/Users/你/.local/bin/claude"</pre>
       </div>
       <!-- 只读预览 -->
       <div id="plan-full-view-body" class="plan-full-body">
-        <pre id="plan-full-md" class="plan-full-md"></pre>
+        <div id="plan-full-md" class="plan-full-md md-body"></div>
       </div>
       <!-- 编辑器（textarea 简单 md） -->
       <div id="plan-full-edit-body" class="plan-full-edit-body" hidden>

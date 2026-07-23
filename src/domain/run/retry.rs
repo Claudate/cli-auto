@@ -5,9 +5,19 @@
 //! [POS]: domain/run — no preflight IO (caller checks provider alive)
 //! [PROTOCOL]: 变更时更新 domain/run/mod.rs
 
-/// User-initiated stop and success never auto-retry / failover.
+/// User-initiated stop, success, and **inspect semantic FAIL** never auto-retry / failover.
+///
+/// `inspect_fail` = worker finished but host VERDICT gate rejected Done (P-loop).
+/// Re-running the same inspect cannot clear blocking ISSUES; use rework wave instead.
 pub fn is_non_retryable(reason_code: &str) -> bool {
-    reason_code == "stopped" || reason_code == "ok"
+    matches!(reason_code, "stopped" | "ok" | "inspect_fail")
+}
+
+/// Host inspect gate rewrote Done → Failed with a VERDICT/ISSUES reason.
+pub fn is_inspect_gate_error(error: Option<&str>) -> bool {
+    error
+        .map(|e| e.contains("inspect VERDICT"))
+        .unwrap_or(false)
 }
 
 /// Attempt budget for this task: after failover, only `fallback_extra`.
@@ -83,6 +93,21 @@ mod tests {
             classify_retry("stopped", 1, 3, false, true),
             RetryKind::Permanent
         );
+    }
+
+    #[test]
+    fn inspect_fail_never_retries_or_failovers() {
+        assert!(is_non_retryable("inspect_fail"));
+        assert!(!can_same_provider_retry("inspect_fail", 1, 3));
+        assert_eq!(
+            classify_retry("inspect_fail", 1, 3, false, true),
+            RetryKind::Permanent
+        );
+        assert!(is_inspect_gate_error(Some(
+            "inspect VERDICT=FAIL (12 ISSUES line(s) for rework (Open risks ISSUES[t7-inspect]))"
+        )));
+        assert!(!is_inspect_gate_error(Some("env: node: No such file")));
+        assert!(!is_inspect_gate_error(None));
     }
 
     #[test]

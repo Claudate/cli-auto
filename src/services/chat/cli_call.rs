@@ -153,20 +153,22 @@ pub(crate) fn call_claude_chat(
     config: &Config,
     project: &Path,
     sess: &ChatSession,
+    effort_override: Option<&str>,
 ) -> Result<String> {
     let provider = make_claude_provider(config);
 
     let task_dir = chat_work_task_dir(project);
+    // Defense-in-depth: send.rs already cleared; wipe again at spawn boundary.
+    super::stream::clear_chat_stream_work(project);
     std::fs::create_dir_all(&task_dir)?;
-    // Defense-in-depth: provider.start also clears this; chat reuses a fixed dir.
-    let _ = std::fs::remove_file(task_dir.join(".done"));
-    // Drop prior stream so collect cannot pick up a truncated previous turn.
-    let _ = std::fs::write(task_dir.join("stdout.json"), "");
-    let _ = std::fs::write(task_dir.join("stdout.raw.ndjson"), "");
 
     let prompt = build_user_prompt(config, sess, project);
     std::fs::write(task_dir.join("prompt.md"), &prompt)?;
 
+    let effort = effort_override
+        .and_then(crate::config::normalize_effort)
+        .or_else(|| crate::config::normalize_effort(&config.default.effort))
+        .unwrap_or_else(|| "high".into());
     let chat_task = TaskIR {
         id: "__chat__".into(),
         title: "plan chat".into(),
@@ -185,6 +187,8 @@ pub(crate) fn call_claude_chat(
             "max_turns": null,
             "max_budget_usd": null,
             "permission_mode": "dontAsk",
+            // Reasoning depth → claude --effort (ultracode → xhigh + system hint).
+            "effort": effort,
             // No allowed_tools key → CLI default tools (Read/Bash/Edit…), scope-locked
             // via --append-system-prompt. Empty [] used to pass --allowedTools "" which
             // Claude 2.1.x still seeds with defaults and then hits error_max_turns at 2.
@@ -303,11 +307,16 @@ pub(crate) fn call_claude_normalize(
         acceptance: None,
         timeout_secs: Some(120),
         worktree: Some(false),
-        provider_opts: serde_json::json!({
-            "max_turns": null,
-            "max_budget_usd": null,
-            "permission_mode": "dontAsk",
-        }),
+        provider_opts: {
+            let effort = crate::config::normalize_effort(&config.default.effort)
+                .unwrap_or_else(|| "high".into());
+            serde_json::json!({
+                "max_turns": null,
+                "max_budget_usd": null,
+                "permission_mode": "dontAsk",
+                "effort": effort,
+            })
+        },
         optional: false,
         include: true,
         role: None,

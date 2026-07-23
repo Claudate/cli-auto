@@ -72,6 +72,9 @@ pub enum Commands {
         /// After planning, print path to plan.proposed.json
         #[arg(long)]
         json: bool,
+        /// Claude reasoning effort for the planner CLI call
+        #[arg(long)]
+        effort: Option<String>,
     },
     /// Execute a plan (structured → direct exec; prose → plan job then confirm)
     Run {
@@ -123,6 +126,10 @@ pub enum Commands {
         /// Override run-level total budget USD
         #[arg(long)]
         max_budget: Option<f64>,
+        /// Claude reasoning effort: low | medium | high | xhigh | max | ultracode
+        /// (ultracode = xhigh + multi-agent thoroughness). Overrides config / CCO_EFFORT.
+        #[arg(long)]
+        effort: Option<String>,
     },
     /// Resume a paused/failed/aborted run from unfinished tasks
     Resume {
@@ -215,7 +222,10 @@ pub async fn execute(cli: Cli) -> Result<i32> {
             provider,
             mode,
             json,
-        } => commands::plan_cmd::run(&config, project, plan, plan_mode, provider, mode, json),
+            effort,
+        } => commands::plan_cmd::run(
+            &config, project, plan, plan_mode, provider, mode, json, effort,
+        ),
         Commands::Run {
             project,
             plan,
@@ -235,6 +245,7 @@ pub async fn execute(cli: Cli) -> Result<i32> {
             auto_open_terminal,
             terminal_kind,
             max_budget,
+            effort,
         } => {
             commands::run::run(
                 &config,
@@ -256,6 +267,7 @@ pub async fn execute(cli: Cli) -> Result<i32> {
                 auto_open_terminal,
                 terminal_kind,
                 max_budget,
+                effort,
             )
             .await
         }

@@ -148,6 +148,7 @@ export function createChatDesk(opts = {}) {
       message: args?.message || "",
       sessionId: args?.sessionId || "default",
       attachments: args?.attachments ?? null,
+      effort: args?.effort || null,
     });
   };
   desk.savePlan = (args) => chatApi.savePlan(args);

@@ -18,14 +18,9 @@ const LIVE = new Set([
   "init",
   "resuming",
 ]);
-const FAIL = new Set([
-  "failed",
-  "error",
-  "aborted",
-  "cancelled",
-  "canceled",
-  "timeout",
-]);
+/** Business failure only — stop/abort are a separate bucket. */
+const FAIL = new Set(["failed", "error", "err", "timeout"]);
+const STOP = new Set(["stopped", "aborted", "cancelled", "canceled"]);
 const DONE = new Set(["completed", "done", "success", "passed", "ok"]);
 
 export function isLiveStatus(s) {
@@ -38,6 +33,12 @@ export function isFailedStatus(s) {
   const fn = g("isFailedStatus");
   if (typeof fn === "function") return fn(s);
   return FAIL.has(String(s || "").toLowerCase());
+}
+
+export function isStoppedStatus(s) {
+  const fn = g("isStoppedStatus");
+  if (typeof fn === "function") return fn(s);
+  return STOP.has(String(s || "").toLowerCase());
 }
 
 export function isDoneStatus(s) {
@@ -67,10 +68,10 @@ export function isStalledTask(t) {
 }
 
 /**
- * R2 five-state bucket for tiles / KPIs.
+ * R2 buckets for tiles / KPIs (+ stop: user abort ≠ fail).
  * @param {string|object} st
  * @param {object} [task]
- * @returns {"fail"|"done"|"stall"|"run"|"wait"}
+ * @returns {"fail"|"stop"|"done"|"stall"|"run"|"wait"}
  */
 export function taskBucket(st, task) {
   let t = task;
@@ -81,6 +82,7 @@ export function taskBucket(st, task) {
   }
   s = String(s || "").toLowerCase();
   if (isFailedStatus(s)) return "fail";
+  if (isStoppedStatus(s)) return "stop";
   if (isDoneStatus(s)) return "done";
   if (t && isStalledTask(t)) return "stall";
   if (isLiveStatus(s) || ["starting", "queued", "running"].includes(s)) {
@@ -91,6 +93,7 @@ export function taskBucket(st, task) {
 
 const FIVE = {
   fail: "失败",
+  stop: "已停止",
   done: "已完成",
   stall: "已卡住",
   run: "进行中",
@@ -103,14 +106,15 @@ export function fiveStateLabel(bucket) {
   return FIVE[bucket] || "排队中";
 }
 
-/** CLI / 看板排序：卡住 → 进行中 → 排队 → 已完成 → 失败 */
+/** CLI / 看板排序：卡住 → 进行中 → 排队 → 已完成 → 已停止 → 失败 */
 export function cliStatusRank(st, task) {
   const b = taskBucket(st, task);
   if (b === "stall") return 0;
   if (b === "run") return 1;
   if (b === "wait") return 2;
   if (b === "done") return 3;
-  return 4;
+  if (b === "stop") return 4;
+  return 5;
 }
 
 export function sortTasksByStatus(tasks) {
@@ -134,15 +138,17 @@ export function countBuckets(tasks) {
   let wait = 0;
   let fail = 0;
   let stall = 0;
+  let stop = 0;
   (tasks || []).forEach((t) => {
     const b = taskBucket(t);
     if (b === "done") done++;
     else if (b === "stall") stall++;
     else if (b === "run") run++;
     else if (b === "fail") fail++;
+    else if (b === "stop") stop++;
     else wait++;
   });
-  return { done, run, wait, fail, stall };
+  return { done, run, wait, fail, stall, stop };
 }
 
 /**
@@ -168,6 +174,15 @@ export function runContext(live, legacy = {}) {
     }
   } catch (_) {
     if (planning) belongs = false;
+  }
+  // 双保险：live 仍在跑/暂停时绝不因 planJob 门禁把执行台刷空
+  if (live?.run_id && isLiveStatus(live.run_status)) {
+    belongs = true;
+  } else if (
+    live?.run_id &&
+    String(live.run_status || "").toLowerCase() === "paused"
+  ) {
+    belongs = true;
   }
   const runStatus = belongs ? live?.run_status : null;
   const hasRun = belongs && !!live?.run_id;

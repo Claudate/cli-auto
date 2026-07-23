@@ -14,8 +14,8 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 
 use super::{
-    parse_claude_result_json, Capabilities, StartCtx, TaskResult, TaskStatus, WorkerHandle,
-    WorkerPort, WorkerStatus,
+    parse_claude_result_json, Capabilities, StartCtx, TaskResult, WorkerHandle, WorkerPort,
+    WorkerStatus,
 };
 use crate::plan::TaskIR;
 
@@ -249,12 +249,7 @@ impl WorkerPort for SdkProvider {
             .ok()
             .and_then(|s| s.trim().parse::<i32>().ok())
             .unwrap_or(-1);
-        Ok(match code {
-            0 => WorkerStatus::Done,
-            130 => WorkerStatus::Stopped,
-            124 => WorkerStatus::Timeout,
-            _ => WorkerStatus::Failed,
-        })
+        Ok(super::worker_status_from_exit(code))
     }
 
     async fn stop(&self, handle: &WorkerHandle) -> Result<()> {
@@ -274,12 +269,7 @@ impl WorkerPort for SdkProvider {
             .and_then(|p| std::fs::read_to_string(p.join(".done")).ok())
             .and_then(|s| s.trim().parse().ok());
 
-        let status = match code {
-            Some(0) => TaskStatus::Done,
-            Some(130) => TaskStatus::Stopped,
-            Some(124) => TaskStatus::Timeout,
-            _ => TaskStatus::Failed,
-        };
+        let status = super::task_status_from_exit(code);
 
         Ok(TaskResult {
             status,
@@ -301,6 +291,7 @@ impl WorkerPort for SdkProvider {
 mod tests {
     use super::*;
     use crate::plan::TaskIR;
+    use crate::ports::worker::TaskStatus;
     use tempfile::tempdir;
 
     fn sample_task(id: &str, prompt: &str) -> TaskIR {

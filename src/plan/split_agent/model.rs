@@ -207,12 +207,21 @@ fn call_claude_cli_print(config: &Config, req: &SplitRequest) -> Result<String> 
         acceptance: None,
         timeout_secs: Some(600),
         worktree: Some(false),
-        provider_opts: json!({
-            "max_turns": 6,
-            "max_budget_usd": PLANNER_MAX_BUDGET_USD,
-            "permission_mode": "dontAsk",
-            "allowed_tools": [],
-        }),
+        provider_opts: {
+            let effort = req
+                .effort
+                .as_deref()
+                .and_then(crate::config::normalize_effort)
+                .or_else(|| crate::config::normalize_effort(&config.default.effort))
+                .unwrap_or_else(|| "high".into());
+            json!({
+                "max_turns": 6,
+                "max_budget_usd": PLANNER_MAX_BUDGET_USD,
+                "permission_mode": "dontAsk",
+                "allowed_tools": [],
+                "effort": effort,
+            })
+        },
         optional: false,
         include: true,
         role: None,
@@ -302,6 +311,7 @@ mod tests {
             created_at: "t0".into(),
             updated_at: "t0".into(),
             grain_hint: None,
+            effort: None,
         };
         let job = agent.split(&req).unwrap();
         assert_eq!(job.tasks.len(), 2);

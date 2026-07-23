@@ -1,14 +1,15 @@
 # 引导成长计划 · 用户记忆 · 多视角对抗 · 与 cco 结合方案
 
 > 日期：2026-07-21  
-> 角色：**工程形状草稿**（引导写计划 + SQLite 会话记忆 + 有界对抗）——**产品本体以** [`subjective-desire-decision-concept.md`](./subjective-desire-decision-concept.md) **为准**  
-> 状态：**设计稿 · 全量 Guide 未排期实施**（勾选 ☐ 见 §8 G0–G4；**不**平行第二套 A0–A5；心爱主线是「接近主观渴望」，本文偏 cco 嫁接想象）  
+> **状态：全量未 ship · pilotdeck 已 archive**（G0–G4 草稿 ☐ 保留 · **不**因薄表提前勾 ✅）  
+> 角色：**工程形状草稿**（引导写计划 + SQLite 会话记忆 + 有界对抗）——**产品本体以** [`archive/subjective-desire-decision-concept.md`](./archive/subjective-desire-decision-concept.md) **为准**  
+> 状态（详）：**设计稿 · 全量 Guide 未排期实施**（勾选 ☐ 见 §8 G0–G4；**不**平行第二套 A0–A5；心爱主线是「接近主观渴望」，本文偏 cco 嫁接想象）  
 > 产品方向：[`../PRODUCT.md`](../PRODUCT.md)  
 > 架构边界：[`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)（confirm 唯一开跑 · MVVM · 体积）  
 > 拆分 SoT：[`cco-split-format-sqlite-2026-07-21.md`](./cco-split-format-sqlite-2026-07-21.md)  
-> 拆分 Agent：[`split-agent-model-path-2026-07-21.md`](./split-agent-model-path-2026-07-21.md) · [`openhands-style-split-agent-landing-2026-07-21.md`](./openhands-style-split-agent-landing-2026-07-21.md)  
-> 体验：[`ux-nondev-landing-2026-07-21.md`](./ux-nondev-landing-2026-07-21.md)  
-> 轻记忆先行切片（**非**本文件全量 Guide · **不**开第二套波次）：[`pilotdeck-borrow-landing-2026-07-21.md`](./pilotdeck-borrow-landing-2026-07-21.md) **P2-2** pin/summary ✅ · **P2-3** 与本文互链 ✅（见 §3.1 / §5.6.1）  
+> 拆分 Agent（已归档）：[`archive/split-agent-model-path-2026-07-21.md`](./archive/split-agent-model-path-2026-07-21.md) · [`archive/openhands-style-split-agent-landing-2026-07-21.md`](./archive/openhands-style-split-agent-landing-2026-07-21.md)  
+> 体验（已归档）：[`archive/ux-nondev-landing-2026-07-21.md`](./archive/ux-nondev-landing-2026-07-21.md)  
+> 轻记忆先行切片（**已 archive** · **非**本文件全量 Guide · **不**开第二套波次）：[`archive/pilotdeck-borrow-landing-2026-07-21.md`](./archive/pilotdeck-borrow-landing-2026-07-21.md) **P2-2** pin/summary ✅ · **P2-3** 与本文互链 ✅（见 §3.1 / §5.6.1）  
 > 聊天共建（已归档参考）：[`archive/chat-plan-builder-2026-07-18.md`](./archive/chat-plan-builder-2026-07-18.md)
 
 [PROTOCOL]: 改本方案时同步 §0 定位、§6 数据模型、§8 波次勾选；落地后回写 PRODUCT 五步叙事（只在「① 生成」前插入引导子相）与 `docs/CLAUDE.md` 索引。**禁止**旁路 `confirm_start`；**禁止**把本文件写成第二套调度器。**禁止**因 pilotdeck P2-2 薄表落地而把 §8 G0-2 / G1-5 勾成 ✅——薄表 = 可复用地基，**不等于** Guide 状态机 / 全量 `project_memory` schema 已 ship。
@@ -301,7 +302,7 @@ synthesis = 最后一轮后强制 Brief，禁止再开无限轮
 
 #### 5.6.1 已落地 · 可被 Guide Brief 复用（pilotdeck P2-2 · 2026-07-22）
 
-> **真源勾选**：[`pilotdeck-borrow-landing-2026-07-21.md`](./pilotdeck-borrow-landing-2026-07-21.md) §3 **P2-2 ✅** · **P2-3 ✅**（互链本文）。  
+> **真源勾选**：[`archive/pilotdeck-borrow-landing-2026-07-21.md`](./archive/pilotdeck-borrow-landing-2026-07-21.md) §3 **P2-2 ✅** · **P2-3 ✅**（互链本文；**pilotdeck 已 archive**）。  
 > **本文件 §8 G0–G4 仍全部 ☐**——不因薄表 ship 而双轨勾选。
 
 | 表 / 模块 | 形状 | Guide 复用约定 |
@@ -499,9 +500,9 @@ materialize_plan → 既有 app::chat::save_plan 或直接写 plans/guide-*.md
 ## 8. 落地波次（建议 · 勾选真源）
 
 > 状态：☐ 待做 · ░ 进行中 · ✅ 完成  
-> **不**重开 A0–A5；可与 `ux-nondev-landing` 波次 B（写计划顺滑）衔接。  
-> **排期主权在本文件**：全量 Guide 状态机 / Brief / 角色 Pack **只**认下列 G0–G4 勾选。  
-> pilotdeck **P2-2/P2-3** = 轻记忆薄切片 + 文档互链（已 ✅）；**禁止**在 pilotdeck 再开第二套 G 波次，也**禁止**把 G0-2/G1-5 因 P2-2 表存在而提前勾 ✅（见 §5.6.1）。
+> **不**重开 A0–A5；可与已归档 [`archive/ux-nondev-landing-2026-07-21.md`](./archive/ux-nondev-landing-2026-07-21.md) 波次 B（写计划顺滑）衔接。  
+> **排期主权在本文件**：全量 Guide 状态机 / Brief / 角色 Pack **只**认下列 G0–G4 勾选（**草稿 ☐ 保留 · 全量未 ship**）。  
+> pilotdeck（[`archive/pilotdeck-borrow-landing-2026-07-21.md`](./archive/pilotdeck-borrow-landing-2026-07-21.md)）**P2-2/P2-3** = 轻记忆薄切片 + 文档互链（已 ✅ · **已 archive**）；**禁止**在 pilotdeck 再开第二套 G 波次，也**禁止**把 G0-2/G1-5 因 P2-2 表存在而提前勾 ✅（见 §5.6.1）。
 
 ### 波次 G0 · 契约与空壳（0.5–1 d）
 
@@ -596,3 +597,4 @@ materialize_plan → 既有 app::chat::save_plan 或直接写 plans/guide-*.md
 |------|------|
 | 2026-07-21 | 初稿：结合用户四段意图 · cco 现状 · 外部 MAD/Socratic/AutoGen/Genspark/Advisor 研究 · SQLite 记忆 · 波次 G0–G4 |
 | 2026-07-22 | **P2-3 互链**：§3.1/3.2 · §5.6.1 · §6 SoT · §8 序言 — 标明 pilotdeck P2-2 薄表可被 Guide Brief 复用；G0–G4 仍 ☐、无双轨勾选；全量 Guide 只听本文排期 |
+| 2026-07-22 | **docs-cleanup C3**：文首标「全量未 ship · pilotdeck 已 archive」；pilotdeck / ux-nondev / openhands / agent-path / 概念文链改 `archive/…`；G0–G4 ☐ 保留 |

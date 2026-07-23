@@ -94,16 +94,30 @@ export const startPlanJob = (args) => raw("start_plan_job_cmd", args);
 export const getPlanJob = (jobId) => raw("get_plan_job_cmd", { jobId });
 export const latestPlanJob = (project) =>
   raw("latest_plan_job_cmd", { project });
+/** Plan list reopen: latest restorable split for one plan path (SQLite + disk). */
+export const latestPlanJobForPlan = (project, planPath) =>
+  raw("latest_plan_job_for_plan_cmd", { project, planPath });
+/** Plan list badge index: restorable splits per plan_path. */
+export const listPlanSplitIndex = (project) =>
+  raw("list_plan_split_index_cmd", { project });
 export const updatePlanTask = (args) => raw("update_plan_task_cmd", args);
 export const removePlanTask = (args) => raw("remove_plan_task_cmd", args);
 /** 唯一业务开跑入口（Split 确认）；禁止 UI 旁路 start_run */
-export const confirmStart = (jobId) => raw("confirm_start_cmd", { jobId });
+/** @param {string} jobId @param {string|null|undefined} [effort] low…max|ultracode */
+export const confirmStart = (jobId, effort) => {
+  const args = { jobId };
+  if (effort) args.effort = effort;
+  return raw("confirm_start_cmd", args);
+};
 
 /* ── Run ── */
 export const stopRun = (runId) => raw("stop_run_cmd", { runId });
 export const stopTask = (runId, taskId) =>
   raw("stop_task_cmd", { runId, taskId });
 export const resumeRun = (runId) => raw("resume_run_cmd", { runId });
+/** Manual re-run of one failed task (same run; not re-split / not confirm). */
+export const retryTask = (runId, taskId) =>
+  raw("retry_task_cmd", { runId, taskId });
 export const startRework = (runId) => raw("start_rework_cmd", { runId });
 export const acceptResidual = (runId, note) =>
   raw("accept_residual_cmd", { runId, note: note || null });
@@ -173,12 +187,15 @@ export const gateway = {
   startPlanJob,
   getPlanJob,
   latestPlanJob,
+  latestPlanJobForPlan,
+  listPlanSplitIndex,
   updatePlanTask,
   removePlanTask,
   confirmStart,
   stopRun,
   stopTask,
   resumeRun,
+  retryTask,
   startRework,
   acceptResidual,
   writebackMemory,

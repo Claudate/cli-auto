@@ -300,6 +300,42 @@ impl RunState {
         n
     }
 
+    /// Reset **one** terminal non-success task so the user can re-run just that step.
+    ///
+    /// Leaves Done / Skipped / other tasks untouched. Refuses live tasks
+    /// (Pending/Queued/Starting/Running) — stop first. Clears attempt counters
+    /// for a fresh retry budget on this task only.
+    pub fn prepare_task_retry(&mut self, task_id: &str) -> Result<()> {
+        let ts = self
+            .tasks
+            .get_mut(task_id)
+            .ok_or_else(|| anyhow::anyhow!("任务不存在: {task_id}"))?;
+        match ts.status {
+            TaskStatus::Done | TaskStatus::Skipped => {
+                anyhow::bail!("任务 {task_id} 已完成，无需再跑")
+            }
+            TaskStatus::Pending
+            | TaskStatus::Queued
+            | TaskStatus::Starting
+            | TaskStatus::Running => {
+                anyhow::bail!("任务 {task_id} 仍在进行中，请先停止再重跑")
+            }
+            TaskStatus::Failed | TaskStatus::Stopped | TaskStatus::Timeout => {
+                ts.status = TaskStatus::Pending;
+                ts.error = None;
+                ts.finished_at = None;
+                ts.started_at = None;
+                ts.pid = None;
+                ts.attempt = 0;
+                ts.last_retry_reason = Some("manual".into());
+                ts.failover_used = false;
+            }
+        }
+        self.status = RunStatus::Init;
+        self.finished_at = None;
+        Ok(())
+    }
+
     pub fn total_cost_usd(&self) -> f64 {
         self.tasks
             .values()
@@ -415,5 +451,54 @@ mod tests {
             let back: RouteSource = serde_json::from_str(&s).unwrap();
             assert_eq!(back, src);
         }
+    }
+
+    /// Manual card「再跑一次」: only the named failed task resets; Done stays Done.
+    #[test]
+    fn prepare_task_retry_only_resets_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let run_dir = dir.path();
+        let body = r#"{
+  "schema": "cco-run/v1",
+  "run_id": "20260722T000000Z-rtry",
+  "project_root": "/tmp/proj",
+  "plan_path": "/tmp/proj/plan.md",
+  "adapter": "cco-plan/v1",
+  "started_at": "2026-07-22T00:00:00Z",
+  "status": "failed",
+  "tasks": {
+    "ok": {
+      "status": "done",
+      "provider": "claude",
+      "mode": "print",
+      "attempt": 1,
+      "failover_used": false
+    },
+    "bad": {
+      "status": "failed",
+      "provider": "codex",
+      "mode": "print",
+      "attempt": 2,
+      "failover_used": true,
+      "error": "boom",
+      "last_retry_reason": "fail"
+    }
+  }
+}"#;
+        let mut f = std::fs::File::create(run_dir.join("run.json")).unwrap();
+        f.write_all(body.as_bytes()).unwrap();
+        let mut rs = RunState::load(run_dir).expect("load");
+        rs.prepare_task_retry("bad").expect("retry bad");
+        assert_eq!(rs.tasks["ok"].status, TaskStatus::Done);
+        assert_eq!(rs.tasks["bad"].status, TaskStatus::Pending);
+        assert_eq!(rs.tasks["bad"].attempt, 0);
+        assert_eq!(rs.tasks["bad"].last_retry_reason.as_deref(), Some("manual"));
+        assert!(!rs.tasks["bad"].failover_used);
+        assert!(rs.tasks["bad"].error.is_none());
+        assert_eq!(rs.status, RunStatus::Init);
+        // Done target must refuse
+        assert!(rs.prepare_task_retry("ok").is_err());
+        // Missing id
+        assert!(rs.prepare_task_retry("nope").is_err());
     }
 }

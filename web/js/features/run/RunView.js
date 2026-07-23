@@ -125,8 +125,12 @@ export function bindRunView(vm, bridge = {}) {
     card.hidden = !(hasRun && !planning);
     if (card.hidden) return;
 
-    const { done, run, wait, fail, stall } = counts;
-    card.classList.toggle("ok", finished && fail === 0 && done > 0);
+    const { done, run, wait, fail, stall, stop = 0 } = counts;
+    const runAborted = ["aborted", "stopped"].includes(
+      String(runStatus || "").toLowerCase()
+    );
+    // bad only for real fail/stall — pure user-stop is neutral
+    card.classList.toggle("ok", finished && fail === 0 && done > 0 && !runAborted);
     card.classList.toggle("bad", fail > 0 || stall > 0);
     card.classList.toggle("is-result", !!finished && !active);
     card.classList.toggle("is-running", !!active);
@@ -174,9 +178,16 @@ export function bindRunView(vm, bridge = {}) {
           (stall > 0 ? " is-stall" : run > 0 ? " is-run" : "");
       } else if (finished) {
         pill.hidden = false;
-        pill.textContent = fail > 0 ? "有失败" : "已结束";
-        pill.className =
-          "run-status-pill" + (fail > 0 ? " is-fail" : " is-done");
+        if (fail > 0) {
+          pill.textContent = "有失败";
+          pill.className = "run-status-pill is-fail";
+        } else if (runAborted || stop > 0) {
+          pill.textContent = "已中止";
+          pill.className = "run-status-pill is-stop";
+        } else {
+          pill.textContent = "已结束";
+          pill.className = "run-status-pill is-done";
+        }
       } else {
         pill.hidden = true;
       }
@@ -191,17 +202,12 @@ export function bindRunView(vm, bridge = {}) {
       : null;
     const meta = $("result-meta-text");
     if (meta) {
+      // 费用改到标题右侧 #result-cost-chip；meta 只留步数/耗时/波次
       const bits = [];
       if (tasks.length) bits.push(`共 ${tasks.length} 步`);
       if (live?.started_at) bits.push(formatElapsed(live.started_at, runEnd));
       if (live?.current_wave != null && live?.layers?.length) {
         bits.push(`第 ${live.current_wave}/${live.layers.length} 波`);
-      }
-      const pc = live?.planner_cost_usd;
-      const ec = live?.exec_cost_usd;
-      if (pc != null || ec != null) {
-        const fmt = (n) => (n != null ? `$${Number(n).toFixed(2)}` : "—");
-        bits.push(`花费 规划 ${fmt(pc)} · 执行 ${fmt(ec)}`);
       }
       meta.textContent = bits.join(" · ");
     }
@@ -236,36 +242,25 @@ export function bindRunView(vm, bridge = {}) {
       }
     }
 
-    const stop = $("btn-ws-stop-all");
-    if (stop) stop.hidden = !active;
+    // stop count already bound above from counts; button uses distinct name
+    const stopAllBtn = $("btn-ws-stop-all");
+    if (stopAllBtn) stopAllBtn.hidden = !active;
+    // 结果台动作收口：独立监视/继续/再写 不在 task-dash-actions 露出
     const monWin = $("btn-open-monitor-window");
-    if (monWin) {
-      const isMon =
-        typeof bridge.isMonitorWindow === "function"
-          ? bridge.isMonitorWindow()
-          : !!legacy().isMonitorWindow;
-      monWin.hidden = !!isMon || !(hasRun || active);
-    }
+    if (monWin) monWin.hidden = true;
     const resume = $("btn-ws-resume");
-    if (resume) {
-      resume.hidden = !["paused", "failed", "aborted"].includes(
-        String(runStatus || "").toLowerCase()
-      );
-    }
-
+    if (resume) resume.hidden = true;
     const backChat = $("btn-ws-back-chat");
-    if (backChat) {
-      const showBack = !!finished && !active;
-      backChat.hidden = !showBack;
-      if (showBack) {
-        backChat.textContent = fail > 0 ? "回聊天改计划" : "回聊天";
-        backChat.title =
-          fail > 0
-            ? "回聊天调整计划后再拆成步骤"
-            : "回聊天写下一份计划";
-        backChat.className = fail > 0 ? "btn primary sm" : "btn ghost sm";
-      }
-    }
+    if (backChat) backChat.hidden = true;
+
+    // 日志栏：继续（暂停/失败/中止）+ 结束计划（有 run 即显）
+    const canResume = ["paused", "failed", "aborted"].includes(
+      String(runStatus || "").toLowerCase()
+    );
+    const logResume = $("btn-log-resume");
+    if (logResume) logResume.hidden = !canResume;
+    const logEnd = $("btn-log-end-plan");
+    if (logEnd) logEnd.hidden = !(hasRun || active || finished);
 
     const toggle = $("btn-task-dash-toggle");
     if (toggle) {
@@ -419,6 +414,7 @@ export function bindRunView(vm, bridge = {}) {
     stopAll: () => vm.stopAll(),
     resume: () => vm.resume(),
     stopTask: (id) => vm.stopTask(id),
+    retryTask: (id) => vm.retryTask(id),
     toggleDash: () => {
       vm.toggleDashCollapsed();
       if (typeof bridge.syncLegacy === "function") {

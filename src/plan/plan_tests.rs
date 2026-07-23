@@ -1192,3 +1192,35 @@ tasks:
         // default_provider is claude; task provider was claude (= default) → tag routes to codex
         assert_eq!(ir.tasks[0].provider, "codex");
     }
+
+    /// docs/*-landing-*.md must appear in plan list (not only *plan* filenames).
+    #[test]
+    fn list_plans_includes_landing_docs() {
+        let dir = tempfile::tempdir().unwrap();
+        let docs = dir.path().join("docs");
+        std::fs::create_dir_all(&docs).unwrap();
+        std::fs::write(
+            docs.join("pilotdeck-borrow-landing-2026-07-21.md"),
+            "# pilotdeck\n",
+        )
+        .unwrap();
+        std::fs::write(docs.join("README.md"), "# readme not a plan\n").unwrap();
+        std::fs::write(docs.join("ux-plan-mgmt.md"), "# has plan in name\n").unwrap();
+        let found = list_plans(dir.path()).unwrap();
+        let names: Vec<String> = found
+            .iter()
+            .filter_map(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))
+            .collect();
+        assert!(
+            names.iter().any(|n| n.contains("pilotdeck-borrow-landing")),
+            "landing doc missing: {names:?}"
+        );
+        assert!(
+            names.iter().any(|n| n.contains("ux-plan-mgmt")),
+            "plan-named doc missing: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|n| n.eq_ignore_ascii_case("README.md")),
+            "README should not be listed: {names:?}"
+        );
+    }

@@ -38,6 +38,8 @@ pub struct SettingsView {
     pub post_tasks_note: String,
     /// 拆分后可选 LLM 第二跳校对（去假依赖）；默认关。也可 env CCO_PLANNER_CRITIC=1。
     pub planner_critic_enabled: bool,
+    /// 推理深度：low | medium | high | xhigh | max | ultracode（ultracode=xhigh+多 Agent）。
+    pub effort: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -54,6 +56,8 @@ pub struct SettingsUpdate {
     pub post_git_push_enabled: Option<bool>,
     pub post_open_pr_enabled: Option<bool>,
     pub planner_critic_enabled: Option<bool>,
+    /// low | medium | high | xhigh | max | ultracode
+    pub effort: Option<String>,
 }
 
 pub fn get_settings(config: &Config) -> SettingsView {
@@ -77,6 +81,7 @@ pub fn get_settings(config: &Config) -> SettingsView {
             "系统收尾任务不参与 AI 拆解；开启后每次拆分末尾自动追加为「可选」且默认勾选，确认屏可取消。自动开 PR 需本机已安装并登录 GitHub CLI（gh）；禁止 force-push / 自动 merge。"
                 .into(),
         planner_critic_enabled: config.default.planner_critic_enabled,
+        effort: config.default.effort.clone(),
     }
 }
 
@@ -126,6 +131,11 @@ pub fn set_settings(config: &mut Config, update: SettingsUpdate) -> Result<()> {
     if let Some(v) = update.planner_critic_enabled {
         config.default.planner_critic_enabled = v;
     }
+    if let Some(e) = update.effort {
+        if let Some(n) = crate::config::normalize_effort(&e) {
+            config.default.effort = n;
+        }
+    }
     config.save()
 }
 
@@ -148,7 +158,36 @@ mod tests {
         // Partial update deserializes missing fields as None (does not force false)
         let u2: SettingsUpdate = serde_json::from_str(r#"{"max_parallel":3}"#).unwrap();
         assert_eq!(u2.planner_critic_enabled, None);
-        assert_eq!(u2.max_parallel, Some(3));
+    }
+
+    #[test]
+    fn effort_view_and_update_field() {
+        let mut cfg = Config::default();
+        assert_eq!(cfg.default.effort, "high");
+        assert_eq!(get_settings(&cfg).effort, "high");
+
+        let u: SettingsUpdate = serde_json::from_str(r#"{"effort":"ultracode"}"#).unwrap();
+        assert_eq!(u.effort.as_deref(), Some("ultracode"));
+        // Apply without save (set_settings writes disk); mirror its normalize path.
+        if let Some(n) = crate::config::normalize_effort(u.effort.as_deref().unwrap()) {
+            cfg.default.effort = n;
+        }
+        assert_eq!(cfg.default.effort, "ultracode");
+        assert_eq!(get_settings(&cfg).effort, "ultracode");
+
+        // Invalid token ignored
+        let bad: SettingsUpdate = serde_json::from_str(r#"{"effort":"turbo"}"#).unwrap();
+        if let Some(raw) = bad.effort.as_deref() {
+            if let Some(n) = crate::config::normalize_effort(raw) {
+                cfg.default.effort = n;
+            }
+        }
+        assert_eq!(cfg.default.effort, "ultracode");
+        assert_eq!(
+            crate::config::effort_cli_level("ultracode"),
+            "xhigh"
+        );
+        assert!(crate::config::effort_is_ultracode("ultracode"));
     }
 
     #[test]

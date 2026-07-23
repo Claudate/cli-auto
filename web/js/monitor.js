@@ -99,6 +99,13 @@ function taskBucket(st, task) {
   }
   s = String(s || "").toLowerCase();
   if (isFailedStatus(s)) return "fail";
+  // stop ≠ fail: user abort / freeze pending
+  if (
+    (typeof isStoppedStatus === "function" && isStoppedStatus(s)) ||
+    ["stopped", "aborted", "cancelled", "canceled"].includes(s)
+  ) {
+    return "stop";
+  }
   if (isDoneStatus(s)) return "done";
   if (t && typeof isStalledTask === "function" && isStalledTask(t)) return "stall";
   if (isLiveStatus(s) || ["starting", "queued", "running"].includes(s)) return "run";
@@ -107,7 +114,17 @@ function taskBucket(st, task) {
 
 function cliStatusRank(st, task) {
   const b = taskBucket(st, task);
-  return b === "stall" ? 0 : b === "run" ? 1 : b === "wait" ? 2 : b === "done" ? 3 : 4;
+  return b === "stall"
+    ? 0
+    : b === "run"
+      ? 1
+      : b === "wait"
+        ? 2
+        : b === "done"
+          ? 3
+          : b === "stop"
+            ? 4
+            : 5;
 }
 
 function sortTasksByStatus(tasks) {

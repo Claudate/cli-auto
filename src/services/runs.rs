@@ -6,7 +6,7 @@
 //!
 //! [INPUT]: Config · StartRunRequest · PlanIR · plan job id
 //! [OUTPUT]: RunSummary · PlanMeta · list_plans/list_plan_meta · start_run_* · confirm_start ·
-//!           stop_run · resume_run_async · start_rework_from_run · accept_run_residual（P-loop）
+//!           stop_run · resume_run_async · retry_task_async · start_rework_from_run · accept_run_residual（P-loop）
 //! [POS]: services 子模块；Mode B 开跑真源 = app::split::confirm；rework 另起 run
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md · **勿在此新增业务策略**
 
@@ -318,7 +318,9 @@ pub fn start_run_from_plan_with_route(
     if !project.is_dir() {
         bail!("项目路径不是目录: {}", project.display());
     }
-    let ir = crate::plan::materialize_selected_tasks(ir.clone())?;
+    let mut ir = crate::plan::materialize_selected_tasks(ir.clone())?;
+    // Soft-fill effort if still missing (confirm already force-applied when UI picked).
+    crate::app::run::apply_effort(&mut ir, &config, None);
 
     let run_id = state::new_run_id();
     let run_dir = state::prepare_run_dir(&config.runs_dir(), &run_id)?;
@@ -426,7 +428,7 @@ pub use crate::plan::planner::{
 /// A1 facade: business entry lives in [`crate::app::split::confirm`]; this
 /// symbol stays for CLI/Tauri/tests until all call sites migrate.
 pub fn confirm_start(config: Config, job_id: &str) -> Result<String> {
-    crate::app::split::confirm(config, job_id)
+    crate::app::split::confirm(config, job_id, None)
 }
 
 pub fn stop_run(config: &Config, run_id: &str) -> Result<()> {
@@ -463,6 +465,8 @@ pub fn stop_run(config: &Config, run_id: &str) -> Result<()> {
             ts.status = TaskStatus::Stopped;
             ts.finished_at = Some(chrono::Utc::now());
             ts.pid = None;
+            ts.exit_code = Some(130);
+            ts.error = None; // not a business failure
             stopped.push(tid.clone());
         }
     }
@@ -481,6 +485,24 @@ pub fn stop_run(config: &Config, run_id: &str) -> Result<()> {
 }
 
 pub fn resume_run_async(config: Config, run_id: &str) -> Result<()> {
+    spawn_resume(config, run_id, None)
+}
+
+/// Manual re-run of **one** failed/stopped/timeout task in an existing run dir.
+///
+/// Does **not** open a new Mode B plan or re-split. Done tasks stay Done; only
+/// `task_id` is reset to Pending (fresh attempt budget) and the scheduler
+/// continues from this run. Refuses while the run is still marked Running.
+pub fn retry_task_async(config: Config, run_id: &str, task_id: &str) -> Result<()> {
+    if task_id.trim().is_empty() {
+        bail!("task_id 不能为空");
+    }
+    spawn_resume(config, run_id, Some(task_id.to_string()))
+}
+
+/// Shared background resume/retry spawn. `only_task = None` → whole-run resume
+/// (all non-Done); `Some(id)` → single-task manual retry.
+fn spawn_resume(config: Config, run_id: &str, only_task: Option<String>) -> Result<()> {
     let dir = state::resolve_run_dir(&config.runs_dir(), Some(run_id))?;
     let mut rs = RunState::load(&dir)?;
     if matches!(rs.status, RunStatus::Running) {
@@ -491,7 +513,19 @@ pub fn resume_run_async(config: Config, run_id: &str) -> Result<()> {
         bail!("缺少 plan.resolved.json");
     }
     let ir: PlanIR = serde_json::from_str(&std::fs::read_to_string(&plan_path)?)?;
-    let _n = rs.prepare_for_resume();
+    if let Some(ref tid) = only_task {
+        rs.prepare_task_retry(tid)?;
+        let _ = rs.event(
+            "task_retry",
+            serde_json::json!({
+                "task_id": tid,
+                "reason": "manual",
+                "via": "desktop",
+            }),
+        );
+    } else {
+        let _n = rs.prepare_for_resume();
+    }
     for (id, ts) in &rs.tasks {
         if matches!(ts.status, TaskStatus::Pending) {
             let _ = std::fs::remove_file(dir.join("tasks").join(id).join(".done"));

@@ -11,27 +11,14 @@ const DEFAULT_SELECTORS = [
   "details.split-more-actions[open]",
   "details.split-route-advanced[open]",
   "details.split-quality[open]",
-  "details.split-detail-tech[open]",
-  "details.split-detail-full[open]",
   "details.planner-log-fold[open]",
-  "details.log-advanced[open]",
   "details.settings-advanced[open]",
   "details.help-advanced[open]",
+  // 聊天页：多会话切换（B3 默认藏进 details；点空白应收）
+  "details.chat-session-more[open]",
   ".cco-menu.is-open",
   "[data-click-outside-root][data-open='1']",
 ];
-
-function isInsideSelectOrModal(target) {
-  if (!target || !target.closest) return false;
-  if (target.closest(".cco-select")) return true;
-  if (target.closest("select")) return true;
-  if (target.closest(".modal, [role='dialog'], #modal, .plan-full-modal, .img-lightbox")) {
-    return true;
-  }
-  // custom select panel may portal under body
-  if (target.closest(".cco-select-panel, .cco-select-dropdown")) return true;
-  return false;
-}
 
 /**
  * @param {object} [opts]
@@ -48,7 +35,14 @@ export function installClickOutside(opts = {}) {
 
   const onPointer = (e) => {
     const t = e.target;
-    if (!t || isInsideSelectOrModal(t)) return;
+    if (!t) return;
+    // 点在 modal / 对话框内：不收其它层（防误关）
+    if (
+      t.closest &&
+      t.closest(".modal, [role='dialog'], #modal, .plan-full-modal, .img-lightbox")
+    ) {
+      return;
+    }
     for (const sel of selectors) {
       let nodes;
       try {
@@ -58,7 +52,38 @@ export function installClickOutside(opts = {}) {
       }
       nodes.forEach((node) => {
         if (node.contains(t)) return;
-        // click on summary of another details — still close this one
+        // 点在「本层内部」的 select 菜单/壳（含可能 portal 的 panel）→ 不关
+        const selectRoot = t.closest?.(".cco-select");
+        if (selectRoot && node.contains(selectRoot)) return;
+        const portal = t.closest?.(".cco-select-panel, .cco-select-dropdown");
+        if (portal && node.contains(portal)) return;
+        // 点在其它区域（含页面其它 select）→ 收起本层
+        if (node.tagName === "DETAILS") {
+          node.open = false;
+          return;
+        }
+        node.classList.remove("is-open");
+        if (node.dataset) node.dataset.open = "0";
+        if (typeof node.hidePopover === "function") {
+          try {
+            node.hidePopover();
+          } catch (_) {}
+        }
+      });
+    }
+  };
+
+  const onKey = (e) => {
+    if (e.key !== "Escape" && e.key !== "Esc") return;
+    // Esc：收起所有注册的展开层（含聊天会话…）
+    for (const sel of selectors) {
+      let nodes;
+      try {
+        nodes = document.querySelectorAll(sel);
+      } catch (_) {
+        continue;
+      }
+      nodes.forEach((node) => {
         if (node.tagName === "DETAILS") {
           node.open = false;
           return;
@@ -75,8 +100,10 @@ export function installClickOutside(opts = {}) {
   };
 
   document.addEventListener("pointerdown", onPointer, true);
+  document.addEventListener("keydown", onKey, true);
   return () => {
     document.removeEventListener("pointerdown", onPointer, true);
+    document.removeEventListener("keydown", onKey, true);
     delete document.documentElement.dataset.ccoClickOutside;
   };
 }

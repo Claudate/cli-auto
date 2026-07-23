@@ -3,7 +3,7 @@
 
 成员清单
 scheduler_fake.rs: FakeProvider 多任务调度主路径 · P1-8 report by_provider + handoff 路径
-resume_and_budget.rs: resume / 预算截断
+resume_and_budget.rs: resume / **单任务 prepare_task_retry** / 预算截断
 acceptance_and_term.rs: acceptance 门禁 + term 会话
 bg_and_worktree.rs: bg 模式与 worktree 隔离
 serial_prompts_golden.rs: serial-prompts 适配器金样

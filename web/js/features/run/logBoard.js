@@ -187,6 +187,7 @@ function renderCliBoardInner(tasks) {
                 wait: "排队中",
                 stall: "已卡住",
                 done: "已完成",
+                stop: "已停止",
                 fail: "失败",
               }[f] || f
             }）无匹配步骤`;

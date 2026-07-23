@@ -17,10 +17,12 @@
 //! note: extract_plan_fence / history truncate 必须 char-boundary 安全（CJK 禁字节硬切）
 //! note: extract_plan_fence 嵌套 fence 按行首 depth 计数（```text 图示不得截断 ```plan）
 //! note: chat_save_plan 可选 plan_rel 覆盖已有未执行计划；read_plan_md 供右轨全文 modal
+//! note: chat_send 新 ```plan fence 必清 draft.path/saved（新正文 = 新身份，禁止挂到旧 plan_rel）
 //! note: G0 plan 标题截断（H1 遇 ## / 最长 80 字）+ 写盘换行规范化；G0b 可选 CLI 再整理
 //! note: G4 chat_save_attachment · ChatMessage.attachments；chat_save_plan 可选 plans_dir
 //! note: C3 多会话：list/new/delete + 可选 title；默认 session_id=default 仍兼容
 //! note: C3 流式 partial：chat_stream_partial 读 stdout 增量；失败降级整段 reply（不 panic）
+//! note: chat_send 入口 clear_chat_stream_work，防新一轮 poll 把上一条整段当流式刷出
 
 mod attachment;
 mod cli_call;

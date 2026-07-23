@@ -46,6 +46,7 @@ pub fn build_split_agent_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
         created_at: job.created_at.to_rfc3339(),
         updated_at: now.clone(),
         grain_hint: job.grain_hint.clone(),
+        effort: job.effort.clone(),
     };
 
     if let Some(ref g) = job.grain_hint {
@@ -56,6 +57,13 @@ pub fn build_split_agent_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
                 &format!("ModelSplitAgent grain: {}", g.trim()),
             );
         }
+    }
+    if let Some(ref e) = job.effort {
+        append_log(
+            config,
+            &job.job_id,
+            &format!("ModelSplitAgent effort: {e}"),
+        );
     }
     append_log(
         config,
@@ -161,6 +169,7 @@ mod tests {
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -216,6 +225,7 @@ mod tests {
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
             grain_hint: None,
+            effort: None,
             },
         )
         .unwrap();
@@ -230,7 +240,7 @@ mod tests {
         assert!(!sot.tasks.is_empty());
         assert!(crate::plan::run_gate_ok(&sot).is_ok());
 
-        let run_id = crate::app::split::confirm(cfg.clone(), &view.job_id).unwrap();
+        let run_id = crate::app::split::confirm(cfg.clone(), &view.job_id, None).unwrap();
         assert!(!run_id.is_empty());
         let job = crate::plan::planner::PlanJob::load(&cfg, &view.job_id).unwrap();
         assert_eq!(

@@ -72,6 +72,10 @@ export function showSplitPlanConfirm(opts = {}) {
       state.planJob.tasks[0];
     state.confirmTaskId = pending.id;
   }
+  // Plan list / rail reopen: leave plans|chat page so split desk is visible
+  if (state.page !== "workspace") {
+    showPage("workspace");
+  }
   host.renderPhasePanels();
   host.renderPlanPicker();
   renderWorkspace();
@@ -170,8 +174,13 @@ export function commitSplitMaxParallel(inputEl) {
 
 export async function selectPlan(planPath, opts = {}) {
   const keepSession = !!opts.keepSession;
-  const next = normalizePlanPath(planPath) || planPath || null;
-  const samePlan = next && state.selectedPlan && next === state.selectedPlan;
+  const next =
+    normalizePlanPath(planPath, state.selectedPath) || planPath || null;
+  const cur =
+    normalizePlanPath(state.selectedPlan, state.selectedPath) ||
+    state.selectedPlan ||
+    null;
+  const samePlan = !!(next && cur && next === cur);
 
   // 运行中禁止换源计划（可 keepSession 只用于恢复当前）
   if (hasActiveRun() && !keepSession && !samePlan && !opts.force) {
@@ -180,6 +189,7 @@ export async function selectPlan(planPath, opts = {}) {
   }
 
   // 规划/确认进行中：默认不销毁会话（后台继续）
+  // force=true（聊天/计划管理「拆成步骤」换文件）允许切换；调用方须先 clear session。
   if (host.isPlanSessionActive() && !opts.force) {
     if (samePlan || keepSession) {
       state.selectedPlan = next || state.selectedPlan;
@@ -194,6 +204,7 @@ export async function selectPlan(planPath, opts = {}) {
   }
 
   state.selectedPlan = next;
+  if (next) state.chatDraftPlan = next;
   state.planPreview = null;
   host.renderPhasePanels();
   host.renderPlanPicker();

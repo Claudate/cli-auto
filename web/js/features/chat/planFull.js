@@ -23,6 +23,7 @@ import { host } from "./host.js";
 import { ensureChatState, stashChatSession } from "./chatState.js";
 import { getPlansDir } from "./planDir.js";
 import { chatEsc } from "./chatFormat.js";
+import { renderMarkdown } from "../../shared/markdown.js";
 
 export function planFullState() {
   ensureChatState();
@@ -292,7 +293,11 @@ export function renderPlanFullView() {
     if (viewBody) viewBody.hidden = false;
     if (editBody) editBody.hidden = true;
     if (diffBody) diffBody.hidden = true;
-    if (mdEl) mdEl.textContent = pf.markdown || "";
+    // 只读预览：按 Markdown 渲染；编辑态仍用 textarea 源文
+    if (mdEl) {
+      mdEl.classList.add("md-body");
+      mdEl.innerHTML = renderMarkdown(pf.markdown || "");
+    }
   }
 
   // Buttons

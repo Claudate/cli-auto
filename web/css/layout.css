@@ -532,26 +532,8 @@ button.work-style-card:hover {
   font-size: 0.92rem;
   line-height: 1.45;
 }
-.split-detail-tech,
-.split-detail-full {
-  margin-top: 0.4rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.15rem 0.55rem 0.45rem;
-  background: var(--bg2, transparent);
-}
-.split-detail-tech > summary,
-.split-detail-full > summary {
-  cursor: pointer;
-  font-size: 0.85rem;
-  color: var(--muted);
-  padding: 0.35rem 0;
-}
-.split-detail-tech-body,
-.split-detail-full-body {
-  font-size: 0.88rem;
-  padding-bottom: 0.25rem;
-}
+/* 任务正文（直接展示，无「技术说明/完整说明」壳）— 细则见 plan.css */
+
 .help-rs-list {
   line-height: 1.55;
   font-size: 0.92rem;

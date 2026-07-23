@@ -179,6 +179,8 @@ export function wireRunResult(deps) {
     stopAll: () => runView.stopAll(),
     resume: () => runView.resume(),
     stopTask: (id) => runView.stopTask(id),
+    /** 失败步骤「再跑一次」：只重跑该任务，不重拆 */
+    retryTask: (id) => runView.retryTask(id),
     toggleDash: () => runView.toggleDash(),
     openMonitorWindow: (args) => runVm.openMonitorWindow(args),
   };

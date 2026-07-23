@@ -69,6 +69,49 @@ fn summary_from_session(sess: &ChatSession) -> ChatSessionSummary {
     }
 }
 
+/// Normalize plan body for identity compare (trim + collapse trailing spaces).
+fn norm_plan_key(md: &str) -> String {
+    md.replace("\r\n", "\n")
+        .lines()
+        .map(|l| l.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string()
+}
+
+/// Drop stale plan_rel when draft body no longer matches the bound file.
+/// Heals sessions polluted by older builds that kept path/saved across new fences.
+fn heal_stale_draft_binding(project: &Path, sess: &mut ChatSession) -> bool {
+    let Some(draft) = sess.draft_plan.as_mut() else {
+        return false;
+    };
+    if !draft.saved || draft.path.is_empty() {
+        return false;
+    }
+    let Some(md) = draft.markdown.as_ref().map(|s| s.as_str()) else {
+        // Saved path but no body in session — keep binding (preview may load from disk).
+        return false;
+    };
+    let abs = project.join(draft.path.trim_start_matches('/'));
+    let disk = match std::fs::read_to_string(&abs) {
+        Ok(t) => t,
+        Err(_) => {
+            // Missing file → unbind so next save creates a new chat-*.md.
+            draft.path.clear();
+            draft.saved = false;
+            return true;
+        }
+    };
+    if norm_plan_key(&disk) != norm_plan_key(md) {
+        // Body is a different plan than the bound path (classic pilotdeck hang).
+        draft.path.clear();
+        draft.saved = false;
+        return true;
+    }
+    false
+}
+
 /// Load chat session from disk; missing → empty default session.
 /// G3: opportunistically purge sessions older than retention hours.
 pub fn chat_session_get(project: &Path, session_id: Option<&str>) -> Result<ChatSession> {
@@ -87,6 +130,12 @@ pub fn chat_session_get(project: &Path, session_id: Option<&str>) -> Result<Chat
         .with_context(|| format!("parse chat session {}", path.display()))?;
     sess.session_id = sid;
     sess.project = project.display().to_string();
+    if heal_stale_draft_binding(project, &mut sess) {
+        // Persist healed identity so UI reload stays clean.
+        if let Err(e) = save_session(project, &sess) {
+            tracing::warn!(error = %e, "chat: heal stale draft binding save failed");
+        }
+    }
     Ok(sess)
 }
 

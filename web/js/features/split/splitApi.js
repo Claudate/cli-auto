@@ -69,10 +69,11 @@ export function removeTask(args) {
 /**
  * 唯一业务开跑入口。
  * @param {string} jobId
+ * @param {string|null|undefined} [effort] low…max|ultracode — 执行时的推理深度
  * @returns {Promise<{ run_id?: string, runId?: string }>}
  */
-export function confirmStart(jobId) {
-  return gateway.confirmStart(jobId);
+export function confirmStart(jobId, effort) {
+  return gateway.confirmStart(jobId, effort || null);
 }
 
 /** @param {string} jobId */

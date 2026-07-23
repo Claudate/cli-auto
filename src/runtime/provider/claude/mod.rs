@@ -129,12 +129,7 @@ impl WorkerProvider for ClaudeProvider {
                     .ok()
                     .and_then(|s| s.trim().parse::<i32>().ok())
                     .unwrap_or(-1);
-                return Ok(match code {
-                    0 => WorkerStatus::Done,
-                    124 => WorkerStatus::Timeout,
-                    130 => WorkerStatus::Stopped,
-                    _ => WorkerStatus::Failed,
-                });
+                return Ok(super::worker_status_from_exit(code));
             }
 
             let meta: serde_json::Value = std::fs::read_to_string(&handle.meta_path)
@@ -214,15 +209,7 @@ impl WorkerProvider for ClaudeProvider {
                     .ok()
                     .and_then(|s| s.trim().parse::<i32>().ok())
                     .unwrap_or(-1);
-                if code == 0 {
-                    Ok(WorkerStatus::Done)
-                } else if code == 124 {
-                    Ok(WorkerStatus::Timeout)
-                } else if code == 130 {
-                    Ok(WorkerStatus::Stopped)
-                } else {
-                    Ok(WorkerStatus::Failed)
-                }
+                Ok(super::worker_status_from_exit(code))
             } else if let Some(pid) = handle.pid {
                 if poll_bg::process_alive(pid) {
                     Ok(WorkerStatus::Running)
@@ -304,17 +291,17 @@ impl WorkerProvider for ClaudeProvider {
         let meta: serde_json::Value =
             serde_json::from_str(&meta_text).unwrap_or(serde_json::json!({}));
 
-        let exit_code = meta
+        let meta_code = meta
             .get("exit_code")
             .and_then(|v| v.as_i64())
-            .map(|n| n as i32)
-            .or_else(|| {
-                handle
-                    .stdout_path
-                    .parent()
-                    .and_then(|p| std::fs::read_to_string(p.join(".done")).ok())
-                    .and_then(|s| s.trim().parse().ok())
-            });
+            .map(|n| n as i32);
+        let done_code = handle
+            .stdout_path
+            .parent()
+            .and_then(|p| std::fs::read_to_string(p.join(".done")).ok())
+            .and_then(|s| s.trim().parse().ok());
+        // Prefer .done=130 (stop_run) over stream meta=-1 (SIGKILL race).
+        let exit_code = super::resolve_exit_code(meta_code, done_code);
 
         let parsed = parse_claude_result_json(&stdout).ok();
         let session_id = parsed
@@ -329,12 +316,8 @@ impl WorkerProvider for ClaudeProvider {
         });
 
         let status = match exit_code {
-            Some(0) => TaskStatus::Done,
-            Some(124) => TaskStatus::Timeout,
-            Some(130) => TaskStatus::Stopped,
-            Some(_) => TaskStatus::Failed,
             None if handle.mode == "bg" && ensure_done_marker(&stdout) => TaskStatus::Done,
-            None => TaskStatus::Failed,
+            other => super::task_status_from_exit(other),
         };
 
         let error = if status == TaskStatus::Failed {

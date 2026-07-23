@@ -1,7 +1,7 @@
 /**
- * [INPUT]: 原始 Markdown 文本（确认屏 / 计划说明）
+ * [INPUT]: 原始 Markdown 文本（确认屏 / 计划说明 / 聊天气泡）
  * [OUTPUT]: 安全 HTML 字符串（无外部依赖）
- * [POS]: D9 自 state.js 抽出；classic 经 installMarkdown → window.renderMarkdown
+ * [POS]: D9 自 state.js 抽出；classic 经 installMarkdown → window.renderMarkdown；chatFormatBody 复用
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -127,10 +127,13 @@ export function renderMarkdown(src) {
     x = x.replace(/__([^_]+)__/g, "<strong>$1</strong>");
     x = x.replace(/(^|[^*])\*([^*]+)\*(?![*])/g, "$1<em>$2</em>");
     x = x.replace(/(^|[^_])_([^_]+)_(?!_)/g, "$1<em>$2</em>");
-    x = x.replace(
-      /\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
-    );
+    // 外链可点开；相对/本地路径（计划内交叉引用）只展示为链接样式，不导航
+    x = x.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, url) => {
+      if (/^https?:\/\//i.test(url) || /^mailto:/i.test(url)) {
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+      }
+      return `<span class="md-local-link" title="${url}">${label}</span>`;
+    });
     x = x.replace(/\n/g, "<br>");
     return x;
   }

@@ -145,9 +145,7 @@ function flowConfirmMetaLine(chars, editing) {
 }
 
 function flowPromptLabel(editing) {
-  return editing
-    ? "编辑步骤说明"
-    : "步骤说明（执行时按完整说明进行）";
+  return editing ? "编辑步骤说明" : "这一步";
 }
 
 function flowConfirmStartLabel(kind) {

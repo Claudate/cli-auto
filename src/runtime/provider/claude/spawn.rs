@@ -131,6 +131,19 @@ impl ClaudeProvider {
         if !extra_sys.trim().is_empty() {
             parts.push(extra_sys);
         }
+        // Ultracode: multi-agent thoroughness (product token; CLI flag is still xhigh).
+        if let Some(raw) = Self::opt_str(opts, "effort") {
+            if crate::config::effort_is_ultracode(&raw) {
+                parts.push(crate::config::ULTRACODE_SYSTEM_HINT.to_string());
+            }
+        } else if opts
+            .get("effort")
+            .and_then(|v| v.as_str())
+            .map(crate::config::effort_is_ultracode)
+            .unwrap_or(false)
+        {
+            parts.push(crate::config::ULTRACODE_SYSTEM_HINT.to_string());
+        }
         parts.join("\n\n")
     }
 
@@ -178,6 +191,25 @@ impl ClaudeProvider {
                 cmd.arg("--model").arg(m);
             }
         }
+        // Reasoning effort: low|medium|high|xhigh|max|ultracode → claude --effort
+        // ultracode maps to xhigh on the flag; thoroughness hint via system prompt.
+        // Missing key → high (product default); null/empty → omit flag.
+        let effort_raw = Self::opt_str(opts, "effort");
+        let effort_norm = effort_raw
+            .as_deref()
+            .and_then(crate::config::normalize_effort)
+            .or_else(|| {
+                // Key absent → default high; explicit empty/null → leave unset
+                if opts.get("effort").is_none() {
+                    Some("high".into())
+                } else {
+                    None
+                }
+            });
+        if let Some(norm) = effort_norm {
+            let level = crate::config::effort_cli_level(&norm);
+            cmd.arg("--effort").arg(level);
+        }
         // 项目范围锁 + TaskScope + role segment (inspect via materialize_role_defaults).
         // 子进程挂在 CCO.app 身份下，home 扫描会触发 macOS TCC 授权弹窗。
         let sys = Self::build_append_system_prompt(work_dir, task_scope, opts);
@@ -191,9 +223,8 @@ impl ClaudeProvider {
         if let Ok(key) = std::env::var("ANTHROPIC_API_KEY") {
             cmd.env("ANTHROPIC_API_KEY", key);
         }
-        for (k, v) in &ctx.env_extra {
-            cmd.env(k, v);
-        }
+        // GUI/.app: inject Homebrew/user bins so sibling tools resolve.
+        super::super::apply_worker_process_env(cmd, &ctx.env_extra);
     }
 
     pub(super) async fn start_print(
@@ -280,6 +311,8 @@ impl ClaudeProvider {
             let result = stream_child(child, timeout, &stdout_path_c, &stderr_path_c).await;
             match result {
                 Ok(code) => {
+                    // Preserve stop_run's `.done=130`; map SIGKILL (-1) → 130.
+                    let code = crate::runtime::provider::finalize_stream_exit(&done_flag, code);
                     let meta = serde_json::json!({
                         "exit_code": code,
                         "pid": pid,
@@ -300,16 +333,18 @@ impl ClaudeProvider {
                     {
                         let _ = writeln!(f, "{e:#}");
                     }
+                    // Do not clobber orchestrator stop marker with -1.
+                    let code = crate::runtime::provider::finalize_stream_exit(&done_flag, -1);
                     let meta = serde_json::json!({
                         "error": format!("{e:#}"),
-                        "exit_code": -1,
+                        "exit_code": code,
                         "mode": "print",
                     });
                     let _ = std::fs::write(
                         &meta_path_c,
                         serde_json::to_string_pretty(&meta).unwrap_or_default(),
                     );
-                    let _ = std::fs::write(&done_flag, "-1");
+                    let _ = std::fs::write(&done_flag, format!("{code}"));
                 }
             }
         });
@@ -556,6 +591,34 @@ mod tests {
             ClaudeProvider::opt_limit_f64(&set, "max_budget_usd", 10.0),
             Some(3.5)
         );
+    }
+
+    #[test]
+    fn effort_cli_mapping_and_ultracode_hint() {
+        assert_eq!(crate::config::effort_cli_level("low"), "low");
+        assert_eq!(crate::config::effort_cli_level("xhigh"), "xhigh");
+        assert_eq!(crate::config::effort_cli_level("ultracode"), "xhigh");
+        assert!(crate::config::effort_is_ultracode("ultracode"));
+        assert!(!crate::config::effort_is_ultracode("high"));
+
+        // Ultracode injects thoroughness hint into append system prompt.
+        let opts = serde_json::json!({ "effort": "ultracode" });
+        let sys = ClaudeProvider::build_append_system_prompt(
+            Path::new("/tmp/proj"),
+            None::<&TaskScope>,
+            &opts,
+        );
+        assert!(
+            sys.contains("Ultracode is on"),
+            "expected ultracode hint, got: {sys}"
+        );
+        let opts_high = serde_json::json!({ "effort": "high" });
+        let sys_high = ClaudeProvider::build_append_system_prompt(
+            Path::new("/tmp/proj"),
+            None::<&TaskScope>,
+            &opts_high,
+        );
+        assert!(!sys_high.contains("Ultracode is on"));
     }
 
     /// P2-1: inspect role segment (from materialize) + scope.paths land in system prompt.

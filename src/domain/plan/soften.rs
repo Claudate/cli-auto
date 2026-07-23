@@ -123,6 +123,27 @@ pub fn soften_plan_for_accept(ir: &mut PlanIR) -> Vec<String> {
         }
     }
 
+    // 6) empty inspect depends_on → business leaves (same as materialize_role_defaults)
+    let before_wire: Vec<(String, usize)> = ir
+        .tasks
+        .iter()
+        .filter(|t| t.role == Some(TaskRole::Inspect))
+        .map(|t| (t.id.clone(), t.depends_on.len()))
+        .collect();
+    super::materialize::wire_empty_inspect_depends_on(ir);
+    for (id, n0) in before_wire {
+        if n0 == 0 {
+            if let Some(t) = ir.tasks.iter().find(|t| t.id == id) {
+                if !t.depends_on.is_empty() {
+                    notes.push(format!(
+                        "task {id}: empty inspect depends_on → wait on business leaves {:?}",
+                        t.depends_on
+                    ));
+                }
+            }
+        }
+    }
+
     notes
 }
 

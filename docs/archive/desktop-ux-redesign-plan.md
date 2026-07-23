@@ -4,7 +4,7 @@
 > 追加：[`ux-simple-mainpath-2026-07-17.md`](./ux-simple-mainpath-2026-07-17.md)  
 > 日期：2026-07-17（状态校正 2026-07-18）  
 > 范围：Tauri 桌面 UI（`web/`），原则上不改 Rust scheduler / PlanIR  
-> 关联：[`claude-cli-orchestrator-plan.md`](../../claude-cli-orchestrator-plan.md) §2.4、[`web/`](../../web/)、**产品主路径 B** → [`product-mode-b-ai-planner.md`](../product-mode-b-ai-planner.md)、**监视日志/终端** → [`terminal-console-plan.md`](./terminal-console-plan.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](../gap-and-landing-plan-2026-07-18.md) §1.3  
+> 关联：[`claude-cli-orchestrator-plan.md`](./claude-cli-orchestrator-plan.md) §2.4、[`web/`](../../web/)、**产品主路径 B** → [`product-mode-b-ai-planner.md`](../product-mode-b-ai-planner.md)、**监视日志/终端** → [`terminal-console-plan.md`](./terminal-console-plan.md)、总账 → [`gap-and-landing-plan-2026-07-18.md`](../gap-and-landing-plan-2026-07-18.md) §1.3  
 > **勿再当缺口**：阶段 0–4 与浅色主从/项目内开跑/大日志区已闭环
 
 [PROTOCOL]: 变更本计划时更新状态与阶段勾选；阶段完成后在此勾选并记日期。  

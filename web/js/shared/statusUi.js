@@ -7,7 +7,7 @@
  * note: 不写 Mode B / confirm / soft-fill；不读调度内部策略
  */
 
-/* ── Status labels (人话 · R2 五态优先) ── */
+/* ── Status labels (人话 · R2 五态优先；stop ≠ fail) ── */
 export const STATUS_LABEL = {
   completed: "已完成",
   done: "已完成",
@@ -20,9 +20,11 @@ export const STATUS_LABEL = {
   paused: "已暂停",
   resuming: "进行中",
   failed: "失败",
-  aborted: "失败",
+  aborted: "已中止",
   timeout: "失败",
-  stopped: "失败",
+  stopped: "已停止",
+  cancelled: "已停止",
+  canceled: "已停止",
   pending: "排队中",
   waiting: "排队中",
   ready: "排队中",
@@ -33,13 +35,14 @@ export const STATUS_LABEL = {
   stalled: "已卡住",
 };
 
-/** R2 product five states */
+/** R2 product states (+ stop: 用户中止，不是业务失败) */
 export const FIVE_STATE_LABEL = {
   wait: "排队中",
   run: "进行中",
   done: "已完成",
   stall: "已卡住",
   fail: "失败",
+  stop: "已停止",
 };
 
 export function statusLabel(status) {
@@ -103,8 +106,16 @@ export function isPausedStatus(s) {
   return String(s || "").toLowerCase() === "paused";
 }
 
+/** True business failure only — user stop / run abort are NOT failures. */
 export function isFailedStatus(s) {
-  return ["failed", "aborted", "timeout", "stopped"].includes(
+  return ["failed", "timeout", "err", "error"].includes(
+    String(s || "").toLowerCase()
+  );
+}
+
+/** User stop (task) or whole-run abort — distinct from fail. */
+export function isStoppedStatus(s) {
+  return ["stopped", "aborted", "cancelled", "canceled"].includes(
     String(s || "").toLowerCase()
   );
 }
@@ -149,7 +160,8 @@ export function badge(status) {
     )
   )
     cls = "warn";
-  else if (["failed", "aborted", "timeout", "stopped", "err"].includes(s)) cls = "err";
+  else if (["failed", "timeout", "err", "error"].includes(s)) cls = "err";
+  else if (["stopped", "aborted", "cancelled", "canceled"].includes(s)) cls = "muted";
   return `<span class="badge ${cls}">${esc(statusLabel(status))}</span>`;
 }
 
@@ -159,7 +171,8 @@ export function statusDot(status, task) {
   const s = String(status || "").toLowerCase();
   if (["running", "starting", "queued", "validated", "init"].includes(s)) return "live";
   if (["paused", "resuming", "pending"].includes(s)) return "warn";
-  if (["failed", "aborted", "timeout", "stopped"].includes(s)) return "err";
+  if (["failed", "timeout", "err", "error"].includes(s)) return "err";
+  if (["stopped", "aborted", "cancelled", "canceled"].includes(s)) return "muted";
   if (["completed", "done", "ok", "skipped"].includes(s)) return "ok";
   return "";
 }
@@ -219,6 +232,7 @@ export function installStatusUi(g = typeof window !== "undefined" ? window : glo
     isLiveStatus,
     isPausedStatus,
     isFailedStatus,
+    isStoppedStatus,
     isDoneStatus,
     isTaskPendingStatus,
     isStalledTask,
@@ -241,6 +255,7 @@ const statusUi = {
   isLiveStatus,
   isPausedStatus,
   isFailedStatus,
+  isStoppedStatus,
   isDoneStatus,
   isTaskPendingStatus,
   isStalledTask,

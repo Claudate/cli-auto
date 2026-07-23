@@ -622,6 +622,8 @@ pub fn stop_task(config: &Config, run_id: &str, task_id: Option<&str>) -> Result
                 ts.status = TaskStatus::Stopped;
                 ts.finished_at = Some(chrono::Utc::now());
                 ts.pid = None;
+                ts.exit_code = Some(130);
+                ts.error = None; // not a business failure
             }
         }
     }
@@ -642,6 +644,8 @@ pub fn stop_task(config: &Config, run_id: &str, task_id: Option<&str>) -> Result
             if ts.status == TaskStatus::Pending {
                 ts.status = TaskStatus::Stopped;
                 ts.finished_at = Some(chrono::Utc::now());
+                ts.exit_code = Some(130);
+                ts.error = None;
             }
         }
         rs.status = RunStatus::Aborted;

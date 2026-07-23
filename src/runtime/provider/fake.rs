@@ -14,8 +14,8 @@ use async_trait::async_trait;
 use tokio::process::Command;
 
 use super::{
-    parse_claude_result_json, Capabilities, StartCtx, TaskResult, TaskStatus, WorkerHandle,
-    WorkerProvider, WorkerStatus,
+    parse_claude_result_json, Capabilities, StartCtx, TaskResult, WorkerHandle, WorkerProvider,
+    WorkerStatus,
 };
 use crate::plan::TaskIR;
 
@@ -315,12 +315,7 @@ impl WorkerProvider for FakeProvider {
             .ok()
             .and_then(|s| s.trim().parse::<i32>().ok())
             .unwrap_or(-1);
-        Ok(match code {
-            0 => WorkerStatus::Done,
-            130 => WorkerStatus::Stopped,
-            124 => WorkerStatus::Timeout,
-            _ => WorkerStatus::Failed,
-        })
+        Ok(super::worker_status_from_exit(code))
     }
 
     async fn stop(&self, handle: &WorkerHandle) -> Result<()> {
@@ -339,12 +334,7 @@ impl WorkerProvider for FakeProvider {
             .and_then(|p| std::fs::read_to_string(p.join(".done")).ok())
             .and_then(|s| s.trim().parse().ok());
 
-        let status = match code {
-            Some(0) => TaskStatus::Done,
-            Some(130) => TaskStatus::Stopped,
-            Some(124) => TaskStatus::Timeout,
-            _ => TaskStatus::Failed,
-        };
+        let status = super::task_status_from_exit(code);
 
         let agent_id = handle
             .opaque_id
@@ -371,6 +361,7 @@ impl WorkerProvider for FakeProvider {
 mod tests {
     use super::*;
     use crate::plan::TaskIR;
+    use crate::ports::worker::TaskStatus;
     use tempfile::tempdir;
 
     fn sample_task(id: &str) -> TaskIR {

@@ -20,7 +20,7 @@ import {
   chatProjectName,
   stashChatSession,
 } from "./chatState.js";
-import { chatEsc, chatFormatBody } from "./chatFormat.js";
+import { chatEsc, chatFormatBody, chatFormatStreamBody } from "./chatFormat.js";
 import { renderChatAttachPreview } from "./chatAttachments.js";
 import {
   renderChatSessionSelect,
@@ -128,27 +128,25 @@ export function renderChatMessages() {
       const activePlan = role === "assistant" && mi === lastAssistantIdx;
       return `<div class="chat-msg chat-msg-${role}">
         <div class="chat-msg-role">${label}</div>
-        <div class="chat-msg-body">${chatFormatBody(m.content || "", { activePlan })}${attHtml}</div>
+        <div class="chat-msg-body md-body">${chatFormatBody(m.content || "", { activePlan })}${attHtml}</div>
       </div>`;
     })
     .join("");
-  // Waiting bubble: user already sent; UI must stay responsive while CLI runs.
-  // C3: if stream partial arrived, show it in place of the wait label.
+  // Waiting bubble: user already sent; UI stays responsive while CLI runs.
+  // Stream partials render as markdown (same path as final bubbles), not raw source.
   if (state.chatBusy) {
     const stream = String(state.chatStreamText || "").trim();
     if (stream) {
-      const shown =
-        stream.length > 6000 ? "…\n" + stream.slice(-6000) : stream;
       html += `<div class="chat-msg chat-msg-assistant chat-msg-pending" aria-live="polite">
       <div class="chat-msg-role">AI</div>
-      <div class="chat-msg-body chat-msg-body-pending chat-msg-streaming">${chatEsc(
-        shown
+      <div class="chat-msg-body chat-msg-body-pending chat-msg-streaming md-body">${chatFormatStreamBody(
+        stream
       )}<span class="chat-stream-cursor" aria-hidden="true">▍</span></div>
     </div>`;
     } else {
       html += `<div class="chat-msg chat-msg-assistant chat-msg-pending" aria-live="polite">
       <div class="chat-msg-role">AI</div>
-      <div class="chat-msg-body chat-msg-body-pending">
+      <div class="chat-msg-body chat-msg-body-pending chat-msg-body-wait-only">
         <span class="chat-pending-dots" aria-hidden="true"></span>
         ${chatEsc(chatWaitLabel())}
       </div>

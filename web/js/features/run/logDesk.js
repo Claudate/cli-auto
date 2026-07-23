@@ -46,6 +46,7 @@ export function createLogDesk() {
     cancelTask: logActions.cancelTask,
     stopAll: logActions.stopAll,
     resumeRun: logActions.resumeRun,
+    retryTask: logActions.retryTask,
     startReworkWave: logActions.startReworkWave,
     acceptRunResidual: logActions.acceptRunResidual,
     openExternalTerminal: logActions.openExternalTerminal,

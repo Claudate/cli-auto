@@ -19,6 +19,7 @@ use super::cli_call::{
 };
 use super::normalize::chat_normalize_plan;
 use super::session::{chat_session_get, save_session};
+use super::stream::clear_chat_stream_work;
 use super::types::{ChatAttachment, ChatMessage, ChatSendResponse};
 
 const MAX_HISTORY_MSGS: usize = 24;
@@ -26,12 +27,14 @@ const MAX_MSG_CHARS: usize = 12_000;
 
 /// One round-trip: append user message, call Claude print (or fake), append assistant.
 /// G4: `attachments` are project-relative paths already saved via `chat_save_attachment`.
+/// `effort`: optional per-send override (`low`…`max`|`ultracode`); else config default.
 pub fn chat_send(
     config: &Config,
     project: &Path,
     message: &str,
     session_id: Option<&str>,
     attachments: Option<Vec<ChatAttachment>>,
+    effort: Option<&str>,
 ) -> Result<ChatSendResponse> {
     if !project.is_dir() {
         bail!("project path is not a directory: {}", project.display());
@@ -86,6 +89,10 @@ pub fn chat_send(
         tracing::warn!(error = %e, "chat: early save of user message failed");
     }
 
+    // Drop previous-turn stdout / .done *before* the UI starts polling, so the
+    // stream bubble cannot paint last reply as if it were the new generation.
+    clear_chat_stream_work(project);
+
     let force_fake = std::env::var("CCO_CHAT_FAKE")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)
@@ -96,7 +103,7 @@ pub fn chat_send(
     let (reply, used_fake, env_note) = if force_fake {
         (fake_chat_reply(msg, project), true, None)
     } else {
-        match call_claude_chat(config, project, &sess) {
+        match call_claude_chat(config, project, &sess, effort) {
             Ok(r) => (r, false, None),
             Err(e) => {
                 let diagnostic = e.to_string();
@@ -139,14 +146,14 @@ pub fn chat_send(
             md
         };
         let title = extract_title_from_md(&md);
+        // New ```plan fence = new draft identity. Never inherit path/saved from a
+        // previous save — otherwise "另起一份新计划" still shows/overwrites the old
+        // plan_rel (e.g. pilotdeck path) while the body already changed.
         let mut draft = sess.draft_plan.take().unwrap_or_default();
         draft.markdown = Some(md);
-        draft.title = title.or(draft.title);
-        // Not saved until chat_save_plan
-        draft.saved = draft.saved && !draft.path.is_empty();
-        if draft.path.is_empty() {
-            draft.saved = false;
-        }
+        draft.title = title;
+        draft.path.clear();
+        draft.saved = false;
         sess.draft_plan = Some(draft);
     }
 

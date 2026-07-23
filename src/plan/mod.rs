@@ -157,13 +157,18 @@ pub fn list_plans(project_root: &Path) -> Result<Vec<PathBuf>> {
                 || name.ends_with(".yml")
                 || name == "plan.md"
             {
-                // plans/ 下全部 .md 都算计划；其它目录仍要求文件名含 plan/prompt
+                // plans/ · serial-plans/：全部 .md 都算计划。
+                // docs/ 等其它目录：文件名须像「计划/落地/规格」，避免把随意 README 扫进列表。
+                // 含 landing（本仓大量 *-landing-*.md）· plan · prompt · roadmap · spec。
                 let under_plans = dir.ends_with("plans") || dir.ends_with("serial-plans");
-                if name.contains("plan")
-                    || name.contains("prompt")
+                if under_plans
                     || name.ends_with(".yaml")
                     || name.ends_with(".yml")
-                    || under_plans
+                    || name.contains("plan")
+                    || name.contains("prompt")
+                    || name.contains("landing")
+                    || name.contains("roadmap")
+                    || name.contains("spec")
                 {
                     out.push(entry);
                 }

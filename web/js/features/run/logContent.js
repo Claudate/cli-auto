@@ -24,6 +24,7 @@ import {
   esc,
   isLiveStatus,
   isFailedStatus,
+  isStoppedStatus,
 } from "./logHost.js";
 
 /** P1-1：日志面板内容签名；相同则跳过 innerHTML 重绘 */
@@ -210,6 +211,14 @@ export function aiLogPlainText(t) {
   // 无结构化事件时：不回落整段 log_tail，避免系统噪音污染
   if (isLiveStatus(t?.status)) return "AI 运行中，等待交互输出…";
   if (isFailedStatus(t?.status)) return t?.error ? String(t.error) : "任务失败，无 AI 交互日志。";
+  if (
+    (typeof isStoppedStatus === "function" && isStoppedStatus(t?.status)) ||
+    ["stopped", "aborted", "cancelled", "canceled"].includes(
+      String(t?.status || "").toLowerCase()
+    )
+  ) {
+    return "本步已停止，无更多 AI 交互日志。";
+  }
   return "";
 }
 
@@ -245,6 +254,16 @@ export function panelLogContent(t) {
           html: err
             ? `<div class="cli-empty-ai muted">任务失败<br/>${err}</div>`
             : '<div class="cli-empty-ai muted">任务失败，无执行输出</div>',
+        };
+      }
+      if (
+        (typeof isStoppedStatus === "function" && isStoppedStatus(st)) ||
+        ["stopped", "aborted", "cancelled", "canceled"].includes(st)
+      ) {
+        return {
+          mode,
+          empty: true,
+          html: '<div class="cli-empty-ai muted">本步已停止</div>',
         };
       }
       if ((S().logEventFilter || "all") !== "all") {
@@ -295,6 +314,16 @@ export function panelLogContent(t) {
         html: err
           ? `<div class="cli-empty-ai muted">任务失败<br/>${err}</div>`
           : '<div class="cli-empty-ai muted">任务失败，无执行输出</div>',
+      };
+    }
+    if (
+      (typeof isStoppedStatus === "function" && isStoppedStatus(st)) ||
+      ["stopped", "aborted", "cancelled", "canceled"].includes(st)
+    ) {
+      return {
+        mode,
+        empty: true,
+        html: '<div class="cli-empty-ai muted">本步已停止</div>',
       };
     }
     return { mode, empty: true, html: "" };

@@ -297,6 +297,11 @@
 .cli-window.failed {
   border-color: #f0b4b4;
 }
+/* user stop / freeze — neutral, not red fail */
+.cli-window.stopped {
+  border-color: #c9cdd4;
+  opacity: 0.92;
+}
 .cli-window.free {
   position: absolute;
   width: var(--cli-col, 42%) !important;
@@ -1012,17 +1017,19 @@ button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip
   color: #8a6d1d;
 }
 
-/* C1: log advanced tools tuck away */
-.log-advanced {
-  margin-top: 0.35rem;
-}
-.log-advanced > summary {
-  list-style: none;
-  cursor: pointer;
+/* 日志栏右侧：高度 + 继续 + 结束计划（原「日志高级」已撤） */
+.board-toolbar-side {
   display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
 }
-.log-advanced > summary::-webkit-details-marker {
-  display: none;
+.board-toolbar-side .cli-h-grip {
+  margin: 0;
+}
+.log-advanced[hidden] {
+  display: none !important;
 }
 .log-advanced-body {
   display: flex;

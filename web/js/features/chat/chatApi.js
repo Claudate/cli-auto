@@ -23,15 +23,18 @@ export function listSessions(project) {
  *   message: string,
  *   sessionId?: string,
  *   attachments?: unknown[]|null,
+ *   effort?: string|null,
  * }} args
  */
 export function sendMessage(args) {
-  return gateway.chatSend({
+  const payload = {
     project: args.project,
     message: args.message,
     sessionId: args.sessionId || "default",
     attachments: args.attachments ?? null,
-  });
+  };
+  if (args.effort) payload.effort = args.effort;
+  return gateway.chatSend(payload);
 }
 
 /**

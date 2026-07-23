@@ -23,7 +23,11 @@ import {
   stashChatSession,
 } from "./chatState.js";
 import { getPlansDir } from "./planDir.js";
-import { chatExtractPlanFence } from "./chatFormat.js";
+import {
+  chatExtractPlanFence,
+  chatNormMdKey,
+  chatPlanCardRaw,
+} from "./chatFormat.js";
 import { renderChatPage } from "./chatRender.js";
 
 /** G0b: re-structure current draft via chat_normalize_plan_cmd. */
@@ -114,8 +118,9 @@ export async function saveChatPlan(opts) {
     toast("还没有可保存的计划草稿，请先让 AI 生成计划");
     return;
   }
-  // Overwrite only when re-saving an already-saved draft (H1 未执行可改).
-  // Unsaved new draft → planRel null → 新建 chat-*.md；asCopy 强制新建。
+  // Overwrite only when re-saving the *same* already-saved draft body (H1 未执行可改).
+  // New ```plan body (path cleared by chat_send) or asCopy → planRel null → 新建 chat-*.md.
+  // Never pass a stale chatDraftPlan alone — that overwrote unrelated plan files.
   const overwriteRel =
     opts && opts.asCopy
       ? null
@@ -147,6 +152,9 @@ export async function saveChatPlan(opts) {
       plansDir: overwriteRel ? null : plansDir,
     });
     state.chatDraftPlan = resp.plan_rel;
+    // Author-phase identity: the just-saved file is what「拆成步骤」must target.
+    // Do not leave selectedPlan on a prior plan (pilotdeck hang).
+    state.selectedPlan = resp.plan_rel;
     state.chatProjectPath = state.selectedPath;
     if (state.chatSession.draft_plan) {
       state.chatSession.draft_plan.path = resp.plan_rel;
@@ -161,16 +169,14 @@ export async function saveChatPlan(opts) {
       };
     }
     stashChatSession(state.selectedPath);
-    // refresh plans list so chooser + rail see it
+    // refresh plans list so chooser + 计划管理 see it
     try {
       await loadPlansForPicker();
     } catch (_) {}
-    // 刷新列表：右栏打开或在计划管理页时
-    if (state.planRailOpen || state.page === "plans") {
-      try {
-        await host.loadPlanRail();
-      } catch (_) {}
-    }
+    // 刷新 meta（计划管理页用；聊天右栏已撤）
+    try {
+      await host.loadPlanRail();
+    } catch (_) {}
     toast(`计划已保存：${resp.plan_rel}`);
     return resp;
   } catch (e) {
@@ -225,26 +231,56 @@ export async function assignAndSplitFromChat(btn) {
     return;
   }
   const card = btn?.closest?.(".chat-plan-card");
-  const full = card?.querySelector?.(".chat-plan-full");
-  const md = full?.textContent?.trim();
+  // Expand view is rendered HTML; raw lives in .chat-plan-raw.
+  const md = chatPlanCardRaw(card);
   if (md) {
+    const prevKey = chatNormMdKey(state.chatSession?.draft_plan?.markdown || "");
+    const nextKey = chatNormMdKey(md);
     if (!state.chatSession.draft_plan) {
+      // Card body only — never seed path from chatDraftPlan alone (stale identity).
       state.chatSession.draft_plan = {
-        path: state.chatDraftPlan || "",
-        saved: !!state.chatDraftPlan,
+        path: "",
+        saved: false,
         markdown: md,
         title: null,
       };
+      state.chatDraftPlan = null;
     } else {
       state.chatSession.draft_plan.markdown = md;
+      if (prevKey && nextKey && prevKey !== nextKey) {
+        state.chatSession.draft_plan.path = "";
+        state.chatSession.draft_plan.saved = false;
+        state.chatDraftPlan = null;
+      }
     }
   }
   const draft = state.chatSession?.draft_plan;
-  const alreadySaved = !!(
+  // Path + saved is not enough: a polluted session may keep old plan_rel while
+  // draft.markdown already changed (pre-fix). Require disk body match before skip-save.
+  let alreadySaved = !!(
     state.chatDraftPlan &&
     draft?.saved &&
-    draft?.path
+    draft?.path &&
+    draft.path === state.chatDraftPlan &&
+    chatNormMdKey(draft.markdown || "")
   );
+  if (alreadySaved && state.selectedPath) {
+    try {
+      const disk = await chatApi.readPlanMd(state.selectedPath, draft.path);
+      if (chatNormMdKey(disk) !== chatNormMdKey(draft.markdown || "")) {
+        // Identity lies — force new file, do not overwrite / split the old plan.
+        draft.path = "";
+        draft.saved = false;
+        state.chatDraftPlan = null;
+        alreadySaved = false;
+      }
+    } catch (_) {
+      draft.path = "";
+      draft.saved = false;
+      state.chatDraftPlan = null;
+      alreadySaved = false;
+    }
+  }
   if (!alreadySaved) {
     const resp = await saveChatPlan({ skipConfirm: true });
     if (!resp?.plan_rel && !state.chatDraftPlan) {

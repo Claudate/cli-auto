@@ -37,6 +37,41 @@ export async function loadSettings() {
     if (modeEl) modeEl.value = modeIdx[s.default_mode] ?? 0;
     const prov = $("#s-default-provider");
     if (prov) prov.value = s.default_provider;
+    const effortEl = $("#s-effort");
+    if (effortEl && s.effort) {
+      const e = String(s.effort).toLowerCase();
+      if (["low", "medium", "high", "xhigh", "max", "ultracode"].includes(e)) {
+        effortEl.value = e;
+      }
+    }
+    // Seed chat composer select from config default (unless user already picked)
+    const chatEffort = $("#chat-effort");
+    if (chatEffort) {
+      let pick = null;
+      try {
+        pick = localStorage.getItem("cco.chatEffort");
+      } catch (_) {}
+      const seed = pick || s.effort || "high";
+      const e = String(seed).toLowerCase();
+      if (["low", "medium", "high", "xhigh", "max", "ultracode"].includes(e)) {
+        chatEffort.value = e;
+      }
+    }
+    // Seed split-page + chooser depth pickers (local split pick wins, else config)
+    const seedSplit = (() => {
+      let pick = null;
+      try {
+        pick = localStorage.getItem("cco.splitEffort");
+      } catch (_) {}
+      const e = String(pick || s.effort || "high").toLowerCase();
+      return ["low", "medium", "high", "xhigh", "max", "ultracode"].includes(e)
+        ? e
+        : "high";
+    })();
+    for (const id of ["#split-effort", "#pp-effort"]) {
+      const el = $(id);
+      if (el) el.value = seedSplit;
+    }
     const maxP = $("#s-max-parallel");
     if (maxP) maxP.value = s.max_parallel;
     // H3/H4: stall/retry + failover（与 scheduler 读取同源 DTO）
@@ -224,6 +259,7 @@ export async function saveSettings() {
   const pollVal = parseInt($("#s-poll-interval")?.value, 10);
   const modeVal = parseInt($("#s-default-mode")?.value, 10);
   const providerVal = ($("#s-default-provider")?.value || "").trim();
+  const effortVal = ($("#s-effort")?.value || "").trim().toLowerCase();
   const maxParallelVal = parseInt($("#s-max-parallel")?.value, 10);
   const retryMaxVal = parseInt($("#s-retry-max")?.value, 10);
   const stallSecsVal = parseInt($("#s-stall-secs")?.value, 10);
@@ -277,6 +313,11 @@ export async function saveSettings() {
       retry_max: Number.isFinite(retryMaxVal) ? retryMaxVal : 2,
       stall_secs: Number.isFinite(stallSecsVal) ? stallSecsVal : 180,
     };
+    if (
+      ["low", "medium", "high", "xhigh", "max", "ultracode"].includes(effortVal)
+    ) {
+      update.effort = effortVal;
+    }
     if (failoverEnabled !== undefined) {
       update.failover_enabled = failoverEnabled;
     }
@@ -295,6 +336,30 @@ export async function saveSettings() {
     const updated = await settingsApi.setSettings(update);
     if (typeof window.applyLogFontSize === "function") {
       window.applyLogFontSize(fontVal);
+    }
+    // Sync chat composer depth when settings effort changed (keep local pick if set)
+    if (updated?.effort && $("#chat-effort")) {
+      let localPick = null;
+      try {
+        localPick = localStorage.getItem("cco.chatEffort");
+      } catch (_) {}
+      if (!localPick) $("#chat-effort").value = updated.effort;
+    }
+    // Sync split-page depth when settings change (keep local split pick if set)
+    if (updated?.effort) {
+      let splitPick = null;
+      try {
+        splitPick = localStorage.getItem("cco.splitEffort");
+      } catch (_) {}
+      if (!splitPick) {
+        for (const id of ["#split-effort", "#pp-effort"]) {
+          const el = $(id);
+          if (el) el.value = updated.effort;
+        }
+      }
+    }
+    if ($("#s-effort") && updated?.effort) {
+      $("#s-effort").value = updated.effort;
     }
     if ($("#pp-provider")) $("#pp-provider").value = providerVal;
     if ($("#pp-max-parallel") && !$("#pp-max-parallel").dataset.touched) {
