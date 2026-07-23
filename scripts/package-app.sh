@@ -28,6 +28,12 @@ cp -R "$ROOT/web" "$APP/Contents/web"
 
 cp -f "$ROOT/src-tauri/icons/icon.icns" "$APP/Contents/Resources/AppIcon.icns" 2>/dev/null || true
 
+# runtime-prompts: disk path for MacOS/../Resources (also include_str-embedded in binary)
+rm -rf "$APP/Contents/Resources/runtime-prompts"
+if [[ -d "$ROOT/docs/runtime-prompts" ]]; then
+  cp -R "$ROOT/docs/runtime-prompts" "$APP/Contents/Resources/runtime-prompts"
+fi
+
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -53,7 +59,13 @@ zip -r CCO-macos-arm64.zip CCO.app >/dev/null
 echo "OK: $APP"
 echo "WEB_MACOS: $APP/Contents/MacOS/web"
 echo "WEB_CONTENTS: $APP/Contents/web"
+echo "RUNTIME_PROMPTS: $APP/Contents/Resources/runtime-prompts"
 echo "ZIP: $DIST/CCO-macos-arm64.zip"
+if [[ -f "$APP/Contents/Resources/runtime-prompts/chat-plan-writing.md" ]]; then
+  echo "RUNTIME_PROMPTS_OK: chat-plan-writing.md present"
+else
+  echo "RUNTIME_PROMPTS_WARN: missing Resources/runtime-prompts (binary still has include_str fallback)"
+fi
 # sanity: new UI markers must exist in packaged web
 SEARCH_BIN="$(command -v rg || true)"
 if [[ -z "$SEARCH_BIN" && -x /opt/homebrew/bin/rg ]]; then SEARCH_BIN=/opt/homebrew/bin/rg; fi
