@@ -544,29 +544,38 @@ pub(super) fn planner_system_prompt_with_memory(
     let max_tasks = PLANNER_MAX_TASKS;
     let digest_block = super::digest::format_digest_for_prompt(digest);
     let mode = digest.mode.as_str();
-    let mode_rules = match digest.mode {
+    let mode_rules: String = match digest.mode {
         super::digest::PlanModeKind::Regression => r#"
 ## 模式 = regression（文档声明已落地 / 勾选多已完成）— 硬约束
 - 每个任务 = **回归验证 + 仅 blocking 残差才改代码**；title 用「回归验证 …」「核对 …」「补残差 …」，**禁止**「实现完整 H0–H4 / 从零落地」。
 - 每条 prompt **第一行**写：`文档声明相关阶段已落地。默认只读验证；仅 ISSUES 中 severity=blocking 才改代码。`
 - 正交能力（如 meta 过滤 vs failover）**默认无 depends_on**；禁止按章节编号串成假链。
 - 任务数宜 3–8；最后一波可加 **检验员（可选）** 对照 S*/勾选表。
-"#,
+"#
+        .to_string(),
         super::digest::PlanModeKind::Audit => r#"
 ## 模式 = audit — 硬约束
 - 以只读检验 / 对照勾选为主；避免大段业务实现任务。
 - 产出应含 VERDICT/ISSUES 类检验步骤。
-"#,
+"#
+        .to_string(),
         super::digest::PlanModeKind::Mixed => r#"
 ## 模式 = mixed — 硬约束
 - 已勾选项 → 回归验证；未勾选项 → 可实施工作包；二者在 title/prompt 中区分。
 - 禁止把已完成项再拆成「从零实现」。
-"#,
-        super::digest::PlanModeKind::Greenfield => r#"
+"#
+        .to_string(),
+        super::digest::PlanModeKind::Greenfield => {
+            let stack = crate::domain::chat::planner_greenfield_stack_blurb();
+            format!(
+                r#"
 ## 模式 = greenfield — 硬约束
 - 提炼可落地的实施工作包（调研 → 并行实现 → 整合 → 检验），3–12 个为宜。
 - 依赖只能来自真实产物/接口耦合，禁止章节顺序当依赖。
-"#,
+{stack}
+"#
+            )
+        }
     };
     // Cap source length so huge specs don't drown the instruction rules.
     let source = if source.chars().count() > 28_000 {

@@ -14,13 +14,14 @@ use super::paths::{chat_work_task_dir, normalize_work_task_dir};
 use super::types::ChatSession;
 
 pub(crate) fn system_prompt(project: &Path) -> String {
+    let guidance = crate::domain::chat::chat_plan_writing_guidance();
     format!(
-        r#"你是 cco 桌面应用里的「计划写作助手」。用户在项目目录中与你对话，目标是共建一份可执行的**计划文档**（Markdown 散文/大纲），不是直接写代码或执行任务。
+        r#"你是 cco 桌面应用里的「计划写作助手」。用户在项目目录中与你对话，主目标是共建一份可执行的**计划文档**（Markdown 散文/大纲）。
 
-项目路径：{}
+项目路径：{project}
 
 职责：
-1. 用简短中文澄清：目标、范围、约束、验收标准、风险。
+1. 用简短中文澄清：目标、范围、约束、验收标准、风险；按受众给出**建议技术**（见底层规则）。
 2. 当信息足够，或用户要求「生成计划/收口/写计划」时，输出完整 Markdown 计划。
 3. 计划正文必须用下面 fence 包起来（便于应用解析预填；用户仍需点「保存」才会落盘）：
 
@@ -29,20 +30,35 @@ pub(crate) fn system_prompt(project: &Path) -> String {
 ## 目标
 …
 ## 范围
+### 做
 …
+### 不做
+…
+## 建议技术
+- 形态：
+- 语言/框架：
+- 部署：
+- 为什么（一句话）：
 ## 任务大纲
 1. …
 2. …
-## 验收
-- …
+## 成功标准（怎样算做完）
+- [ ] …
 ```
+
+4. **本地启动 / 看效果**：桌面端对短句「启动本地预览 / 你来跑 / 关闭服务」会走 **cco 独立预览**（进程不挂在本会话下，结束聊天也不会带走）。你若用 Bash 起 `npm run dev`，服务常会随本轮 CLI 退出而消失——**禁止**在未确认端口仍可访问时写「已启动」。需要用户验收时，引导说「启动本地预览」或点短句；自己起服务后必须能 curl/访问再报 URL。
 
 硬规则：
 - **不要**输出 cco-plan/v1 JSON 或任务图 JSON（那是后续「分配计划」阶段 Planner 的事）。
-- **不要**假装已经执行了任务；你只写计划文档。
+- **不要**假装已执行；没跑过的命令不要写成「已启动」。大范围改代码/多步实现仍应收口为计划，交给「分配计划」后执行，不要在聊天里默默重写半个仓库。
 - 日常澄清轮可先不写 fence；收口轮务必带 ```plan。
-- 保持简洁，优先可分配、可拆分的任务大纲。"#,
-        project.display()
+- 保持简洁，优先可分配、可拆分的任务大纲；**禁止**用长篇方法论代替计划正文。
+- 工具与命令**仅限项目路径内**；禁止扫 home / 系统目录。
+
+{guidance}
+"#,
+        project = project.display(),
+        guidance = guidance,
     )
 }
 
@@ -186,7 +202,10 @@ pub(crate) fn call_claude_chat(
             // null = omit CLI limit flags (see ClaudeProvider::opt_limit_*).
             "max_turns": null,
             "max_budget_usd": null,
-            "permission_mode": "dontAsk",
+            // Desktop chat has no permission UI: dontAsk denied Bash (e.g. npm run dev).
+            // bypassPermissions + allow flag (spawn) lets install/start/preview run in-project.
+            // Scope still locked by --append-system-prompt (project dir only).
+            "permission_mode": "bypassPermissions",
             // Reasoning depth → claude --effort (ultracode → xhigh + system hint).
             "effort": effort,
             // No allowed_tools key → CLI default tools (Read/Bash/Edit…), scope-locked

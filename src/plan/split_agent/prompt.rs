@@ -7,8 +7,8 @@
 //! note: Q2 要求 scope_paths + 派工 body 模板；禁止 worker 腔；并行=文件所有权；W4 grain 可选一句
 
 /// System role: Plan Mode only — never write product code.
-pub fn system_prompt() -> &'static str {
-    r#"你是 cco 的计划拆分 Agent（Plan Mode / OpenHands 气质）。
+pub fn system_prompt() -> String {
+    let base = r#"你是 cco 的计划拆分 Agent（Plan Mode / OpenHands 气质）。
 你的唯一工作：把 Markdown 计划拆成可并行、可验收的工作步骤图。你不写业务代码、不改仓库、不探索全库。
 
 输出要求：
@@ -42,7 +42,9 @@ pub fn system_prompt() -> &'static str {
 - 禁止把：修订历史、非目标清单本身、PROTOCOL、纯目录说明、空话口号 拆成任务
 - 禁止输出 provider/role（高级字段留给人在拆分台填）；**必须**输出 scope_paths
 - 一步一个可验收结果；任务数宜 3–12，除非计划明确更多
-"#
+"#;
+    // Product delivery / FE defaults — software runtime knowledge (not Claude Code skill).
+    format!("{base}{}", crate::domain::chat::split_agent_delivery_guidance())
 }
 
 /// User message with plan body and runtime caps.

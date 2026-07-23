@@ -2,6 +2,7 @@
 > L2 | 父级: /CLAUDE.md
 
 成员清单
+marketing-landing-reference/SPEC.md: **营销/产品落地页结构 reference**（区块节奏 · 底 CTA≠页脚 · 资产门禁；非可运行整站；对齐 `docs/runtime-prompts`）
 plans/hello.cco.yaml: cco-plan/v1 双任务 fake 示例
 plans/raw-hello.md: raw-single 散文单任务
 plans/serial-prompts-sample.md: serial-prompts/v0 多段

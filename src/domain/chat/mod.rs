@@ -17,11 +17,15 @@
 mod fence;
 mod id;
 mod normalize;
+mod plan_writing_guidance;
 mod stream_parse;
 mod text;
 mod title;
 
 pub use fence::extract_plan_fence;
+pub use plan_writing_guidance::{
+    chat_plan_writing_guidance, planner_greenfield_stack_blurb, split_agent_delivery_guidance,
+};
 pub use id::{sanitize_session_id, DEFAULT_SESSION};
 pub use normalize::{
     acceptance_hint, acceptance_is_stub, acceptance_quality, build_verification,
