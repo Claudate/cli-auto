@@ -4,14 +4,15 @@
 //! [OUTPUT]: PreviewStatus (running · url · pid · error)
 //! [POS]: services IO · app/chat 薄委托；**不**经 Mode B confirm
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/services/CLAUDE.md
-//! note: 进程 setsid/新进程组，chat 结束不带走；先探测端口再报「已启动」
-//! note: 启动探测顺序 npm scripts → 静态 index.html（python -m http.server）
+//! note: 进程 nohup 独立，chat 结束不带走；**HTTP 就绪**后才报「已启动」（禁止只认 TCP/日志）
+//! note: 启动探测 npm scripts（可探）→ 静态 index.html（python --bind 127.0.0.1 固定端口）
+//! note: bare npx serve 随机端口会被 detect 拒掉；npm 起服失败/超时有 index.html 时自动落静态
 
 mod detect;
+mod http_ready;
 
 use std::fs::{self, File};
 use std::io::Read;
-use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -20,7 +21,8 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
-use detect::detect_preview_cmd;
+use detect::{detect_preview_cmd, detect_static_only, PreviewCmd};
+pub use http_ready::{annotate_false_preview_claims, http_ready};
 
 const STATE_NAME: &str = "state.json";
 const LOG_NAME: &str = "dev.log";
@@ -127,14 +129,6 @@ fn kill_pid_tree(pid: u32) {
     }
 }
 
-pub(crate) fn port_open(port: u16) -> bool {
-    TcpStream::connect_timeout(
-        &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
-        Duration::from_millis(200),
-    )
-    .is_ok()
-}
-
 fn parse_url_from_log(log: &Path) -> Option<String> {
     let mut f = File::open(log).ok()?;
     let mut buf = String::new();
@@ -144,35 +138,42 @@ fn parse_url_from_log(log: &Path) -> Option<String> {
     let re = regex::Regex::new(r"https?://(?:localhost|127\.0\.0\.1):\d+").ok()?;
     let m = re.find(&buf)?;
     let mut u = m.as_str().to_string();
+    // Normalize host so browser + probe share loopback.
+    u = u.replacen("localhost", "127.0.0.1", 1);
     if !u.ends_with('/') {
         u.push('/');
     }
     Some(u)
 }
 
+/// True only when HTTP serves 2xx/3xx (avoids false “已启动”).
+fn url_serving(url: &str) -> bool {
+    http_ready(url)
+}
+
 fn probe_url(log: &Path) -> Option<String> {
     if let Some(u) = parse_url_from_log(log) {
-        if let Some(port) = url_port(&u) {
-            if port_open(port) {
-                return Some(u);
-            }
-        } else {
+        if url_serving(&u) {
             return Some(u);
         }
     }
     for &p in DEFAULT_PORTS {
-        if port_open(p) {
-            return Some(format!("http://localhost:{p}/"));
+        let u = format!("http://127.0.0.1:{p}/");
+        if url_serving(&u) {
+            return Some(u);
         }
     }
     None
 }
 
-fn url_port(url: &str) -> Option<u16> {
-    let after = url.split("://").nth(1)?;
-    let hostport = after.split('/').next()?;
-    let port = hostport.split(':').nth(1)?;
-    port.parse().ok()
+/// Prefer known hint (static server) if that URL is serving; else log / port scan.
+fn resolve_ready_url(log: &Path, hint: &Option<String>) -> Option<String> {
+    if let Some(u) = hint {
+        if url_serving(u) {
+            return Some(u.clone());
+        }
+    }
+    probe_url(log)
 }
 
 /// Resolve absolute path to `npm` / `node` under GUI-safe PATH.
@@ -209,69 +210,17 @@ pub(crate) fn shell_single_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
-/// True only when TCP accepts (avoids false “已启动”).
-fn url_listening(url: &str) -> bool {
-    url_port(url).map(port_open).unwrap_or(false)
-}
-
-/// Prefer known hint (static server) if that port is up; else log / port scan.
-fn resolve_ready_url(log: &Path, hint: &Option<String>) -> Option<String> {
-    if let Some(u) = hint {
-        if url_listening(u) {
-            return Some(u.clone());
-        }
-    }
-    probe_url(log).filter(|u| url_listening(u))
-}
-
-/// Start (or reuse) **daemonized** preview via `nohup`; only report after port listens.
-pub fn preview_start(project: &Path) -> Result<PreviewStatus> {
-    if !project.is_dir() {
-        bail!("项目路径不存在: {}", project.display());
-    }
-
-    // Reuse only if pid alive AND port still listens.
-    if let Some(st) = load_state(project) {
-        let log = project.join(&st.log_rel);
-        let url = st
-            .url
-            .clone()
-            .or_else(|| probe_url(&log))
-            .filter(|u| url_listening(u));
-        if pid_alive(st.pid) {
-            if let Some(url) = url {
-                let mut st2 = st.clone();
-                st2.url = Some(url.clone());
-                let _ = save_state(project, &st2);
-                return Ok(PreviewStatus {
-                    running: true,
-                    url: Some(url.clone()),
-                    pid: Some(st.pid),
-                    command: Some(st.command),
-                    log_path: Some(log.display().to_string()),
-                    error: None,
-                    message: format_running_msg(&url, true),
-                });
-            }
-            // Dead listener — stop only our recorded pid tree, then restart.
-            kill_pid_tree(st.pid);
-            clear_state(project);
-        } else {
-            clear_state(project);
-        }
-    }
-
+/// Spawn daemonized preview from a resolved command; wait until HTTP ready.
+fn spawn_and_wait(project: &Path, cmd: &PreviewCmd) -> Result<PreviewStatus> {
     let dir = preview_dir(project);
     fs::create_dir_all(&dir)?;
     let log = log_path(project);
     let _ = fs::write(&log, "");
 
-    let cmd = detect_preview_cmd(project)?;
     let label = cmd.label.clone();
     let hint_url = cmd.hint_url.clone();
     let path_env = crate::runtime::provider::worker_path_env();
 
-    // Launcher script: survives parent exit (chat / Tauri / cargo test).
     let launcher = dir.join("run.sh");
     let body = format!(
         "#!/bin/sh\nexport PATH={path}\ncd {cwd} || exit 1\n{exec}",
@@ -288,7 +237,6 @@ pub fn preview_start(project: &Path) -> Result<PreviewStatus> {
         fs::set_permissions(&launcher, perms)?;
     }
 
-    // nohup + background; capture $! as daemon pid (not the shell that exits).
     let spawn_line = format!(
         "nohup {launcher} >>{log} 2>&1 & echo $!",
         launcher = shell_single_quote(&launcher.display().to_string()),
@@ -329,7 +277,7 @@ pub fn preview_start(project: &Path) -> Result<PreviewStatus> {
     };
     save_state(project, &st)?;
 
-    // Wait until a local port accepts connections (not just log line).
+    // Wait until HTTP serves (not just TCP / log line).
     let deadline = Instant::now() + Duration::from_secs(30);
     while Instant::now() < deadline {
         if let Some(u) = resolve_ready_url(&log, &hint_url) {
@@ -346,9 +294,7 @@ pub fn preview_start(project: &Path) -> Result<PreviewStatus> {
                 message: format_running_msg(&u, false),
             });
         }
-        // Process vanished with no listening port
         if !pid_alive(pid) {
-            // Child may have re-parented; still accept if port is up
             if let Some(u) = resolve_ready_url(&log, &hint_url) {
                 let mut st2 = st.clone();
                 st2.url = Some(u.clone());
@@ -363,15 +309,7 @@ pub fn preview_start(project: &Path) -> Result<PreviewStatus> {
                     message: format_running_msg(&u, false),
                 });
             }
-            let tail = fs::read_to_string(&log).unwrap_or_default();
-            let snip: String = tail
-                .chars()
-                .rev()
-                .take(800)
-                .collect::<String>()
-                .chars()
-                .rev()
-                .collect();
+            let snip = log_tail_snip(&log);
             clear_state(project);
             return Ok(PreviewStatus {
                 running: false,
@@ -391,13 +329,34 @@ pub fn preview_start(project: &Path) -> Result<PreviewStatus> {
         thread::sleep(Duration::from_millis(400));
     }
 
+    // Timeout: never claim a URL we cannot GET.
+    let maybe_url = resolve_ready_url(&log, &hint_url);
+    if let Some(u) = maybe_url {
+        let mut st2 = st.clone();
+        st2.url = Some(u.clone());
+        let _ = save_state(project, &st2);
+        return Ok(PreviewStatus {
+            running: true,
+            url: Some(u.clone()),
+            pid: Some(pid),
+            command: Some(label),
+            log_path: Some(log.display().to_string()),
+            error: None,
+            message: format_running_msg(&u, false),
+        });
+    }
+
+    let alive = pid_alive(pid);
+    if !alive {
+        clear_state(project);
+    }
     Ok(PreviewStatus {
-        running: pid_alive(pid),
-        url: resolve_ready_url(&log, &hint_url),
-        pid: Some(pid),
+        running: alive,
+        url: None,
+        pid: if alive { Some(pid) } else { None },
         command: Some(label),
         log_path: Some(log.display().to_string()),
-        error: Some("超时未检测到端口".into()),
+        error: Some("超时未检测到可访问网页".into()),
         message: format!(
             "还在准备，网页暂时打不开，请先别点链接。\n\
 稍等再发一次「启动本地预览」。\n\
@@ -405,6 +364,83 @@ pub fn preview_start(project: &Path) -> Result<PreviewStatus> {
             log.display()
         ),
     })
+}
+
+fn log_tail_snip(log: &Path) -> String {
+    let tail = fs::read_to_string(log).unwrap_or_default();
+    tail.chars()
+        .rev()
+        .take(800)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect()
+}
+
+/// Start (or reuse) **daemonized** preview via `nohup`; only report after HTTP ready.
+pub fn preview_start(project: &Path) -> Result<PreviewStatus> {
+    if !project.is_dir() {
+        bail!("项目路径不存在: {}", project.display());
+    }
+
+    // Reuse only if pid alive AND HTTP still serves.
+    if let Some(st) = load_state(project) {
+        let log = project.join(&st.log_rel);
+        let url = st
+            .url
+            .clone()
+            .or_else(|| probe_url(&log))
+            .filter(|u| url_serving(u));
+        if pid_alive(st.pid) {
+            if let Some(url) = url {
+                let mut st2 = st.clone();
+                st2.url = Some(url.clone());
+                let _ = save_state(project, &st2);
+                return Ok(PreviewStatus {
+                    running: true,
+                    url: Some(url.clone()),
+                    pid: Some(st.pid),
+                    command: Some(st.command),
+                    log_path: Some(log.display().to_string()),
+                    error: None,
+                    message: format_running_msg(&url, true),
+                });
+            }
+            // Dead listener — stop only our recorded pid tree, then restart.
+            kill_pid_tree(st.pid);
+            clear_state(project);
+        } else {
+            clear_state(project);
+        }
+    }
+
+    let cmd = detect_preview_cmd(project)?;
+    let first = spawn_and_wait(project, &cmd)?;
+    if first.running && first.url.is_some() && first.error.is_none() {
+        return Ok(first);
+    }
+
+    // npm / random tools failed: if we have index.html, force fixed-port static once.
+    if !cmd.is_static && project.join("index.html").is_file() {
+        if let Some(pid) = first.pid {
+            kill_pid_tree(pid);
+        }
+        clear_state(project);
+        if let Ok(static_cmd) = detect_static_only(project) {
+            let second = spawn_and_wait(project, &static_cmd)?;
+            if second.running && second.url.is_some() {
+                let mut msg = second.message;
+                msg.push_str("\n\n（已自动改用静态服务起预览，不依赖 package.json 脚本。）");
+                return Ok(PreviewStatus {
+                    message: msg,
+                    ..second
+                });
+            }
+            return Ok(second);
+        }
+    }
+
+    Ok(first)
 }
 
 fn format_running_msg(url: &str, reused: bool) -> String {
@@ -464,12 +500,17 @@ pub fn preview_stop(project: &Path) -> Result<PreviewStatus> {
 }
 
 /// Status of cco-managed preview (and opportunistic port probe).
+/// Never returns a URL that fails HTTP GET.
 pub fn preview_status(project: &Path) -> Result<PreviewStatus> {
     if let Some(st) = load_state(project) {
         let alive = pid_alive(st.pid);
         let log = project.join(&st.log_rel);
         if alive {
-            let url = probe_url(&log).or(st.url.clone());
+            let url = st
+                .url
+                .clone()
+                .filter(|u| url_serving(u))
+                .or_else(|| probe_url(&log));
             return Ok(PreviewStatus {
                 running: true,
                 url: url.clone(),
@@ -479,7 +520,7 @@ pub fn preview_status(project: &Path) -> Result<PreviewStatus> {
                 error: None,
                 message: match url {
                     Some(u) => format_running_msg(&u, true),
-                    None => "网站程序在跑，但地址还没准备好。稍后再发「启动本地预览」，或发「关闭服务」停掉。"
+                    None => "网站程序在跑，但地址还没准备好（网页还不能访问）。稍后再发「启动本地预览」，或发「关闭服务」停掉。"
                         .into(),
                 },
             });
@@ -487,10 +528,10 @@ pub fn preview_status(project: &Path) -> Result<PreviewStatus> {
         clear_state(project);
     }
 
-    // Opportunistic: something listening on default ports (not cco-managed)
+    // Opportunistic: something listening + serving on default ports (not cco-managed)
     for &p in DEFAULT_PORTS {
-        if port_open(p) {
-            let u = format!("http://localhost:{p}/");
+        let u = format!("http://127.0.0.1:{p}/");
+        if url_serving(&u) {
             return Ok(PreviewStatus {
                 running: true,
                 url: Some(u.clone()),
@@ -532,6 +573,7 @@ mod tests {
         .unwrap();
         let u = parse_url_from_log(&log).expect("url");
         assert!(u.contains("4321"), "{u}");
+        assert!(u.contains("127.0.0.1"), "{u}");
     }
 
     /// Live smoke: `CCO_PREVIEW_SMOKE=/path/to/project cargo test -p cco preview_live -- --ignored --nocapture`
@@ -547,11 +589,36 @@ mod tests {
             "start: {st:?}"
         );
         let url = st.url.unwrap();
-        let port = url_port(&url).expect("port");
-        assert!(port_open(port), "port {port} closed after claim ready");
+        assert!(http_ready(&url), "HTTP not ready after claim: {url}");
         let stop = preview_stop(&project).expect("stop");
         assert!(!stop.running, "stop: {stop:?}");
         thread::sleep(Duration::from_millis(500));
-        assert!(!port_open(port), "port {port} still open after stop");
+        assert!(!http_ready(&url), "still serving after stop: {url}");
+    }
+
+    #[test]
+    fn static_preview_live_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("index.html"),
+            "<!doctype html><title>cco-preview-test</title><h1>ok</h1>",
+        )
+        .unwrap();
+        let st = preview_start(dir.path()).expect("start");
+        assert!(
+            st.running && st.error.is_none(),
+            "start failed: {:?}",
+            st
+        );
+        let url = st.url.expect("url");
+        assert!(
+            http_ready(&url),
+            "claimed ready but HTTP fails: {url} msg={}",
+            st.message
+        );
+        let stop = preview_stop(dir.path()).expect("stop");
+        assert!(!stop.running, "stop: {stop:?}");
+        thread::sleep(Duration::from_millis(400));
+        assert!(!http_ready(&url), "still open after stop {url}");
     }
 }

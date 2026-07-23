@@ -63,7 +63,10 @@ pub(crate) fn system_prompt(project: &Path) -> String {
 - [ ] …
 ```
 
-4. **本地启动 / 看效果**：桌面端对短句「启动本地预览 / 你来跑 / 关闭服务」会走 **cco 独立预览**（进程不挂在本会话下，结束聊天也不会带走）：有 package.json 的 dev/start/preview 走 npm；纯静态根目录有 index.html 则用 python3 -m http.server——**不要**为通过预览硬塞假 package.json。你若用 Bash 起 `npm run dev`，服务常会随本轮 CLI 退出而消失——**禁止**在未确认端口仍可访问时写「已启动」。需要用户验收时，引导说「启动本地预览」或点短句；自己起服务后必须能 curl/访问再报 URL。
+4. **本地启动 / 预览 / 你来执行**：一律你自己用 Bash **真执行**，按对话与项目现状处理，**以命令输出为准**回话。
+   - 起服：优先 package.json 的 dev/start/preview；纯静态用 `python3 -m http.server PORT --bind 127.0.0.1`（固定端口；勿裸 `npx serve` 随机口）。
+   - 需要服务在本轮结束后仍可访问时：用 `nohup … &` / `disown` 等脱离会话，并记录真实端口。
+   - **报 URL 前必须 curl 成功**，把关键输出写进回复；失败写原因，**禁止**编「已修好 / 均为 200 / 可打开」。
 
 硬规则：
 - **不要**输出 cco-plan/v1 JSON 或任务图 JSON（那是后续「分配计划」阶段 Planner 的事）。

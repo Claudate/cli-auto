@@ -11,7 +11,6 @@ import {
   showPage,
 } from "./legacy.js";
 import * as chatApi from "./chatApi.js";
-import * as gateway from "../../shared/gateway.js";
 import { host } from "./host.js";
 import {
   ensureChatState,
@@ -154,50 +153,7 @@ export function handleLastSummaryAction(action) {
   }
 }
 
-/** Short chat intents for detached local preview (not Mode B / not Claude Bash). */
-function detectPreviewIntent(text) {
-  const t = String(text || "").trim();
-  // Whole short utterances only (mirror Rust detect_local_preview_intent).
-  if (!t || [...t].length > 24) return null;
-  if (
-    /^(关闭服务|关掉服务|停止预览|关掉预览|停止服务|关闭预览|结束预览|关闭|关掉|停止|停掉)$/.test(
-      t
-    )
-  ) {
-    return "stop";
-  }
-  if (
-    /^(启动本地预览|启动预览|本地预览|重新启动|重启服务|重启预览|你来跑|启动服务|启动项目|打开预览|起服务|跑起来|启动|开一下|跑一下|启动一下|重启|再启动)$/.test(
-      t
-    )
-  ) {
-    return "start";
-  }
-  return null;
-}
-
-async function runLocalPreviewIntent(projectPath, intent) {
-  const resp =
-    intent === "stop"
-      ? await chatApi.previewStop(projectPath)
-      : await chatApi.previewStart(projectPath);
-  const msg =
-    (resp && resp.message) ||
-    (intent === "stop" ? "已关闭预览。" : "预览操作完成。");
-  state.chatSession.messages = [
-    ...(state.chatSession.messages || []),
-    { role: "assistant", content: msg },
-  ];
-  // Only open browser when port is confirmed listening (avoid empty ERR_CONNECTION_REFUSED).
-  if (intent === "start" && resp?.running && resp?.url && !resp?.error) {
-    try {
-      await gateway.openPath(resp.url);
-    } catch (_) {
-      /* link in bubble still works */
-    }
-  }
-  return resp;
-}
+// Preview short-phrase intercept removed: chat always goes to Claude CLI.
 
 export async function sendChatMessage() {
   ensureChatState();
@@ -250,15 +206,6 @@ export async function sendChatMessage() {
   startChatWaitTicker();
 
   try {
-    // Detached preview: short intents never go through Claude Bash (would die with chat).
-    const previewIntent =
-      !pendingSnap.length && text ? detectPreviewIntent(text) : null;
-    if (previewIntent) {
-      await runLocalPreviewIntent(projectPath, previewIntent);
-      stashChatSession(projectPath);
-      return;
-    }
-
     // G4: upload pending attachments first, then send with attachment meta
     let attachments = [];
     if (pendingSnap.length) {

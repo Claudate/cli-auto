@@ -27,7 +27,9 @@ pub use chat::{
     ChatAttachment, ChatDraftPlan, ChatMessage, ChatNormalizePlanResponse, ChatSavePlanResponse,
     ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
 };
-pub use preview::{preview_start, preview_status, preview_stop, PreviewStatus};
+pub use preview::{
+    annotate_false_preview_claims, preview_start, preview_status, preview_stop, PreviewStatus,
+};
 pub use live::{
     open_task_terminal, project_live_view, stop_task, task_logs, ProjectLiveView, TaskLiveView,
     TaskLogsView,
