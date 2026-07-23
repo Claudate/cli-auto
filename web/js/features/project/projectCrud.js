@@ -158,17 +158,66 @@ export async function removeSelectedProject(pathArg, opts = {}) {
   }
 }
 
-/* 隐藏当前运行视图（不清除运行记录，不删除项目） */
+/**
+ * 结束本轮 / 收起运行视图。
+ * SoT = SQLite project_ui_prefs.dismissed_run_id（gateway only）。
+ * project_live_view 服务端过滤；禁止 localStorage 业务态。
+ */
 export async function dismissRun() {
-  // 只收起运行视图；若在规划/确认则保留
+  const path = state.selectedPath;
+  const rid =
+    state.live?.run_id ||
+    (path && state.lastRunIdByProject?.[path]) ||
+    null;
+  if (path && rid) {
+    try {
+      await requireGateway().projectDismissRun(path, String(rid));
+    } catch (e) {
+      console.warn("[dismissRun] sqlite", e);
+      toast(String(e?.message || e) || "结束本轮写入失败");
+      // Still clear UI so user is not stuck on result desk
+    }
+  }
+  try {
+    host.clearPlanSession?.(path);
+  } catch (_) {}
   state.live = null;
   state.selectedTaskId = null;
-  if (!host.isPlanSessionActive()) {
-    state.phase = "pick";
-  }
+  state.planJobId = null;
+  state.planJob = null;
+  state.confirmTaskId = null;
+  state.phase = "pick";
   state.planCollapsed = false;
-  renderWorkspace();
-  host.updateBgPlanBanner();
+  state.planStartedAt = 0;
+  try {
+    host.stopPlanJobPoll?.();
+  } catch (_) {}
+  try {
+    host.setAssignBusy?.(false);
+  } catch (_) {}
+  try {
+    if (typeof loadProjects === "function") await loadProjects();
+  } catch (_) {}
+  try {
+    if (typeof openChatPage === "function") await openChatPage();
+    else showPage("chat");
+  } catch (_) {
+    try {
+      showPage("chat");
+    } catch (__) {}
+  }
+  try {
+    renderWorkspace();
+  } catch (_) {}
+  try {
+    host.updateBgPlanBanner?.();
+  } catch (_) {}
+  try {
+    renderProjectList();
+  } catch (_) {}
+  try {
+    host.renderPlanPicker?.();
+  } catch (_) {}
 }
 
 /* ── Doctor gate (A5-2d → features/settings via ccoSettings) ── */

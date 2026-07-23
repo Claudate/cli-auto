@@ -24,7 +24,10 @@ mod title;
 
 pub use fence::extract_plan_fence;
 pub use plan_writing_guidance::{
-    chat_plan_writing_guidance, planner_greenfield_stack_blurb, split_agent_delivery_guidance,
+    backend_architecture_guidance, chat_plan_writing_guidance, planner_greenfield_stack_blurb,
+    split_agent_delivery_guidance, ui_color_systems_guidance, ui_copy_systems_guidance,
+    ui_delivery_recipes_guidance, ui_layout_systems_guidance, ui_motion_effects_guidance,
+    ui_typography_systems_guidance,
 };
 pub use id::{sanitize_session_id, DEFAULT_SESSION};
 pub use normalize::{

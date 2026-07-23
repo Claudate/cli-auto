@@ -7,6 +7,7 @@
 //! note: print 仅 stdin 传 prompt；allowed_tools:[] → --allowedTools ""
 //! note: max_turns/max_budget_usd null|0 → 不传 CLI 限制（chat 无人为 turn 上限）
 //! note: append-system-prompt = project scope lock + TaskScope contract + provider_opts.append_system_prompt
+//! note: permission_mode=bypassPermissions → 另加 --allow-dangerously-skip-permissions（chat 无权限 UI）
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -182,6 +183,11 @@ impl ClaudeProvider {
             cmd.arg("--bg");
         }
         cmd.arg("--permission-mode").arg(&perm);
+        // Non-interactive desktop/print sessions: bypass mode needs the allow flag,
+        // otherwise CLI may still refuse to enter bypassPermissions.
+        if perm == "bypassPermissions" {
+            cmd.arg("--allow-dangerously-skip-permissions");
+        }
         // Always pass when key present (including empty string = no tools).
         if let Some(t) = tools {
             cmd.arg("--allowedTools").arg(t);

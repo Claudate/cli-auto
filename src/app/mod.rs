@@ -29,6 +29,9 @@ pub mod chat;
 /// Project light memory (P2-2): last_summary + pins ≤3; prompt context only.
 pub mod memory;
 
+/// Project UI prefs (SQLite): dismissed_run_id · durable shell state.
+pub mod project_ui;
+
 /// A0 baseline marker.
 pub const A0_BASELINE: &str = "app-a0";
 

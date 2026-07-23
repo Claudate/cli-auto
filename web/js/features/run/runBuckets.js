@@ -175,14 +175,27 @@ export function runContext(live, legacy = {}) {
   } catch (_) {
     if (planning) belongs = false;
   }
-  // 双保险：live 仍在跑/暂停时绝不因 planJob 门禁把执行台刷空
+  // SoT dismiss 已在 project_live_view 过滤；双保险：
+  // - 真在跑：绝不刷空执行台
+  // - paused：仅当 isRunPaused() 为真（已排除 last_dismissed）
   if (live?.run_id && isLiveStatus(live.run_status)) {
     belongs = true;
-  } else if (
-    live?.run_id &&
-    String(live.run_status || "").toLowerCase() === "paused"
-  ) {
-    belongs = true;
+  } else if (live?.run_id) {
+    try {
+      const w = typeof window !== "undefined" ? window : globalThis;
+      if (typeof w.isRunPaused === "function" && w.isRunPaused()) {
+        belongs = true;
+      } else if (
+        String(live.run_status || "").toLowerCase() === "paused" &&
+        typeof w.isRunPaused !== "function"
+      ) {
+        belongs = true;
+      }
+    } catch (_) {
+      if (String(live.run_status || "").toLowerCase() === "paused") {
+        belongs = true;
+      }
+    }
   }
   const runStatus = belongs ? live?.run_status : null;
   const hasRun = belongs && !!live?.run_id;

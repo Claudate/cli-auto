@@ -1,8 +1,8 @@
 /**
  * [INPUT]: legacy host + gateway via requireGateway
- * [OUTPUT]: loadLive / ensureSelectedTask → ccoLoadLive
+ * [OUTPUT]: loadLive / ensureSelectedTask → ccoLoadLive only
  * [POS]: A5-2b-fin features/project/loadLiveBridge.js
- * note: loadLive / ensureSelectedTask → ccoLoadLive
+ * note: 业务过滤只在 project_live_view（SQLite dismiss）；本文件不双写
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -50,17 +50,18 @@ import {
 } from "./legacy.js";
 import { host } from "./host.js";
 
-/* ── Workspace live（A5-2b → features/run/loadLive；IPC 经 gateway） ── */
+/* ── Workspace live：唯一路径 ccoLoadLive（server SoT） ── */
 export async function loadLive() {
   if (typeof window.ccoLoadLive === "function") {
     return window.ccoLoadLive({
       getState: () => state,
       hasActiveRun: () => hasActiveRun(),
       refreshPlanJob: () => host.refreshPlanJob(),
+      loadProjects: typeof loadProjects === "function" ? () => loadProjects() : undefined,
       logMaxBytes: 96000,
     });
   }
-  // main.js 未就绪：gateway 优先，禁止散落新策略
+  // main.js 未就绪：直读 gateway（仍信服务端过滤）
   if (!state.selectedPath) {
     state.live = null;
     return null;
@@ -70,18 +71,30 @@ export async function loadLive() {
     await host.refreshPlanJob().catch(() => {});
   }
   const prevLive = hasActiveRun();
+  let live;
   if (window.ccoGateway?.getProjectLive) {
-    state.live = await window.ccoGateway.getProjectLive(state.selectedPath, {
+    live = await window.ccoGateway.getProjectLive(state.selectedPath, {
       logMaxBytes: 96000,
     });
   } else {
-    state.live = await requireGateway().getProjectLive(state.selectedPath, {
+    live = await requireGateway().getProjectLive(state.selectedPath, {
       logMaxBytes: 96000,
     });
   }
+  const path = state.selectedPath;
+  if (path && live?.run_id) {
+    if (!state.lastRunIdByProject) state.lastRunIdByProject = {};
+    state.lastRunIdByProject[path] = String(live.run_id);
+  }
+  state.live = live;
   const nowLive = hasActiveRun();
-  if (prevLive && !nowLive && state.phase === "running") {
+  if (prevLive && !nowLive && state.phase === "running" && state.live) {
     state.phase = "done";
+  }
+  if (prevLive !== nowLive) {
+    try {
+      if (typeof loadProjects === "function") await loadProjects();
+    } catch (_) {}
   }
   ensureSelectedTask();
   try {
@@ -109,7 +122,7 @@ export async function loadLive() {
 }
 
 export function ensureSelectedTask() {
-  if (typeof window.ccoEnsureSelectedTask === "function") {
+  if (typeof window.ccoLoadLive === "function" && window.ccoEnsureSelectedTask) {
     return window.ccoEnsureSelectedTask(state);
   }
   const tasks = state.live?.tasks || [];
@@ -117,19 +130,13 @@ export function ensureSelectedTask() {
     state.selectedTaskId = null;
     return null;
   }
-  const ids = new Set(tasks.map((t) => t.task_id));
-  if (!(state.selectedTaskId && ids.has(state.selectedTaskId))) {
-    state.selectedTaskId = null;
+  if (
+    state.selectedTaskId &&
+    tasks.some((t) => t.task_id === state.selectedTaskId || t.id === state.selectedTaskId)
+  ) {
+    return state.selectedTaskId;
   }
-  const failed = tasks.find((t) => isFailedStatus(t.status));
   const running = tasks.find((t) => isLiveStatus(t.status));
-  if (!state.selectedTaskId) {
-    state.selectedTaskId = (failed || running || tasks[0]).task_id;
-  } else if (failed && isFailedStatus(failed.status)) {
-    const cur = tasks.find((t) => t.task_id === state.selectedTaskId);
-    if (cur && !isFailedStatus(cur.status) && !isLiveStatus(cur.status)) {
-      state.selectedTaskId = failed.task_id;
-    }
-  }
+  state.selectedTaskId = (running || tasks[0]).task_id || (running || tasks[0]).id || null;
   return state.selectedTaskId;
 }

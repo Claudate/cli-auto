@@ -227,16 +227,26 @@ export function renderChatPage() {
       ? "请先在左侧选择项目"
       : state.chatBusy
         ? "AI 正在回复，可先写下一条…"
-        : "说清目标与约束；可附图片/文档；满意后让 AI 生成计划…";
+        : "说清目标与约束，或拖入文件…";
   }
   if (sendBtn) {
     // Disabled while waiting = prevent double-send, NOT app freeze.
     // Backend chat_send runs on a worker thread so the rest of the UI stays live.
+    // Icon-only send (arrow-up); never wipe SVG with textContent.
     sendBtn.disabled = !state.selectedPath || !!state.chatBusy;
-    sendBtn.textContent = state.chatBusy ? "思考中…" : "发送";
     sendBtn.title = state.chatBusy
       ? "正在等待本机 Claude CLI 回复，请稍候"
-      : "发送消息";
+      : "发送（Enter）";
+    sendBtn.setAttribute(
+      "aria-label",
+      state.chatBusy ? "思考中…" : "发送"
+    );
+  }
+  // Codex-style auto-grow textarea
+  if (input && typeof input.scrollHeight === "number") {
+    input.style.height = "auto";
+    const max = 160; // ~10rem
+    input.style.height = `${Math.min(input.scrollHeight, max)}px`;
   }
   if (attachBtn) {
     attachBtn.disabled = !state.selectedPath || !!state.chatBusy;

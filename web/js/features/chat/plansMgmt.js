@@ -21,13 +21,35 @@ import * as chatApi from "./chatApi.js";
 import { renderMarkdown } from "../../shared/markdown.js";
 
 /**
- * Ensure selected / draft / split-index plans appear in the list even when
- * list_plans skipped the filename (e.g. *-landing-*.md before filter expand).
+ * Drop selection pointers whose source .md is gone (no ghost list rows).
+ * @param {string} root
+ */
+async function dropMissingPlanPointers(root) {
+  if (!root) return;
+  const keys = ["selectedPlan", "chatDraftPlan", "planRailSelected"];
+  for (const key of keys) {
+    const raw = state[key];
+    if (!raw) continue;
+    const path =
+      typeof normalizePlanPath === "function"
+        ? normalizePlanPath(raw, root) || raw
+        : raw;
+    const ok = await chatApi.planMdExists(root, path);
+    if (!ok) {
+      state[key] = null;
+    }
+  }
+}
+
+/**
+ * Ensure selected / draft plans appear when list_plans filename filter missed them.
+ * **Does not** re-inject SQLite split-index paths — source deleted ⇒ list drops.
+ * Only pins after disk probe succeeds.
  * @param {Array} items
  * @param {string[]} pinPaths
  * @param {string} root
  */
-function ensurePinnedPlanItems(items, pinPaths, root) {
+async function ensurePinnedPlanItems(items, pinPaths, root) {
   const list = Array.isArray(items) ? items.slice() : [];
   const seen = new Set(
     list.map((it) => {
@@ -37,30 +59,29 @@ function ensurePinnedPlanItems(items, pinPaths, root) {
         : p;
     })
   );
+  // Explicit user/session pins only — no planSplitByPath ghosts
   const candidates = [
     ...(pinPaths || []),
     state.chatDraftPlan,
     state.selectedPlan,
     state.planRailSelected,
   ].filter(Boolean);
-  // Also pin paths that already have a restorable split in SQLite
-  const splitBy = state.planSplitByPath || {};
-  for (const k of Object.keys(splitBy)) {
-    if (k && k.includes("/")) candidates.push(k);
-  }
   for (const raw of candidates) {
     const path =
       typeof normalizePlanPath === "function"
         ? normalizePlanPath(raw, root) || raw
         : raw;
     if (!path || seen.has(path)) continue;
-    // Only inject paths under project
     if (
       typeof host.isPlanUnderProject === "function" &&
       !host.isPlanUnderProject(path, root)
     ) {
       continue;
     }
+    // Source must exist on disk; deleted chat-*.md must not reappear
+    // eslint-disable-next-line no-await-in-loop
+    const ok = await chatApi.planMdExists(root, path);
+    if (!ok) continue;
     seen.add(path);
     const meta =
       typeof host.planMetaForPath === "function"
@@ -85,6 +106,8 @@ export async function openPlanManagement() {
       stashChatSession(state.chatProjectPath || state.selectedPath);
     } catch (_) {}
   }
+  // 源文件已删 → 清掉选中指针，避免幽灵「已拆分」
+  await dropMissingPlanPointers(state.selectedPath);
   const selected =
     state.planRailSelected ||
     state.selectedPlan ||
@@ -114,13 +137,13 @@ export async function openPlanManagement() {
       state.chatDraftPlan = selected;
     } catch (_) {}
   }
-  renderPlansMgmtPage();
+  await renderPlansMgmtPage();
   if (!selected) {
     toast("从左侧选一份计划，再点「拆成步骤」");
   }
 }
 
-export function renderPlansMgmtPage() {
+export async function renderPlansMgmtPage() {
   ensureChatState();
   syncPlansDirLabels();
   if (typeof syncShowExecutedToggles === "function") syncShowExecutedToggles();
@@ -137,6 +160,9 @@ export function renderPlansMgmtPage() {
   }
 
   const root = state.selectedPath;
+  if (root) {
+    await dropMissingPlanPointers(root);
+  }
   const selectedPath =
     state.planRailSelected ||
     state.selectedPlan ||
@@ -165,8 +191,8 @@ export function renderPlansMgmtPage() {
     dirItems = dirParts.primary;
   }
 
-  // 当前/最近打开的计划必须出现在列表（list_plans 文件名过滤可能扫不到 landing 等）
-  dirItems = ensurePinnedPlanItems(dirItems, pinPaths, root);
+  // 仅 pin 磁盘仍存在的选中/草稿（不 pin 已删源文件的拆分索引）
+  dirItems = await ensurePinnedPlanItems(dirItems, pinPaths, root);
 
   if (!dirItems.length) {
     list.innerHTML = "";
@@ -265,9 +291,31 @@ export async function renderPlansMgmtDetail(item) {
 
   let markdown = "";
   try {
-    markdown = await chatApi.readPlanMd(root, path );
+    markdown = await chatApi.readPlanMd(root, path);
   } catch (e) {
-    markdown = `（无法读取：${e?.message || e}）`;
+    // 源文件已删：从选中/列表指针清掉，不在详情里挂幽灵
+    const msg = String(e?.message || e || "");
+    if (/not found|No such file|无法找到|不存在/i.test(msg)) {
+      if (state.planRailSelected === path || state.selectedPlan === path) {
+        state.planRailSelected = null;
+        if (state.selectedPlan === path) state.selectedPlan = null;
+        if (state.chatDraftPlan === path) state.chatDraftPlan = null;
+      }
+      // Drop from rail items so list no longer shows it
+      if (Array.isArray(state.planRailItems)) {
+        state.planRailItems = state.planRailItems.filter((it) => {
+          const p = it?.path || it;
+          return p !== path;
+        });
+      }
+      if (Array.isArray(state.plans)) {
+        state.plans = state.plans.filter((p) => p !== path);
+      }
+      toast("源计划文件已删除，已从列表移除");
+      renderPlansMgmtPage();
+      return;
+    }
+    markdown = `（无法读取：这份计划文件打不开。可点「刷新」或换一份计划。）`;
   }
   const title =
     sanitizePlanTitle(item.title) ||

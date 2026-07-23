@@ -54,6 +54,8 @@ pub fn confirm(config: Config, job_id: &str, effort: Option<&str>) -> Result<Str
         Some(&soft_report),
     )?;
     mark_confirmed(&config, job_id, &run_id, &ir)?;
+    // New open-run: clear UI dismiss so project_live binds this run.
+    crate::app::project_ui::try_clear_dismissed_run(&config, &job.project);
     Ok(run_id)
 }
 

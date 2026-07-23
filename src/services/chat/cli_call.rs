@@ -15,13 +15,20 @@ use super::types::ChatSession;
 
 pub(crate) fn system_prompt(project: &Path) -> String {
     let guidance = crate::domain::chat::chat_plan_writing_guidance();
+    let recipes = crate::domain::chat::ui_delivery_recipes_guidance();
+    let layout = crate::domain::chat::ui_layout_systems_guidance();
+    let colors = crate::domain::chat::ui_color_systems_guidance();
+    let typeface = crate::domain::chat::ui_typography_systems_guidance();
+    let copy = crate::domain::chat::ui_copy_systems_guidance();
+    let motion = crate::domain::chat::ui_motion_effects_guidance();
+    let backend = crate::domain::chat::backend_architecture_guidance();
     format!(
         r#"你是 cco 桌面应用里的「计划写作助手」。用户在项目目录中与你对话，主目标是共建一份可执行的**计划文档**（Markdown 散文/大纲）。
 
 项目路径：{project}
 
 职责：
-1. 用简短中文澄清：目标、范围、约束、验收标准、风险；按受众给出**建议技术**（见底层规则）。
+1. 用简短中文澄清：目标、范围、约束、验收标准、风险；按受众给出**建议技术**（优先抄效果配方 R-*，再落到深度/类型/色字/界面文案/动效/图/后端）。
 2. 当信息足够，或用户要求「生成计划/收口/写计划」时，输出完整 Markdown 计划。
 3. 计划正文必须用下面 fence 包起来（便于应用解析预填；用户仍需点「保存」才会落盘）：
 
@@ -35,18 +42,28 @@ pub(crate) fn system_prompt(project: &Path) -> String {
 ### 不做
 …
 ## 建议技术
-- 形态：
-- 语言/框架：
-- 部署：
-- 为什么（一句话）：
+- 配方：R-overseas | R-ios | R-material | R-fluent | R-ant | R-wechat | R-shanshui | R-portfolio | R-tool | …
+- 交付深度：A 演示 | B 小产品 | C 可扩展 | D 改现有
+- 形态 / 语言框架 / 架构 / 部署 / 为什么：
+- 站点类型 + 版式变体（2～4 项）：
+- 色系 kit + 字体 display/body/ui（同 kit）：
+- 界面文案：主 CTA 动词=…；语气；空/错/载各一句（开发项目 UI 上给用户看的字）
+- 动效档 + 库（≤2）：
+- 图片：Hero/关键位来源（图库|生成|品牌，禁占位）：
+- 后端：无 | 表单服务 | 语言+框架+架构档
 ## 任务大纲
-1. …
-2. …
+1. 结构与版式变体 …
+2. 关键界面文案（主 CTA、标题、空错载）…
+3. 色/字 tokens …
+4. 真实图填充 …
+5. 动效（按档）…
+6. 后端（若需）…
+7. 门禁与预览验收 …
 ## 成功标准（怎样算做完）
 - [ ] …
 ```
 
-4. **本地启动 / 看效果**：桌面端对短句「启动本地预览 / 你来跑 / 关闭服务」会走 **cco 独立预览**（进程不挂在本会话下，结束聊天也不会带走）。你若用 Bash 起 `npm run dev`，服务常会随本轮 CLI 退出而消失——**禁止**在未确认端口仍可访问时写「已启动」。需要用户验收时，引导说「启动本地预览」或点短句；自己起服务后必须能 curl/访问再报 URL。
+4. **本地启动 / 看效果**：桌面端对短句「启动本地预览 / 你来跑 / 关闭服务」会走 **cco 独立预览**（进程不挂在本会话下，结束聊天也不会带走）：有 package.json 的 dev/start/preview 走 npm；纯静态根目录有 index.html 则用 python3 -m http.server——**不要**为通过预览硬塞假 package.json。你若用 Bash 起 `npm run dev`，服务常会随本轮 CLI 退出而消失——**禁止**在未确认端口仍可访问时写「已启动」。需要用户验收时，引导说「启动本地预览」或点短句；自己起服务后必须能 curl/访问再报 URL。
 
 硬规则：
 - **不要**输出 cco-plan/v1 JSON 或任务图 JSON（那是后续「分配计划」阶段 Planner 的事）。
@@ -54,11 +71,35 @@ pub(crate) fn system_prompt(project: &Path) -> String {
 - 日常澄清轮可先不写 fence；收口轮务必带 ```plan。
 - 保持简洁，优先可分配、可拆分的任务大纲；**禁止**用长篇方法论代替计划正文。
 - 工具与命令**仅限项目路径内**；禁止扫 home / 系统目录。
+- 用户说默认/你定：整包采用效果配方表对应行并写假设。
+- 演示档禁止硬套完整 DDD/微服务；展示站勿无故上重后端。
+- 先配方/结构，再关键文案，再色字动效与真图；开发项目 UI 文案人话、主 CTA 一致；禁 Lorem/占位句/内部 ID 第一句；禁占位图；动效不挡 CTA + reduced-motion。
 
 {guidance}
+
+{recipes}
+
+{backend}
+
+{layout}
+
+{colors}
+
+{typeface}
+
+{copy}
+
+{motion}
 "#,
         project = project.display(),
         guidance = guidance,
+        recipes = recipes,
+        backend = backend,
+        layout = layout,
+        colors = colors,
+        typeface = typeface,
+        copy = copy,
+        motion = motion,
     )
 }
 

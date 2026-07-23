@@ -43,8 +43,18 @@ pub fn system_prompt() -> String {
 - 禁止输出 provider/role（高级字段留给人在拆分台填）；**必须**输出 scope_paths
 - 一步一个可验收结果；任务数宜 3–12，除非计划明确更多
 "#;
-    // Product delivery / FE defaults — software runtime knowledge (not Claude Code skill).
-    format!("{base}{}", crate::domain::chat::split_agent_delivery_guidance())
+    // Product delivery + recipes + backend + layout + color + type + copy + motion.
+    format!(
+        "{base}{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}",
+        crate::domain::chat::split_agent_delivery_guidance(),
+        crate::domain::chat::ui_delivery_recipes_guidance(),
+        crate::domain::chat::backend_architecture_guidance(),
+        crate::domain::chat::ui_layout_systems_guidance(),
+        crate::domain::chat::ui_color_systems_guidance(),
+        crate::domain::chat::ui_typography_systems_guidance(),
+        crate::domain::chat::ui_copy_systems_guidance(),
+        crate::domain::chat::ui_motion_effects_guidance()
+    )
 }
 
 /// User message with plan body and runtime caps.
@@ -95,6 +105,53 @@ mod tests {
             "old forbid-scope line must be gone"
         );
         assert!(s.contains("你是 worker") || s.contains("worker"), "ban worker tone");
+        assert!(
+            s.contains("western-saas") || s.contains("色系"),
+            "color systems guidance must append"
+        );
+        assert!(
+            s.contains("交付深度") || s.contains("MVC") || s.contains("演示"),
+            "backend architecture guidance must append"
+        );
+        assert!(
+            s.contains("font-display")
+                || s.contains("文楷")
+                || s.contains("字体")
+                || s.contains("LXGW"),
+            "typography guidance must append"
+        );
+        assert!(
+            s.contains("prefers-reduced-motion")
+                || s.contains("动效档")
+                || s.contains("GSAP")
+                || s.contains("anime"),
+            "motion effects guidance must append"
+        );
+        assert!(
+            s.contains("marketing")
+                || s.contains("portfolio")
+                || s.contains("站点类型")
+                || s.contains("信息结构"),
+            "layout systems guidance must append"
+        );
+        assert!(
+            s.contains("R-overseas") || s.contains("配方") || s.contains("R-tool"),
+            "delivery recipes must append"
+        );
+        assert!(
+            s.contains("R-ios")
+                || s.contains("R-material")
+                || s.contains("ios-hig")
+                || s.contains("material"),
+            "platform style recipes must append"
+        );
+        assert!(
+            s.contains("主 CTA")
+                || s.contains("空态")
+                || s.contains("界面文案")
+                || s.contains("Lorem"),
+            "ui copy systems must append"
+        );
     }
 
     #[test]

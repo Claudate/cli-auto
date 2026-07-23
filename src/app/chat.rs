@@ -8,7 +8,7 @@
 //! [INPUT]: project path · Config · message · session_id · attachments · plan markdown
 //! [OUTPUT]: session / send / stream / save_plan / normalize / cleanup DTOs
 //! [POS]: Application 层；Presentation 应调本模块；**禁止** confirm_start / start_run 旁路
-//! [PROTOCOL]: 只写散文 plan.md 与会话 JSON；不 spawn 执行 worker；搬家时改委托目标即可
+//! [PROTOCOL]: 主产出散文 plan.md；本地 preview 为独立进程（非 Mode B worker）；搬家时改委托目标即可
 //!
 //! ## Presentation map (A1-7)
 //! | Tauri command | app::chat |
@@ -16,9 +16,11 @@
 //! | `chat_session_get_cmd` | [`get_session`] |
 //! | `chat_list_sessions_cmd` | [`list_sessions`] |
 //! | `chat_new_session_cmd` | [`new_session`] |
+//! | `chat_rename_session_cmd` | [`rename_session`] |
 //! | `chat_delete_session_cmd` | [`delete_session`] |
 //! | `chat_send_cmd` | [`send`] |
 //! | `chat_stream_partial_cmd` | [`stream_partial`] |
+//! | `preview_start_cmd` / `preview_stop_cmd` / `preview_status_cmd` | [`preview_start`] / [`preview_stop`] / [`preview_status`] |
 //! | `chat_save_plan_cmd` | [`save_plan`] |
 //! | `chat_normalize_plan_cmd` | [`normalize_plan`] |
 //! | `chat_save_attachment_cmd` | [`save_attachment`] |
@@ -31,10 +33,12 @@ use anyhow::Result;
 use crate::config::Config;
 use crate::services::{
     chat_delete_session, chat_list_sessions, chat_new_session, chat_normalize_plan,
-    chat_save_attachment, chat_save_plan, chat_send, chat_session_get, chat_stream_partial,
-    cleanup_expired_chat_sessions, read_plan_md as services_read_plan_md, ChatAttachment,
-    ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSendResponse, ChatSession,
-    ChatSessionSummary, ChatStreamPartial,
+    chat_rename_session, chat_save_attachment, chat_save_plan, chat_send, chat_session_get,
+    chat_stream_partial, cleanup_expired_chat_sessions, preview_start as services_preview_start,
+    preview_status as services_preview_status, preview_stop as services_preview_stop,
+    read_plan_md as services_read_plan_md, ChatAttachment, ChatNormalizePlanResponse,
+    ChatSavePlanResponse, ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
+    PreviewStatus,
 };
 
 // --- session ---
@@ -52,6 +56,15 @@ pub fn list_sessions(project: &Path) -> Result<Vec<ChatSessionSummary>> {
 /// Create a new empty session (`s-YYYYMMDD-HHMMSS` …).
 pub fn new_session(project: &Path, title: Option<&str>) -> Result<ChatSession> {
     chat_new_session(project, title)
+}
+
+/// Rename a session (`title`; empty/None clears custom title).
+pub fn rename_session(
+    project: &Path,
+    session_id: &str,
+    title: Option<&str>,
+) -> Result<ChatSession> {
+    chat_rename_session(project, session_id, title)
 }
 
 /// Delete a session JSON (+ best-effort attachments).
@@ -82,6 +95,23 @@ pub fn send(
 /// Best-effort partial assistant text while send is in flight.
 pub fn stream_partial(project: &Path, session_id: Option<&str>) -> Result<ChatStreamPartial> {
     chat_stream_partial(project, session_id)
+}
+
+// --- local preview (detached; not Mode B worker) ---
+
+/// Start (or reuse) project dev/preview server; waits until a local port is open.
+pub fn preview_start(project: &Path) -> Result<PreviewStatus> {
+    services_preview_start(project)
+}
+
+/// Stop cco-managed preview process.
+pub fn preview_stop(project: &Path) -> Result<PreviewStatus> {
+    services_preview_stop(project)
+}
+
+/// Status of cco-managed (or opportunistic) local preview.
+pub fn preview_status(project: &Path) -> Result<PreviewStatus> {
+    services_preview_status(project)
 }
 
 // --- plan md ---

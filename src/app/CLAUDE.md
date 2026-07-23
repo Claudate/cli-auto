@@ -11,8 +11,9 @@ run/: **A1-3/A1-7/A5-1/A5-3 · S-run 多文件** Run 用例面（单文件 ≤40
   · route.rs: apply_provider_override（soft/force · 返回 RouteFillReport · A0-R3）
   · provenance.rs: **P1-2** stamp_route_fill / stamp_route_inferred / stamp_failover → TaskState.route_* · **P1-3** compose_route_label / provider_product_label（live 人话）
   · 编排循环仍在 `runtime/scheduler`；**不**旁路 Mode B；TUI 只经本面
-chat.rs: **A1-6/A1-7** Chat 用例面 — session list/get/new/delete · send · stream_partial · save_plan · read_plan_md · normalize_plan · save_attachment · cleanup_expired；现委托 `services::chat_*` thin facade；**禁止** confirm/start_run
-memory.rs: **P2-2** 项目轻记忆 — get/last_summary/list_pins/upsert_pin/delete_pin · writeback_from_run（规则模板 summary）· prompt_context（仅上下文，不改 route/不 auto-confirm）
+chat.rs: **A1-6/A1-7** Chat 用例面 — session list/get/new/**rename**/delete · send · stream_partial · **preview_start/stop/status**（本地 dev 独立进程）· save_plan · read_plan_md · normalize_plan · save_attachment · cleanup_expired；委托 `services::chat_*` / `preview`；**禁止** confirm/start_run
+memory.rs: **P2-2** 项目轻记忆 — get/last_summary/list_pins/upsert_pin/delete_pin · writeback_from_run · prompt_context
+project_ui.rs: **项目 UI 偏好** — dismiss_run / clear_dismissed_run（SQLite `project_ui_prefs`；结束本轮 SoT）
 （A1-5 **未**加 `app/inspect` 用例面：inspect 纯规则在 `domain/inspect`，IO 在 `runtime/handoff`；桌面 rework 经 `app::run::start_rework` → services。A4 再做人话 DTO 用例。）
 
 ## 硬规则

@@ -148,6 +148,17 @@ export function attachDocumentClick(deps) {
         ).catch((err) => toast(String(err?.message || err)));
         return;
       }
+      const planDirect = e.target?.closest?.(".btn-chat-plan-direct");
+      if (planDirect) {
+        e.preventDefault();
+        // 直接执行：整份计划单任务；仍经 Mode B confirm（禁止 start_run）
+        Promise.resolve(
+          typeof g("assignAndDirectFromChat") === "function"
+            ? call("assignAndDirectFromChat", planDirect)
+            : null
+        ).catch((err) => toast(String(err?.message || err)));
+        return;
+      }
 
       // shell-chrome C1：rail「查看拆分结果」— 勿当选中整行
       const railView = e.target?.closest?.("[data-plan-rail-view]");

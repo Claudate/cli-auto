@@ -313,8 +313,8 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                 <div class="kpi-meta muted" id="result-meta-text"></div>
               </div>
               <div class="task-dash-actions" id="result-actions">
-                <!-- 结果台仅「结束」+ 运行中「全部停止」；继续/回补/再写/监视 → 日志栏或撤 -->
-                <button class="btn primary sm" id="btn-ws-finish" type="button" hidden title="结束本轮">结束</button>
+                <!-- 结束本轮：统一日志栏 #btn-log-end-plan；此处仅运行中「全部停止」 -->
+                <button class="btn primary sm" id="btn-ws-finish" type="button" hidden title="（已迁到日志栏「结束计划」）">结束</button>
                 <button class="btn danger sm" id="btn-ws-stop-all" type="button" hidden>全部停止</button>
                 <button class="icon-btn sm task-dash-toggle" id="btn-task-dash-toggle" type="button" title="折叠任务看板" aria-label="折叠任务看板" hidden data-icon="chevron-down" data-icon-size="14"></button>
                 <!-- legacy hooks（hidden 保留 id，handler/旧脚本不炸） -->
@@ -469,18 +469,40 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
               <div class="chat-head-row">
                 <p class="muted chat-head-step">说清目标 → 生成计划 → 点「拆成步骤」 · <span id="chat-project-label">—</span></p>
                 <div class="chat-head-actions">
-                  <!-- B3：会话切换默认藏进 details，首屏不抢概念 -->
-                  <details class="chat-session-more" id="chat-session-more" title="多会话（进阶）">
-                    <summary class="btn ghost sm">会话…</summary>
-                    <div class="chat-session-switch" id="chat-session-switch">
-                      <label class="chat-session-label muted" for="chat-session-select">会话</label>
-                      <select id="chat-session-select" class="chat-session-select" aria-label="切换聊天会话">
-                        <option value="default">默认</option>
-                      </select>
-                      <button type="button" class="icon-btn sm" id="btn-chat-session-new" title="新建会话" aria-label="新建会话" data-icon="plus" data-icon-size="14"></button>
-                      <button type="button" class="icon-btn sm" id="btn-chat-session-del" title="删除当前会话" aria-label="删除当前会话" data-icon="trash" data-icon-size="14"></button>
-                    </div>
-                  </details>
+                  <!-- 会话工具条（对齐 Claude for VS Code：历史 + 新建） -->
+                  <div class="chat-session-toolbar" role="group" aria-label="会话">
+                    <details class="chat-session-history" id="chat-session-history" title="历史会话">
+                      <summary
+                        class="icon-btn sm chat-session-history-btn"
+                        aria-label="历史会话"
+                        data-icon="history"
+                        data-icon-size="16"
+                      ></summary>
+                      <div class="chat-session-panel" id="chat-session-panel" role="listbox" aria-label="历史会话列表">
+                        <div class="chat-session-panel-head">
+                          <span class="chat-session-panel-title">历史会话</span>
+                          <button
+                            type="button"
+                            class="btn ghost sm"
+                            id="btn-chat-session-new-in-panel"
+                            title="新建会话"
+                          >新建</button>
+                        </div>
+                        <div class="chat-session-panel-list" id="chat-session-panel-list">
+                          <div class="chat-session-panel-empty muted">暂无其它会话</div>
+                        </div>
+                      </div>
+                    </details>
+                    <button
+                      type="button"
+                      class="icon-btn sm"
+                      id="btn-chat-session-new"
+                      title="新建会话"
+                      aria-label="新建会话"
+                      data-icon="plus"
+                      data-icon-size="16"
+                    ></button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -501,25 +523,60 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                 <button class="btn primary sm" id="btn-chat-assign" type="button" hidden>拆成步骤</button>
               </div>
             </div>
-            <div id="chat-attach-preview" class="chat-attach-preview" hidden></div>
             <div class="chat-composer">
               <input type="file" id="chat-file-input" accept="image/*,.pdf,.md,.markdown,.txt,.csv,.json,.yaml,.yml,.toml,.xml,.html,.htm,.css,.rs,.ts,.tsx,.js,.jsx,.py,.go,.java,.c,.h,.cpp,.hpp,.cs,.sql,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.log" multiple hidden />
-              <button class="btn ghost sm icon-only" id="btn-chat-attach" type="button" title="上传附件：图片 / PDF / 文档 / 代码（点击选择 / 拖入 / Ctrl+V）" aria-label="上传附件" data-icon="paperclip" data-icon-size="16"></button>
-              <textarea id="chat-input" rows="2" placeholder="说清目标与约束… 可附文件（点击别针 / 拖入 / Ctrl+V）" ></textarea>
-              <label class="chat-effort-wrap" title="推理深度：影响本机 Claude 思考力度；ultracode 等同 xhigh 并自动偏多 Agent 穷尽">
-                <span class="chat-effort-label muted">深度</span>
-                <select id="chat-effort" class="chat-effort-select" aria-label="推理深度">
-                  <option value="low">low · 浅</option>
-                  <option value="medium">medium</option>
-                  <option value="high" selected>high · 默认</option>
-                  <option value="xhigh">xhigh · 很深</option>
-                  <option value="max">max · 最深</option>
-                  <option value="ultracode">ultracode · 多 Agent</option>
-                </select>
-              </label>
-              <button class="btn primary" id="btn-chat-send" type="button">发送</button>
+              <div class="chat-composer-card">
+                <div id="chat-attach-preview" class="chat-attach-preview" hidden></div>
+                <textarea
+                  id="chat-input"
+                  rows="1"
+                  placeholder="说清目标与约束，或拖入文件…"
+                  title="Enter 发送 · Shift+Enter 换行 · 拼音组字中回车不发送 · 可附图片/PDF/md/文档/代码"
+                ></textarea>
+                <div class="chat-composer-toolbar">
+                  <div class="chat-composer-tools">
+                    <button
+                      class="btn ghost sm icon-only chat-tool-btn"
+                      id="btn-chat-attach"
+                      type="button"
+                      title="上传附件：图片 / PDF / 文档 / 代码（点击 · 拖入 · Ctrl+V）"
+                      aria-label="上传附件"
+                      data-icon="paperclip"
+                      data-icon-size="16"
+                    ></button>
+                  </div>
+                  <div class="chat-composer-actions">
+                    <label
+                      class="chat-effort-wrap"
+                      title="推理深度：影响本机 Claude 思考力度；ultracode 等同 xhigh 并自动偏多 Agent 穷尽"
+                    >
+                      <span class="sr-only">深度</span>
+                      <select
+                        id="chat-effort"
+                        class="chat-effort-select"
+                        aria-label="推理深度"
+                      >
+                        <option value="low">low · 浅</option>
+                        <option value="medium">medium</option>
+                        <option value="high" selected>high · 默认</option>
+                        <option value="xhigh">xhigh · 很深</option>
+                        <option value="max">max · 最深</option>
+                        <option value="ultracode">ultracode</option>
+                      </select>
+                    </label>
+                    <button
+                      class="btn primary icon-only chat-send-btn"
+                      id="btn-chat-send"
+                      type="button"
+                      title="发送（Enter）"
+                      aria-label="发送"
+                      data-icon="arrow-up"
+                      data-icon-size="16"
+                    ></button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <p class="chat-composer-hint">Enter 发送 · Shift+Enter 换行 · 拼音组字中回车落字不发送 · 附件：图片 / PDF / md / 文档 / 代码 · 点图可放大</p>
           </div>
           <!-- 聊天右栏 plan-rail 已撤：列表/选中/拆分回看走顶栏「计划管理」page-plans -->
         </div>

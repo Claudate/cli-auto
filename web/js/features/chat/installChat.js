@@ -12,6 +12,7 @@ import * as plansMgmt from "./plansMgmt.js";
 import * as chatAttachments from "./chatAttachments.js";
 import * as chatFormat from "./chatFormat.js";
 import * as chatSessions from "./chatSessions.js";
+import * as chatSessionRename from "./chatSessionRename.js";
 import * as chatActions from "./chatActions.js";
 import * as planRail from "./planRail.js";
 import * as planFull from "./planFull.js";
@@ -27,6 +28,7 @@ export function installChatHost() {
     ...chatAttachments,
     ...chatFormat,
     ...chatSessions,
+    ...chatSessionRename,
     ...chatActions,
     ...planRail,
     ...planFull,
@@ -74,12 +76,15 @@ export function createChatDesk(opts = {}) {
     saveChatPlan: chatActions.saveChatPlan,
     assignFromChat: chatActions.assignFromChat,
     assignAndSplitFromChat: chatActions.assignAndSplitFromChat,
+    assignAndDirectFromChat: chatActions.assignAndDirectFromChat,
     previewChatPlan: chatActions.previewChatPlan,
     normalizeChatDraft: chatActions.normalizeChatDraft,
     loadChatSession: chatSessions.loadChatSession,
     loadChatSessionList: chatSessions.loadChatSessionList,
     switchChatSession: chatSessions.switchChatSession,
     newChatSession: chatSessions.newChatSession,
+    renameChatSession: chatSessionRename.renameChatSession,
+    beginChatSessionRename: chatSessionRename.beginChatSessionRename,
     deleteChatSession: chatSessions.deleteChatSession,
     addChatAttachments: chatAttachments.addChatAttachments,
     removeChatAttachment: chatAttachments.removeChatAttachment,

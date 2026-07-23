@@ -113,8 +113,12 @@ export async function analyzePlanFromPicker(planPathArg) {
   // defaulting to fast made "拆成步骤" feel fake (instant title scrape, no model).
   // Work-style may bias concurrency seed + grain (never forces plan_mode=fast).
   // W3 smart-resplit / one-shot force: state.forcePlanModeAi wins once then clears.
+  // Chat「直接执行」: forcePlanModeDirect → whole plan as one task (no multi-split).
   let planMode = $("#pp-plan-mode")?.value || "ai";
-  if (state.forcePlanModeAi) {
+  if (state.forcePlanModeDirect) {
+    planMode = "direct";
+    state.forcePlanModeDirect = false;
+  } else if (state.forcePlanModeAi) {
     planMode = "ai";
     state.forcePlanModeAi = false;
     const pm = $("#pp-plan-mode");
@@ -227,22 +231,27 @@ export async function analyzePlanFromPicker(planPathArg) {
   host.updateTopPlanInfo?.();
   const logEl0 = $("#planner-log");
   const smartSplit = planMode === "ai";
+  const directExec = planMode === "direct";
   if (logEl0) {
     logEl0.dataset.sig = "";
-    logEl0.innerHTML = smartSplit
-      ? '<div class="cli-empty-ai muted">正在智能拆分：会想依赖、并行与文件地界…</div>'
-      : planMode === "fast"
-        ? '<div class="cli-empty-ai muted">正在用本地规则拆分（不调用模型）…</div>'
-        : '<div class="cli-empty-ai muted">正在理解计划并拆分步骤…</div>';
+    logEl0.innerHTML = directExec
+      ? '<div class="cli-empty-ai muted">正在按整份计划准备直接执行（不拆多步）…</div>'
+      : smartSplit
+        ? '<div class="cli-empty-ai muted">正在智能拆分：会想依赖、并行与文件地界…</div>'
+        : planMode === "fast"
+          ? '<div class="cli-empty-ai muted">正在用本地规则拆分（不调用模型）…</div>'
+          : '<div class="cli-empty-ai muted">正在理解计划并拆分步骤…</div>';
   }
   const sub0 = $("#planning-sub");
   if (sub0) {
     const name = planDisplayName(plan);
-    const core = smartSplit
-      ? `正在智能拆分「${name}」…（会想依赖与并行，可能要几分钟 · 同时最多 ${maxParallel} 步）`
-      : planMode === "fast"
-        ? `正在用本地规则拆分「${name}」…（不调用模型 · 同时最多 ${maxParallel} 步）`
-        : `正在拆分「${name}」…（同时最多 ${maxParallel} 步）`;
+    const core = directExec
+      ? `正在准备直接执行「${name}」…（整份计划一个窗口）`
+      : smartSplit
+        ? `正在智能拆分「${name}」…（会想依赖与并行，可能要几分钟 · 同时最多 ${maxParallel} 步）`
+        : planMode === "fast"
+          ? `正在用本地规则拆分「${name}」…（不调用模型 · 同时最多 ${maxParallel} 步）`
+          : `正在拆分「${name}」…（同时最多 ${maxParallel} 步）`;
     sub0.textContent =
       typeof flowJoinSeriousFun === "function"
         ? flowJoinSeriousFun(
@@ -316,6 +325,9 @@ export async function analyzePlanFromPicker(planPathArg) {
       await refreshPlanJob();
     }
   } catch (e) {
+    // One-shot direct flags must not stick across failures.
+    state.forcePlanModeDirect = false;
+    state.forceAutoStartAfterPlan = false;
     state.phase = "pick";
     if (err) {
       err.textContent = String(e);
@@ -394,8 +406,11 @@ export async function advancePlannedJob(view) {
   }
   const n = view.task_count || view.tasks?.length || 0;
   const adapter = view.adapter || "";
-  const how =
-    typeof flowPlanHowLabel === "function"
+  const mode = String(view.plan_mode || view.planMode || "").toLowerCase();
+  const isDirect = mode === "direct" || adapter === "raw-single";
+  const how = isDirect
+    ? "直接执行"
+    : typeof flowPlanHowLabel === "function"
       ? flowPlanHowLabel(adapter)
       : adapter.includes("heuristic")
         ? "本地规则拆分"
@@ -403,10 +418,18 @@ export async function advancePlannedJob(view) {
           ? "智能拆分"
           : "拆分完成";
   // 业务可选：必须人工确认。系统收尾默认勾选时可 auto-start。
+  // 一次 shot：聊天「直接执行」设 forceAutoStartAfterPlan（用完即清）。
+  const forceAuto = !!state.forceAutoStartAfterPlan;
+  if (forceAuto) state.forceAutoStartAfterPlan = false;
   const needsOpt = planNeedsOptionalConfirm(view);
   const hasOptional = planHasOptionalTasks(view);
-  if (state.autoStartAfterPlan && !needsOpt) {
-    toast(`${how}：${n} 个任务，正在启动…`);
+  const wantAuto = (forceAuto || state.autoStartAfterPlan) && !needsOpt;
+  if (wantAuto) {
+    toast(
+      isDirect
+        ? "正在按整份计划直接启动…"
+        : `${how}：${n} 个任务，正在启动…`
+    );
     state.phase = "confirm";
     try {
       if (window.ccoApp && typeof window.ccoApp.goSplit === "function") {
@@ -423,7 +446,11 @@ export async function advancePlannedJob(view) {
       : hasOptional
         ? "；含系统收尾（默认已勾选）"
         : "，请确认后开始";
-    toast(`${how}：${n} 个任务${optHint}`);
+    toast(
+      isDirect
+        ? `已准备直接执行（1 个主任务）${optHint}`
+        : `${how}：${n} 个任务${optHint}`
+    );
     state.phase = "confirm";
     try {
       if (window.ccoApp && typeof window.ccoApp.goSplit === "function") {

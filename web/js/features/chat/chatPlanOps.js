@@ -1,7 +1,8 @@
 /**
  * [INPUT]: legacy · chatApi · chatState · format · planDir · host · chatRender
- * [OUTPUT]: normalize · save · assign · preview（计划草稿操作）
+ * [OUTPUT]: normalize · save · assign · direct · preview（计划草稿操作）
  * [POS]: A5-2a features/chat；自 chatActions 纵切（P-ship-D）
+ * note: 「直接执行」= plan_mode=direct + forceAutoStart；禁止 start_run
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 import {
@@ -221,15 +222,13 @@ export async function assignFromChat() {
 }
 
 /**
- * B2：未落盘时先静默保存，再走 startExecuteFromSelection（默认直拆，禁止 start_run）。
- * @param {HTMLElement|null} btn  plan card button (optional; seeds markdown from card)
+ * Ensure plan-card body is on disk as the selected plan (silent save when needed).
+ * Shared by「拆成步骤」and「直接执行」— never starts a run by itself.
+ * @param {HTMLElement|null} btn
+ * @returns {Promise<string|null>} plan relative path or null on abort/error
  */
-export async function assignAndSplitFromChat(btn) {
+async function ensurePlanSavedFromCard(btn) {
   ensureChatState();
-  if (hasActiveRun()) {
-    toastRunLocked("拆成步骤");
-    return;
-  }
   const card = btn?.closest?.(".chat-plan-card");
   // Expand view is rendered HTML; raw lives in .chat-plan-raw.
   const md = chatPlanCardRaw(card);
@@ -284,10 +283,57 @@ export async function assignAndSplitFromChat(btn) {
   if (!alreadySaved) {
     const resp = await saveChatPlan({ skipConfirm: true });
     if (!resp?.plan_rel && !state.chatDraftPlan) {
-      return;
+      return null;
     }
   }
+  return state.chatDraftPlan || state.selectedPlan || null;
+}
+
+/**
+ * B2：未落盘时先静默保存，再走 startExecuteFromSelection（默认直拆，禁止 start_run）。
+ * @param {HTMLElement|null} btn  plan card button (optional; seeds markdown from card)
+ */
+export async function assignAndSplitFromChat(btn) {
+  ensureChatState();
+  if (hasActiveRun()) {
+    toastRunLocked("拆成步骤");
+    return;
+  }
+  const path = await ensurePlanSavedFromCard(btn);
+  if (!path) return;
   await assignFromChat();
+}
+
+/**
+ * Plan-card「直接执行」：整份计划 = 单任务，跳过多步智能拆分；仍走
+ * start_plan_job(plan_mode=direct) → confirm_start（禁止 start_run 旁路）。
+ * 业务 optional 仍会停在拆分台；系统收尾默认勾选时可直接开跑。
+ * @param {HTMLElement|null} btn
+ */
+export async function assignAndDirectFromChat(btn) {
+  ensureChatState();
+  if (hasActiveRun()) {
+    toastRunLocked("直接执行");
+    return;
+  }
+  if (!state.selectedPath) {
+    toast("请先选择项目");
+    return;
+  }
+  const path = await ensurePlanSavedFromCard(btn);
+  if (!path) return;
+  // One-shot: force plan_mode=direct + auto-confirm after planned (see jobPoll).
+  state.forcePlanModeDirect = true;
+  state.forceAutoStartAfterPlan = true;
+  if (typeof startExecuteFromSelection === "function") {
+    await startExecuteFromSelection(path, {
+      source: "chat-direct",
+      fakeNote: !!state.chatFake,
+      direct: true,
+    });
+    return;
+  }
+  toast("执行入口未就绪，请刷新窗口后重试");
 }
 
 /** Ready-bar「打开预览」→ App 内全文 modal（不默认 open_path）. */

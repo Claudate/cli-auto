@@ -1,6 +1,6 @@
 /**
  * [INPUT]: ResultViewModel · live/tasks · 既有 #result-desk DOM
- * [OUTPUT]: 结果摘要 + inspect 人话；结果台 CTA 仅「结束」
+ * [OUTPUT]: 结果摘要 + inspect 人话；结束本轮统一日志栏「结束计划」
  * [POS]: A4-3/A4-4 · P0-1/P0-4/P1-3/P2-1 ResultView；禁止 invoke / 解析 VERDICT 正文
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
@@ -107,7 +107,7 @@ export function bindResultView(vm, bridge = {}) {
    */
   function renderInspectLoopStrip(live, finished, active) {
     const strip = $("inspect-loop-strip");
-    // 结果台 CTA 收口：继续/回补/先这样结束 不再露出；仅「结束」
+    // 结果台 CTA：回补/先这样结束 不露出；结束本轮用日志栏「结束计划」
     const btnRework = $("btn-ws-rework");
     const btnAccept = $("btn-ws-accept-residual");
     if (btnRework) btnRework.hidden = true;
@@ -145,9 +145,10 @@ export function bindResultView(vm, bridge = {}) {
     const active = !!(ctx && ctx.active);
     const show = finished && !active && !!(ctx && ctx.hasRun);
     desk.hidden = !show;
+    // 顶栏「结束」已撤；统一用日志栏「结束计划」
     const finishBtn = $("btn-ws-finish");
+    if (finishBtn) finishBtn.hidden = true;
     if (!show) {
-      if (finishBtn) finishBtn.hidden = true;
       return;
     }
 
@@ -245,15 +246,8 @@ export function bindResultView(vm, bridge = {}) {
     // P2-1: plan checklist vs inspect side-by-side (live.verification DTO)
     renderVerificationPanel(live?.verification);
 
-    // C3 收口：结果台仅「结束」；回补/再写/先这样结束 已撤
+    // 回补/再写/先这样结束/顶栏结束 均不露出；结束本轮用 #btn-log-end-plan
     const btnBack = $("btn-ws-back-chat");
-    if (finishBtn) {
-      finishBtn.hidden = false;
-      finishBtn.textContent = "结束";
-      finishBtn.title = "结束本轮";
-      finishBtn.classList.add("primary");
-      finishBtn.classList.remove("ghost");
-    }
     if (btnBack) btnBack.hidden = true;
 
     const heading = $("task-dash-heading");

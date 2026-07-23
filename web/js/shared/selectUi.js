@@ -27,9 +27,21 @@ class SelectShell {
    */
   constructor(select, opts = {}) {
     this.select = select;
-    this.size = opts.size || (select.classList.contains("chat-session-select") || select.id === "confirm-task-provider" ? "sm" : "md");
+    this.size =
+      opts.size ||
+      (select.classList.contains("chat-session-select") ||
+      select.classList.contains("chat-effort-select") ||
+      select.id === "chat-effort" ||
+      select.id === "split-effort" ||
+      select.id === "confirm-task-provider"
+        ? "sm"
+        : "md");
     this.menuEnd = !!opts.menuEnd || select.id === "chat-session-select";
-    this.inline = !!opts.inline || this.size === "sm" || select.classList.contains("chat-session-select");
+    this.inline =
+      !!opts.inline ||
+      this.size === "sm" ||
+      select.classList.contains("chat-session-select") ||
+      select.classList.contains("chat-effort-select");
     this.activeIndex = -1;
     this._syncing = false;
     this._rebuildQueued = false;

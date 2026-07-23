@@ -10,6 +10,7 @@ function renderWorkspace() {
   updateWorkspaceTitle();
   const live = state.live;
   // 拆分会话打开时，项目历史 completed live 不算本轮
+  // SoT dismiss 已在 project_live_view 过滤；此处只信 liveBelongsToOpenPlan
   const belongs =
     typeof liveBelongsToOpenPlan === "function" ? liveBelongsToOpenPlan() : true;
   const runStatus = belongs ? live?.run_status : null;
@@ -21,10 +22,7 @@ function renderWorkspace() {
     ["completed", "done", "failed", "aborted", "stopped", "paused"].includes(
       String(runStatus || "").toLowerCase()
     );
-  if (state.phase !== "planning" && state.phase !== "confirm") {
-    if (active) state.phase = "running";
-    else if (finished) state.phase = "done";
-  }
+  // phase 只由 applyEntryRoute / confirm / dismiss / loadLive 写；禁止 render 改 phase
   const body = $("#workspace-body");
   if (body) {
     body.classList.remove("mode-idle", "mode-running", "mode-done", "mode-plan");

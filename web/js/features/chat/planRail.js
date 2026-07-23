@@ -26,6 +26,7 @@ import {
   partitionByPlansDir,
 } from "./planDir.js";
 import { chatEsc } from "./chatFormat.js";
+import * as chatApi from "./chatApi.js";
 
 export function planRailTitleFromPath(path) {
   if (typeof planDisplayName === "function") return planDisplayName(path);
@@ -153,12 +154,12 @@ export async function loadPlanRail() {
         }
       }
     }
-    // 当前选中 / 草稿 / 已有拆分索引 必须留在列表（防「再进计划管理就消失」）
+    // 仅 pin 仍在磁盘上的选中/草稿（list_plans 文件名过滤漏网时补回）。
+    // **禁止**用 planSplitByPath 注入 — 源 md 已删时会变「幽灵已拆分」。
     const pinInject = [
       state.selectedPlan,
       state.chatDraftPlan,
       state.planRailSelected,
-      ...Object.keys(state.planSplitByPath || {}).filter((k) => k.includes("/")),
     ];
     for (const raw of pinInject) {
       if (!raw) continue;
@@ -171,6 +172,26 @@ export async function loadPlanRail() {
         continue;
       }
       if (items.some((it) => it.path === path)) continue;
+      // eslint-disable-next-line no-await-in-loop
+      let exists = false;
+      try {
+        exists = await chatApi.planMdExists(root, path);
+      } catch (_) {
+        exists = false;
+      }
+      if (!exists) {
+        // 清掉指向已删文件的选中
+        if (state.selectedPlan === raw || state.selectedPlan === path) {
+          state.selectedPlan = null;
+        }
+        if (state.chatDraftPlan === raw || state.chatDraftPlan === path) {
+          state.chatDraftPlan = null;
+        }
+        if (state.planRailSelected === raw || state.planRailSelected === path) {
+          state.planRailSelected = null;
+        }
+        continue;
+      }
       items.unshift({
         path,
         title: null,

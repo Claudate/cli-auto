@@ -134,6 +134,13 @@ export const projectPinUpsert = (project, key, value) =>
   raw("project_pin_upsert_cmd", { project, key, value });
 export const projectPinDelete = (project, key) =>
   raw("project_pin_delete_cmd", { project, key });
+/** SQLite: finish round — hide this run from project_live until cleared. */
+export const projectDismissRun = (project, runId) =>
+  raw("project_dismiss_run_cmd", { project, runId });
+export const projectClearDismissedRun = (project) =>
+  raw("project_clear_dismissed_run_cmd", { project });
+export const projectGetDismissedRun = (project) =>
+  raw("project_get_dismissed_run_cmd", { project });
 export const openTaskTerminal = (args) => raw("open_task_terminal_cmd", args);
 
 /* ── Chat (author) ── */
@@ -143,6 +150,12 @@ export const chatNewSession = (project, title) =>
   raw("chat_new_session_cmd", { project, title: title ?? null });
 export const chatDeleteSession = (project, sessionId) =>
   raw("chat_delete_session_cmd", { project, sessionId });
+export const chatRenameSession = (project, sessionId, title) =>
+  raw("chat_rename_session_cmd", {
+    project,
+    sessionId,
+    title: title == null || title === "" ? null : title,
+  });
 export const chatSessionGet = (project, sessionId) =>
   raw("chat_session_get_cmd", { project, sessionId });
 export const chatSend = (args) => raw("chat_send_cmd", args);
@@ -151,6 +164,10 @@ export const chatSavePlan = (args) => raw("chat_save_plan_cmd", args);
 export const chatNormalizePlan = (args) => raw("chat_normalize_plan_cmd", args);
 export const chatSaveAttachment = (args) =>
   raw("chat_save_attachment_cmd", args);
+/** Detached local preview (npm run dev…); not Mode B worker. */
+export const previewStart = (project) => raw("preview_start_cmd", { project });
+export const previewStop = (project) => raw("preview_stop_cmd", { project });
+export const previewStatus = (project) => raw("preview_status_cmd", { project });
 
 /* ── Settings / doctor / shell ── */
 export const getSettings = () => raw("get_settings_cmd");
@@ -204,6 +221,9 @@ export const gateway = {
   projectPinsList,
   projectPinUpsert,
   projectPinDelete,
+  projectDismissRun,
+  projectClearDismissedRun,
+  projectGetDismissedRun,
   openTaskTerminal,
   chatListSessions,
   chatNewSession,
@@ -214,6 +234,9 @@ export const gateway = {
   chatSavePlan,
   chatNormalizePlan,
   chatSaveAttachment,
+  previewStart,
+  previewStop,
+  previewStatus,
   getSettings,
   setSettings,
   doctor,

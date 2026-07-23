@@ -85,17 +85,23 @@ export function setAssignBusy(busy) {
     }
   }
   // Dynamic plan-card CTAs (chat reply footer) — same busy lock as sticky assign
-  const cardAssigns = document.querySelectorAll(".btn-chat-plan-assign");
+  const cardAssigns = document.querySelectorAll(
+    ".btn-chat-plan-assign, .btn-chat-plan-direct"
+  );
   for (const btn of cardAssigns) {
+    const defaultLabel = btn.classList.contains("btn-chat-plan-direct")
+      ? "直接执行"
+      : "拆成步骤";
     if (busy) {
       btn.disabled = true;
       btn.classList.add("is-busy");
-      if (!btn.dataset.label) btn.dataset.label = btn.textContent || "拆成步骤";
-      btn.innerHTML = '<span class="spinner sm" aria-hidden="true"></span><span>拆分中…</span>';
+      if (!btn.dataset.label) btn.dataset.label = btn.textContent || defaultLabel;
+      btn.innerHTML =
+        '<span class="spinner sm" aria-hidden="true"></span><span>处理中…</span>';
     } else {
       btn.classList.remove("is-busy");
       const active = isLiveStatus(state.live?.run_status);
-      const label = btn.dataset.label || "拆成步骤";
+      const label = btn.dataset.label || defaultLabel;
       btn.textContent = active ? "运行中…" : label;
       delete btn.dataset.label;
       btn.disabled = !state.chatDraftPlan || !!active;
@@ -159,6 +165,7 @@ export async function startExecuteFromSelection(planPath, opts = {}) {
   const forceSwitch =
     !!opts.force ||
     opts.source === "chat" ||
+    opts.source === "chat-direct" ||
     opts.source === "full-view" ||
     opts.source === "plans" ||
     switching;
@@ -188,6 +195,9 @@ export async function startExecuteFromSelection(planPath, opts = {}) {
   try {
     await host.selectPlan(path, { force: forceSwitch });
   } catch (e) {
+    // Drop one-shot direct flags so a failed select cannot auto-start later.
+    state.forcePlanModeDirect = false;
+    state.forceAutoStartAfterPlan = false;
     toast(String(e?.message || e));
     return;
   }
@@ -207,7 +217,13 @@ export async function startExecuteFromSelection(planPath, opts = {}) {
     renderPlanPicker();
     const name =
       typeof planDisplayName === "function" ? planDisplayName(path) : path;
-    toast(`正在拆成步骤…「${name}」`);
+    const isDirectExec =
+      !!state.forcePlanModeDirect || opts.source === "chat-direct";
+    toast(
+      isDirectExec
+        ? `正在准备直接执行…「${name}」`
+        : `正在拆成步骤…「${name}」`
+    );
     // Pass path explicitly — never re-read a possibly stale selectedPlan alone.
     await host.analyzePlanFromPicker(path);
     return;

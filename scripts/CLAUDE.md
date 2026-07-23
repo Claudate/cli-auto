@@ -5,7 +5,7 @@
 package-app.sh: release 构建 cco + cco-desktop → dist/CCO.app；X3 目视清单 + web 标记扫描（模板/写回/拆成步骤/结果台）
 smoke.sh: doctor + fake provider 最小冒烟（CCO_STATE_ROOT 隔离）
 check-arch.sh: **架构硬规则门禁**（文件行数 · GIANTS 哨兵 · LEGACY_THICK state.js · gateway/invoke · domain 不依赖 tauri）；默认 warn；`STRICT=1` 可失败
-check-landing-gates.sh: **落地页/营销站门禁**（example.com · 占位邮箱 · 页脚主 CTA · CTA 刷屏 · h1）；说明 `docs/runtime-prompts/landing-gates.md`；默认 FAIL 硬失败、WARN 不失败；`STRICT=1` WARN 也失败；`SKIP_G1=1` 仅显式演示
+check-landing-gates.sh: **落地页/营销站门禁**（example.com · 占位邮箱 · **G7 占位图服务/文件名** · 页脚主 CTA · CTA 刷屏 · h1）；说明 `docs/runtime-prompts/landing-gates.md`；默认 FAIL 硬失败、WARN 不失败；`STRICT=1` WARN 也失败；`SKIP_G1=1`/`SKIP_G7=1` 仅显式演示
 
 ## 硬规则
 

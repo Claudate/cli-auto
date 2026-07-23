@@ -114,13 +114,31 @@ export async function loadLive(deps = {}) {
       ? deps.getProjectLive
       : (project, opts) => gateway.getProjectLive(project, opts);
 
-  state.live = await fetchLive(state.selectedPath, {
+  // SoT = SQLite dismissed_run_id；project_live_view 已在服务端过滤
+  let live = await fetchLive(state.selectedPath, {
     logMaxBytes: deps.logMaxBytes ?? 96000,
   });
+  const path = state.selectedPath;
+  if (path && live?.run_id) {
+    if (!state.lastRunIdByProject) state.lastRunIdByProject = {};
+    state.lastRunIdByProject[path] = String(live.run_id);
+  }
+  state.live = live;
 
   const nowLive = !!hasActiveRun();
-  if (prevLive && !nowLive && state.phase === "running") {
+  // 仅「本轮正在跑 → 自然结束」才进 done；用户已 dismiss 的不回结果台
+  if (prevLive && !nowLive && state.phase === "running" && state.live) {
     state.phase = "done";
+  }
+  // 终态切换后刷新侧栏 last_status
+  if (prevLive !== nowLive) {
+    try {
+      if (typeof deps.loadProjects === "function") {
+        await deps.loadProjects();
+      } else if (typeof w.loadProjects === "function") {
+        await w.loadProjects();
+      }
+    } catch (_) {}
   }
 
   state.selectedTaskId = pickSelectedTaskId(state.live, state.selectedTaskId);

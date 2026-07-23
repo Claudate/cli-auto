@@ -8,6 +8,13 @@
 | 文件 | 注入点 |
 |------|--------|
 | [`chat-plan-writing.md`](./chat-plan-writing.md) | 桌面聊天 system prompt（计划写作助手） |
+| [`ui-delivery-recipes.md`](./ui-delivery-recipes.md) | 聊天 + 拆分 **优先**（效果配方：布局·色·字·文案·动效·图·后端） |
+| [`ui-layout-systems.md`](./ui-layout-systems.md) | 聊天 + 拆分 Agent 追加（站点类型 · 区块顺序 · 变体） |
+| [`ui-color-systems.md`](./ui-color-systems.md) | 聊天 + 拆分 Agent 追加（色系 kit / CSS token） |
+| [`ui-typography-systems.md`](./ui-typography-systems.md) | 聊天 + 拆分 Agent 追加（字体包 display/body/ui · 与色系同 kit） |
+| [`ui-copy-systems.md`](./ui-copy-systems.md) | 聊天 + 拆分 Agent 追加（网站+App 界面文案 / 微文案） |
+| [`ui-motion-effects.md`](./ui-motion-effects.md) | 聊天 + 拆分 Agent 追加（动效档 · 开源白名单 · reduced-motion） |
+| [`backend-architecture.md`](./backend-architecture.md) | 聊天 + 拆分 Agent 追加（交付深度 A–D · 语言 · MVC/MVVM/DDD） |
 | [`split-agent-delivery.md`](./split-agent-delivery.md) | Mode B 拆分 Agent system prompt 追加段 |
 | [`planner-greenfield-stack.md`](./planner-greenfield-stack.md) | 旧路径 LLM Planner · greenfield 模式追加 |
 | [`landing-gates.md`](./landing-gates.md) | **不注入 LLM**；给人与 `scripts/check-landing-gates.sh` 用 |

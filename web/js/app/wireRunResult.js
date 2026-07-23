@@ -54,9 +54,13 @@ export function wireRunResult(deps) {
 
   function goShellResult() {
     const s = legacyState();
-    if (s && s.phase === "running") s.phase = "done";
+    // 仅当人还在执行/结果工作区时才切结果台；chat/设置中不拽回
+    if (!s || s.page !== "workspace") return;
+    if (s.phase === "pick" || s.phase === "planning" || s.phase === "confirm") {
+      return;
+    }
+    if (s.phase === "running") s.phase = "done";
     try {
-      if (s?.selectedPath) appVm.selectProject(s.selectedPath);
       appVm.goResult();
     } catch (e) {
       console.error("[ccoRun] goResult", e);
@@ -88,17 +92,36 @@ export function wireRunResult(deps) {
     onAfterMutate: afterRunMutate,
     onPhaseRun: () => goShellRun(),
     onPhaseResult: () => goShellResult(),
-    onFinishRound: () => {
+    onFinishRound: async () => {
+      // await：必须等 SQLite dismiss 写完再切页，否则 loadLive 竞态会回绑 paused
       try {
-        if (typeof window.dismissRun === "function") window.dismissRun();
-      } catch (_) {}
-      if (typeof window.openChatPage === "function") {
-        window.openChatPage();
-      } else if (typeof window.showPage === "function") {
-        window.showPage("chat");
+        if (typeof window.dismissRun === "function") {
+          await window.dismissRun();
+        }
+      } catch (e) {
+        console.warn("[ccoResult] dismissRun", e);
       }
+      // 确保不再停在结果 workspace（dismissRun 内也会清；双保险）
+      try {
+        if (typeof window.state === "object" && window.state) {
+          window.state.phase = "pick";
+          window.state.live = null;
+        }
+      } catch (_) {}
+      try {
+        if (typeof window.openChatPage === "function") {
+          await window.openChatPage();
+        } else if (typeof window.showPage === "function") {
+          window.showPage("chat");
+        }
+      } catch (_) {}
       try {
         appVm.goAuthor();
+      } catch (_) {}
+      try {
+        if (typeof window.renderProjectList === "function") {
+          window.renderProjectList();
+        }
       } catch (_) {}
     },
     toast: (msg) => {
@@ -157,13 +180,9 @@ export function wireRunResult(deps) {
       const id = live?.run_id || null;
       if (!id || id === lastGoResultRunId) return;
       const s = legacyState();
-      if (
-          s?.phase === "planning" ||
-          s?.phase === "confirm" ||
-          s?.phase === "plan_failed"
-        ) {
-          return;
-        }
+      // 仅 workspace + running 时进结果台；chat / pick / 拆分台不抢屏
+      if (!s || s.page !== "workspace" || s.phase !== "running") return;
+      if (!live?.run_id) return;
       lastGoResultRunId = id;
       goShellResult();
     },

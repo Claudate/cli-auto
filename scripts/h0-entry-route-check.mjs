@@ -1,9 +1,8 @@
 /**
  * H0 entry-route pure logic check (no DOM / Tauri).
- * Mirrors resolveEntryRoute priority in web/js/plan.js §4.1:
- *   1. hasActiveRun → workspace + running
- *   2. planJob planning / planned|confirmed (confirm phase) → workspace
- *   3. else (done / no live) → chat
+ * Mirrors resolveEntryRoute in web/js/features/project/sessionEntry.js:
+ *   1. hasActiveRun or paused → workspace + running
+ *   2. else (planning / confirm / done / idle) → chat
  */
 function isLiveStatus(s) {
   return ["running", "starting", "queued", "validated", "init", "resuming"].includes(
@@ -15,27 +14,23 @@ function hasActiveRun(live) {
   return !!(live?.run_id && isLiveStatus(live?.run_status));
 }
 
-function isPlanSessionActive(phase) {
-  return phase === "planning" || phase === "confirm";
+function isRunPaused(live) {
+  return !!(
+    live?.run_id && String(live?.run_status || "").toLowerCase() === "paused"
+  );
 }
 
 function resolveEntryRoute({ live, phase, planJobId, planJob }) {
   if (hasActiveRun(live)) {
     return { page: "workspace", phaseHint: "running" };
   }
-  if (isPlanSessionActive(phase) && planJobId) {
-    return {
-      page: "workspace",
-      phaseHint: phase === "planning" ? "planning" : "confirm",
-    };
+  if (isRunPaused(live)) {
+    return { page: "workspace", phaseHint: "running" };
   }
-  const st = String(planJob?.status || "").toLowerCase();
-  if (planJobId && (st === "planning" || st === "planned" || st === "confirmed")) {
-    return {
-      page: "workspace",
-      phaseHint: st === "planning" ? "planning" : "confirm",
-    };
-  }
+  // planning / confirm / done / idle → chat (default open)
+  void phase;
+  void planJobId;
+  void planJob;
   return { page: "chat", phaseHint: null };
 }
 
@@ -76,7 +71,29 @@ assert(
   assert("active run → workspace", r.page === "workspace" && r.phaseHint === "running");
 }
 
-// planJob planning → workspace planning
+// starting/queued → workspace
+{
+  const r = resolveEntryRoute({
+    live: { run_id: "r1", run_status: "starting" },
+    phase: "pick",
+    planJobId: null,
+    planJob: null,
+  });
+  assert("starting → workspace", r.page === "workspace" && r.phaseHint === "running");
+}
+
+// paused → workspace
+{
+  const r = resolveEntryRoute({
+    live: { run_id: "r1", run_status: "paused" },
+    phase: "pick",
+    planJobId: null,
+    planJob: null,
+  });
+  assert("paused → workspace", r.page === "workspace" && r.phaseHint === "running");
+}
+
+// planJob planning → chat（不默认抢入口）
 {
   const r = resolveEntryRoute({
     live: null,
@@ -84,10 +101,10 @@ assert(
     planJobId: "j1",
     planJob: { status: "planning" },
   });
-  assert("planning job → workspace planning", r.page === "workspace" && r.phaseHint === "planning");
+  assert("planning job → chat", r.page === "chat");
 }
 
-// planJob planned (confirm) → workspace confirm
+// planJob planned (confirm) → chat
 {
   const r = resolveEntryRoute({
     live: null,
@@ -95,29 +112,21 @@ assert(
     planJobId: "j1",
     planJob: { status: "planned" },
   });
-  assert("planned job → workspace confirm", r.page === "workspace" && r.phaseHint === "confirm");
+  assert("planned job → chat", r.page === "chat");
 }
 
-// 活动 run 优先于 planJob
+// active run wins over confirm desk
 {
   const r = resolveEntryRoute({
-    live: { run_id: "r1", run_status: "starting" },
+    live: { run_id: "r1", run_status: "running" },
     phase: "confirm",
     planJobId: "j1",
     planJob: { status: "planned" },
   });
-  assert("active run beats planJob", r.page === "workspace" && r.phaseHint === "running");
-}
-
-// status-only planned without phase session (disk restore edge)
-{
-  const r = resolveEntryRoute({
-    live: null,
-    phase: "pick",
-    planJobId: "j2",
-    planJob: { status: "planned" },
-  });
-  assert("status planned without phase → workspace", r.page === "workspace" && r.phaseHint === "confirm");
+  assert(
+    "active run beats confirm → workspace",
+    r.page === "workspace" && r.phaseHint === "running"
+  );
 }
 
 if (process.exitCode) {

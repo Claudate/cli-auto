@@ -27,12 +27,15 @@ function sendChatMessage(...a) { return _chatCall("sendChatMessage", ...a); }
 function saveChatPlan(...a) { return _chatCall("saveChatPlan", ...a); }
 function assignFromChat(...a) { return _chatCall("assignFromChat", ...a); }
 function assignAndSplitFromChat(...a) { return _chatCall("assignAndSplitFromChat", ...a); }
+function assignAndDirectFromChat(...a) { return _chatCall("assignAndDirectFromChat", ...a); }
 function previewChatPlan(...a) { return _chatCall("previewChatPlan", ...a); }
 function normalizeChatDraft(...a) { return _chatCall("normalizeChatDraft", ...a); }
 function loadChatSession(...a) { return _chatCall("loadChatSession", ...a); }
 function loadChatSessionList(...a) { return _chatCall("loadChatSessionList", ...a); }
 function switchChatSession(...a) { return _chatCall("switchChatSession", ...a); }
 function newChatSession(...a) { return _chatCall("newChatSession", ...a); }
+function renameChatSession(...a) { return _chatCall("renameChatSession", ...a); }
+function beginChatSessionRename(...a) { return _chatCall("beginChatSessionRename", ...a); }
 function deleteChatSession(...a) { return _chatCall("deleteChatSession", ...a); }
 function addChatAttachments(...a) { return _chatCall("addChatAttachments", ...a); }
 function removeChatAttachment(...a) { return _chatCall("removeChatAttachment", ...a); }

@@ -12,6 +12,13 @@ use std::sync::OnceLock;
 pub const FILE_CHAT_PLAN_WRITING: &str = "chat-plan-writing.md";
 pub const FILE_SPLIT_AGENT_DELIVERY: &str = "split-agent-delivery.md";
 pub const FILE_PLANNER_GREENFIELD: &str = "planner-greenfield-stack.md";
+pub const FILE_UI_DELIVERY_RECIPES: &str = "ui-delivery-recipes.md";
+pub const FILE_UI_LAYOUT: &str = "ui-layout-systems.md";
+pub const FILE_UI_COLOR_SYSTEMS: &str = "ui-color-systems.md";
+pub const FILE_UI_TYPOGRAPHY: &str = "ui-typography-systems.md";
+pub const FILE_UI_MOTION: &str = "ui-motion-effects.md";
+pub const FILE_UI_COPY: &str = "ui-copy-systems.md";
+pub const FILE_BACKEND_ARCHITECTURE: &str = "backend-architecture.md";
 
 /// Env: absolute or relative dir containing the markdown files above.
 pub const ENV_RUNTIME_PROMPTS_DIR: &str = "CCO_RUNTIME_PROMPTS_DIR";
@@ -21,6 +28,13 @@ const EMBED_CHAT: &str = include_str!("../../../docs/runtime-prompts/chat-plan-w
 const EMBED_SPLIT: &str = include_str!("../../../docs/runtime-prompts/split-agent-delivery.md");
 const EMBED_PLANNER: &str =
     include_str!("../../../docs/runtime-prompts/planner-greenfield-stack.md");
+const EMBED_UI_RECIPES: &str = include_str!("../../../docs/runtime-prompts/ui-delivery-recipes.md");
+const EMBED_UI_LAYOUT: &str = include_str!("../../../docs/runtime-prompts/ui-layout-systems.md");
+const EMBED_UI_COLOR: &str = include_str!("../../../docs/runtime-prompts/ui-color-systems.md");
+const EMBED_UI_TYPE: &str = include_str!("../../../docs/runtime-prompts/ui-typography-systems.md");
+const EMBED_UI_MOTION: &str = include_str!("../../../docs/runtime-prompts/ui-motion-effects.md");
+const EMBED_UI_COPY: &str = include_str!("../../../docs/runtime-prompts/ui-copy-systems.md");
+const EMBED_BACKEND: &str = include_str!("../../../docs/runtime-prompts/backend-architecture.md");
 
 /// Compact architect + frontend co-plan rules for the desktop chat system prompt.
 pub fn chat_plan_writing_guidance() -> &'static str {
@@ -37,6 +51,41 @@ pub fn planner_greenfield_stack_blurb() -> &'static str {
     load_cached(FILE_PLANNER_GREENFIELD, EMBED_PLANNER)
 }
 
+/// End-to-end effect recipes (layout+color+type+motion+images+backend).
+pub fn ui_delivery_recipes_guidance() -> &'static str {
+    load_cached(FILE_UI_DELIVERY_RECIPES, EMBED_UI_RECIPES)
+}
+
+/// Site type + section order + information architecture (append to chat / split).
+pub fn ui_layout_systems_guidance() -> &'static str {
+    load_cached(FILE_UI_LAYOUT, EMBED_UI_LAYOUT)
+}
+
+/// Color kits + CSS token discipline (append to chat / split system prompts).
+pub fn ui_color_systems_guidance() -> &'static str {
+    load_cached(FILE_UI_COLOR_SYSTEMS, EMBED_UI_COLOR)
+}
+
+/// Font kits display/body/ui aligned with color kits (append to chat / split).
+pub fn ui_typography_systems_guidance() -> &'static str {
+    load_cached(FILE_UI_TYPOGRAPHY, EMBED_UI_TYPE)
+}
+
+/// Motion tiers + open-source effect whitelist (append to chat / split).
+pub fn ui_motion_effects_guidance() -> &'static str {
+    load_cached(FILE_UI_MOTION, EMBED_UI_MOTION)
+}
+
+/// Product UI copy: website + app/software microcopy (append to chat / split).
+pub fn ui_copy_systems_guidance() -> &'static str {
+    load_cached(FILE_UI_COPY, EMBED_UI_COPY)
+}
+
+/// Delivery depth A–D + language/framework + MVC/MVVM/DDD (append to chat / split).
+pub fn backend_architecture_guidance() -> &'static str {
+    load_cached(FILE_BACKEND_ARCHITECTURE, EMBED_BACKEND)
+}
+
 fn load_cached(file_name: &'static str, embedded: &'static str) -> &'static str {
     match file_name {
         FILE_CHAT_PLAN_WRITING => {
@@ -48,6 +97,34 @@ fn load_cached(file_name: &'static str, embedded: &'static str) -> &'static str 
             CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
         }
         FILE_PLANNER_GREENFIELD => {
+            static CELL: OnceLock<String> = OnceLock::new();
+            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+        }
+        FILE_UI_DELIVERY_RECIPES => {
+            static CELL: OnceLock<String> = OnceLock::new();
+            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+        }
+        FILE_UI_LAYOUT => {
+            static CELL: OnceLock<String> = OnceLock::new();
+            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+        }
+        FILE_UI_COLOR_SYSTEMS => {
+            static CELL: OnceLock<String> = OnceLock::new();
+            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+        }
+        FILE_UI_TYPOGRAPHY => {
+            static CELL: OnceLock<String> = OnceLock::new();
+            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+        }
+        FILE_UI_MOTION => {
+            static CELL: OnceLock<String> = OnceLock::new();
+            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+        }
+        FILE_UI_COPY => {
+            static CELL: OnceLock<String> = OnceLock::new();
+            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+        }
+        FILE_BACKEND_ARCHITECTURE => {
             static CELL: OnceLock<String> = OnceLock::new();
             CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
         }
@@ -128,12 +205,162 @@ mod tests {
         assert!(g.contains("静态") || g.contains("Astro"));
         assert!(g.contains("开源线标") || g.contains("Lucide"));
         assert!(g.contains("建议技术"));
+        assert!(
+            g.contains("配方") || g.contains("ui-delivery-recipes") || g.contains("R-overseas"),
+            "recipes pointer"
+        );
+        assert!(
+            g.contains("站点类型") || g.contains("marketing") || g.contains("layout"),
+            "layout pointer"
+        );
+        assert!(
+            g.contains("色系") || g.contains("western-saas"),
+            "color kit pointer"
+        );
+        assert!(
+            g.contains("字体") || g.contains("typography") || g.contains("文楷"),
+            "typography pointer"
+        );
+        assert!(
+            g.contains("动效") || g.contains("motion") || g.contains("light"),
+            "motion pointer"
+        );
+        assert!(
+            g.contains("文案") || g.contains("ui-copy") || g.contains("主 CTA"),
+            "copy pointer"
+        );
+        assert!(
+            g.contains("交付深度") || g.contains("backend-architecture"),
+            "backend depth pointer"
+        );
+    }
+
+    #[test]
+    fn ui_copy_covers_product_ui_strings() {
+        let g = ui_copy_systems_guidance();
+        assert!(g.contains("主 CTA") || g.contains("动词"));
+        assert!(g.contains("空态") || g.contains("错误"));
+        assert!(g.contains("App") || g.contains("软件") || g.contains("按钮"));
+        assert!(g.contains("Lorem") || g.contains("占位") || g.contains("TODO"));
+        assert!(g.contains("人话") || g.contains("帮人办事"));
     }
 
     #[test]
     fn split_and_planner_blurbs_nonempty() {
         assert!(split_agent_delivery_guidance().contains("开源线标"));
+        assert!(
+            split_agent_delivery_guidance().contains("配方")
+                || split_agent_delivery_guidance().contains("recipes")
+        );
+        assert!(
+            split_agent_delivery_guidance().contains("信息结构")
+                || split_agent_delivery_guidance().contains("站点类型")
+                || split_agent_delivery_guidance().contains("排版")
+        );
+        assert!(
+            split_agent_delivery_guidance().contains("占位图")
+                || split_agent_delivery_guidance().contains("placehold")
+        );
         assert!(planner_greenfield_stack_blurb().contains("静态"));
+        assert!(
+            planner_greenfield_stack_blurb().contains("配方")
+                || planner_greenfield_stack_blurb().contains("结构")
+        );
+    }
+
+    #[test]
+    fn chat_guidance_forbids_placeholder_images() {
+        let g = chat_plan_writing_guidance();
+        assert!(
+            g.contains("占位图") || g.contains("placehold"),
+            "must ban placeholder images"
+        );
+        assert!(
+            g.contains("图库") || g.contains("生成") || g.contains("Unsplash") || g.contains("Pexels"),
+            "must allow stock or generated art"
+        );
+    }
+
+    #[test]
+    fn ui_delivery_recipes_covers_combos() {
+        let g = ui_delivery_recipes_guidance();
+        assert!(g.contains("R-overseas"));
+        assert!(g.contains("R-shanshui") || g.contains("R-cn-brand"));
+        assert!(g.contains("R-tool") || g.contains("R-admin"));
+        assert!(g.contains("R-ios") || g.contains("ios-hig"));
+        assert!(g.contains("R-material") || g.contains("material"));
+        assert!(g.contains("R-fluent") || g.contains("R-wechat") || g.contains("R-ant"));
+        assert!(g.contains("western-saas") || g.contains("色系"));
+        assert!(g.contains("图片") || g.contains("Hero"));
+        assert!(g.contains("后端") || g.contains("交付深度"));
+    }
+
+    #[test]
+    fn ui_color_covers_platform_kits() {
+        let g = ui_color_systems_guidance();
+        assert!(g.contains("ios-hig"), "ios kit");
+        assert!(g.contains("material"), "material kit");
+        assert!(g.contains("fluent") || g.contains("Fluent"));
+        assert!(g.contains("ant-design") || g.contains("wechat"));
+    }
+
+    #[test]
+    fn ui_layout_covers_site_types() {
+        let g = ui_layout_systems_guidance();
+        assert!(g.contains("marketing"));
+        assert!(g.contains("portfolio") || g.contains("作品集"));
+        assert!(g.contains("dashboard") || g.contains("后台"));
+        assert!(g.contains("content") || g.contains("文档"));
+        assert!(g.contains("story") || g.contains("叙事"));
+        assert!(g.contains("Hero") || g.contains("首屏"));
+        assert!(
+            g.contains("受控变化") || g.contains("版式变体") || g.contains("防死板"),
+            "controlled variation for non-rigid layouts"
+        );
+    }
+
+    #[test]
+    fn ui_color_systems_covers_kits() {
+        let g = ui_color_systems_guidance();
+        assert!(
+            g.contains("western-saas"),
+            "got head: {}",
+            &g[..g.len().min(120)]
+        );
+        assert!(g.contains("shanshui") || g.contains("山水"));
+        assert!(g.contains("jp-wa") || g.contains("和风"));
+        assert!(g.contains("--color-primary") || g.contains("color-primary"));
+        assert!(g.contains("cta-band") || g.contains("cta_band") || g.contains("CTA"));
+    }
+
+    #[test]
+    fn ui_typography_covers_roles_and_shanshui() {
+        let g = ui_typography_systems_guidance();
+        assert!(g.contains("display") || g.contains("--font-display"));
+        assert!(g.contains("body") || g.contains("--font-body"));
+        assert!(g.contains("文楷") || g.contains("LXGW") || g.contains("楷"));
+        assert!(g.contains("Inter") || g.contains("western-saas"));
+        assert!(g.contains("shanshui") || g.contains("山水"));
+    }
+
+    #[test]
+    fn ui_motion_covers_tiers_and_whitelist() {
+        let g = ui_motion_effects_guidance();
+        assert!(g.contains("light") || g.contains("动效档"));
+        assert!(g.contains("GSAP") || g.contains("anime"));
+        assert!(g.contains("prefers-reduced-motion") || g.contains("reduced-motion"));
+        assert!(g.contains("tsparticles") || g.contains("Three") || g.contains("Lottie"));
+        assert!(g.contains("western-saas") || g.contains("shanshui"));
+    }
+
+    #[test]
+    fn backend_architecture_covers_depths_and_langs() {
+        let g = backend_architecture_guidance();
+        assert!(g.contains("演示") || g.contains("交付深度"), "depth");
+        assert!(g.contains("Node") || g.contains("Go"));
+        assert!(g.contains("MVC") || g.contains("DDD"));
+        assert!(g.contains("Rust") || g.contains("Java") || g.contains("PHP"));
+        assert!(!g.contains("一律 DDD"), "must not force DDD for demos");
     }
 
     #[test]

@@ -58,6 +58,10 @@ export function deleteSession(project, sessionId) {
   return gateway.chatDeleteSession(project, sessionId);
 }
 
+export function renameSession(project, sessionId, title) {
+  return gateway.chatRenameSession(project, sessionId, title);
+}
+
 export function streamPartial(args) {
   return gateway.chatStreamPartial(args);
 }
@@ -72,6 +76,33 @@ export function saveAttachment(args) {
 
 export function readPlanMd(project, plan) {
   return gateway.readPlanMd(project, plan);
+}
+
+/** Detached local preview — survives chat turn; not confirm/start_run. */
+export function previewStart(project) {
+  return gateway.previewStart(project);
+}
+
+export function previewStop(project) {
+  return gateway.previewStop(project);
+}
+
+export function previewStatus(project) {
+  return gateway.previewStatus(project);
+}
+
+/**
+ * True if project-relative plan markdown exists on disk.
+ * Used to drop ghost list rows (split index / selection pins after source delete).
+ */
+export async function planMdExists(project, plan) {
+  if (!project || !plan) return false;
+  try {
+    await gateway.readPlanMd(project, plan);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 /** P2-2: project light memory (last_summary + pins). */

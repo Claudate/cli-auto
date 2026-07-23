@@ -285,7 +285,7 @@ pub(super) struct LlmCriticOutcome {
 pub(super) fn plan_mode_skips_llm_critic(plan_mode: &str) -> bool {
     matches!(
         plan_mode.trim().to_ascii_lowercase().as_str(),
-        "fast" | "heuristic" | "parse" | "fake"
+        "fast" | "heuristic" | "parse" | "fake" | "direct"
     )
 }
 
@@ -1110,7 +1110,7 @@ mod llm_critic_gate_tests {
 
     #[test]
     fn plan_mode_skips_llm_critic_for_local_modes() {
-        for m in ["fast", "heuristic", "parse", "fake", "FAST", " Parse "] {
+        for m in ["fast", "heuristic", "parse", "fake", "direct", "FAST", " Parse "] {
             assert!(plan_mode_skips_llm_critic(m), "mode={m}");
         }
         assert!(!plan_mode_skips_llm_critic("ai"));

@@ -1,3 +1,5 @@
 - **技术默认写入实现类 prompt**：出海/个人/营销页 → 静态或 SSG（HTML/Astro）+ 托管；工具型 Web → 跟仓库或 Vite+简单 API；**禁止**无依据微服务/中台。
-- UI 类工作包 prompt 须含：主路径可点验收、空/错/载、开源线标图标（禁止 emoji 图标）。
-- brownfield：prompt 写清挂载目录，禁止「重写整站框架」。
+- UI 类工作包：主路径可点、空/错/载人话、开源线标；点名**配方 id 或**站点类型 + 色/字 kit + **主 CTA 文案** + 动效档（库≤2）+ 真图来源；对齐 recipes + layout/color/type/copy/motion。
+- 有后端：交付深度 A/B/C + 语言 + 架构档；演示勿企业空壳（`backend-architecture`）。
+- brownfield：挂载目录清晰，禁止「重写整站框架」。
+- 任务顺序建议：结构 → 关键文案 → CSS tokens → 图片 → 动效 → 后端 → 门禁/预览。

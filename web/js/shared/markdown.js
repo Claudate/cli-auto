@@ -3,6 +3,7 @@
  * [OUTPUT]: 安全 HTML 字符串（无外部依赖）
  * [POS]: D9 自 state.js 抽出；classic 经 installMarkdown → window.renderMarkdown；chatFormatBody 复用
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ * note: bare http(s) → .md-ext-link；点击经 ccoGateway.openPath → 系统浏览器
  */
 
 import { esc } from "./statusUi.js";
@@ -120,6 +121,37 @@ export function renderMarkdown(src) {
     blocks.push({ type: "p", text: paras.join("\n") });
   }
 
+  function peelUrlTrail(url) {
+    let u = url;
+    let trail = "";
+    while (u.length > 8) {
+      const last = u[u.length - 1];
+      if (/[.,;:!?]$/.test(last)) {
+        trail = last + trail;
+        u = u.slice(0, -1);
+        continue;
+      }
+      // Prose often glues ')' after a URL; only peel when parens are unbalanced.
+      if (last === ")") {
+        const open = (u.match(/\(/g) || []).length;
+        const close = (u.match(/\)/g) || []).length;
+        if (close > open) {
+          trail = ")" + trail;
+          u = u.slice(0, -1);
+          continue;
+        }
+      }
+      break;
+    }
+    return { url: u, trail };
+  }
+
+  function extAnchor(url, label) {
+    const safe = String(url || "");
+    const text = label != null ? label : safe;
+    return `<a class="md-ext-link" href="${safe}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+  }
+
   function inlineMd(s) {
     let x = esc(s);
     x = x.replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -127,12 +159,17 @@ export function renderMarkdown(src) {
     x = x.replace(/__([^_]+)__/g, "<strong>$1</strong>");
     x = x.replace(/(^|[^*])\*([^*]+)\*(?![*])/g, "$1<em>$2</em>");
     x = x.replace(/(^|[^_])_([^_]+)_(?!_)/g, "$1<em>$2</em>");
-    // 外链可点开；相对/本地路径（计划内交叉引用）只展示为链接样式，不导航
+    // Markdown links: 外链可点开；相对/本地路径只展示样式
     x = x.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, url) => {
       if (/^https?:\/\//i.test(url) || /^mailto:/i.test(url)) {
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+        return extAnchor(url, label);
       }
       return `<span class="md-local-link" title="${url}">${label}</span>`;
+    });
+    // Bare http(s) URLs (e.g. 本地地址：http://localhost:4322/) — not already in href="…"
+    x = x.replace(/(^|[^"'=\]>])(https?:\/\/[^\s<>"']+)/gi, (full, pre, rawUrl) => {
+      const { url, trail } = peelUrlTrail(rawUrl);
+      return `${pre}${extAnchor(url)}${trail}`;
     });
     x = x.replace(/\n/g, "<br>");
     return x;
@@ -185,11 +222,51 @@ export function renderMarkdown(src) {
 }
 
 /**
+ * Click external http(s)/mailto → system open (Tauri webview target=_blank is unreliable).
+ * Uses ccoGateway.openPath when present (Rust handles URL scheme).
+ * @param {typeof globalThis} [g]
+ */
+export function installMdExtLinkOpen(g = typeof window !== "undefined" ? window : globalThis) {
+  if (!g?.document || g.__ccoMdExtLinkOpen) return;
+  g.__ccoMdExtLinkOpen = true;
+  g.document.addEventListener(
+    "click",
+    (e) => {
+      const t = e.target;
+      if (!t || typeof t.closest !== "function") return;
+      const a = t.closest("a.md-ext-link, a[href]");
+      if (!a) return;
+      const href = (a.getAttribute("href") || "").trim();
+      if (!/^https?:\/\//i.test(href) && !/^mailto:/i.test(href)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const open =
+        (g.ccoGateway && typeof g.ccoGateway.openPath === "function" && g.ccoGateway.openPath) ||
+        null;
+      if (open) {
+        Promise.resolve(open(href)).catch((err) => {
+          const msg = err?.message || String(err || "无法打开链接");
+          if (typeof g.toast === "function") g.toast(msg);
+        });
+        return;
+      }
+      try {
+        g.open(href, "_blank", "noopener,noreferrer");
+      } catch (_) {
+        /* ignore */
+      }
+    },
+    true
+  );
+}
+
+/**
  * @param {typeof globalThis} [g]
  */
 export function installMarkdown(g = typeof window !== "undefined" ? window : globalThis) {
   if (!g) return;
   g.renderMarkdown = renderMarkdown;
+  installMdExtLinkOpen(g);
 }
 
-export default { renderMarkdown, installMarkdown };
+export default { renderMarkdown, installMarkdown, installMdExtLinkOpen };

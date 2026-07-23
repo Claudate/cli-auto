@@ -6,6 +6,7 @@
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/state/CLAUDE.md
 
 pub mod cco_split_store;
+pub mod project_ui;
 pub mod project_memory;
 pub mod sqlite;
 

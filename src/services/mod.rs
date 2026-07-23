@@ -13,6 +13,7 @@
 
 mod chat;
 mod live;
+mod preview;
 mod projects;
 mod runs;
 mod settings;
@@ -20,12 +21,13 @@ mod util;
 
 pub use chat::{
     chat_delete_session, chat_list_sessions, chat_new_session, chat_normalize_plan,
-    chat_save_attachment, chat_save_plan, chat_send, chat_session_get, chat_stream_partial,
-    cleanup_expired_chat_sessions, extract_title_from_md, normalize_plan_markdown, read_plan_md,
-    sanitize_plan_title, structure_plan_markdown, ChatAttachment, ChatDraftPlan, ChatMessage,
-    ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSendResponse, ChatSession,
-    ChatSessionSummary, ChatStreamPartial,
+    chat_rename_session, chat_save_attachment, chat_save_plan, chat_send, chat_session_get,
+    chat_stream_partial, cleanup_expired_chat_sessions, extract_title_from_md,
+    normalize_plan_markdown, read_plan_md, sanitize_plan_title, structure_plan_markdown,
+    ChatAttachment, ChatDraftPlan, ChatMessage, ChatNormalizePlanResponse, ChatSavePlanResponse,
+    ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
 };
+pub use preview::{preview_start, preview_status, preview_stop, PreviewStatus};
 pub use live::{
     open_task_terminal, project_live_view, stop_task, task_logs, ProjectLiveView, TaskLiveView,
     TaskLogsView,

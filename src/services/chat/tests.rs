@@ -85,6 +85,19 @@ fn chat_list_new_delete_sessions_roundtrip() {
     assert_eq!(row.title.as_deref(), Some("登录优化"));
     assert!(row.preview.as_deref().unwrap_or("").contains("登录") || row.title.is_some());
 
+    // Rename
+    let renamed = chat_rename_session(&project, &created.session_id, Some("  新名称  ")).unwrap();
+    assert_eq!(renamed.title.as_deref(), Some("新名称"));
+    let list_r = chat_list_sessions(&project).unwrap();
+    let row_r = list_r
+        .iter()
+        .find(|s| s.session_id == created.session_id)
+        .unwrap();
+    assert_eq!(row_r.title.as_deref(), Some("新名称"));
+    // Clear title
+    let cleared = chat_rename_session(&project, &created.session_id, Some("")).unwrap();
+    assert!(cleared.title.is_none());
+
     chat_delete_session(&project, &created.session_id).unwrap();
     assert!(!session_path(&project, &created.session_id).is_file());
     let list2 = chat_list_sessions(&project).unwrap();

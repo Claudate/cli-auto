@@ -18,7 +18,7 @@ build.rs: tauri build 钩子
 | update/remove/sanitize plan task | app::split::* |
 | stop_run_cmd / stop_task_cmd / resume_run_cmd / **retry_task_cmd** / rework / residual | app::run::* |
 | get_runs / get_run / plan meta / preview / start_run（ParseOnly） | app::run::* |
-| chat_* / read_plan_md | app::chat::* |
+| chat_* / read_plan_md / preview_start|stop|status | app::chat::* |
 | live / projects / settings / doctor | services thin（未建 app 模块） |
 
 ## 硬规则（继承 L1 · 本层加严）

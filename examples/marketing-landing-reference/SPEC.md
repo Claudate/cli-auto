@@ -1,12 +1,13 @@
 # 营销 / 产品落地页 · 结构参考（Reference）
 
 > **用途**：实现时对齐**节奏与层次**，不是抄品牌皮。  
-> **真源关系**：纪律见 `docs/runtime-prompts/`；本文件给「好样子」的区块顺序与密度。  
+> **真源关系**：纪律见 `docs/runtime-prompts/`；整包默认抄 **`ui-delivery-recipes` → R-overseas**；**本文件 = 站点类型 `marketing` 区块 reference**。其它类型见 `ui-layout-systems.md`。  
 > **非**：完整可运行站（需要时再脚手架）；Agent 应对齐本结构，而非另发明五段同色深底。
 
 ## 一句话
 
-给【谁】在【场景】得到【可观察结果】；主 CTA 动词唯一。
+给【谁】在【场景】得到【可观察结果】；主 CTA 动词唯一。  
+界面文案细则（H1/CTA/空错态 + App 微文案）：`docs/runtime-prompts/ui-copy-systems.md`。
 
 ## 推荐区块顺序（不可乱序堆砌）
 
@@ -22,18 +23,23 @@
 
 ## 视觉纪律（下限）
 
-1. 少色：1 主色 + 中性阶 + 1 强调。  
-2. 底 CTA ≠ Footer 底色（或明确分隔线 + 间距）。  
+1. 少色：1 主色 + 中性阶 + 1 强调；**先选 kit 再写页面**（`docs/runtime-prompts/ui-color-systems.md`：western-saas / nordic / cn-ink / cn-festive / shanshui / jp-wa / jp-minimal）。  
+2. 底 CTA ≠ Footer 底色（或明确分隔线 + 间距）；用 `--color-cta-band` vs `--color-footer`。  
 3. 中文标题：`text-wrap: balance` / 人工断句。  
 4. 图标：开源线标（Lucide 等），禁止 emoji 按钮。  
-5. 主 CTA 文案全站一致；出现位置建议：顶栏 + Hero + 底带（最多三处强按钮）。
+5. 主 CTA 文案全站一致；出现位置建议：顶栏 + Hero + 底带（最多三处强按钮）。  
+6. 颜色只进 CSS 变量；禁止组件内随机 hex 拼盘。  
+7. 字体：与色系同 kit；`--font-display` / `--font-body` / `--font-ui`（见 `ui-typography-systems.md`）；书法/艺术字仅短标题，不作正文与按钮。  
+8. 动效：档位 none/light/brand/3d-hero（见 `ui-motion-effects.md`）；库白名单且 ≤2；主 CTA 不被挡；`prefers-reduced-motion` 可关。  
+9. **防死板**：区块职责按上表；Hero 构图/证据形态/能力区形态可做受控变体（见 `ui-layout-systems.md` §2.1），勿每站同一左文右图+三等分图标卡。
 
 ## 真实资产门禁（写进成功标准）
 
 - [ ] 无 example.com 可见链（或计划注明仅演示）  
 - [ ] 主 CTA URL 真实或本地 `#demo`  
 - [ ] 顶栏唯一主名  
-- [ ] `scripts/check-landing-gates.sh` 无 FAIL  
+- [ ] 插图非占位图：图库 / 生成图 / 品牌素材；无 placehold·dummyimage·`placeholder.*`  
+- [ ] `scripts/check-landing-gates.sh` 无 FAIL（含 G7 图片）  
 
 ## 人 30 秒走查
 

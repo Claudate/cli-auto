@@ -133,6 +133,12 @@ const state = {
 
 // A2/A5 ESM bridge — features/* read window.state + classic helpers
 if (typeof window !== "undefined") {
+  // lastRunId: only for dismiss when live already null (not SoT)
+  if (!state.lastRunIdByProject) state.lastRunIdByProject = {};
+  // Purge legacy dual-write key (SoT = SQLite project_ui_prefs)
+  try {
+    localStorage.removeItem("cco.dismissedRuns.v1");
+  } catch (_) {}
   window.state = state;
   window.PAUSE_CONFIRM_KEY = PAUSE_CONFIRM_KEY;
 }

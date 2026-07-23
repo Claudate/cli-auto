@@ -14,7 +14,8 @@ const DEFAULT_SELECTORS = [
   "details.planner-log-fold[open]",
   "details.settings-advanced[open]",
   "details.help-advanced[open]",
-  // 聊天页：多会话切换（B3 默认藏进 details；点空白应收）
+  // 聊天页：历史会话 panel（点空白应收）
+  "details.chat-session-history[open]",
   "details.chat-session-more[open]",
   ".cco-menu.is-open",
   "[data-click-outside-root][data-open='1']",

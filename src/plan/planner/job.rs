@@ -196,9 +196,9 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         .to_ascii_lowercase();
     if !matches!(
         plan_mode.as_str(),
-        "parse" | "fake" | "ai" | "fast" | "heuristic"
+        "parse" | "fake" | "ai" | "fast" | "heuristic" | "direct"
     ) {
-        bail!("未知 plan_mode: {plan_mode}（支持 parse|fake|ai|fast）");
+        bail!("未知 plan_mode: {plan_mode}（支持 parse|fake|ai|fast|direct）");
     }
     let provider = req
         .provider
@@ -209,10 +209,14 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| config.default.default_mode.clone());
     // Chosen at split time so the confirm UI and DAG reflect user intent.
-    let max_parallel = req
-        .max_parallel
-        .unwrap_or(config.default.max_parallel)
-        .clamp(1, 32);
+    // direct = whole plan as one task → always serial (finish also stamps job.max_parallel onto IR).
+    let max_parallel = if plan_mode == "direct" {
+        1
+    } else {
+        req.max_parallel
+            .unwrap_or(config.default.max_parallel)
+            .clamp(1, 32)
+    };
 
     let job_id = new_job_id();
     let project = req
@@ -1298,6 +1302,23 @@ pub fn latest_plan_job_for_project(
 
 fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
     match job.plan_mode.as_str() {
+        // Chat/plan-card「直接执行」: whole document = one worker task; still Mode B
+        // (plan job → proposed → confirm_start). Never bypass confirm.
+        "direct" => {
+            append_log(
+                config,
+                &job.job_id,
+                "using direct single-task (whole plan, no multi-step split)",
+            );
+            let abs = crate::plan::resolve_plan_path(&job.project, &job.plan_path)?;
+            let text = std::fs::read_to_string(&abs)
+                .map_err(|e| anyhow::anyhow!("读计划失败 {}: {e}", abs.display()))?;
+            let mut ir = crate::plan::adapters::raw_single::parse(&abs, &text, config)?;
+            // Force serial single slot so desk/run never claim multi-parallel.
+            ir.max_parallel = 1;
+            apply_worker_defaults(&mut ir, &job.provider, &job.exec_mode);
+            Ok(ir)
+        }
         "parse" => {
             append_log(config, &job.job_id, "using adapter parse (load_plan)");
             let mut ir = load_plan(&job.project, &job.plan_path, None, config)?;

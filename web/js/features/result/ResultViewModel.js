@@ -169,7 +169,7 @@ export function createResultViewModel(deps = {}) {
       }
       if (typeof deps.onFinishRound === "function") {
         try {
-          deps.onFinishRound();
+          await deps.onFinishRound();
         } catch (e) {
           console.error("[ResultViewModel] onFinishRound", e);
         }

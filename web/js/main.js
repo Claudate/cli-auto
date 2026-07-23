@@ -52,7 +52,6 @@ import {
 import { createLogDesk } from "./features/run/logDesk.js";
 import { installSettingsHost } from "./features/settings/installSettings.js";
 import { installTemplatesHost } from "./features/templates/installTemplates.js";
-import { PHASE_TITLE } from "./app/routes.js";
 
 /** D9: display + shell chrome on window before boot renders lists/pages. */
 installStatusUi(window);
@@ -112,10 +111,11 @@ const appVm = createAppViewModel({
   },
   onPhaseChange: (phase, snap) => {
     try {
+      // A2 调试角标已撤：主路径不展示 phase 胶囊（顶栏/页内文案已够）
       const el = document.getElementById("cco-app-phase-label");
       if (el) {
-        el.textContent = PHASE_TITLE[phase] || phase;
-        el.hidden = false;
+        el.textContent = "";
+        el.hidden = true;
       }
       document.body.dataset.ccoAppPhase = phase;
       if (snap?.projectPath) {
@@ -167,6 +167,12 @@ function applyConfirmedRun(out) {
   s.selectedTaskId = null;
   s.planCollapsed = true;
   s.closedPanels = {};
+  // 新开跑：清 SQLite dismiss（服务端 confirm 也会清；前端再调一次防竞态）
+  try {
+    if (s.selectedPath && window.ccoGateway?.projectClearDismissedRun) {
+      window.ccoGateway.projectClearDismissedRun(s.selectedPath).catch(() => {});
+    }
+  } catch (_) {}
   try {
     if (s.selectedPath && s.planSessions) delete s.planSessions[s.selectedPath];
   } catch (_) {}

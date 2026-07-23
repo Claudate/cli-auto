@@ -36,9 +36,24 @@ function st() {
 
 /* ── Run-lock helpers (read state.live · display-only) ── */
 
+/**
+ * Live run was soft-ended via「结束计划」(SQLite last_dismissed on project row).
+ * Double-check: project_live should already omit it; never treat as resumeable.
+ */
+function isDismissedCurrentLive(state) {
+  const rid = state?.live?.run_id;
+  if (!rid || !state?.selectedPath) return false;
+  const proj = (state.projects || []).find((p) => p.path === state.selectedPath);
+  if (!proj) return false;
+  const last = proj.last_run_id || proj.lastRunId || null;
+  const dismissed = !!(proj.last_dismissed || proj.lastDismissed);
+  return dismissed && last && String(last) === String(rid);
+}
+
 /** True when the currently selected project has a live run (not paused). */
 export function hasActiveRun() {
   const state = st();
+  if (isDismissedCurrentLive(state)) return false;
   const isLive = g("isLiveStatus");
   if (typeof isLive !== "function") return !!(state.live?.run_id);
   return !!(state.live?.run_id && isLive(state.live?.run_status));
@@ -46,6 +61,8 @@ export function hasActiveRun() {
 
 export function isRunPaused() {
   const state = st();
+  // 已「结束计划」的 paused 不当作可续跑（stop_task 残留 desk）
+  if (isDismissedCurrentLive(state)) return false;
   const isPaused = g("isPausedStatus");
   if (typeof isPaused !== "function") {
     return !!(
@@ -369,15 +386,18 @@ export function renderProjectList() {
     .map((p) => {
       const stt = p.active_status || p.last_status || "";
       const live = p.running_tasks > 0 || isLiveStatus(p.active_status);
-      // Paused is last-run desk state (not active_* after projects.rs fix)
-      const paused = isPausedStatus(p.last_status);
+      // 已「结束计划」的 last run：不当作可续跑（SQLite last_dismissed）
+      const dismissed = !!p.last_dismissed;
+      const paused =
+        !dismissed && isPausedStatus(p.last_status) && !live;
       const isCurrent = p.path === state.selectedPath;
       let meta;
       if (live) {
         meta = `${p.running_tasks || 0}/${p.total_tasks || "?"} 任务 · 运行中`;
       } else if (paused) {
-        // stop_task 后 run 常为 paused（尚有 pending 可续）；勿显示成「排队中」
         meta = "已暂停 · 可续跑";
+      } else if (dismissed && p.last_status) {
+        meta = `最近: ${statusLabel(p.last_status)} · 已结束本轮`;
       } else if (p.last_status) {
         meta = `最近: ${statusLabel(p.last_status)}`;
       } else if (p.exists) {

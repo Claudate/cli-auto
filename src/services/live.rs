@@ -160,16 +160,37 @@ pub fn project_live_view(
         .iter()
         .filter(|r| paths_match(Path::new(&r.project_root), project))
         .collect();
+    // SQLite：用户「结束计划」后的 run 不当作当前 live（避免重开项目又进结果台）
+    // 含 paused：stop_task 残留 pending 时常为 paused，仍须尊重 dismiss。
+    let dismissed = crate::state::project_ui::try_get_dismissed_run_id(config, project);
     let chosen = for_proj
         .iter()
         .find(|r| {
             matches!(
                 r.status.as_str(),
-                "running" | "validated" | "init" | "paused"
+                "running" | "validated" | "init" | "paused" | "starting" | "queued" | "resuming"
+            ) && !crate::state::project_ui::should_hide_run_as_current(
+                dismissed.as_deref(),
+                &r.run_id,
+                &r.status,
             )
         })
-        .or_else(|| for_proj.first())
-        .copied();
+        .copied()
+        .or_else(|| {
+            // Prefer newest non-dismissed terminal; if newest is dismissed, do not
+            // promote an older historical run as "current" (empty live instead).
+            let newest = for_proj.first().copied();
+            if let Some(n) = newest {
+                if crate::state::project_ui::should_hide_run_as_current(
+                    dismissed.as_deref(),
+                    &n.run_id,
+                    &n.status,
+                ) {
+                    return None;
+                }
+            }
+            newest
+        });
 
     let Some(sum) = chosen else {
         return Ok(ProjectLiveView {
@@ -193,7 +214,45 @@ pub fn project_live_view(
         });
     };
 
+    // If the only candidate was dismissed terminal, surface empty live
+    if crate::state::project_ui::should_hide_run_as_current(
+        dismissed.as_deref(),
+        &sum.run_id,
+        &sum.status,
+    ) {
+        return Ok(ProjectLiveView {
+            project_path: project.display().to_string(),
+            project_name: name,
+            run_id: None,
+            run_status: None,
+            plan_path: None,
+            started_at: None,
+            tasks: vec![],
+            layers: vec![],
+            current_wave: None,
+            max_parallel: None,
+            planner_cost_usd: None,
+            exec_cost_usd: None,
+            inspect_loop: None,
+            run_dir: None,
+            handoff_md_path: None,
+            handoff_board: vec![],
+            verification: None,
+        });
+    }
+
     let rs = load_run(config, &sum.run_id)?;
+    // New live run id different from dismissed → clear dismiss (new round)
+    if let Some(ref d) = dismissed {
+        if d != &sum.run_id
+            && matches!(
+                sum.status.as_str(),
+                "running" | "validated" | "init" | "paused" | "starting" | "queued" | "resuming"
+            )
+        {
+            crate::state::project_ui::try_clear_dismissed_run_id(config, project);
+        }
+    }
     // Resolved plan for titles / depends / waves
     let resolved_path = rs.run_dir.join("plan.resolved.json");
     let resolved: Option<PlanIR> = std::fs::read_to_string(&resolved_path)

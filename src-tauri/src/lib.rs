@@ -4,7 +4,7 @@
 //! [OUTPUT]: tauri commands → **cco::app** (split/run/chat) + thin services adapters (live/projects/settings)
 //! [POS]: 桌面薄壳；禁止堆业务逻辑；handler = 解析 IPC → app → DTO/错误字符串
 //! note: chat_send_cmd 必须 async + spawn_blocking，禁止同步堵 UI
-//! note: C3 多会话 chat_list/new/delete_session_cmd
+//! note: C3 多会话 chat_list/new/rename/delete_session_cmd
 //! note: P2-4 open_monitor_window_cmd — 系统级第二窗（可拖到另一显示器）
 //! note: A1-7 — chat/split/run 走 app::*；IPC 命令名与 JSON 字段保持兼容
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src-tauri/CLAUDE.md
@@ -18,22 +18,24 @@
 //! | stop_run_cmd / resume_run_cmd / retry_task_cmd / rework / residual | app::run::* |
 //! | get_runs / get_run / plan meta / preview | app::run::* |
 //! | start_run (legacy ParseOnly) | app::run::start_from_request |
-//! | chat_* / read_plan_md | app::chat::* |
+//! | chat_* / read_plan_md / preview_* | app::chat::* |
 //! | live / projects / settings / doctor | services thin adapters (not yet app modules) |
 
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use cco::app::{chat as chat_uc, memory as memory_uc, run as run_uc, split as split_uc};
+use cco::app::{
+    chat as chat_uc, memory as memory_uc, project_ui as project_ui_uc, run as run_uc, split as split_uc,
+};
 use cco::state::{ProjectLastSummary, ProjectMemoryView, ProjectPin};
 use cco::config::Config;
 use cco::services::{
     add_project, get_settings, list_projects, open_task_terminal, project_live_view, remove_project,
     run_doctor, set_settings, task_logs, ChatAttachment, ChatNormalizePlanResponse,
     ChatSavePlanResponse, ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
-    PlanJobView, PlanMeta, PlanPreview, ProjectLiveView, ProjectSummary, ReworkStartResponse,
-    RunSummary, SanitizeDepsResult, SettingsUpdate, SettingsView, StartPlanJobRequest,
-    StartRunRequest,
+    PlanJobView, PlanMeta, PlanPreview, PreviewStatus, ProjectLiveView, ProjectSummary,
+    ReworkStartResponse, RunSummary, SanitizeDepsResult, SettingsUpdate, SettingsView,
+    StartPlanJobRequest, StartRunRequest,
 };
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -499,8 +501,64 @@ fn project_pin_delete_cmd(
     Ok(json!({ "ok": true, "deleted": deleted, "key": key }))
 }
 
+/// SQLite SoT: user finished this run in UI — project_live must not re-bind it.
+#[tauri::command]
+fn project_dismiss_run_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    #[allow(non_snake_case)] runId: String,
+) -> Result<Value, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    project_ui_uc::dismiss_run(
+        &config,
+        PathBuf::from(project).as_path(),
+        &runId,
+    )
+    .map_err(map_err)?;
+    Ok(json!({ "ok": true, "run_id": runId, "dismissed": true }))
+}
+
+/// Clear dismissed run (e.g. new confirm_start).
+#[tauri::command]
+fn project_clear_dismissed_run_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<Value, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    project_ui_uc::clear_dismissed_run(&config, PathBuf::from(project).as_path())
+        .map_err(map_err)?;
+    Ok(json!({ "ok": true }))
+}
+
+#[tauri::command]
+fn project_get_dismissed_run_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<Value, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    let rid =
+        project_ui_uc::get_dismissed_run(&config, PathBuf::from(project).as_path()).map_err(map_err)?;
+    Ok(json!({ "run_id": rid }))
+}
+
 #[tauri::command]
 fn open_path(path: String) -> Result<(), String> {
+    let raw = path.trim();
+    // Chat / markdown external links (http://localhost:4322/) — never mkdir as a path.
+    if raw.starts_with("http://")
+        || raw.starts_with("https://")
+        || raw.starts_with("mailto:")
+    {
+        let status = std::process::Command::new("open")
+            .arg(raw)
+            .status()
+            .map_err(map_err)?;
+        if !status.success() {
+            return Err(format!("open url failed: {raw} (exit {status})"));
+        }
+        return Ok(());
+    }
+
     // Normalize trailing slashes for existence checks (macOS open tolerates them).
     let trimmed = path.trim_end_matches(['/', '\\']);
     let p = std::path::PathBuf::from(if trimmed.is_empty() { &path } else { trimmed });
@@ -658,6 +716,20 @@ fn chat_new_session_cmd(
 }
 
 #[tauri::command]
+fn chat_rename_session_cmd(
+    project: String,
+    #[allow(non_snake_case)] sessionId: String,
+    title: Option<String>,
+) -> Result<ChatSession, String> {
+    chat_uc::rename_session(
+        PathBuf::from(project).as_path(),
+        &sessionId,
+        title.as_deref(),
+    )
+    .map_err(map_err)
+}
+
+#[tauri::command]
 fn chat_delete_session_cmd(
     project: String,
     #[allow(non_snake_case)] sessionId: String,
@@ -697,6 +769,26 @@ fn chat_stream_partial_cmd(
     #[allow(non_snake_case)] sessionId: Option<String>,
 ) -> Result<ChatStreamPartial, String> {
     chat_uc::stream_partial(PathBuf::from(project).as_path(), sessionId.as_deref()).map_err(map_err)
+}
+
+/// Detached local dev/preview (not Mode B worker; survives chat Claude exit).
+#[tauri::command]
+async fn preview_start_cmd(project: String) -> Result<PreviewStatus, String> {
+    tokio::task::spawn_blocking(move || {
+        chat_uc::preview_start(PathBuf::from(project).as_path()).map_err(map_err)
+    })
+    .await
+    .map_err(|e| format!("preview_start join error: {e}"))?
+}
+
+#[tauri::command]
+fn preview_stop_cmd(project: String) -> Result<PreviewStatus, String> {
+    chat_uc::preview_stop(PathBuf::from(project).as_path()).map_err(map_err)
+}
+
+#[tauri::command]
+fn preview_status_cmd(project: String) -> Result<PreviewStatus, String> {
+    chat_uc::preview_status(PathBuf::from(project).as_path()).map_err(map_err)
 }
 
 #[tauri::command]
@@ -830,6 +922,9 @@ pub fn run() {
             project_pins_list_cmd,
             project_pin_upsert_cmd,
             project_pin_delete_cmd,
+            project_dismiss_run_cmd,
+            project_clear_dismissed_run_cmd,
+            project_get_dismissed_run_cmd,
             open_path,
             open_monitor_window_cmd,
             get_settings_cmd,
@@ -838,9 +933,13 @@ pub fn run() {
             chat_session_get_cmd,
             chat_list_sessions_cmd,
             chat_new_session_cmd,
+            chat_rename_session_cmd,
             chat_delete_session_cmd,
             chat_send_cmd,
             chat_stream_partial_cmd,
+            preview_start_cmd,
+            preview_stop_cmd,
+            preview_status_cmd,
             chat_save_plan_cmd,
             chat_normalize_plan_cmd,
             chat_save_attachment_cmd,

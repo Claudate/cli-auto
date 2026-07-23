@@ -13,11 +13,26 @@ use crate::config::Config;
 use crate::plan::{OnFailure, PlanIR, TaskIR};
 
 pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
-    let name = path
+    let stem = path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("raw")
         .to_string();
+    // Prefer first markdown H1 so direct-execute / raw cards show a human title.
+    let title = crate::domain::chat::extract_title_from_md(text)
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(|| {
+            if stem.is_empty() || stem == "raw" {
+                "按计划执行".into()
+            } else {
+                stem.clone()
+            }
+        });
+    let name = if stem.is_empty() {
+        title.clone()
+    } else {
+        stem
+    };
 
     let provider = config.default.default_provider.clone();
     let opts = default_provider_opts(config, &provider);
@@ -36,7 +51,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
         require_inspect: false,
         tasks: vec![TaskIR {
             id: "t1".into(),
-            title: "raw prompt".into(),
+            title,
             depends_on: vec![],
             group: Some("G1".into()),
             provider,
@@ -51,7 +66,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             role: None,
             scope: None,
             outputs: vec![],
-        tags: vec![],
+            tags: vec![],
         }],
     })
 }

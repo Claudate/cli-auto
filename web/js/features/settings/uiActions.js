@@ -460,6 +460,8 @@ export function createUiActions() {
     "btn-chat-env-dismiss": () => call("dismissChatEnvBar"),
     "btn-chat-session-new": () =>
       typeof g("newChatSession") === "function" ? call("newChatSession") : null,
+    "btn-chat-session-new-in-panel": () =>
+      typeof g("newChatSession") === "function" ? call("newChatSession") : null,
     "btn-chat-session-del": () =>
       typeof g("deleteChatSession") === "function"
         ? call("deleteChatSession")

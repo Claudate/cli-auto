@@ -227,6 +227,30 @@ pub fn chat_new_session(project: &Path, title: Option<&str>) -> Result<ChatSessi
     chat_session_get(project, Some(&base))
 }
 
+/// C3: rename a session (set or clear `title`). Empty title → clear (label falls back to preview/id).
+/// Creates the session JSON if missing so default / never-saved ids can still be titled.
+pub fn chat_rename_session(
+    project: &Path,
+    session_id: &str,
+    title: Option<&str>,
+) -> Result<ChatSession> {
+    if !project.is_dir() {
+        bail!("project path is not a directory: {}", project.display());
+    }
+    let sid = sanitize_session_id(session_id);
+    if sid.is_empty() {
+        bail!("session_id is empty");
+    }
+    let mut sess = chat_session_get(project, Some(&sid))?;
+    let cleaned = title
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| truncate_chars(s, 80));
+    sess.title = cleaned;
+    save_session(project, &sess)?;
+    chat_session_get(project, Some(&sid))
+}
+
 /// C3: delete a session JSON (+ best-effort attachments dir).
 /// Refuses empty / unsafe ids. Deleting `default` is allowed (next get returns empty).
 pub fn chat_delete_session(project: &Path, session_id: &str) -> Result<()> {

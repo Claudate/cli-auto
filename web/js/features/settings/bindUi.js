@@ -57,6 +57,19 @@ export function bindGlobalUI() {
     }
   });
 
+  // Codex-style auto-grow: textarea grows with content up to max height
+  const chatInput = document.getElementById("chat-input");
+  if (chatInput && !chatInput.dataset.autogrowBound) {
+    chatInput.dataset.autogrowBound = "1";
+    const resizeComposer = () => {
+      chatInput.style.height = "auto";
+      chatInput.style.height = `${Math.min(chatInput.scrollHeight, 160)}px`;
+    };
+    chatInput.addEventListener("input", resizeComposer);
+    // Initial size once laid out
+    requestAnimationFrame(resizeComposer);
+  }
+
   document.addEventListener(
     "paste",
     (e) => {
@@ -108,6 +121,7 @@ export function bindGlobalUI() {
     }
   });
 
+  // Legacy select (older shell)
   const sessionSel = document.getElementById("chat-session-select");
   if (sessionSel && !sessionSel.dataset.bound) {
     sessionSel.dataset.bound = "1";
@@ -117,6 +131,96 @@ export function bindGlobalUI() {
         Promise.resolve(call("switchChatSession", sid)).catch((err) =>
           toast(String(err?.message || err))
         );
+      }
+    });
+  }
+
+  // History panel: switch / delete row (Claude for VS Code–style list)
+  const sessionPanel = document.getElementById("chat-session-panel-list");
+  if (sessionPanel && !sessionPanel.dataset.bound) {
+    sessionPanel.dataset.bound = "1";
+    const onPick = (sid) => {
+      if (!sid || typeof g("switchChatSession") !== "function") return;
+      Promise.resolve(call("switchChatSession", sid)).catch((err) =>
+        toast(String(err?.message || err))
+      );
+    };
+    sessionPanel.addEventListener("click", (e) => {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      // Don't treat rename input clicks as row pick
+      if (t.closest?.(".chat-session-rename-input")) {
+        e.stopPropagation();
+        return;
+      }
+      const renameBtn = t.closest("[data-session-rename]");
+      if (renameBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const sid = renameBtn.getAttribute("data-session-rename") || "default";
+        const seed =
+          renameBtn.getAttribute("data-session-rename-seed") || undefined;
+        if (typeof g("beginChatSessionRename") === "function") {
+          call("beginChatSessionRename", sid, seed);
+        } else if (window.ccoChat?.beginChatSessionRename) {
+          window.ccoChat.beginChatSessionRename(sid, seed);
+        }
+        return;
+      }
+      const del = t.closest("[data-session-del]");
+      if (del) {
+        e.preventDefault();
+        e.stopPropagation();
+        const sid = del.getAttribute("data-session-del") || "default";
+        if (typeof g("deleteChatSession") === "function") {
+          Promise.resolve(call("deleteChatSession", sid)).catch((err) =>
+            toast(String(err?.message || err))
+          );
+        }
+        return;
+      }
+      const row = t.closest("[data-session-id]");
+      if (row && !row.classList.contains("is-renaming")) {
+        e.preventDefault();
+        onPick(row.getAttribute("data-session-id") || "default");
+      }
+    });
+    sessionPanel.addEventListener("dblclick", (e) => {
+      const title = e.target?.closest?.("[data-session-title]");
+      if (!title) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const sid = title.getAttribute("data-session-title") || "default";
+      const row = title.closest("[data-session-id]");
+      const seedBtn = row?.querySelector?.("[data-session-rename-seed]");
+      const seed =
+        seedBtn?.getAttribute?.("data-session-rename-seed") ||
+        title.textContent ||
+        undefined;
+      if (typeof g("beginChatSessionRename") === "function") {
+        call("beginChatSessionRename", sid, seed);
+      } else if (window.ccoChat?.beginChatSessionRename) {
+        window.ccoChat.beginChatSessionRename(sid, seed);
+      }
+    });
+    sessionPanel.addEventListener("keydown", (e) => {
+      if (e.target?.classList?.contains("chat-session-rename-input")) return;
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const row = e.target?.closest?.("[data-session-id]");
+      if (!row || row.classList.contains("is-renaming")) return;
+      e.preventDefault();
+      onPick(row.getAttribute("data-session-id") || "default");
+    });
+  }
+
+  // Refresh list when opening history panel
+  const historyDetails = document.getElementById("chat-session-history");
+  if (historyDetails && !historyDetails.dataset.bound) {
+    historyDetails.dataset.bound = "1";
+    historyDetails.addEventListener("toggle", () => {
+      if (!historyDetails.open) return;
+      if (typeof g("loadChatSessionList") === "function") {
+        Promise.resolve(call("loadChatSessionList")).catch(() => {});
       }
     });
   }

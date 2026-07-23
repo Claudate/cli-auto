@@ -93,6 +93,40 @@ pub fn chat_send(
     // stream bubble cannot paint last reply as if it were the new generation.
     clear_chat_stream_work(project);
 
+    // Local preview intents: never go through Claude Bash (process dies with the turn).
+    // Defense-in-depth even if UI intercept misses ("重新启动" etc.).
+    if atts.is_empty() {
+        if let Some(intent) = detect_local_preview_intent(msg) {
+            let st = match intent {
+                "stop" => crate::services::preview_stop(project),
+                _ => crate::services::preview_start(project),
+            };
+            let reply = match st {
+                Ok(s) => s.message,
+                Err(e) => format!("没打开成功：{e}\n可再试一次「启动本地预览」。"),
+            };
+            sess.messages.push(ChatMessage {
+                role: "assistant".into(),
+                content: reply.clone(),
+                at: Some(Utc::now().to_rfc3339()),
+                attachments: vec![],
+            });
+            if sess.messages.len() > MAX_HISTORY_MSGS {
+                let drop_n = sess.messages.len() - MAX_HISTORY_MSGS;
+                sess.messages.drain(0..drop_n);
+            }
+            save_session(project, &sess)?;
+            return Ok(ChatSendResponse {
+                session_id: sess.session_id.clone(),
+                reply,
+                messages: sess.messages.clone(),
+                draft_plan: sess.draft_plan.clone(),
+                fake: false,
+                env_note: None,
+            });
+        }
+    }
+
     let force_fake = std::env::var("CCO_CHAT_FAKE")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)
@@ -178,4 +212,88 @@ pub fn chat_send(
         fake: used_fake,
         env_note,
     })
+}
+
+/// Short user lines that mean local project preview (not Mode B, not Claude Bash).
+/// Only whole short utterances — never substring-match long plan prose.
+fn detect_local_preview_intent(msg: &str) -> Option<&'static str> {
+    let t = msg.trim();
+    let n = t.chars().count();
+    if t.is_empty() || n > 24 {
+        return None;
+    }
+    // stop first (exact / near-exact)
+    if matches!(
+        t,
+        "关闭服务"
+            | "关掉服务"
+            | "停止预览"
+            | "关掉预览"
+            | "停止服务"
+            | "关闭预览"
+            | "结束预览"
+            | "关闭"
+            | "关掉"
+            | "停止"
+            | "停掉"
+    ) {
+        return Some("stop");
+    }
+    if matches!(
+        t,
+        "启动本地预览"
+            | "启动预览"
+            | "本地预览"
+            | "重新启动"
+            | "重启服务"
+            | "重启预览"
+            | "你来跑"
+            | "启动服务"
+            | "启动项目"
+            | "打开预览"
+            | "起服务"
+            | "跑起来"
+            | "启动"
+            | "开一下"
+            | "跑一下"
+            | "启动一下"
+            | "重启"
+            | "再启动"
+    ) {
+        return Some("start");
+    }
+    None
+}
+
+#[cfg(test)]
+mod preview_intent_tests {
+    use super::detect_local_preview_intent;
+
+    #[test]
+    fn start_phrases() {
+        for s in [
+            "启动本地预览",
+            "重新启动",
+            "你来跑",
+            "重启",
+            "启动服务",
+        ] {
+            assert_eq!(detect_local_preview_intent(s), Some("start"), "{s}");
+        }
+    }
+
+    #[test]
+    fn stop_phrases() {
+        for s in ["关闭服务", "停止预览", "关闭"] {
+            assert_eq!(detect_local_preview_intent(s), Some("stop"), "{s}");
+        }
+    }
+
+    #[test]
+    fn long_plan_text_not_intercepted() {
+        assert_eq!(
+            detect_local_preview_intent("请帮我写一份完整计划：启动本地预览只是其中一步，还要部署"),
+            None
+        );
+    }
 }

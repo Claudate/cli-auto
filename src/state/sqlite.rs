@@ -1,7 +1,7 @@
 //! SQLite store for plan jobs + cco split SoT.
 //!
 //! [INPUT]: Config.state_root · PlanJob · PlanIR · CcoSplitJob
-//! [OUTPUT]: ~/.cco/cco.db — plan_jobs/plan_tasks（过渡索引）+ cco_split_*（拆分 SoT）+ project_last_summary/project_pins（P2-2）
+//! [OUTPUT]: ~/.cco/cco.db — plan_jobs/plan_tasks + cco_split_* + project_last_summary/project_pins + project_ui_prefs
 //! [POS]: state adapter
 //! [PROTOCOL]: 变更时更新此头部与 src/state/CLAUDE.md
 //!
@@ -123,6 +123,17 @@ pub(crate) fn ensure_schema(conn: &Connection) -> Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_project_pins_project
           ON project_pins(project_id, pinned_at DESC);
+
+        -- Per-project UI prefs (dismissed run, etc.) — durable SoT, not memory/localStorage
+        CREATE TABLE IF NOT EXISTS project_ui_prefs (
+          project_id TEXT NOT NULL,
+          key TEXT NOT NULL,
+          value TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (project_id, key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_ui_prefs_project
+          ON project_ui_prefs(project_id);
         "#,
     )?;
     Ok(())

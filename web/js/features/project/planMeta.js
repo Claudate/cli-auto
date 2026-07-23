@@ -271,21 +271,33 @@ export async function loadPlansForPicker() {
         root
       );
     }
-    // 用户手动选的计划若不在扫描结果中，且仍属本项目，置顶保留
-    const selected = normalizePlanPath(state.selectedPlan, root) || state.selectedPlan;
+    // 用户手动选的计划：仅当磁盘仍有源文件时置顶；源已删则清选中（不造幽灵）
+    let selected = normalizePlanPath(state.selectedPlan, root) || state.selectedPlan;
     if (selected && isPlanUnderProject(selected, root) && !list.includes(selected)) {
-      list.unshift(selected);
-      if (!state.planMetaByPath[selected]) {
-        const stub = {
-          path: selected,
-          title: null,
-          ever_completed: false,
-          last_run_status: null,
-          last_run_id: null,
-          last_run_finished_at: null,
-        };
-        state.planMetaItems = [stub, ...(state.planMetaItems || [])];
-        state.planMetaByPath[selected] = stub;
+      let exists = false;
+      try {
+        await requireGateway().readPlanMd(root, selected);
+        exists = true;
+      } catch (_) {
+        exists = false;
+      }
+      if (exists) {
+        list.unshift(selected);
+        if (!state.planMetaByPath[selected]) {
+          const stub = {
+            path: selected,
+            title: null,
+            ever_completed: false,
+            last_run_status: null,
+            last_run_id: null,
+            last_run_finished_at: null,
+          };
+          state.planMetaItems = [stub, ...(state.planMetaItems || [])];
+          state.planMetaByPath[selected] = stub;
+        }
+      } else {
+        state.selectedPlan = null;
+        selected = null;
       }
     }
     // 若当前选中已不在本项目，清掉，避免列表/分配指向别的目录

@@ -32,7 +32,7 @@
 | `status` | `planning` · `planned` · `plan_failed` · `confirmed` · `cancelled` |
 | `project` | 项目根绝对路径 |
 | `plan_path` | 源计划路径 |
-| `plan_mode` | `parse` · `fake` · `ai` |
+| `plan_mode` | `parse` · `fake` · `ai` · `fast` · `direct`（整份计划单任务；仍走 confirm） |
 | `provider` / `exec_mode` | **confirm 后 worker 软默认**（soft-fill 来源） |
 | `run_id` | confirm 后写入 |
 | `task_count` / `max_parallel` / `adapter` | planned 时填充 |

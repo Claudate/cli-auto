@@ -73,22 +73,8 @@ button.btn.primary:disabled {
   cursor: not-allowed;
 }
 
-/* 壳 phase 人话标签（A2 AppViewModel；默认不占主路径第一句） */
+/* 壳 phase 人话角标（A2 曾用于调试；主路径不展示，节点保留 hidden） */
 .cco-app-phase-label {
-  position: fixed;
-  right: var(--space-3);
-  bottom: var(--space-3);
-  z-index: 20;
-  font-size: 0.7rem;
-  color: var(--muted);
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.15rem 0.55rem;
-  pointer-events: none;
-  opacity: 0.85;
-}
-body.cco-window-monitor .cco-app-phase-label {
   display: none !important;
 }
 

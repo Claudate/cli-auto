@@ -390,7 +390,7 @@ pub(super) fn write_proposed(config: &Config, job_id: &str, ir: &PlanIR) -> Resu
                     crate::plan::CcoSplitSource::Llm
                 }
             }
-            "parse" => crate::plan::CcoSplitSource::Parse,
+            "parse" | "direct" => crate::plan::CcoSplitSource::Parse,
             "fake" => crate::plan::CcoSplitSource::Fake,
             _ => crate::plan::CcoSplitSource::Heuristic,
         };

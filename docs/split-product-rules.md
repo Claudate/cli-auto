@@ -33,6 +33,7 @@
 |------|------|
 | **桌面 / CLI 默认 = `ai`** | ModelSplitAgent → 结构化 `cco-split/v1` |
 | **`fast` = 高级 / 显式** | 本地 heuristic；文案禁止「推荐」 |
+| **`direct` = 聊天「直接执行」** | 整份计划 = 单任务（`raw-single`）；**仍** `start_plan_job → confirm_start`；禁止 `start_run` 旁路 |
 | 输出 schema | `cco-split/v1`：id · title · summary · body · depends_on · wave · enabled · optional · done_when · plan_ref · kind · scope_paths… |
 | 主路径依赖字段 | title / body / depends / wave / enabled / optional；高级（provider/role/scope）可空不挡展示 |
 | 禁拆成任务 | 非目标、PROTOCOL、修订历史、纯目录/索引、空话 |

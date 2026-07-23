@@ -125,7 +125,14 @@ export function startChatWaitTicker() {
     paintChatPendingBubble();
     const sendBtn = $("#btn-chat-send");
     if (sendBtn && state.chatBusy) {
-      sendBtn.textContent = state.chatStreamText ? "生成中…" : "思考中…";
+      // Icon-only send: update title/aria only (do not wipe SVG)
+      sendBtn.title = state.chatStreamText
+        ? "正在生成回复…"
+        : "正在等待本机 Claude CLI 回复，请稍候";
+      sendBtn.setAttribute(
+        "aria-label",
+        state.chatStreamText ? "生成中…" : "思考中…"
+      );
     }
   }, 1000);
   // Stream poll slightly faster than wait label (best-effort; spawn_blocking free).
@@ -194,21 +201,22 @@ export function chatSessionLabel(row) {
   return id;
 }
 
-/** 收起「会话…」面板（选中/新建/删除/点空白后） */
+/** 收起历史会话面板（选中/新建/删除/点空白后） */
 export function collapseChatSessionMore() {
-  const el = document.getElementById("chat-session-more");
+  const el =
+    document.getElementById("chat-session-history") ||
+    document.getElementById("chat-session-more");
   if (el && el.tagName === "DETAILS") el.open = false;
 }
 
+/**
+ * History panel list (Claude for VS Code–style).
+ * Also keeps legacy #chat-session-select in sync if still present.
+ */
 export function renderChatSessionSelect() {
   ensureChatState();
-  const sel = $("#chat-session-select");
-  const delBtn = $("#btn-chat-session-del");
-  const newBtn = $("#btn-chat-session-new");
-  if (!sel) return;
   const cur = state.chatSession?.session_id || "default";
   const list = Array.isArray(state.chatSessionList) ? state.chatSessionList : [];
-  // Ensure current is in options even if list lagging
   const ids = new Set(list.map((r) => r.session_id));
   const rows = list.slice();
   if (!ids.has(cur)) {
@@ -218,26 +226,119 @@ export function renderChatSessionSelect() {
       message_count: (state.chatSession?.messages || []).length,
     });
   }
-  const prev = sel.value;
-  sel.innerHTML = rows
-    .map((r) => {
-      const id = chatEsc(r.session_id || "default");
-      const label = chatEsc(chatSessionLabel(r));
-      const n = r.message_count != null ? r.message_count : 0;
-      const suffix = n > 0 ? ` (${n})` : "";
-      return `<option value="${id}">${label}${suffix}</option>`;
-    })
-    .join("");
-  sel.value = ids.has(cur) || rows.some((r) => r.session_id === cur) ? cur : rows[0]?.session_id || "default";
-  // If value set failed (missing option), force
-  if (sel.value !== cur && rows.some((r) => r.session_id === cur)) {
-    sel.value = cur;
+
+  const newBtn = $("#btn-chat-session-new");
+  const newInPanel = $("#btn-chat-session-new-in-panel");
+  const historyBtn = document.querySelector(
+    "#chat-session-history > summary, .chat-session-history-btn"
+  );
+  const busyOrNoPath = !state.selectedPath || !!state.chatBusy;
+  if (newBtn) newBtn.disabled = busyOrNoPath;
+  if (newInPanel) newInPanel.disabled = busyOrNoPath;
+  if (historyBtn) {
+    if (busyOrNoPath || !!state.chatSessionListLoading) {
+      historyBtn.setAttribute("aria-disabled", "true");
+      historyBtn.classList.add("is-disabled");
+    } else {
+      historyBtn.removeAttribute("aria-disabled");
+      historyBtn.classList.remove("is-disabled");
+    }
   }
-  void prev;
-  sel.disabled = !state.selectedPath || !!state.chatBusy || !!state.chatSessionListLoading;
-  if (newBtn) newBtn.disabled = !state.selectedPath || !!state.chatBusy;
+
+  const panelList = $("#chat-session-panel-list");
+  if (panelList) {
+    if (!state.selectedPath) {
+      panelList.innerHTML =
+        `<div class="chat-session-panel-empty muted">请先选择项目</div>`;
+    } else if (state.chatSessionListLoading && !rows.length) {
+      panelList.innerHTML =
+        `<div class="chat-session-panel-empty muted">加载中…</div>`;
+    } else if (!rows.length) {
+      panelList.innerHTML =
+        `<div class="chat-session-panel-empty muted">暂无会话 · 点「新建」开始</div>`;
+    } else {
+      const trashIco =
+        typeof window.ccoIcon === "function"
+          ? window.ccoIcon("trash", { size: 13 })
+          : "";
+      const pencilIco =
+        typeof window.ccoIcon === "function"
+          ? window.ccoIcon("pencil", { size: 13 })
+          : "";
+      panelList.innerHTML = rows
+        .map((r) => {
+          const id = String(r.session_id || "default");
+          const label = chatSessionLabel(r);
+          const n = r.message_count != null ? Number(r.message_count) : 0;
+          const meta =
+            n > 0
+              ? `${n} 条消息`
+              : id === "default"
+                ? "默认会话"
+                : "空会话";
+          const isCur = id === cur;
+          const canEdit = !busyOrNoPath;
+          const canDel =
+            canEdit && !(id === "default" && n === 0 && !list.length);
+          // Prefer raw title for edit seed (not compact date fallback).
+          const editSeed =
+            (r.title && String(r.title).trim()) ||
+            (r.preview && String(r.preview).trim()) ||
+            (r.draft_plan_title && String(r.draft_plan_title).trim()) ||
+            (id === "default" ? "默认" : label);
+          return (
+            `<div class="chat-session-item${isCur ? " is-current" : ""}" ` +
+            `role="option" aria-selected="${isCur ? "true" : "false"}" ` +
+            `data-session-id="${chatEsc(id)}" tabindex="0">` +
+            `<div class="chat-session-item-main">` +
+            `<span class="chat-session-item-title" ` +
+            `data-session-title="${chatEsc(id)}" ` +
+            `title="双击重命名">${chatEsc(label)}</span>` +
+            `<span class="chat-session-item-meta">${chatEsc(meta)}</span>` +
+            `</div>` +
+            `<div class="chat-session-item-actions">` +
+            `<button type="button" class="chat-session-item-rename" ` +
+            `data-session-rename="${chatEsc(id)}" ` +
+            `data-session-rename-seed="${chatEsc(editSeed)}" ` +
+            `title="重命名" aria-label="重命名" ` +
+            `${canEdit ? "" : "disabled"}>${pencilIco}</button>` +
+            `<button type="button" class="chat-session-item-del" ` +
+            `data-session-del="${chatEsc(id)}" ` +
+            `title="${id === "default" ? "清空默认会话" : "删除会话"}" ` +
+            `aria-label="${id === "default" ? "清空默认会话" : "删除会话"}" ` +
+            `${canDel ? "" : "disabled"}>${trashIco}</button>` +
+            `</div>` +
+            `</div>`
+          );
+        })
+        .join("");
+    }
+  }
+
+  // Legacy select (if still in DOM from older shell)
+  const sel = $("#chat-session-select");
+  const delBtn = $("#btn-chat-session-del");
+  if (sel) {
+    sel.innerHTML = rows
+      .map((r) => {
+        const id = chatEsc(r.session_id || "default");
+        const label = chatEsc(chatSessionLabel(r));
+        const n = r.message_count != null ? r.message_count : 0;
+        const suffix = n > 0 ? ` (${n})` : "";
+        return `<option value="${id}">${label}${suffix}</option>`;
+      })
+      .join("");
+    sel.value =
+      ids.has(cur) || rows.some((r) => r.session_id === cur)
+        ? cur
+        : rows[0]?.session_id || "default";
+    if (sel.value !== cur && rows.some((r) => r.session_id === cur)) {
+      sel.value = cur;
+    }
+    sel.disabled =
+      !state.selectedPath || !!state.chatBusy || !!state.chatSessionListLoading;
+  }
   if (delBtn) {
-    // Allow delete always when a session exists; default clears to empty
     delBtn.disabled =
       !state.selectedPath ||
       !!state.chatBusy ||
@@ -316,8 +417,11 @@ export async function newChatSession() {
   }
 }
 
-/** C3: delete current session (confirm), then switch to default or first remaining. */
-export async function deleteChatSession() {
+/**
+ * C3: delete a session by id (confirm), then switch if it was current.
+ * @param {string} [sessionId] omit = current session
+ */
+export async function deleteChatSession(sessionId) {
   ensureChatState();
   if (!state.selectedPath) {
     toast("请先选择项目");
@@ -327,11 +431,12 @@ export async function deleteChatSession() {
     toast("AI 正在回复，请稍后再删");
     return;
   }
-  const sid = state.chatSession?.session_id || "default";
+  const cur = state.chatSession?.session_id || "default";
+  const sid = String(sessionId || cur || "default").trim() || "default";
   const label = chatSessionLabel(
     (state.chatSessionList || []).find((r) => r.session_id === sid) || {
       session_id: sid,
-      title: state.chatSession?.title,
+      title: sid === cur ? state.chatSession?.title : null,
     }
   );
   const ok = window.confirm(
@@ -342,30 +447,32 @@ export async function deleteChatSession() {
   if (!ok) return;
   try {
     await chatApi.deleteSession(state.selectedPath, sid);
-    // Drop cache for this session
     const key = chatCacheKey(state.selectedPath, sid);
     delete state.chatSessions[key];
     if (state.chatSessions[state.selectedPath]?.session_id === sid) {
       delete state.chatSessions[state.selectedPath];
     }
-    // Switch to default (or list head after refresh)
-    state.chatSession = {
-      session_id: "default",
-      messages: [],
-      draft_plan: null,
-      title: null,
-    };
-    state.chatDraftPlan = null;
-    state.chatFake = false;
-    state.chatEnvNote = null;
     toast(sid === "default" ? "已清空默认会话" : "已删除会话");
     await loadChatSessionList();
-    const next =
-      (state.chatSessionList || []).find((r) => r.session_id === "default")
-        ?.session_id ||
-      state.chatSessionList?.[0]?.session_id ||
-      "default";
-    await switchChatSession(next);
+    if (sid === cur) {
+      state.chatSession = {
+        session_id: "default",
+        messages: [],
+        draft_plan: null,
+        title: null,
+      };
+      state.chatDraftPlan = null;
+      state.chatFake = false;
+      state.chatEnvNote = null;
+      const next =
+        (state.chatSessionList || []).find((r) => r.session_id === "default")
+          ?.session_id ||
+        state.chatSessionList?.[0]?.session_id ||
+        "default";
+      await switchChatSession(next);
+    } else {
+      renderChatSessionSelect();
+    }
     collapseChatSessionMore();
   } catch (e) {
     toast(String(e?.message || e));

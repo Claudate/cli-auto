@@ -263,7 +263,7 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
     );
   }
 
-  // B2：主 CTA 始终「拆成步骤」；仅保存 / 重新保存 为 ghost 次按钮
+  // B2：主 CTA 始终「拆成步骤」；「直接执行」= 整份计划单任务开跑（跳过多步拆分台）
   // 已保存且已拆分：只保留路径状态 + 展开全文（避免聊天里重复保存/再拆）
   const canExec = !runLocked && !busy && !!md;
   const assignTitle = runLocked
@@ -271,6 +271,11 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
     : isSaved
       ? "把计划拆成可执行步骤"
       : "先保存到本机计划，再进入拆分台";
+  const directTitle = runLocked
+    ? "运行中，请先停止后再执行"
+    : "不拆成多步，整份计划交给一个窗口直接执行";
+  const directBtn =
+    `<button type="button" class="btn primary sm btn-chat-plan-direct" ${canExec ? "" : "disabled"} title="${directTitle}">直接执行</button>`;
   if (isSaved && alreadySplit) {
     return (
       `<span class="chat-plan-card-saved muted" title="已保存并拆分；改计划请到计划管理或拆分台「重新规划」">已保存：${chatEsc(savedPath)}</span>` +
@@ -285,7 +290,8 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
       `<div class="chat-plan-card-actions-btns">` +
       expand +
       `<button type="button" class="btn ghost sm btn-chat-plan-adopt" ${busy ? "disabled" : ""} title="覆盖保存到本地计划文件">仅保存</button>` +
-      `<button type="button" class="btn primary sm btn-chat-plan-assign" ${canExec ? "" : "disabled"} title="${assignTitle}">拆成步骤</button>` +
+      `<button type="button" class="btn ghost sm btn-chat-plan-assign" ${canExec ? "" : "disabled"} title="${assignTitle}">拆成步骤</button>` +
+      directBtn +
       `</div>`
     );
   }
@@ -294,7 +300,8 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
     `<div class="chat-plan-card-actions-btns">` +
     expand +
     `<button type="button" class="btn ghost sm btn-chat-plan-adopt" ${busy || !md ? "disabled" : ""} title="只保存到本机，暂不拆分">仅保存</button>` +
-    `<button type="button" class="btn primary sm btn-chat-plan-assign" ${canExec ? "" : "disabled"} title="${assignTitle}">拆成步骤</button>` +
+    `<button type="button" class="btn ghost sm btn-chat-plan-assign" ${canExec ? "" : "disabled"} title="${assignTitle}">拆成步骤</button>` +
+    directBtn +
     `</div>`
   );
 }

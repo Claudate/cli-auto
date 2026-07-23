@@ -254,6 +254,65 @@ mod tests {
         assert_eq!(sot2.run_id.as_deref(), Some(run_id.as_str()));
     }
 
+    /// Chat plan-card「直接执行」: whole md → single task → confirm open-run (no multi-split).
+    #[test]
+    fn direct_path_single_task_and_confirm() {
+        let dir = tempdir().unwrap();
+        let project = dir.path().to_path_buf();
+        let plan = project.join("fix.md");
+        std::fs::write(
+            &plan,
+            "# 云山藏 · 展示站修复\n\n## 做\n\n- 修底 CTA\n- 修 Footer 色阶\n",
+        )
+        .unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(cfg.runs_dir()).unwrap();
+
+        let view = start_plan_job(
+            &cfg,
+            StartPlanJobRequest {
+                project: project.clone(),
+                plan: PathBuf::from("fix.md"),
+                plan_mode: Some("direct".into()),
+                provider: Some("fake".into()),
+                mode: Some("print".into()),
+                max_parallel: Some(4),
+                preserve_from_job_id: None,
+                grain_hint: None,
+                effort: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(view.status, "planned", "err={:?}", view.error);
+        assert_eq!(view.plan_mode, "direct");
+        // Whole document is one business task (system post may append optionals).
+        let business: Vec<_> = view
+            .tasks
+            .iter()
+            .filter(|t| !crate::domain::plan::is_system_post_task(&t.id))
+            .collect();
+        assert_eq!(business.len(), 1, "business tasks={:?}", business);
+        assert!(
+            business[0].title.contains("云山藏") || business[0].title.contains("展示站"),
+            "title={}",
+            business[0].title
+        );
+        let ir = crate::plan::planner::load_proposed(&cfg, &view.job_id).unwrap();
+        // SoT round-trip tags adapter as cco-split/{source}; still one business task.
+        assert_eq!(ir.max_parallel, 1);
+        assert_eq!(
+            ir.tasks
+                .iter()
+                .filter(|t| !crate::domain::plan::is_system_post_task(&t.id))
+                .count(),
+            1
+        );
+
+        let run_id = crate::app::split::confirm(cfg.clone(), &view.job_id, None).unwrap();
+        assert!(!run_id.is_empty());
+    }
+
     /// Clear fixture env even if test panics mid-way.
     struct EnvClearGuard;
     impl Drop for EnvClearGuard {

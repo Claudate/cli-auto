@@ -27,6 +27,10 @@ pub struct ProjectSummary {
     pub total_tasks: usize,
     pub last_run_id: Option<String>,
     pub last_status: Option<String>,
+    /// True when last_run_id was user-dismissed via「结束计划」(SQLite SoT).
+    /// Sidebar must not treat it as「可续跑」current round.
+    #[serde(default)]
+    pub last_dismissed: bool,
     pub default_plan: Option<String>,
     pub last_plan: Option<String>,
 }
@@ -47,16 +51,26 @@ pub fn list_projects(config: &Config) -> Result<Vec<ProjectSummary>> {
             .collect();
         // already newest-first from list_runs
         let last = for_proj.first().copied();
+        let dismissed =
+            crate::state::project_ui::try_get_dismissed_run_id(config, &p.path);
+        let last_dismissed = match (last, dismissed.as_deref()) {
+            (Some(l), Some(d)) if l.run_id == d => true,
+            _ => false,
+        };
         // Live only: do NOT promote an older `paused` run over a newer completed one.
         // Paused is a terminal-ish desk state of the *latest* run (stop_task left
         // pending siblings); surface it via last_status, not active_*.
+        // Also never promote a dismissed terminal run as "active".
         let active = for_proj
             .iter()
             .find(|r| {
                 matches!(
                     r.status.as_str(),
-                    "running" | "validated" | "init"
-                )
+                    "running" | "validated" | "init" | "starting" | "queued" | "resuming"
+                ) && dismissed
+                    .as_deref()
+                    .map(|d| d != r.run_id.as_str())
+                    .unwrap_or(true)
             })
             .copied();
 
@@ -85,6 +99,7 @@ pub fn list_projects(config: &Config) -> Result<Vec<ProjectSummary>> {
             total_tasks,
             last_run_id: last.map(|l| l.run_id.clone()),
             last_status: last.map(|l| l.status.clone()),
+            last_dismissed,
             default_plan: p.default_plan.as_ref().map(|s| s.display().to_string()),
             last_plan: p.last_plan.as_ref().map(|s| s.display().to_string()),
         });

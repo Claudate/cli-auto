@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# [INPUT]: 可选站点根路径；环境 STRICT=1 · SCAN_DIST=1 · SCAN_MD=1 · SKIP_G1=1
-# [OUTPUT]: 落地页假资产 / 页脚主 CTA 等门禁；默认 WARN 不失败，STRICT 升级
+# [INPUT]: 可选站点根路径；环境 STRICT=1 · SCAN_DIST=1 · SCAN_MD=1 · SKIP_G1=1 · SKIP_G7=1
+# [OUTPUT]: 落地页假资产 / 占位图 / 页脚主 CTA 等门禁；默认 WARN 不失败，STRICT 升级
 # [POS]: scripts/ 与 docs/runtime-prompts/landing-gates.md
 # [PROTOCOL]: 变更时更新 docs/runtime-prompts/landing-gates.md 与 scripts/CLAUDE.md
 # 兼容 macOS bash 3.2（不用 mapfile）
@@ -29,6 +29,7 @@ STRICT="${STRICT:-0}"
 SCAN_DIST="${SCAN_DIST:-0}"
 SCAN_MD="${SCAN_MD:-0}"
 SKIP_G1="${SKIP_G1:-0}"
+SKIP_G7="${SKIP_G7:-0}"
 
 WARN=0
 FAIL=0
@@ -84,6 +85,21 @@ if [[ "$SKIP_G1" != "1" && "$FILE_COUNT" -gt 0 ]]; then
   fi
 else
   note "G1/G2 skipped (SKIP_G1=1 or no files)"
+fi
+
+# --- G7: placeholder image services / filenames (not real stock/generated art) ---
+if [[ "$SKIP_G7" != "1" && "$FILE_COUNT" -gt 0 ]]; then
+  # Services + common placeholder paths/filenames; allow picsum/unsplash/pexels (real photos).
+  g7_pat='placehold\.co|placehold\.it|via\.placeholder\.com|placeholder\.com|dummyimage\.com|fakeimg\.pl|placekitten\.com|placecats\.com|lorempixel\.com|placeimg\.com|placeholder\.(png|jpe?g|gif|webp|svg)|/placeholders?/|images/placeholder|img/placeholder|图片占位|Image [Pp]laceholder|your[-_ ]?image[-_ ]?here'
+  hits7="$(printf '%s\n' "$FILE_LIST" | tr '\n' '\0' | xargs -0 grep -n -E -i "$g7_pat" 2>/dev/null | head -n 40 || true)"
+  if [[ -n "${hits7:-}" ]]; then
+    fail "G7 placeholder image service or filename (use stock URL, generated asset, or brand art; SKIP_G7=1 only for explicit demos)"
+    note "$hits7" | head -n 15
+  else
+    note "G7 ok: no common placeholder-image markers"
+  fi
+else
+  note "G7 skipped (SKIP_G7=1 or no files)"
 fi
 
 # --- G5: h1 on index-like files (or hero child when index only composes) ---
