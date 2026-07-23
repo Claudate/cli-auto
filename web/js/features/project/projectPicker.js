@@ -84,29 +84,28 @@ export function setAssignBusy(busy) {
       }
     }
   }
-  // Dynamic plan-card CTAs (chat reply footer) — same busy lock as sticky assign
-  const cardAssigns = document.querySelectorAll(
-    ".btn-chat-plan-assign, .btn-chat-plan-direct"
-  );
-  for (const btn of cardAssigns) {
-    const defaultLabel = btn.classList.contains("btn-chat-plan-direct")
-      ? "直接执行"
-      : "拆成步骤";
-    if (busy) {
-      btn.disabled = true;
-      btn.classList.add("is-busy");
-      if (!btn.dataset.label) btn.dataset.label = btn.textContent || defaultLabel;
-      btn.innerHTML =
-        '<span class="spinner sm" aria-hidden="true"></span><span>处理中…</span>';
-    } else {
+  // Plan-card CTAs: busy/live only — never require chatDraftPlan (unsaved
+  // fences clear that path on purpose; card body still saves on click).
+  document
+    .querySelectorAll(".btn-chat-plan-assign, .btn-chat-plan-direct")
+    .forEach((btn) => {
+      const def = btn.classList.contains("btn-chat-plan-direct")
+        ? "直接执行"
+        : "拆成步骤";
+      if (busy) {
+        btn.disabled = true;
+        btn.classList.add("is-busy");
+        if (!btn.dataset.label) btn.dataset.label = btn.textContent || def;
+        btn.innerHTML =
+          '<span class="spinner sm" aria-hidden="true"></span><span>处理中…</span>';
+        return;
+      }
       btn.classList.remove("is-busy");
-      const active = isLiveStatus(state.live?.run_status);
-      const label = btn.dataset.label || defaultLabel;
-      btn.textContent = active ? "运行中…" : label;
+      const live = isLiveStatus(state.live?.run_status);
+      btn.textContent = live ? "运行中…" : btn.dataset.label || def;
       delete btn.dataset.label;
-      btn.disabled = !state.chatDraftPlan || !!active;
-    }
-  }
+      btn.disabled = !!live;
+    });
 }
 
 /**

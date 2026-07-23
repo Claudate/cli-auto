@@ -87,16 +87,11 @@ export function renderChatMessages() {
     }
     return;
   }
-  // Only the last assistant message's plan card gets save/execute CTAs
-  let lastAssistantIdx = -1;
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i]?.role === "assistant") {
-      lastAssistantIdx = i;
-      break;
-    }
-  }
+  // Every assistant ```plan card stays actionable until saved+alreadySplit
+  // (or stream partials, which force activePlan:false). Earlier "last assistant
+  // only" froze unexecuted drafts after any later AI turn / preview reply.
   let html = msgs
-    .map((m, mi) => {
+    .map((m) => {
       const role = m.role === "assistant" ? "assistant" : m.role === "system" ? "system" : "user";
       const label = role === "assistant" ? "AI" : role === "system" ? "系统" : "我";
       const atts = Array.isArray(m.attachments) ? m.attachments : [];
@@ -125,7 +120,7 @@ export function renderChatMessages() {
             })
             .join("")}</div>`
         : "";
-      const activePlan = role === "assistant" && mi === lastAssistantIdx;
+      const activePlan = role === "assistant";
       return `<div class="chat-msg chat-msg-${role}">
         <div class="chat-msg-role">${label}</div>
         <div class="chat-msg-body md-body">${chatFormatBody(m.content || "", { activePlan })}${attHtml}</div>

@@ -23,6 +23,7 @@ function stashChatSession(...a) { return _chatCall("stashChatSession", ...a); }
 function restoreChatSession(...a) { return _chatCall("restoreChatSession", ...a); }
 function openChatPage(...a) { return _chatCall("openChatPage", ...a); }
 function renderChatPage(...a) { return _chatCall("renderChatPage", ...a); }
+function renderChatMessages(...a) { return _chatCall("renderChatMessages", ...a); }
 function sendChatMessage(...a) { return _chatCall("sendChatMessage", ...a); }
 function saveChatPlan(...a) { return _chatCall("saveChatPlan", ...a); }
 function assignFromChat(...a) { return _chatCall("assignFromChat", ...a); }

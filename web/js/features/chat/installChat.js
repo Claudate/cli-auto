@@ -72,6 +72,7 @@ export function createChatDesk(opts = {}) {
     restoreChatSession: chatState.restoreChatSession,
     openChatPage: chatActions.openChatPage,
     renderChatPage: chatActions.renderChatPage,
+    renderChatMessages: chatActions.renderChatMessages,
     sendChatMessage: chatActions.sendChatMessage,
     saveChatPlan: chatActions.saveChatPlan,
     assignFromChat: chatActions.assignFromChat,

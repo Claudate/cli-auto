@@ -97,23 +97,38 @@ export async function loadLive() {
     } catch (_) {}
   }
   ensureSelectedTask();
-  try {
-    renderWorkspace();
-  } catch (_) {}
+  const onChat = state.page === "chat";
+  // Chat: do not run workspace shell (avoids selectedPlan steal from live).
+  if (!onChat) {
+    try {
+      renderWorkspace();
+    } catch (_) {}
+  }
   if (prevLive !== nowLive) {
     try {
       renderProjectList();
     } catch (_) {}
+    if (!onChat) {
+      try {
+        host.renderPlanPicker();
+      } catch (_) {}
+      try {
+        host.updateSplitPlanChip();
+      } catch (_) {}
+    }
+    if (onChat) {
+      try {
+        (window.renderChatMessages || window.renderChatPage)?.();
+      } catch (_) {}
+    }
+  } else if (!onChat) {
     try {
       host.renderPlanPicker();
     } catch (_) {}
     try {
-      host.updateSplitPlanChip();
+      host.updateBgPlanBanner();
     } catch (_) {}
   } else {
-    try {
-      host.renderPlanPicker();
-    } catch (_) {}
     try {
       host.updateBgPlanBanner();
     } catch (_) {}

@@ -1,6 +1,6 @@
 /**
  * [INPUT]: gateway.getProjectLive · legacy window helpers (phase / poll / render)
- * [OUTPUT]: loadLive + ensureSelectedTask（workspace 轮询壳）
+ * [OUTPUT]: loadLive + ensureSelectedTask（workspace 轮询壳；run-lock 翻转时刷 chat CTA）
  * [POS]: A5-2b 自 plan.js 抽出；IPC 只经 gateway；不写 confirm / start_run
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
@@ -157,14 +157,35 @@ export async function loadLive(deps = {}) {
     }
   };
 
-  call(deps.renderWorkspace, "renderWorkspace");
+  // Chat poll: only refresh live SoT + card CTAs. Skip renderWorkspace so a
+  // finished B-run cannot rewrite selectedPlan / phase panels under the author.
+  const onChat = state.page === "chat";
+  if (!onChat) {
+    call(deps.renderWorkspace, "renderWorkspace");
+  }
 
   if (prevLive !== nowLive) {
     call(deps.renderProjectList, "renderProjectList");
+    if (!onChat) {
+      call(deps.renderPlanPicker, "renderPlanPicker");
+      call(deps.updateSplitPlanChip, "updateSplitPlanChip");
+    }
+    // Run lock toggles canExec on plan-card CTAs — re-paint without openChatPage.
+    if (onChat) {
+      call(deps.renderChatMessages, "renderChatMessages");
+      if (
+        !(
+          typeof deps.renderChatMessages === "function" ||
+          typeof w.renderChatMessages === "function"
+        )
+      ) {
+        call(deps.renderChatPage, "renderChatPage");
+      }
+    }
+  } else if (!onChat && state.page !== "workspace") {
     call(deps.renderPlanPicker, "renderPlanPicker");
-    call(deps.updateSplitPlanChip, "updateSplitPlanChip");
-  } else if (state.page !== "workspace") {
-    call(deps.renderPlanPicker, "renderPlanPicker");
+    call(deps.updateBgPlanBanner, "updateBgPlanBanner");
+  } else if (!onChat) {
     call(deps.updateBgPlanBanner, "updateBgPlanBanner");
   } else {
     call(deps.updateBgPlanBanner, "updateBgPlanBanner");

@@ -160,6 +160,39 @@ export function attachDocumentClick(deps) {
         return;
       }
 
+      // Plan-card「查看拆分结果」— same restore path as plansMgmt / planRail
+      const planViewSplit = e.target?.closest?.(".btn-chat-plan-view-split");
+      if (planViewSplit) {
+        e.preventDefault();
+        e.stopPropagation();
+        const p =
+          planViewSplit.getAttribute("data-plan-path") ||
+          planViewSplit.dataset?.planPath ||
+          "";
+        if (!p) {
+          toast("找不到计划路径");
+          return;
+        }
+        if (typeof g("viewSplitFromPlanRail") === "function") {
+          Promise.resolve(call("viewSplitFromPlanRail", p)).catch((err) =>
+            toast(String(err?.message || err))
+          );
+        } else if (window.ccoChat?.viewSplitFromPlanRail) {
+          Promise.resolve(window.ccoChat.viewSplitFromPlanRail(p)).catch((err) =>
+            toast(String(err?.message || err))
+          );
+        } else if (typeof g("tryRestorePlanJobForPlan") === "function") {
+          Promise.resolve(call("tryRestorePlanJobForPlan", p)).then((ok) => {
+            if (ok && typeof g("showSplitPlanConfirm") === "function") {
+              call("showSplitPlanConfirm", { keepReturn: true });
+            }
+          }).catch((err) => toast(String(err?.message || err)));
+        } else {
+          toast("查看拆分结果不可用");
+        }
+        return;
+      }
+
       // shell-chrome C1：rail「查看拆分结果」— 勿当选中整行
       const railView = e.target?.closest?.("[data-plan-rail-view]");
       if (railView) {

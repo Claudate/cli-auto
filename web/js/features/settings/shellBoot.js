@@ -1,6 +1,6 @@
 /**
  * [INPUT]: settingsApi · classic globals (loadProjects/selectProject/…)
- * [OUTPUT]: startPolling · openMonitorWindow · boot · waitTauri
+ * [OUTPUT]: startPolling（含 chat 页 loadLive）· openMonitorWindow · boot · waitTauri
  * [POS]: A5-2d features/settings — 冷启动壳；IPC 只经 settingsApi
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -44,6 +44,12 @@ export function startPolling(intervalMs = 2000) {
       if (typeof window.loadProjects === "function") {
         window.loadProjects().catch(() => {});
       }
+      if (typeof window.loadLive === "function") {
+        window.loadLive().catch(() => {});
+      }
+    } else if (st.page === "chat" && st.selectedPath) {
+      // Keep live SoT fresh while authoring so plan-card canExec unlocks when
+      // a background / other-desk run ends (loadLive re-paints chat on lock flip).
       if (typeof window.loadLive === "function") {
         window.loadLive().catch(() => {});
       }

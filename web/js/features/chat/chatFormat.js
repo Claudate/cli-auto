@@ -1,6 +1,6 @@
 /**
  * [INPUT]: legacy.state · host.saveChatPlan · shared/markdown · planSplit index/job
- * [OUTPUT]: fence parse · plan cards · format · expand/adopt · hide save/split when already split
+ * [OUTPUT]: fence parse · plan cards · format · expand/adopt · already-split → 查看拆分结果
  * [POS]: A5-2a features/chat/chatFormat.js
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -223,7 +223,8 @@ export function chatPlanPathHasSplit(planPath) {
 /**
  * Footer CTAs live on the plan card (not sticky ready-bar).
  * @param {string} md
- * @param {{ active?: boolean }} opts  active = latest plan in latest assistant reply
+ * @param {{ active?: boolean }} opts  active=false only for stream partials;
+ *   finished assistant cards stay actionable until saved+alreadySplit
  */
 export function chatPlanCardActionsHtml(md, opts = {}) {
   ensureChatState();
@@ -254,7 +255,7 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
   const expand =
     `<button type="button" class="btn ghost sm btn-chat-plan-expand">展开全文</button>`;
 
-  // Historical plan cards: expand only (no sticky-like duplicate CTAs)
+  // Stream partials only: expand while fence incomplete (no save/exec yet)
   if (!active) {
     return (
       `<div class="chat-plan-card-actions-btns">` +
@@ -264,7 +265,7 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
   }
 
   // B2：主 CTA 始终「拆成步骤」；「直接执行」= 整份计划单任务开跑（跳过多步拆分台）
-  // 已保存且已拆分：只保留路径状态 + 展开全文（避免聊天里重复保存/再拆）
+  // 已保存且已拆分：路径 + 展开 +「查看拆分结果」（不在聊天重复拆）
   const canExec = !runLocked && !busy && !!md;
   const assignTitle = runLocked
     ? "运行中，请先停止后再拆分"
@@ -281,6 +282,7 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
       `<span class="chat-plan-card-saved muted" title="已保存并拆分；改计划请到计划管理或拆分台「重新规划」">已保存：${chatEsc(savedPath)}</span>` +
       `<div class="chat-plan-card-actions-btns">` +
       expand +
+      `<button type="button" class="btn ghost sm btn-chat-plan-view-split" data-plan-path="${chatEsc(savedPath)}" title="打开拆分台查看结果">查看拆分结果</button>` +
       `</div>`
     );
   }
@@ -345,23 +347,18 @@ export function chatPlanCardRaw(card) {
 
 /**
  * @param {string} text
- * @param {{ activePlan?: boolean }} opts  when true, last ```plan in this body gets save/exec CTAs
+ * @param {{ activePlan?: boolean }} opts  when true, every ```plan fence gets save/exec CTAs
+ *   (stream path forces false). Multiple fences in one reply are all actionable.
  */
 export function chatFormatBody(text, opts = {}) {
   // Parse fences on raw text first (nesting-aware): plan → card, code → pre,
   // remaining prose → shared renderMarkdown (headings / tables / lists / hr).
   const segs = chatSegmentMarkdown(text);
-  let lastPlanIdx = -1;
-  if (opts.activePlan) {
-    for (let i = 0; i < segs.length; i++) {
-      if (segs[i].type === "plan") lastPlanIdx = i;
-    }
-  }
   return segs
-    .map((seg, i) => {
+    .map((seg) => {
       if (seg.type === "plan") {
         return chatFormatPlanCard(seg.body, {
-          active: opts.activePlan && i === lastPlanIdx,
+          active: !!opts.activePlan,
         });
       }
       if (seg.type === "code") {
