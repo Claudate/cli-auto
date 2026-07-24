@@ -55,9 +55,22 @@ fn task_from_ir(ord: i32, t: &TaskIR) -> CcoSplitTask {
     } else {
         CcoTaskKind::Do
     };
+    // H2: split human vs shell. Runnable acceptance/verify → verify_cmd;
+    // non-runnable acceptance → done_when; parse body for more human criteria.
+    let verify_cmd = t
+        .verify_cmd
+        .clone()
+        .filter(|s| crate::domain::plan::is_runnable_verify(s))
+        .or_else(|| {
+            t.acceptance
+                .clone()
+                .filter(|s| crate::domain::plan::is_runnable_verify(s))
+        });
     let done_when = t
         .acceptance
-        .clone()
+        .as_ref()
+        .filter(|s| !crate::domain::plan::is_runnable_verify(s))
+        .cloned()
         .or_else(|| super::humanize::parse_done_when(&t.prompt));
     let summary = super::humanize::human_summary(
         &t.title,
@@ -113,6 +126,7 @@ fn task_from_ir(ord: i32, t: &TaskIR) -> CcoSplitTask {
         enabled: if t.optional { t.include } else { true },
         optional: t.optional,
         done_when,
+        verify_cmd,
         plan_ref: t.group.clone(),
         kind,
         status: CcoTaskStatus::Pending,
@@ -247,7 +261,30 @@ fn task_to_ir(t: &CcoSplitTask, default_provider: &str, default_mode: &str) -> T
         provider,
         mode,
         prompt,
-        acceptance: t.done_when.clone(),
+        // H2: verify_cmd is the only shell slot; acceptance kept for wire compat
+        // (same runnable value) so old tools still see a command when present.
+        verify_cmd: t
+            .verify_cmd
+            .as_ref()
+            .filter(|s| crate::domain::plan::is_runnable_verify(s))
+            .cloned()
+            .or_else(|| {
+                t.done_when
+                    .as_ref()
+                    .filter(|s| crate::domain::plan::is_runnable_verify(s))
+                    .cloned()
+            }),
+        acceptance: t
+            .verify_cmd
+            .as_ref()
+            .filter(|s| crate::domain::plan::is_runnable_verify(s))
+            .cloned()
+            .or_else(|| {
+                t.done_when
+                    .as_ref()
+                    .filter(|s| crate::domain::plan::is_runnable_verify(s))
+                    .cloned()
+            }),
         timeout_secs: None,
         worktree,
         provider_opts,

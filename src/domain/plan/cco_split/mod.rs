@@ -45,6 +45,7 @@ mod tests {
             enabled: true,
             optional: false,
             done_when: None,
+            verify_cmd: None,
             plan_ref: None,
             kind: CcoTaskKind::Do,
             status: CcoTaskStatus::Pending,
@@ -132,6 +133,7 @@ mod tests {
                 provider: "claude".into(),
                 mode: "print".into(),
                 prompt: "body one\nmore".into(),
+                verify_cmd: None,
                 acceptance: Some("file exists".into()),
                 timeout_secs: None,
                 worktree: Some(false),
@@ -173,6 +175,101 @@ mod tests {
                 .map(|s| s.paths.clone())
                 .unwrap_or_default(),
             vec!["src/".to_string()]
+        );
+        // H0-2b: prose "file exists" stays on done_when, not TaskIR.acceptance
+        assert!(back.tasks[0].acceptance.is_none());
+    }
+
+    #[test]
+    fn to_plan_ir_shell_done_when_enters_acceptance() {
+        let mut t = sample_task("s1", &[]);
+        t.done_when = Some("test -f MARKER.txt".into());
+        let doc = CcoSplitJob {
+            job_id: "j-shell".into(),
+            project: PathBuf::from("/p"),
+            plan_path: PathBuf::from("docs/x.md"),
+            status: CcoSplitStatus::Ready,
+            title: "shell".into(),
+            max_parallel: 1,
+            source: CcoSplitSource::Manual,
+            error: None,
+            run_id: None,
+            created_at: "t0".into(),
+            updated_at: "t0".into(),
+            tasks: vec![t],
+        };
+        let ir = to_plan_ir(&doc, "claude", "print");
+        assert_eq!(
+            ir.tasks[0].acceptance.as_deref(),
+            Some("test -f MARKER.txt")
+        );
+    }
+
+    #[test]
+    fn to_plan_ir_chinese_done_when_skips_acceptance() {
+        let mut t = sample_task("h1", &[]);
+        t.done_when = Some("存在 VERDICT 与 ISSUES；阻塞项必须 FAIL".into());
+        let doc = CcoSplitJob {
+            job_id: "j-human".into(),
+            project: PathBuf::from("/p"),
+            plan_path: PathBuf::from("docs/x.md"),
+            status: CcoSplitStatus::Ready,
+            title: "human".into(),
+            max_parallel: 1,
+            source: CcoSplitSource::Llm,
+            error: None,
+            run_id: None,
+            created_at: "t0".into(),
+            updated_at: "t0".into(),
+            tasks: vec![t],
+        };
+        let ir = to_plan_ir(&doc, "claude", "print");
+        assert!(
+            ir.tasks[0].acceptance.is_none(),
+            "human done_when must not enter sh -c slot"
+        );
+        assert!(ir.tasks[0].verify_cmd.is_none());
+    }
+
+    #[test]
+    fn dual_fields_done_when_and_verify_cmd() {
+        let mut t = sample_task("d1", &[]);
+        t.done_when = Some("页面可打开且无红错".into());
+        t.verify_cmd = Some("test -f MARKER.txt".into());
+        let doc = CcoSplitJob {
+            job_id: "j-dual".into(),
+            project: PathBuf::from("/p"),
+            plan_path: PathBuf::from("docs/x.md"),
+            status: CcoSplitStatus::Ready,
+            title: "dual".into(),
+            max_parallel: 1,
+            source: CcoSplitSource::Manual,
+            error: None,
+            run_id: None,
+            created_at: "t0".into(),
+            updated_at: "t0".into(),
+            tasks: vec![t],
+        };
+        let ir = to_plan_ir(&doc, "claude", "print");
+        assert_eq!(ir.tasks[0].verify_cmd.as_deref(), Some("test -f MARKER.txt"));
+        assert_eq!(
+            ir.tasks[0].effective_verify_cmd(),
+            Some("test -f MARKER.txt")
+        );
+        // from_plan_ir: shell stays verify; human not invented from shell
+        let back = from_plan_ir(
+            "j2",
+            PathBuf::from("/p"),
+            PathBuf::from("docs/x.md"),
+            &ir,
+            CcoSplitSource::Manual,
+            CcoSplitStatus::Ready,
+            "t0",
+            "t0",
+        );
+        assert_eq!(
+            back.tasks[0].verify_cmd.as_deref(),
+            Some("test -f MARKER.txt")
         );
     }
 

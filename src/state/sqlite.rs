@@ -96,6 +96,7 @@ pub(crate) fn ensure_schema(conn: &Connection) -> Result<()> {
           enabled INTEGER NOT NULL DEFAULT 1,
           optional INTEGER NOT NULL DEFAULT 0,
           done_when TEXT,
+          verify_cmd TEXT,
           plan_ref TEXT,
           kind TEXT NOT NULL DEFAULT 'do',
           status TEXT NOT NULL DEFAULT 'pending',
@@ -136,6 +137,31 @@ pub(crate) fn ensure_schema(conn: &Connection) -> Result<()> {
           ON project_ui_prefs(project_id);
         "#,
     )?;
+    // H2: additive columns on existing DBs (CREATE IF NOT EXISTS alone is not enough).
+    ensure_column(conn, "cco_split_tasks", "verify_cmd", "TEXT")?;
+    Ok(())
+}
+
+/// `PRAGMA table_info` + `ALTER TABLE … ADD COLUMN` when missing (H2 migration).
+pub(crate) fn ensure_column(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    decl: &str,
+) -> Result<()> {
+    // table/column/decl are internal constants only — not user input.
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let names: Vec<String> = stmt
+        .query_map([], |r| r.get::<_, String>(1))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    if names.iter().any(|n| n == column) {
+        return Ok(());
+    }
+    conn.execute(
+        &format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"),
+        [],
+    )
+    .with_context(|| format!("add column {table}.{column}"))?;
     Ok(())
 }
 
@@ -492,6 +518,7 @@ mod tests {
                     provider: "claude".into(),
                     mode: "print".into(),
                     prompt: "do one".into(),
+                    verify_cmd: None,
                     acceptance: None,
                     timeout_secs: None,
                     worktree: Some(false),
@@ -511,6 +538,7 @@ mod tests {
                     provider: "claude".into(),
                     mode: "print".into(),
                     prompt: "do two".into(),
+                    verify_cmd: None,
                     acceptance: None,
                     timeout_secs: None,
                     worktree: Some(false),

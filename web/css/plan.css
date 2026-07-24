@@ -1319,6 +1319,17 @@
   color: #1a7f37;
   border-color: #c9ecd4;
 }
+/* H1: shared status sentence under title row */
+.status-one-liner {
+  margin: 0.15rem 0 0.35rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.status-one-liner[hidden] {
+  display: none !important;
+}
 .task-dash-kpis {
   display: flex;
   align-items: stretch;
@@ -1503,6 +1514,14 @@
 }
 .result-desk-item.is-done .result-desk-mark { color: #1a7f37; }
 .result-desk-item.is-issue .result-desk-mark { color: #b54708; }
+.result-desk-merge {
+  margin: 0.35rem 0 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.result-desk-merge[hidden] {
+  display: none !important;
+}
 .result-desk-honest {
   margin: 0.45rem 0 0;
   font-size: 0.8rem;

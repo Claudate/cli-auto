@@ -243,6 +243,19 @@ export function bindResultView(vm, bridge = {}) {
       honest.textContent = h.text;
     }
 
+    // H3-1: merge_check one-liner (app DTO only; no JS strategy)
+    const mergeEl = $("result-desk-merge-check");
+    if (mergeEl) {
+      const mc = (live && (live.merge_check || live.mergeCheck)) || "";
+      if (mc) {
+        mergeEl.hidden = false;
+        mergeEl.textContent = String(mc);
+      } else {
+        mergeEl.hidden = true;
+        mergeEl.textContent = "";
+      }
+    }
+
     // P2-1: plan checklist vs inspect side-by-side (live.verification DTO)
     renderVerificationPanel(live?.verification);
 

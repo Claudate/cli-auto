@@ -50,6 +50,7 @@ fn sample_task(id: &str, prompt: &str) -> TaskIR {
         provider: "sdk".into(),
         mode: "print".into(),
         prompt: prompt.into(),
+        verify_cmd: None,
         acceptance: None,
         timeout_secs: None,
         worktree: None,

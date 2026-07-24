@@ -411,6 +411,7 @@ mod tests {
             provider: "sdk".into(),
             mode: "print".into(),
             prompt: prompt.into(),
+            verify_cmd: None,
             acceptance: None,
             timeout_secs: None,
             worktree: None,

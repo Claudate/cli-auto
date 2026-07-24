@@ -210,6 +210,7 @@ mod tests {
             provider: "claude".into(),
             mode: "print".into(),
             prompt: format!("do {id}"),
+            verify_cmd: None,
             acceptance: None,
             timeout_secs: None,
             worktree: Some(false),

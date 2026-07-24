@@ -161,9 +161,54 @@ export function bindRunView(vm, bridge = {}) {
     const heading = $("task-dash-heading");
     if (heading && !finished) heading.textContent = "执行进度";
 
+    // H1-3: bind app-composed status_one_liner when present (no JS strategy).
+    const oneLiner = $("status-one-liner") || $("result-status-line");
+    if (oneLiner) {
+      const line =
+        (live && (live.status_one_liner || live.statusOneLiner)) || "";
+      if (line) {
+        oneLiner.hidden = false;
+        oneLiner.textContent = String(line).replace(/\*\*/g, "");
+      } else {
+        oneLiner.hidden = true;
+        oneLiner.textContent = "";
+      }
+    }
+
     const pill = $("run-status-pill");
     if (pill) {
-      if (active) {
+      const line =
+        live && (live.status_one_liner || live.statusOneLiner);
+      if (line) {
+        pill.hidden = false;
+        // Short badge still uses five-state; full sentence lives in status-one-liner when present.
+        if (active) {
+          pill.textContent =
+            stall > 0
+              ? "有步骤卡住"
+              : run > 0
+                ? "进行中"
+                : wait > 0
+                  ? "排队中"
+                  : "执行中";
+          pill.className =
+            "run-status-pill" +
+            (stall > 0 ? " is-stall" : run > 0 ? " is-run" : "");
+        } else if (finished) {
+          if (fail > 0) {
+            pill.textContent = "有失败";
+            pill.className = "run-status-pill is-fail";
+          } else if (runAborted || stop > 0) {
+            pill.textContent = "已中止";
+            pill.className = "run-status-pill is-stop";
+          } else {
+            pill.textContent = "已结束";
+            pill.className = "run-status-pill is-done";
+          }
+        } else {
+          pill.hidden = true;
+        }
+      } else if (active) {
         pill.hidden = false;
         pill.textContent =
           stall > 0

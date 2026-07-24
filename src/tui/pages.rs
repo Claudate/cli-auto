@@ -53,8 +53,11 @@ fn render_dashboard(frame: &mut Frame, app: &App, area: Rect) {
         .filter(|t| matches!(t.status, TaskStatus::Failed | TaskStatus::Timeout))
         .count();
 
+    // H1-4: shared StatusOneLiner as first line (same generator as CLI/desktop).
+    let one = crate::app::run::from_run_state(st);
     let head = format!(
-        "run {}  status {:?}  project {}\nplan {}\nadapter {}  tasks {}  running {}  done {}  failed {}  cost ${:.4}\nrun_dir {}",
+        "{}\nrun {}  status {:?}  project {}\nplan {}\nadapter {}  tasks {}  running {}  done {}  failed {}  cost ${:.4}\nrun_dir {}",
+        one.text.replace("**", ""),
         st.run_id,
         st.status,
         st.project_root.display(),

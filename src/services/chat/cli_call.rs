@@ -237,6 +237,7 @@ pub(crate) fn call_claude_chat(
         provider: "claude".into(),
         mode: "print".into(),
         prompt,
+        verify_cmd: None,
         acceptance: None,
         // Wall-clock only (process timeout). Chat must NOT pass --max-turns /
         // --max-budget-usd: null omits those flags so Claude is not turn-capped.
@@ -367,6 +368,7 @@ pub(crate) fn call_claude_normalize(
         provider: "claude".into(),
         mode: "print".into(),
         prompt: prompt.to_string(),
+        verify_cmd: None,
         acceptance: None,
         timeout_secs: Some(120),
         worktree: Some(false),

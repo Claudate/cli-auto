@@ -15,6 +15,8 @@ pub fn run(config: &Config, run_id: Option<String>) -> Result<i32> {
     let dir = state::resolve_run_dir(&config.runs_dir(), run_id.as_deref())?;
     // Prefer app query; dir already resolved for "latest" default.
     let st = run_uc::load_by_dir(&dir)?;
+    // H0-5 / H1-4: first line shared StatusOneLiner; machine fields follow.
+    println!("{}", crate::app::run::from_run_state(&st).text);
     println!("run_id: {}", st.run_id);
     println!("status: {:?}", st.status);
     println!("project: {}", st.project_root.display());

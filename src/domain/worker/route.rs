@@ -151,6 +151,7 @@ mod tests {
             provider: provider.into(),
             mode: "print".into(),
             prompt: "p".into(),
+            verify_cmd: None,
             acceptance: None,
             timeout_secs: None,
             worktree: None,

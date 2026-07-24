@@ -70,6 +70,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             provider: provider.clone(),
             mode: mode.clone(),
             prompt,
+            verify_cmd: None,
             acceptance: None,
             timeout_secs: None,
             worktree: Some(config.default.worktree),

@@ -256,11 +256,13 @@ fn build_report_verification(
         .unwrap_or_default();
     let task_items = plan
         .map(|p| {
-            collect_task_acceptance_items(
-                p.tasks
-                    .iter()
-                    .map(|t| (t.id.as_str(), t.acceptance.as_deref())),
-            )
+            collect_task_acceptance_items(p.tasks.iter().map(|t| {
+                    let human = t
+                        .acceptance
+                        .as_deref()
+                        .filter(|s| !crate::domain::plan::is_runnable_verify(s));
+                    (t.id.as_str(), human)
+                }))
         })
         .unwrap_or_default();
 

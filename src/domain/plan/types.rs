@@ -153,6 +153,12 @@ pub struct TaskIR {
     /// print | bg | auto
     pub mode: String,
     pub prompt: String,
+    /// Host shell verify one-liner (H2). Scheduler prefers this over [`Self::acceptance`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify_cmd: Option<String>,
+    /// Legacy acceptance slot (YAML/plan wire). May still hold shell for old plans;
+    /// human prose must not be `sh -c`'d (see `is_runnable_verify` / H0).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acceptance: Option<String>,
     pub timeout_secs: Option<u64>,
     pub worktree: Option<bool>,
@@ -180,6 +186,34 @@ pub struct TaskIR {
     /// Absent in old plans → empty (serde default).
     #[serde(default)]
     pub tags: Vec<String>,
+}
+
+impl TaskIR {
+    /// Shell command the host may run after the task (H2).
+    /// Prefers `verify_cmd`; falls back to `acceptance` only when runnable.
+    pub fn effective_verify_cmd(&self) -> Option<&str> {
+        if let Some(v) = self
+            .verify_cmd
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            if super::verify::is_runnable_verify(v) {
+                return Some(v);
+            }
+        }
+        if let Some(a) = self
+            .acceptance
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            if super::verify::is_runnable_verify(a) {
+                return Some(a);
+            }
+        }
+        None
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

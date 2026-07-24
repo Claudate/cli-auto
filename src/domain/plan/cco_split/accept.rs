@@ -138,6 +138,7 @@ fn serialize_scope_overlaps(doc: &mut CcoSplitJob, notes: &mut Vec<String>) {
         guard += 1;
         if guard > n * 3 {
             notes.push("scope serialize: stop after many fixes".into());
+            notes.push("多处范围重叠，已尽量改为排队，请再核对步骤顺序".into());
             break;
         }
         let id_to_deps: HashMap<String, Vec<String>> = doc
@@ -193,9 +194,11 @@ fn serialize_scope_overlaps(doc: &mut CcoSplitJob, notes: &mut Vec<String>) {
         if let Some(t) = doc.tasks.iter_mut().find(|t| t.task_id == later_id) {
             if !t.depends_on.iter().any(|d| d == &earlier_id) {
                 t.depends_on.push(earlier_id.clone());
+                // Machine log (English) + H3 human tip for desk (Chinese).
                 notes.push(format!(
                     "serialize {later_id} after {earlier_id} (scope_paths overlap)"
                 ));
+                notes.push("为避免改同一处，已改为排队执行".into());
             } else {
                 break;
             }

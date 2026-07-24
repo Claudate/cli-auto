@@ -39,36 +39,108 @@ export function renderHandoffBoardStrip() {
   }
   if (!board.length) {
     rowsEl.innerHTML =
-      '<span class="muted" style="font-size:0.75rem">账本已生成，Board 尚空</span>';
+      '<span class="muted" style="font-size:0.75rem">账本已生成，尚无条目</span>';
     return;
   }
   rowsEl.innerHTML = board
     .map((r) => {
-      const st = String(r.status || "").toLowerCase();
+      const stRaw = String(r.status || "").toLowerCase();
+      const finished = isFinishedStatus(stRaw);
       let cls = "handoff-board-chip";
-      if (st.includes("fail") || st.includes("timeout") || st.includes("error")) {
+      if (
+        stRaw.includes("fail") ||
+        stRaw.includes("timeout") ||
+        stRaw.includes("error") ||
+        stRaw.includes("abort")
+      ) {
         cls += " is-fail";
-      } else if (st === "running" || st === "starting" || st === "queued") {
+      } else if (!finished) {
         cls += " is-run";
-      } else if (st === "done" || st === "skipped") {
+      } else {
         cls += " is-done";
       }
-      const role = r.role ? ` · ${r.role}` : "";
-      const prov = r.provider ? ` · ${r.provider}` : "";
-      const cost =
-        r.cost != null && Number.isFinite(Number(r.cost))
-          ? ` · $${Number(r.cost).toFixed(3)}`
-          : "";
-      return (
-        `<span class="${cls}" title="${esc(r.scope || "")}">` +
-        `<span class="hb-id">${esc(r.id)}</span>` +
-        `<span class="hb-meta">${esc(st)}${esc(role)}${esc(prov)}${esc(
-          cost
-        )}</span>` +
-        `</span>`
-      );
+      // 进行中：平台 · 模型 · 状态（不显示金额）
+      // 结束后：平台 · 模型 · 金额（不显示状态）
+      const platform = platformLabel(r.provider);
+      const model = modelLabel(r.model, r.provider);
+      const parts = [
+        `<span class="hb-platform">${esc(platform)}</span>`,
+        `<span class="hb-sep" aria-hidden="true">·</span>`,
+        `<span class="hb-model">${esc(model)}</span>`,
+      ];
+      if (finished) {
+        parts.push(
+          `<span class="hb-sep" aria-hidden="true">·</span>`,
+          `<span class="hb-cost">${esc(amountLabel(r.cost))}</span>`
+        );
+      } else {
+        parts.push(
+          `<span class="hb-sep" aria-hidden="true">·</span>`,
+          `<span class="hb-status">${esc(statusLabel(r.status))}</span>`
+        );
+      }
+      const tip = [r.id, r.role, r.scope, r.status].filter(Boolean).join(" · ");
+      return `<span class="${cls}" title="${esc(tip)}">${parts.join("")}</span>`;
     })
     .join("");
+}
+
+/** 任务是否已终态（完成后不显示状态、改显示金额） */
+function isFinishedStatus(stRaw) {
+  const s = String(stRaw || "").toLowerCase();
+  if (!s) return false;
+  if (
+    s === "running" ||
+    s === "starting" ||
+    s === "queued" ||
+    s === "pending" ||
+    s === "paused"
+  ) {
+    return false;
+  }
+  // done / completed / skipped / failed / timeout / aborted / stopped …
+  return true;
+}
+
+/** AI 平台人话短名（不暴露内部枚举长文） */
+function platformLabel(provider) {
+  const p = String(provider || "").trim().toLowerCase();
+  if (p === "claude") return "Claude";
+  if (p === "codex") return "Codex";
+  if (p === "fake") return "模拟";
+  if (p === "sdk") return "SDK";
+  return p ? p : "—";
+}
+
+/** 模型名：plan 声明优先；未声明显示「默认」 */
+function modelLabel(model, provider) {
+  const m = String(model || "").trim();
+  if (m) return m;
+  const p = String(provider || "").trim().toLowerCase();
+  if (p === "fake") return "—";
+  return "默认";
+}
+
+/** 状态人话（主路径不堆英文枚举） */
+function statusLabel(status) {
+  const s = String(status || "").trim().toLowerCase();
+  if (!s) return "—";
+  if (s === "running" || s === "starting") return "运行中";
+  if (s === "queued" || s === "pending") return "等待";
+  if (s === "done" || s === "completed" || s === "skipped") return "完成";
+  if (s.includes("fail") || s.includes("error")) return "失败";
+  if (s.includes("timeout")) return "超时";
+  if (s.includes("abort") || s === "stopped" || s === "cancelled") return "已停";
+  if (s === "paused") return "暂停";
+  return String(status).trim();
+}
+
+/** 金额：有则 $x.xxx，无则 —（不伪装 $0） */
+function amountLabel(cost) {
+  if (cost == null || cost === "") return "—";
+  const n = Number(cost);
+  if (!Number.isFinite(n)) return "—";
+  return `$${n.toFixed(3)}`;
 }
 
 export async function openHandoffLedger() {

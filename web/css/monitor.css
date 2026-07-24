@@ -898,30 +898,54 @@ button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip
 .handoff-board-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.5rem;
+  gap: 0.28rem;
+  padding: 0.25rem 0.6rem;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: #fff;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   line-height: 1.3;
   max-width: 100%;
 }
-.handoff-board-chip .hb-id {
+/* 协作账本四项：平台 · 模型 · 状态 · 金额 */
+.handoff-board-chip .hb-platform {
   font-weight: 650;
+  color: var(--text, #111);
 }
-.handoff-board-chip .hb-meta {
+.handoff-board-chip .hb-model {
+  color: var(--text, #111);
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.handoff-board-chip .hb-status {
   color: var(--muted);
+}
+.handoff-board-chip .hb-cost {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-weight: 500;
+}
+.handoff-board-chip .hb-sep {
+  color: var(--border);
+  user-select: none;
 }
 .handoff-board-chip.is-fail {
   border-color: color-mix(in srgb, var(--danger, #b42318) 40%, var(--border));
   background: color-mix(in srgb, var(--danger, #b42318) 8%, #fff);
 }
+.handoff-board-chip.is-fail .hb-status {
+  color: var(--danger, #b42318);
+}
 .handoff-board-chip.is-run {
   border-color: color-mix(in srgb, var(--accent, #2563eb) 35%, var(--border));
 }
+.handoff-board-chip.is-run .hb-status {
+  color: var(--accent, #2563eb);
+}
 .handoff-board-chip.is-done {
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 /* P2-3 light ANSI spans (raw mode) */

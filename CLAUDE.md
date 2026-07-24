@@ -44,6 +44,7 @@ Cargo.toml — workspace（cco + cco-desktop）
 [`docs/multi-cli-collaboration-2026-07-18.md`](./docs/multi-cli-collaboration-2026-07-18.md) — provider/role/scope · handoff · tags 路由
 [`docs/plan-execute-inspect-rework-2026-07-19.md`](./docs/plan-execute-inspect-rework-2026-07-19.md) — 巡检对照勾选 · 回补波（P-loop）
 [`docs/product-mainpath-optimize-2026-07-20.md`](./docs/product-mainpath-optimize-2026-07-20.md) — 拆分台三栏/结果台交互意图（P2-16 UI 已闭环）
+[`docs/human-status-verify-dual-landing-2026-07-24.md`](./docs/human-status-verify-dual-landing-2026-07-24.md) — 人话状态 + 可执行验收双层（H0–H3 ✅）
 [`docs/subjective-desire-cco-subset-landing-2026-07-22.md`](./docs/subjective-desire-cco-subset-landing-2026-07-22.md) — 主观渴望子集落地（D0–D2 ☐）
 [`docs/guided-plan-memory-decision-2026-07-21.md`](./docs/guided-plan-memory-decision-2026-07-21.md) — 引导/记忆/对抗草稿（G0–G4 ☐ · 后置）
 [`docs/gap-and-landing-plan-2026-07-18.md`](./docs/gap-and-landing-plan-2026-07-18.md) — 历史总账 + D5 池导航（D0–D4 已闭环；**不**新开阶段表）

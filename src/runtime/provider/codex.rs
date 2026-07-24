@@ -672,6 +672,7 @@ mod tests {
             provider: "codex".into(),
             mode: "bg".into(),
             prompt: "hello".into(),
+            verify_cmd: None,
             acceptance: None,
             timeout_secs: None,
             worktree: None,

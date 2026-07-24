@@ -96,6 +96,8 @@ struct FileTask {
     #[serde(default)]
     prompt_file: Option<String>,
     #[serde(default)]
+    verify_cmd: Option<String>,
+    #[serde(default)]
     acceptance: Option<String>,
     #[serde(default)]
     timeout_secs: Option<u64>,
@@ -259,6 +261,16 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             provider,
             mode,
             prompt,
+            verify_cmd: ft
+                .verify_cmd
+                .clone()
+                .filter(|s| crate::domain::plan::is_runnable_verify(s))
+                .or_else(|| {
+                    ft.acceptance
+                        .clone()
+                        .filter(|s| crate::domain::plan::is_runnable_verify(s))
+                }),
+            // Keep acceptance for wire/display; human prose stays, shell also mirrored if only there.
             acceptance: ft.acceptance.clone(),
             timeout_secs: ft.timeout_secs.or(file.defaults.timeout_secs),
             worktree: ft.worktree.or(Some(worktree)),

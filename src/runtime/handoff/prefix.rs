@@ -56,6 +56,16 @@ pub fn build_prompt_prefix(task: &TaskIR, run_dir: &Path) -> String {
     body.push_str(&format!("全局账本: {ledger}\n"));
     body.push_str(&format!("你的 outputs: {outputs}\n"));
     body.push_str("完成后最后一行: CCO_DONE ok\n");
+    // H3-2: shallow discipline for integrate/inspect (no auto git merge).
+    if matches!(
+        task.role,
+        Some(crate::plan::TaskRole::Integrate) | Some(crate::plan::TaskRole::Inspect)
+    ) {
+        body.push_str("\n## 拼在一起怎么验（纪律）\n");
+        body.push_str("1. 先读各步 SUMMARY / Fragments，再下总判\n");
+        body.push_str("2. 有失败或未完成的任务，不要装成全部成功\n");
+        body.push_str("3. 合并/巡检后对照原计划验收；host 不会自动 git merge\n");
+    }
 
     // Short Board table (status snapshot only).
     body.push_str("\n## Board\n");

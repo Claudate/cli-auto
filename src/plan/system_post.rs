@@ -125,9 +125,9 @@ fn make_inspect_task(ir: &PlanIR, depends_on: &[String]) -> TaskIR {
         provider: ir.default_provider.clone(),
         mode: ir.default_mode.clone(),
         prompt,
-        acceptance: Some(
-            "存在 .cco-out/inspect/VERDICT.md 与 ISSUES.md；阻塞项必须 FAIL".into(),
-        ),
+        // H0-3A: human criteria stay in prompt; host gate = outputs paths only.
+        verify_cmd: None,
+        acceptance: None,
         timeout_secs: Some(900),
         worktree: Some(false),
         provider_opts: json!({}),
@@ -209,7 +209,9 @@ fn make_git_push_task(ir: &PlanIR, depends_on: &[String]) -> TaskIR {
         provider: ir.default_provider.clone(),
         mode: ir.default_mode.clone(),
         prompt,
-        acceptance: Some("有变更则已 commit+push，或明确说明无变更/失败原因".into()),
+        // H0-3A: no fake shell; worker prompt carries criteria (outputs empty by design).
+        verify_cmd: None,
+        acceptance: None,
         timeout_secs: Some(600),
         worktree: Some(false),
         provider_opts: json!({}),
@@ -285,9 +287,9 @@ fn make_open_pr_task(ir: &PlanIR, depends_on: &[String]) -> TaskIR {
         provider: ir.default_provider.clone(),
         mode: ir.default_mode.clone(),
         prompt,
-        acceptance: Some(
-            "已开 PR 并输出 CCO_PR_OK url=…，或明确 CCO_PR_SKIPPED reason=…".into(),
-        ),
+        // H0-3A: no fake shell; worker prompt carries CCO_PR_* markers.
+        verify_cmd: None,
+        acceptance: None,
         timeout_secs: Some(600),
         worktree: Some(false),
         provider_opts: json!({}),
@@ -328,6 +330,7 @@ mod tests {
                 provider: "claude".into(),
                 mode: "print".into(),
                 prompt: "do work".into(),
+                verify_cmd: None,
                 acceptance: None,
                 timeout_secs: None,
                 worktree: Some(false),
@@ -370,6 +373,13 @@ mod tests {
         assert_eq!(ir.tasks[2].depends_on, vec![SYS_POST_INSPECT_ID.to_string()]);
         assert!(ir.require_inspect);
         assert!(ir.tasks[1].role == Some(TaskRole::Inspect));
+        // H0-3A: no Chinese (or any) acceptance string that would fake-shell
+        assert!(ir.tasks[1].acceptance.is_none());
+        assert!(ir.tasks[2].acceptance.is_none());
+        assert!(
+            !ir.tasks[1].outputs.is_empty(),
+            "inspect still has path outputs gate"
+        );
         // Push prompt must gate on VERDICT PASS
         assert!(
             ir.tasks[2].prompt.contains("PASS")

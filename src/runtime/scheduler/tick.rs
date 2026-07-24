@@ -279,7 +279,8 @@ impl Scheduler {
         work_dir: &std::path::Path,
         result: &mut super::super::provider::TaskResult,
     ) {
-        if let Some(cmd) = &task.acceptance {
+        // H2: only effective verify_cmd (verify_cmd | runnable legacy acceptance).
+        if let Some(cmd) = task.effective_verify_cmd() {
             let acc = run_acceptance_soft(work_dir, cmd, Duration::from_secs(300)).await;
             let acc_path = self.state.task_dir(&task.id).join("acceptance.json");
             let _ = std::fs::write(
@@ -300,6 +301,30 @@ impl Scheduler {
                     acc.stderr.chars().take(300).collect::<String>()
                 ));
             }
+        } else if let Some(raw) = task
+            .acceptance
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            // Legacy human acceptance present but not shell — record skip, never fail.
+            tracing::info!(
+                task_id = %task.id,
+                acceptance = %raw.chars().take(120).collect::<String>(),
+                "acceptance skipped (not shell); continue outputs/inspect gates"
+            );
+            let acc_path = self.state.task_dir(&task.id).join("acceptance.json");
+            let _ = std::fs::write(
+                &acc_path,
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "ok": null,
+                    "skipped": true,
+                    "reason": "skipped_not_shell",
+                    "command": raw,
+                    "passed": false,
+                }))
+                .unwrap_or_default(),
+            );
         }
         if result.status == TaskStatus::Done {
             self.enforce_outputs(task, work_dir, result);

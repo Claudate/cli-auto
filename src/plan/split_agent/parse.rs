@@ -48,6 +48,8 @@ struct AgentTask {
     #[serde(default)]
     done_when: Option<String>,
     #[serde(default)]
+    verify_cmd: Option<String>,
+    #[serde(default)]
     plan_ref: Option<String>,
     #[serde(default)]
     can_parallel: Option<bool>,
@@ -195,6 +197,9 @@ pub fn parse_agent_output(raw: &str, req: &SplitRequest) -> Result<CcoSplitJob> 
             enabled,
             optional,
             done_when: t.done_when.filter(|s| !s.trim().is_empty()),
+            verify_cmd: t
+                .verify_cmd
+                .filter(|s| crate::domain::plan::is_runnable_verify(s)),
             plan_ref: t.plan_ref.filter(|s| !s.trim().is_empty()),
             kind,
             status: CcoTaskStatus::Pending,

@@ -10,12 +10,14 @@
 
 pub mod cco_split;
 mod materialize;
+mod merge_check;
 mod optional;
 mod routing;
 mod soften;
 mod system_ids;
 mod types;
 mod validate;
+mod verify;
 
 pub use cco_split::{
     from_plan_ir, recompute_waves, run_gate_ok, sanitize_cco_split_deps, soft_accept_split,
@@ -23,6 +25,10 @@ pub use cco_split::{
     CcoTaskKind, CcoTaskStatus, CCO_SPLIT_SCHEMA,
 };
 pub use materialize::{materialize_role_defaults, materialize_selected_tasks};
+pub use merge_check::{
+    humanize_soft_accept_note, merge_check_for_integrate, merge_check_for_plan,
+    soft_accept_human_tips, MERGE_CHECK_DEFAULT,
+};
 pub use optional::{
     looks_like_work_task_id, normalize_optional_title, title_is_meta_heading, title_looks_optional,
 };
@@ -36,6 +42,7 @@ pub use types::{
     INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_SYSTEM_PROMPT, INSPECT_SYSTEM_PROMPT_MARKER,
     MAX_PROMPT_CHARS, MAX_TASKS, MAX_TIMEOUT_SECS, PLANNER_MAX_BUDGET_USD, PLANNER_MAX_TASKS,
 };
+pub use verify::{is_runnable_verify, looks_like_shell_acceptance};
 
 // Crate-private helpers (soft_accept uses validate::* via super::super; tests need re-export).
 #[cfg(test)]

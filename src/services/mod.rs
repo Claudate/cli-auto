@@ -13,6 +13,7 @@
 
 mod chat;
 mod live;
+mod live_status;
 mod preview;
 mod projects;
 mod runs;

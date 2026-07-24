@@ -204,6 +204,7 @@ fn call_claude_cli_print(config: &Config, req: &SplitRequest) -> Result<String> 
         provider: "claude".into(),
         mode: "print".into(),
         prompt,
+        verify_cmd: None,
         acceptance: None,
         timeout_secs: Some(600),
         worktree: Some(false),

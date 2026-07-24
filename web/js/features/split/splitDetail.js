@@ -88,6 +88,7 @@ export function ensureAdvancedRouteDom() {
     `<div class="split-route-row"><span class="muted">通道</span> <strong id="split-route-provider-label">—</strong></div>` +
     `<div class="split-route-row"><span class="muted">角色</span> <span id="split-route-role-label">—</span></div>` +
     `<div class="split-route-row"><span class="muted">范围</span> <span id="split-route-scope-label">—</span></div>` +
+    `<div class="split-route-row" id="split-route-verify-row" hidden><span class="muted">自动检查</span> <code id="split-route-verify-label" class="split-route-verify">—</code></div>` +
     `</div>` +
     `<label class="field split-route-provider-field" id="split-route-provider-field">` +
     `<span>本步骤执行通道</span>` +
@@ -254,11 +255,10 @@ export function paintDetail(ctx) {
       }
       const bodyText = String(displayBody || full || "").trim();
       const ol = oneLiner(cur) || "";
+      // H2-4: 怎样算做完 = 人话 done_when only；verify_cmd 不进第一句
       let doneLine = "";
-      if (cur.acceptance || cur.done_when || cur.doneWhen) {
-        doneLine = String(
-          cur.acceptance || cur.done_when || cur.doneWhen
-        ).trim();
+      if (cur.done_when || cur.doneWhen) {
+        doneLine = String(cur.done_when || cur.doneWhen).trim();
       }
       if (!doneLine) {
         const m = bodyText.match(
@@ -416,6 +416,8 @@ function paintAdvancedRoute(cur, job, ctx) {
   const provLabel = $("split-route-provider-label");
   const roleLabelEl = $("split-route-role-label");
   const scopeLabelEl = $("split-route-scope-label");
+  const verifyRow = $("split-route-verify-row");
+  const verifyLabel = $("split-route-verify-label");
   const advSel = $("split-route-provider");
   const roleSel = $("split-route-role");
   const scopeTa = $("split-route-scope");
@@ -425,6 +427,17 @@ function paintAdvancedRoute(cur, job, ctx) {
   if (scopeLabelEl) {
     scopeLabelEl.textContent = route.scopeText;
     scopeLabelEl.classList.toggle("muted", !route.hasExplicitScope);
+  }
+  // H2-4: verify_cmd only in advanced fold — never main path first sentence
+  const verifyCmd = String(cur.verify_cmd || cur.verifyCmd || "").trim();
+  if (verifyRow && verifyLabel) {
+    if (verifyCmd) {
+      verifyRow.hidden = false;
+      verifyLabel.textContent = verifyCmd;
+    } else {
+      verifyRow.hidden = true;
+      verifyLabel.textContent = "—";
+    }
   }
   if (advSel) {
     if (!selectBusy(advSel)) {

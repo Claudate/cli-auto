@@ -303,6 +303,8 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                 <!-- 规划/执行金额：本轮结果标题右侧（原顶栏 budget-chip） -->
                 <span id="result-cost-chip" class="result-cost-chip muted" hidden title="规划成本 · 执行成本">—</span>
               </div>
+              <!-- H1-3: app 下发人话状态句（不写策略） -->
+              <p class="status-one-liner muted" id="status-one-liner" hidden></p>
               <div class="task-dash-kpis">
                 <span id="run-status-badge" hidden></span>
                 <div class="kpi-card done"><div class="kpi-n" id="stat-done-n">0</div><div class="kpi-l">已完成</div></div>
@@ -348,6 +350,8 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                   <p class="result-desk-honest muted" id="result-desk-honest" hidden></p>
                 </div>
               </div>
+              <!-- H3: parallel / integrate verify one-liner (app merge_check) -->
+              <p class="result-desk-merge muted" id="result-desk-merge-check" hidden></p>
               <!-- P2-1: plan acceptance checklist vs inspect (live.verification) -->
               <details class="result-desk-verify" id="result-desk-verify" hidden>
                 <summary class="result-desk-verify-sum" id="result-desk-verify-sum">原计划要验收</summary>

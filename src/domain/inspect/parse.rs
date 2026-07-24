@@ -98,11 +98,18 @@ pub fn parse_issues_text(text: &str) -> Vec<ParsedIssue> {
         // Field-only lines like `- **severity**: residual` must NOT open a new
         // block (otherwise `### I-1` alone becomes fail-closed Blocking).
         let severity_field_only = is_severity_field_only_line(t);
+        // Block starts: classic `- id:` / `### I-1`, residual/oos headings
+        // (`### R1 · …` / `### O1 · …`), or single-line severity bullets.
         let starts_block = t.starts_with("- id:")
             || t.starts_with("-id:")
             || t.starts_with("## I-")
             || t.starts_with("### I-")
-            || (t.starts_with("- I-") || t.starts_with("* I-"))
+            || (t.starts_with('-') || t.starts_with('*'))
+                && (t[1..].trim_start().starts_with("I-")
+                    || t[1..].trim_start().starts_with("R")
+                    || t[1..].trim_start().starts_with("O"))
+                && is_issue_heading_token(t[1..].trim_start().split_whitespace().next().unwrap_or(""))
+            || (t.starts_with('#') && is_issue_heading_line(t))
             || (t.starts_with('-')
                 && (t.contains("severity=") || t.contains("severity:"))
                 && !severity_field_only);
@@ -162,10 +169,16 @@ pub fn parse_issues_text(text: &str) -> Vec<ParsedIssue> {
         // severity still fail-closed → Blocking.
         let has_issue_id = block.lines().any(|l| {
             let t = l.trim().trim_start_matches('#').trim();
-            t.starts_with("I-")
-                || t.starts_with("- I-")
-                || t.starts_with("* I-")
-                || t.starts_with("id:")
+            let bare = t
+                .trim_start_matches(|c: char| c == '-' || c == '*' || c == '•')
+                .trim();
+            let first = bare
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim_end_matches(|c: char| c == '·' || c == ':' || c == ',');
+            is_issue_heading_token(first)
+                || bare.starts_with("id:")
                 || t.starts_with("- id:")
         });
         let first = block
@@ -187,15 +200,19 @@ pub fn parse_issues_text(text: &str) -> Vec<ParsedIssue> {
         let id = extract_kv(&block, "id")
             .or_else(|| {
                 block.lines().next().and_then(|l| {
-                    // `### I-1` / `- I-2 · title` / `I-3`
+                    // `### I-1` / `### R1 · title` / `- O2 · …` / `I-3`
                     let t = l
                         .trim()
                         .trim_start_matches('#')
                         .trim_start_matches(|c: char| c == '-' || c == '*' || c == '•')
                         .trim();
-                    let token = t.split_whitespace().next().unwrap_or(t);
-                    if token.starts_with('I') && token.contains('-') {
-                        Some(token.trim_end_matches(|c: char| c == '·' || c == ':' || c == ',').to_string())
+                    let token = t
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or(t)
+                        .trim_end_matches(|c: char| c == '·' || c == ':' || c == ',');
+                    if is_issue_heading_token(token) {
+                        Some(token.to_string())
                     } else {
                         None
                     }
@@ -250,6 +267,10 @@ fn is_empty_set_confirmation_block(block: &str) -> bool {
 
 /// True when the line is only a severity field under a multi-line ISSUE
 /// (`- **severity**: residual`), not a single-line issue that embeds severity.
+///
+/// Parenthetical notes after the grade are still field-only, including fullwidth
+/// Chinese notes like `out-of-scope（本波角色=静态 inspect）` — those must not
+/// open a new block or fail-closed to Blocking.
 fn is_severity_field_only_line(t: &str) -> bool {
     let stripped = t
         .trim()
@@ -267,24 +288,75 @@ fn is_severity_field_only_line(t: &str) -> bool {
     } else {
         return false;
     };
-    // Single-line issues carry more keys: `severity=blocking plan_ref=… path=…`
-    let token_and_maybe_more = rest.trim();
-    let parts: Vec<&str> = token_and_maybe_more.split_whitespace().collect();
-    // field-only: one token (residual / blocking / …) optionally with punctuation
-    parts.len() <= 1
-        && !token_and_maybe_more.contains("plan_ref")
-        && !token_and_maybe_more.contains("path=")
-        && !token_and_maybe_more.contains("fix_wp")
+    // Drop trailing notes before counting tokens.
+    let token_core = strip_severity_trailing_note(rest.trim());
+    let parts: Vec<&str> = token_core.split_whitespace().collect();
+    // field-only: one severity token; extra keys ⇒ single-line issue row
+    parts.len() == 1
+        && severity_from_token(parts[0]).is_some()
+        && !rest.contains("plan_ref")
+        && !rest.contains("path=")
+        && !rest.contains("fix_wp")
+}
+
+/// Heading line for a single ISSUE block (`### I-1`, `### R1 · …`, `### O2 · …`).
+fn is_issue_heading_line(t: &str) -> bool {
+    let s = t.trim_start_matches('#').trim();
+    let first = s
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .trim_end_matches(|c: char| c == '·' || c == ':' || c == ',' || c == '—');
+    is_issue_heading_token(first)
+}
+
+/// Token form of an ISSUE id/heading: `I-1`, `I1`, `R1`, `R-2`, `O1`, `O-3`.
+fn is_issue_heading_token(token: &str) -> bool {
+    let t = token.trim();
+    if t.is_empty() {
+        return false;
+    }
+    // Classic `I-*`
+    if t.starts_with('I') && t.contains('-') {
+        return true;
+    }
+    let mut chars = t.chars();
+    let Some(c0) = chars.next() else {
+        return false;
+    };
+    if !matches!(c0, 'I' | 'R' | 'O') {
+        return false;
+    }
+    let rest: String = chars.collect();
+    let rest = rest.trim_start_matches('-');
+    rest.chars().next().is_some_and(|c| c.is_ascii_digit())
+}
+
+/// Drop fullwidth/halfwidth parenthetical notes after a severity token.
+/// `out-of-scope（本波…）` / `residual (optional)` → bare grade.
+fn strip_severity_trailing_note(s: &str) -> &str {
+    let cut = s
+        .find(['（', '(', '【', '[', '—', '–'])
+        .unwrap_or(s.len());
+    s[..cut].trim()
 }
 
 fn severity_from_token(token: &str) -> Option<IssueSeverity> {
-    Some(match token {
-        "blocking" | "block" | "p0" => IssueSeverity::Blocking,
-        "map" | "geb" => IssueSeverity::Map,
-        "residual" | "non-blocking" | "nonblocking" | "optional" => IssueSeverity::Residual,
-        "out-of-scope" | "outofscope" | "oos" | "out_of_scope" => IssueSeverity::OutOfScope,
-        _ => IssueSeverity::Blocking,
-    })
+    let token = strip_severity_trailing_note(token)
+        .trim()
+        .trim_matches(|c: char| c == '`' || c == '*' || c == '"' || c == '\'' || c == '_' || c == '。' || c == '.' || c == '；' || c == ';')
+        .to_ascii_lowercase();
+    // Collapse common separators so `out_of_scope` / `out-of-scope` share path.
+    let compact = token.replace('_', "-");
+    match compact.as_str() {
+        "blocking" | "block" | "p0" => Some(IssueSeverity::Blocking),
+        "map" | "geb" => Some(IssueSeverity::Map),
+        "residual" | "non-blocking" | "nonblocking" | "optional" => Some(IssueSeverity::Residual),
+        "out-of-scope" | "outofscope" | "oos" => Some(IssueSeverity::OutOfScope),
+        // Unknown grade: do NOT fail-closed here — caller treats missing grade as
+        // free-form Blocking only when no severity field was present at all.
+        _ => None,
+    }
 }
 
 /// Explicit `severity=` / `severity:` / `**severity**: residual` fields only.
@@ -331,7 +403,11 @@ fn parse_severity_field_only(block: &str) -> Option<IssueSeverity> {
         if token == "无" || token == "none" || token == "no" {
             continue;
         }
-        return severity_from_token(token);
+        // Known grade (after stripping fullwidth notes) wins; unknown token
+        // does not invent Blocking — keep scanning other lines.
+        if let Some(sev) = severity_from_token(token) {
+            return Some(sev);
+        }
     }
     None
 }
@@ -531,5 +607,84 @@ Result companion: VERDICT.md → **PASS**
         assert!(parsed.iter().any(|i| i.id.contains("I-1")));
         assert!(parsed.iter().any(|i| i.id.contains("I-2")));
         assert!(parsed.iter().any(|i| i.id.contains("I-4")));
+    }
+
+    /// Regression: inspect often writes `### R1` residual + `out-of-scope（中文说明）`.
+    /// Host used to fail-closed the oos line as Blocking → false P-loop gate fail.
+    #[test]
+    fn residual_r_headers_and_oos_fullwidth_note_not_blocking() {
+        let text = r#"# ISSUES · t6 inspect
+
+> Result 为 PASS：无 blocking / map。
+
+## residual
+
+### R1 · 场景「茶席」线标为 Lucide coffee 杯形
+- **severity:** residual
+- **plan_ref:** §做.4
+- **fix_wp:** t4
+- **描述:** 线标命名略西式
+
+### R2 · ys-006 材质字面
+- **severity:** residual
+- **plan_ref:** §做.3
+- **fix_wp:** t2
+
+### R3 · 静态 href
+- **severity:** residual
+- **plan_ref:** 主路径
+- **fix_wp:** t5
+
+## blocking
+
+（无）
+
+## map
+
+（无 · L1/L2 不同构未发现）
+
+## out-of-scope
+
+### O1 · 浏览器实机
+- **severity:** out-of-scope（本波角色=静态 inspect；任务允许无浏览器时静态完成）
+- **plan_ref:** 任务大纲 7
+- **fix_wp:** 人工
+- **描述:** 未跑 npm run dev
+"#;
+        let parsed = parse_issues_text(text);
+        assert_eq!(parsed.len(), 4, "parsed={parsed:?}");
+        assert!(
+            parsed.iter().all(|i| !i.severity.is_blocking_for_gate()),
+            "blocking false-positive: {parsed:?}"
+        );
+        assert_eq!(
+            count_blocking_for_test(&parsed),
+            0,
+            "blocking_n must be 0 for residual+oos-only"
+        );
+        let o1 = parsed.iter().find(|i| i.id.starts_with('O')).unwrap();
+        assert_eq!(o1.severity, IssueSeverity::OutOfScope);
+        assert!(parsed.iter().filter(|i| i.severity == IssueSeverity::Residual).count() >= 3);
+    }
+
+    #[test]
+    fn severity_token_strips_fullwidth_chinese_note() {
+        assert_eq!(
+            severity_from_token("out-of-scope（本波角色=静态 inspect）"),
+            Some(IssueSeverity::OutOfScope)
+        );
+        assert_eq!(
+            severity_from_token("residual (optional polish)"),
+            Some(IssueSeverity::Residual)
+        );
+        // Unknown bare token does not invent Blocking at token layer.
+        assert_eq!(severity_from_token("mystery-grade"), None);
+    }
+
+    fn count_blocking_for_test(issues: &[ParsedIssue]) -> usize {
+        issues
+            .iter()
+            .filter(|i| i.severity.is_blocking_for_gate())
+            .count()
     }
 }

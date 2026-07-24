@@ -11,6 +11,7 @@
 mod active;
 mod retry;
 mod status;
+mod status_line;
 
 pub use active::{expand_from_task, resolve_active_ids, ActiveFilter};
 pub use retry::{
@@ -21,4 +22,8 @@ pub use status::{
     budget_exceeded, is_external_stop, is_live_task_status, merge_disk_terminal,
     provider_slot_open, resolve_final_run_status, stall_triggered, FinalRunStatus,
     MergeDiskEffect,
+};
+pub use status_line::{
+    from_plan_job, from_run, resolve_status_one_liner, PlanJobSnap, StatusOneLiner, StatusPhase,
+    TaskStatusSnap,
 };

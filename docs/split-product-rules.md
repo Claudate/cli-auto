@@ -34,8 +34,9 @@
 | **桌面 / CLI 默认 = `ai`** | ModelSplitAgent → 结构化 `cco-split/v1` |
 | **`fast` = 高级 / 显式** | 本地 heuristic；文案禁止「推荐」 |
 | **`direct` = 聊天「直接执行」** | 整份计划 = 单任务（`raw-single`）；**仍** `start_plan_job → confirm_start`；禁止 `start_run` 旁路 |
-| 输出 schema | `cco-split/v1`：id · title · summary · body · depends_on · wave · enabled · optional · done_when · plan_ref · kind · scope_paths… |
-| 主路径依赖字段 | title / body / depends / wave / enabled / optional；高级（provider/role/scope）可空不挡展示 |
+| 输出 schema | `cco-split/v1`：id · title · summary · body · depends_on · wave · enabled · optional · done_when · **verify_cmd（可选 shell）** · plan_ref · kind · scope_paths… |
+| 主路径依赖字段 | title / body / depends / wave / enabled / optional；高级（provider/role/scope/**verify_cmd**）可空不挡展示 |
+| **done_when ≠ shell** | 「怎样算做完」只做人话展示 + 巡检叙述；**禁止** materialize 后人话进 `sh -c`。可跑检查走 **`verify_cmd`**（落地勾选见 [`human-status-verify-dual-landing-2026-07-24.md`](./human-status-verify-dual-landing-2026-07-24.md) H0–H2） |
 | 禁拆成任务 | 非目标、PROTOCOL、修订历史、纯目录/索引、空话 |
 
 `depends_on` **只连真先后**；禁止为凑波次串线。并行单位 = **文件/模块所有权**，不是「波次数字」。
@@ -84,7 +85,8 @@
 ```
 
 - `scope_paths[]`：仓库相对路径；纯文案任务 `[]` 并在 body 标明无代码路径。  
-- `done_when`：可观察完成标准（可与「怎样算做完」同义压缩）。  
+- `done_when`：可观察完成标准（可与「怎样算做完」同义压缩）；**给人看，不给 host 当 shell**。  
+- `verify_cmd`（可选）：一行 shell，任务 Done 后 host 可跑；缺省则靠 `outputs` + 巡检；**不进拆分台第一句**。  
 - body **禁止**以工人脚手架开头。
 
 ---

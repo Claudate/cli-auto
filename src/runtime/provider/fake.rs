@@ -373,6 +373,7 @@ mod tests {
             provider: "fake".into(),
             mode: "print".into(),
             prompt: format!("hello {id}"),
+            verify_cmd: None,
             acceptance: None,
             timeout_secs: None,
             worktree: None,

@@ -54,9 +54,12 @@ pub struct PlanTaskView {
     /// Card one-liner from cco split SoT (falls back to prompt_preview).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
-    /// Done criteria (cco split / acceptance).
+    /// Done criteria (cco split / acceptance) — human only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub done_when: Option<String>,
+    /// Optional host shell one-liner (H2); advanced fold only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify_cmd: Option<String>,
     /// Concurrent wave (0-based) from cco split SoT / topo.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wave: Option<i32>,
@@ -117,6 +120,9 @@ pub struct PlanJobView {
     /// P1-4: one-line human hint when `acceptance_is_stub` (None/omit when filled).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acceptance_hint: Option<String>,
+    /// H3: how to verify after parallel/integrate (human; no MERGE.md default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merge_check: Option<String>,
     pub layers: Vec<Vec<String>>,
     pub tasks: Vec<PlanTaskView>,
     pub planner_log_tail: String,
@@ -157,7 +163,12 @@ fn task_view(t: &TaskIR) -> PlanTaskView {
         prompt: t.prompt.clone(),
         prompt_preview: preview.clone(),
         summary: Some(preview),
-        done_when: t.acceptance.clone(),
+        done_when: t
+            .acceptance
+            .as_ref()
+            .filter(|s| !crate::domain::plan::is_runnable_verify(s))
+            .cloned(),
+        verify_cmd: t.effective_verify_cmd().map(|s| s.to_string()),
         wave: None,
         ord: None,
         kind,
@@ -211,6 +222,7 @@ fn task_view_from_cco(t: &crate::plan::CcoSplitTask) -> PlanTaskView {
             t.summary.clone()
         }),
         done_when: t.done_when.clone(),
+        verify_cmd: t.verify_cmd.clone(),
         wave: Some(t.wave),
         ord: Some(t.ord),
         kind: Some(t.kind.as_str().to_string()),
@@ -279,6 +291,25 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
         full
     };
     let (acceptance_is_stub, acceptance_hint) = plan_acceptance_fields(job);
+    // H3: merge_check from proposed PlanIR when available (best-effort).
+    let merge_check = load_proposed(config, &job.job_id)
+        .ok()
+        .and_then(|ir| crate::domain::plan::merge_check_for_plan(&ir.tasks));
+    // H3-3: keep Chinese soft_accept tips in critic_notes for desk banner.
+    let mut critic_notes = job.critic_notes.clone();
+    for tip in crate::domain::plan::soft_accept_human_tips(&job.critic_notes) {
+        if !critic_notes.iter().any(|n| n == &tip) {
+            critic_notes.push(tip);
+        }
+    }
+    for tip in [
+        "为避免改同一处，已改为排队执行",
+        "多处范围重叠，已尽量改为排队，请再核对步骤顺序",
+    ] {
+        if job.critic_notes.iter().any(|n| n == tip) && !critic_notes.iter().any(|n| n == tip) {
+            critic_notes.push(tip.to_string());
+        }
+    }
     Ok(PlanJobView {
         job_id: job.job_id.clone(),
         status: job.status.as_str().to_string(),
@@ -299,12 +330,13 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
         critic_edges_removed: job.critic_edges_removed,
         critic_titles_rewritten: job.critic_titles_rewritten,
         critic_prompts_tagged: job.critic_prompts_tagged,
-        critic_notes: job.critic_notes.clone(),
+        critic_notes,
         critic_llm_used: job.critic_llm_used,
         critic_llm_cost_usd: job.critic_llm_cost_usd,
         critic_llm_ms: job.critic_llm_ms,
         acceptance_is_stub,
         acceptance_hint,
+        merge_check,
         layers,
         tasks,
         planner_log_tail,
@@ -379,7 +411,7 @@ pub(super) fn write_proposed(config: &Config, job_id: &str, ir: &PlanIR) -> Resu
     // Dual-write task rows (order · wave · optional/include) for SQLite consumers.
     crate::state::sqlite::try_replace_plan_tasks(config, job_id, ir);
     // C2/C3: cco-native split SoT (full fields) — primary store for desk/confirm.
-    if let Ok(job) = PlanJob::load(config, job_id) {
+    if let Ok(mut job) = PlanJob::load(config, job_id) {
         let source = match job.plan_mode.as_str() {
             "ai" => {
                 if ir.adapter.starts_with("cco-split/llm") || ir.adapter.contains("llm") {
@@ -429,6 +461,24 @@ pub(super) fn write_proposed(config: &Config, job_id: &str, ir: &PlanIR) -> Resu
                 job_id,
                 &format!("cco_split soft_accept: {}", notes.join("; ")),
             );
+            // H3-3: persist human serialize tips onto job critic_notes (desk banner).
+            let mut dirty = false;
+            for tip in crate::domain::plan::soft_accept_human_tips(&notes) {
+                if !job.critic_notes.iter().any(|n| n == &tip) {
+                    job.critic_notes.push(tip);
+                    dirty = true;
+                }
+            }
+            for n in &notes {
+                if n.contains("排队") && !job.critic_notes.iter().any(|x| x == n) {
+                    job.critic_notes.push(n.clone());
+                    dirty = true;
+                }
+            }
+            if dirty {
+                job.updated_at = Utc::now();
+                let _ = job.save(config);
+            }
         }
         crate::state::cco_split_store::try_save_cco_split(config, &doc);
     }

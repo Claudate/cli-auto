@@ -24,6 +24,7 @@ cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**�
 
 ### 还在做（活跃落地 · 可有 ☐）
 
+human-status-verify-dual-landing-2026-07-24.md: **人话状态 + 可执行验收双层**（①怎样算做完 · ③卡在哪 · ④合并验 · **H0–H3 ✅** · done_when≠shell · StatusOneLiner · 无 STATE.md/自动 merge）
 subjective-desire-cco-subset-landing-2026-07-22.md: **主观渴望 · 对本仓有用子集落地**（从构思抽出 · **D0–D2 ☐** · 计划五节/缺槽追问/Brief≠confirm · 无人生 Pack）
 guided-plan-memory-decision-2026-07-21.md: **引导/记忆/对抗工程草稿**（G0–G4 ☐ 全量未 ship；§5.6.1 可复用 pilotdeck 薄表；文首后置；**不**开第二套波次）
 

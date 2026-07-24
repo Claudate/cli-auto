@@ -45,6 +45,7 @@ pub(super) fn build_fake_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
             prompt: format!(
                 "【模拟任务 {id}】{title}\n来源计划: {src_hint}\n{dep_note}\n{body}\n\n完成后输出一行: CCO_DONE ok\n"
             ),
+            verify_cmd: None,
             acceptance: None,
             timeout_secs: Some(120),
             worktree: Some(false),
@@ -393,6 +394,10 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
             provider: job.provider.clone(),
             mode: job.exec_mode.clone(),
             prompt,
+            verify_cmd: acceptance
+                .as_ref()
+                .filter(|s| crate::domain::plan::is_runnable_verify(s))
+                .cloned(),
             acceptance,
             timeout_secs: None,
             worktree: Some(false),

@@ -189,9 +189,12 @@ pub struct CcoSplitTask {
     pub enabled: bool,
     #[serde(default)]
     pub optional: bool,
-    /// Done criteria (display + inspect).
+    /// Done criteria (display + inspect) — human only; never `sh -c`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub done_when: Option<String>,
+    /// Optional host shell one-liner (H2). Empty on main path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify_cmd: Option<String>,
     /// Plan section / id reference.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan_ref: Option<String>,

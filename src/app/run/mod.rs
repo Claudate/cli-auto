@@ -39,6 +39,7 @@ mod foreground;
 mod materialize;
 pub mod provenance;
 mod route;
+pub mod status_line;
 
 pub use foreground::{
     finish_with_reports, preflight_plan, prepare_resume, prepare_scheduler, ForegroundOpts,
@@ -51,6 +52,7 @@ pub use provenance::{
     stamp_route_inferred,
 };
 pub use route::apply_provider_override;
+pub use status_line::{from_job_view, from_run_state, from_run_state_with_titles, resolve};
 
 use std::path::{Path, PathBuf};
 
@@ -267,6 +269,7 @@ mod tests {
             provider: provider.into(),
             mode: "print".into(),
             prompt: "p".into(),
+            verify_cmd: None,
             acceptance: None,
             timeout_secs: None,
             worktree: None,

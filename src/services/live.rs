@@ -121,13 +121,24 @@ pub struct ProjectLiveView {
     /// P2-1: plan acceptance checklist vs inspect side-by-side.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verification: Option<VerificationView>,
+    /// H1: shared human status sentence (app projection; UI binds only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_one_liner: Option<String>,
+    /// H3: shallow “how to verify after parallel/integrate” sentence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merge_check: Option<String>,
 }
 
 /// Compact Board row for desktop handoff strip (multi-cli P2-6).
+/// UI 协作账本只展示：平台 · 模型 · 状态 · 金额（其余字段可给 title/调试，不进主文案）。
 #[derive(Debug, Clone, Serialize)]
 pub struct HandoffBoardRowView {
     pub id: String,
+    /// AI 平台（claude / codex / fake …）
     pub provider: String,
+    /// 模型名（来自 plan `provider_opts.model`；未声明则为 None → UI 显示「默认」）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
     pub status: String,
@@ -193,25 +204,7 @@ pub fn project_live_view(
         });
 
     let Some(sum) = chosen else {
-        return Ok(ProjectLiveView {
-            project_path: project.display().to_string(),
-            project_name: name,
-            run_id: None,
-            run_status: None,
-            plan_path: None,
-            started_at: None,
-            tasks: vec![],
-            layers: vec![],
-            current_wave: None,
-            max_parallel: None,
-            planner_cost_usd: None,
-            exec_cost_usd: None,
-            inspect_loop: None,
-            run_dir: None,
-            handoff_md_path: None,
-            handoff_board: vec![],
-            verification: None,
-        });
+        return Ok(empty_live_view(project, &name, config));
     };
 
     // If the only candidate was dismissed terminal, surface empty live
@@ -220,25 +213,7 @@ pub fn project_live_view(
         &sum.run_id,
         &sum.status,
     ) {
-        return Ok(ProjectLiveView {
-            project_path: project.display().to_string(),
-            project_name: name,
-            run_id: None,
-            run_status: None,
-            plan_path: None,
-            started_at: None,
-            tasks: vec![],
-            layers: vec![],
-            current_wave: None,
-            max_parallel: None,
-            planner_cost_usd: None,
-            exec_cost_usd: None,
-            inspect_loop: None,
-            run_dir: None,
-            handoff_md_path: None,
-            handoff_board: vec![],
-            verification: None,
-        });
+        return Ok(empty_live_view(project, &name, config));
     }
 
     let rs = load_run(config, &sum.run_id)?;
@@ -423,17 +398,36 @@ pub fn project_live_view(
         .map(|h| {
             h.board
                 .into_iter()
-                .map(|r| HandoffBoardRowView {
-                    id: r.id,
-                    provider: r.provider,
-                    role: r.role,
-                    status: r.status,
-                    scope: r.scope,
-                    cost: r.cost,
+                .map(|r| {
+                    let model = resolved
+                        .as_ref()
+                        .and_then(|p| p.task(&r.id))
+                        .and_then(|t| {
+                            t.provider_opts
+                                .get("model")
+                                .and_then(|v| v.as_str())
+                                .map(str::trim)
+                                .filter(|s| !s.is_empty())
+                                .map(|s| s.to_string())
+                        });
+                    HandoffBoardRowView {
+                        id: r.id,
+                        provider: r.provider,
+                        model,
+                        role: r.role,
+                        status: r.status,
+                        scope: r.scope,
+                        cost: r.cost,
+                    }
                 })
                 .collect()
         })
         .unwrap_or_default();
+
+    let status_one_liner = super::live_status::compose_for_run(config, project, &rs, &tasks);
+    let merge_check = resolved
+        .as_ref()
+        .and_then(|p| crate::domain::plan::merge_check_for_plan(&p.tasks));
 
     Ok(ProjectLiveView {
         project_path: project.display().to_string(),
@@ -453,7 +447,33 @@ pub fn project_live_view(
         handoff_md_path,
         handoff_board,
         verification,
+        status_one_liner,
+        merge_check,
     })
+}
+
+fn empty_live_view(project: &Path, name: &str, config: &Config) -> ProjectLiveView {
+    ProjectLiveView {
+        project_path: project.display().to_string(),
+        project_name: name.to_string(),
+        run_id: None,
+        run_status: None,
+        plan_path: None,
+        started_at: None,
+        tasks: vec![],
+        layers: vec![],
+        current_wave: None,
+        max_parallel: None,
+        planner_cost_usd: None,
+        exec_cost_usd: None,
+        inspect_loop: None,
+        run_dir: None,
+        handoff_md_path: None,
+        handoff_board: vec![],
+        verification: None,
+        status_one_liner: super::live_status::latest_job_line(config, project),
+        merge_check: None,
+    }
 }
 
 /// P2-1: best-effort plan md + task acceptance → VerificationView (no fail).
@@ -468,13 +488,16 @@ fn build_live_verification(
         .map(|md| parse_acceptance_checklist(&md))
         .unwrap_or_default();
 
+    // H2: task row copy prefers human acceptance prose; shell-only → skip (verify is host gate).
     let task_items = plan
         .map(|p| {
-            collect_task_acceptance_items(
-                p.tasks
-                    .iter()
-                    .map(|t| (t.id.as_str(), t.acceptance.as_deref())),
-            )
+            collect_task_acceptance_items(p.tasks.iter().map(|t| {
+                let human = t
+                    .acceptance
+                    .as_deref()
+                    .filter(|s| !crate::domain::plan::is_runnable_verify(s));
+                (t.id.as_str(), human)
+            }))
         })
         .unwrap_or_default();
 

@@ -153,7 +153,7 @@ pub(crate) async fn run_scheduler_loop(
         let status = join
             .await
             .map_err(|e| anyhow::anyhow!("scheduler join: {e}"))??;
-        println!("\nstatus: {:?}", status);
+        print_run_finish_summary(config, run_id, status);
         let code = run_uc::finish_with_reports(config, run_id, status)?;
         println!(
             "report: {}",
@@ -163,11 +163,22 @@ pub(crate) async fn run_scheduler_loop(
     }
 
     let status = sched.run().await?;
-    println!("\nstatus: {:?}", status);
+    print_run_finish_summary(config, run_id, status);
     let code = run_uc::finish_with_reports(config, run_id, status)?;
     println!(
         "report: {}",
         config.runs_dir().join(run_id).join("report.md").display()
     );
     Ok(code)
+}
+
+/// H0-4 / H1-4: human summary first (StatusOneLiner); machine enum secondary.
+fn print_run_finish_summary(config: &Config, run_id: &str, status: crate::state::RunStatus) {
+    let run_dir = config.runs_dir().join(run_id);
+    if let Ok(st) = crate::state::RunState::load(&run_dir) {
+        println!("\n{}", crate::app::run::from_run_state(&st).text);
+    } else {
+        println!("\n本轮状态：{:?}", status);
+    }
+    println!("status: {:?}", status);
 }

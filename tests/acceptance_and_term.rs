@@ -81,6 +81,97 @@ tasks:
     assert!(run_dir.join("tasks/a/acceptance.json").exists() || st.tasks["a"].error.is_some());
 }
 
+/// H0-7: human Chinese criteria must not mark the task Failed via `sh -c`.
+#[tokio::test]
+async fn human_acceptance_does_not_fail_task() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().join("proj");
+    std::fs::create_dir_all(project.join("docs/plans")).unwrap();
+    let plan_path = project.join("docs/plans/human-acc.yaml");
+    std::fs::write(
+        &plan_path,
+        r#"
+schema: cco-plan/v1
+name: human-acc
+defaults:
+  provider: fake
+  mode: print
+  worktree: false
+on_failure: continue
+tasks:
+  - id: a
+    title: a
+    prompt: "do a\nCCO_DONE ok"
+    acceptance: "存在 VERDICT 与 ISSUES；阻塞项必须 FAIL"
+"#,
+    )
+    .unwrap();
+
+    let mut config = Config::default();
+    config.state_root = tmp.path().join("state");
+    config.default.default_provider = "fake".into();
+    config.default.worktree = false;
+    std::fs::create_dir_all(config.runs_dir()).unwrap();
+
+    let ir = load_plan(&project, &plan_path, Some("cco-plan/v1"), &config).unwrap();
+    assert!(
+        !cco::plan::is_runnable_verify(ir.tasks[0].acceptance.as_deref().unwrap_or("")),
+        "fixture must be non-shell"
+    );
+    let run_id = state::new_run_id();
+    let run_dir = state::prepare_run_dir(&config.runs_dir(), &run_id).unwrap();
+    let run_state = RunState::new(
+        run_id,
+        project.canonicalize().unwrap(),
+        &ir,
+        run_dir.clone(),
+    );
+    let registry = ProviderRegistry::from_config(&config).unwrap();
+    let status = Scheduler {
+        max_parallel: 1,
+        plan: ir,
+        state: run_state,
+        registry,
+        poll_interval: Duration::from_millis(20),
+        yes: true,
+        only: None,
+        from_task: None,
+        dry_run: false,
+        mirror_state: None,
+        auto_open_terminal: false,
+        terminal_kind: SessionKind::Embedded,
+        terminal_manager: None,
+        run_max_budget_usd: None,
+        provider_max_parallel: Default::default(),
+        retry_max: 0,
+        stall_secs: 600,
+        failover_enabled: false,
+        fallback_extra_attempts: 1,
+    }
+    .run()
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(status, RunStatus::Completed),
+        "human acceptance must not fail the run, got {status:?}"
+    );
+    let st = RunState::load(&run_dir).unwrap();
+    assert_eq!(st.tasks["a"].status, TaskStatus::Done);
+    let acc_path = run_dir.join("tasks/a/acceptance.json");
+    if acc_path.exists() {
+        let body = std::fs::read_to_string(&acc_path).unwrap();
+        assert!(
+            body.contains("skipped_not_shell") || body.contains("\"skipped\": true"),
+            "acceptance.json should note skip, got {body}"
+        );
+        assert!(
+            !body.contains("\"ok\": true") || body.contains("skipped"),
+            "skip must not be reported as shell pass"
+        );
+    }
+}
+
 #[tokio::test]
 async fn terminal_embedded_session_persists() {
     let tmp = tempfile::tempdir().unwrap();

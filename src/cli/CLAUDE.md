@@ -8,9 +8,9 @@ commands/run.rs: **A5-1** Mode B → `app::split::confirm_materialize`；ParseOn
 commands/resume.rs: **A5-1** → `app::run::{prepare_resume,prepare_scheduler}`
 commands/stop.rs: **A1-7** 整 run / 单 task → `app::run::{stop,stop_task}`
 commands/plan_cmd.rs: **A1-7** → `app::split::{start_job,get_job}`
-commands/status.rs: **A5-1** → `app::run::{load_by_dir,handoff_paths,format_status_by_provider}`
+commands/status.rs: **A5-1** → `app::run::{load_by_dir,handoff_paths,format_status_by_provider}`；**H0-5** 首行 `report_summary_line`
 commands/plans.rs: **A5-1** → `app::run::plans`
-commands/common.rs: plan_then_load_ir → app::split；`run_scheduler_loop`（打印 + finish_with_reports）；term path helper
+commands/common.rs: plan_then_load_ir → app::split；`run_scheduler_loop`（**H0-4** 结束先 `report_summary_line` 再 status 枚举 + finish_with_reports）；term path helper
 interactive.rs: 交互选 project/plan · confirm · 非交互硬要求 --project
 
 ## A5-1 CLI ↔ app 1:1 表（真源）

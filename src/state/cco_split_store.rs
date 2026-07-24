@@ -58,9 +58,9 @@ pub fn save_cco_split(config: &Config, doc: &CcoSplitJob) -> Result<()> {
             let mut stmt = tx.prepare(
                 r#"INSERT INTO cco_split_tasks (
                     job_id, task_id, ord, title, summary, body, depends_on, wave,
-                    enabled, optional, done_when, plan_ref, kind, status,
+                    enabled, optional, done_when, verify_cmd, plan_ref, kind, status,
                     provider, role, scope_paths, meta_json
-                  ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)"#,
+                  ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)"#,
             )?;
             for t in &doc.tasks {
                 let deps = serde_json::to_string(&t.depends_on).unwrap_or_else(|_| "[]".into());
@@ -82,6 +82,7 @@ pub fn save_cco_split(config: &Config, doc: &CcoSplitJob) -> Result<()> {
                     t.enabled as i64,
                     t.optional as i64,
                     t.done_when,
+                    t.verify_cmd,
                     t.plan_ref,
                     t.kind.as_str(),
                     t.status.as_str(),
@@ -143,15 +144,15 @@ pub fn load_cco_split(config: &Config, job_id: &str) -> Result<Option<CcoSplitJo
 
         let mut stmt = conn.prepare(
             r#"SELECT task_id, ord, title, summary, body, depends_on, wave,
-                      enabled, optional, done_when, plan_ref, kind, status,
+                      enabled, optional, done_when, verify_cmd, plan_ref, kind, status,
                       provider, role, scope_paths, meta_json
                FROM cco_split_tasks WHERE job_id = ?1 ORDER BY ord ASC"#,
         )?;
         let tasks = stmt
             .query_map(params![job_id], |r| {
                 let deps_s: String = r.get(5)?;
-                let scope_s: String = r.get(15)?;
-                let meta_s: Option<String> = r.get(16)?;
+                let scope_s: String = r.get(16)?;
+                let meta_s: Option<String> = r.get(17)?;
                 let depends_on: Vec<String> =
                     serde_json::from_str(&deps_s).unwrap_or_default();
                 let scope_paths: Vec<String> =
@@ -170,11 +171,12 @@ pub fn load_cco_split(config: &Config, job_id: &str) -> Result<Option<CcoSplitJo
                     enabled: r.get::<_, i64>(7)? != 0,
                     optional: r.get::<_, i64>(8)? != 0,
                     done_when: r.get(9)?,
-                    plan_ref: r.get(10)?,
-                    kind: CcoTaskKind::parse(&r.get::<_, String>(11)?),
-                    status: CcoTaskStatus::parse(&r.get::<_, String>(12)?),
-                    provider: r.get(13)?,
-                    role: r.get(14)?,
+                    verify_cmd: r.get(10)?,
+                    plan_ref: r.get(11)?,
+                    kind: CcoTaskKind::parse(&r.get::<_, String>(12)?),
+                    status: CcoTaskStatus::parse(&r.get::<_, String>(13)?),
+                    provider: r.get(14)?,
+                    role: r.get(15)?,
                     scope_paths,
                     meta_json,
                 })
@@ -279,6 +281,7 @@ mod tests {
                     enabled: true,
                     optional: false,
                     done_when: Some("ok".into()),
+                    verify_cmd: None,
                     plan_ref: Some("§1".into()),
                     kind: CcoTaskKind::Do,
                     status: CcoTaskStatus::Pending,
@@ -298,6 +301,7 @@ mod tests {
                     enabled: false,
                     optional: true,
                     done_when: None,
+                    verify_cmd: None,
                     plan_ref: None,
                     kind: CcoTaskKind::Do,
                     status: CcoTaskStatus::Pending,
