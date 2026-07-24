@@ -467,6 +467,7 @@ merge_check: Option<String>     // 浅白一句；默认规则生成，可空
 | 2026-07-24 | **H1 ✅**：`domain/run/status_line` + `app/run/status_line` · live `status_one_liner`（`live_status` 薄模块）· 桌面 `#status-one-liner` · CLI/TUI 共用 · H1-5 仍 ⛔ |
 | 2026-07-24 | **H2 ✅**：`verify_cmd` 字段 · SQLite `ensure_column` · convert 双轨 · `effective_verify_cmd` · tick 只跑 shell · desk 高级折叠 · H2-6 仍 ⛔ |
 | 2026-07-24 | **H3 ✅**：`merge_check` domain+live+结果台 · soft_accept 中文排队 · handoff integrate/inspect 纪律 · multi-cli 互链无自动 merge |
+| 2026-07-24 | **核验收口**：合入 `e6e1ddb`（H0–H3）+ `bb30704`（金样 `grain_hint`/`effort`）；`cargo test` domain verify/status_line/merge_check/cco_split · `acceptance_and_term` · `a0_behavior_golden` · `mode_b_golden` 全绿；H1-5 / H2-6 仍 ⛔ |
 
 ---
 
