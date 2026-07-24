@@ -83,6 +83,8 @@ async fn a0_confirm_start_is_mode_b_run_entry() {
             mode: Some("print".into()),
             max_parallel: Some(1),
             preserve_from_job_id: None,
+            grain_hint: None,
+            effort: None,
         },
     )
     .unwrap();
@@ -244,6 +246,8 @@ tasks:
             mode: Some("print".into()),
             max_parallel: Some(1),
             preserve_from_job_id: None,
+            grain_hint: None,
+            effort: None,
         },
     )
     .unwrap();
@@ -328,6 +332,8 @@ tasks:
             mode: Some("print".into()),
             max_parallel: Some(1),
             preserve_from_job_id: None,
+            grain_hint: None,
+            effort: None,
         },
     )
     .unwrap();
