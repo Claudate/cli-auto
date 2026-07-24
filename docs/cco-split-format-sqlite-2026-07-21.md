@@ -67,7 +67,7 @@
 | `enabled` | 是否执行（用户勾选；映射 include） |
 | `optional` | 是否可选步骤 |
 | `done_when` | 怎样算做完（**仅**展示 + 巡检叙述；**禁止**当 shell） |
-| `verify_cmd` | 可选一行 shell（host 软验收）；落地勾选见 [`human-status-verify-dual-landing-2026-07-24.md`](./human-status-verify-dual-landing-2026-07-24.md) **H2**（**不**并入文末 S2–S6） |
+| `verify_cmd` | 可选一行 shell（host 软验收）；落地史见 [`archive/human-status-verify-dual-landing-2026-07-24.md`](./archive/human-status-verify-dual-landing-2026-07-24.md) **H2**（**不**并入文末 S2–S6 · 勿当未做） |
 | `plan_ref` | 对照计划章节/ID |
 | `kind` | do / check / system |
 | `status` | pending / …（确认后同步 run） |
@@ -75,7 +75,7 @@
 | `meta_json` | 扩展袋（避免再改表） |
 
 **原则**：主路径只依赖 title / body / depends / wave / enabled / optional；高级字段可空。  
-**materialize 到 PlanIR** 只在 `confirm_start`：prompt←body，include←enabled，optional 保留；`scope_paths` → TaskScope（执行路由）；**`done_when` → 人话/叙述（不进 shell）**；**`verify_cmd` → 执行层 shell 验收**（过渡期旧 `TaskIR.acceptance` 兼容，见 human-status-verify-dual H0–H2）。
+**materialize 到 PlanIR** 只在 `confirm_start`：prompt←body，include←enabled，optional 保留；`scope_paths` → TaskScope（执行路由）；**`done_when` → 人话/叙述（不进 shell）**；**`verify_cmd` → 执行层 shell 验收**（过渡期旧 `TaskIR.acceptance` 兼容，见 archive human-status-verify-dual H0–H2）。
 
 ### 1.2 校验分层
 
@@ -126,7 +126,7 @@
 | 2026-07-21 | 独立 cco 格式 + SQLite SoT；C1–C7 落地 |
 | 2026-07-22 | soft-sqlite 归档；并入残余债 S2–S6（唯一勾选落点） |
 | 2026-07-22 | C1 文档合并：删过时 dual-write 差距控诉；链短规则 + archive；角色=存储真源 |
-| 2026-07-24 | §1.1 增 `verify_cmd` 字段说明；双层验收落地勾选 **只认** human-status-verify-dual 计划 H0–H3 |
+| 2026-07-24 | §1.1 增 `verify_cmd` 字段说明；双层验收落地勾选史见 archive human-status-verify-dual H0–H3（已 ✅ 归档） |
 
 ---
 

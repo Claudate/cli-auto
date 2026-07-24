@@ -24,7 +24,6 @@ cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**�
 
 ### 还在做（活跃落地 · 可有 ☐）
 
-human-status-verify-dual-landing-2026-07-24.md: **人话状态 + 可执行验收双层**（①怎样算做完 · ③卡在哪 · ④合并验 · **H0–H3 ✅** · done_when≠shell · StatusOneLiner · 无 STATE.md/自动 merge）
 subjective-desire-cco-subset-landing-2026-07-22.md: **主观渴望 · 对本仓有用子集落地**（从构思抽出 · **D0–D2 ☐** · 计划五节/缺槽追问/Brief≠confirm · 无人生 Pack）
 guided-plan-memory-decision-2026-07-21.md: **引导/记忆/对抗工程草稿**（G0–G4 ☐ 全量未 ship；§5.6.1 可复用 pilotdeck 薄表；文首后置；**不**开第二套波次）
 
@@ -40,7 +39,11 @@ gap-and-landing-plan-2026-07-18.md: 历史总账 + D5 池导航（D0–D4 已闭
 
 ## 历史归档（[`archive/`](./archive/) · **勿当缺口 · 勿继承勾选**）
 
-> 主线已 ✅ 子计划已迁入 `docs/archive/`（2026-07-21 档 B + **2026-07-22 再归档** 13 项）。日常实施与 Agent **默认不读**；查「当初为什么」再开。索引见 [`archive/README.md`](./archive/README.md)。
+> 主线已 ✅ 子计划已迁入 `docs/archive/`（2026-07-21 档 B + **2026-07-22 再归档** + **2026-07-24** human-status）。日常实施与 Agent **默认不读**；查「当初为什么」再开。索引见 [`archive/README.md`](./archive/README.md)。
+
+### 2026-07-24 再归档
+
+archive/human-status-verify-dual-landing-2026-07-24.md — 人话状态 + 可执行验收双层 H0–H3 ✅（done_when≠shell · StatusOneLiner · merge_check；**规则已进** split-product-rules / cco-split 字段表）
 
 ### 2026-07-22 再归档（B 表）
 

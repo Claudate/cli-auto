@@ -1,17 +1,17 @@
 # 人话状态 + 可执行验收 · 双层展示落地计划
 
 > 日期：2026-07-24  
-> 角色：**实施勾选真源**（论坛评判 ①③④ 的可拆可跑落地）  
-> 产品方向：[`../PRODUCT.md`](../PRODUCT.md)（完成 = 对照计划，不是 exit 0 · 业务语言优先 · 进度看得见）  
-> 架构：[`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)（confirm 唯一开跑 · MVVM · 文件硬上限）  
-> 拆分行为短规则：[`split-product-rules.md`](./split-product-rules.md)  
-> 拆分存储真源：[`cco-split-format-sqlite-2026-07-21.md`](./cco-split-format-sqlite-2026-07-21.md)（字段表可增 `verify_cmd`；**本计划勾选不进 S2–S6**）  
-> 并行 / 混跑参考：[`multi-cli-collaboration-2026-07-18.md`](./multi-cli-collaboration-2026-07-18.md)（无自动 git merge）  
-> 巡检对照：[`plan-execute-inspect-rework-2026-07-19.md`](./plan-execute-inspect-rework-2026-07-19.md)（inspect 权威 · 清单不 auto-run）  
+> 角色：**已归档**（H0–H3 ✅ · **勿当缺口 · 勿继承勾选**）  
+> 产品方向：[`../../PRODUCT.md`](../../PRODUCT.md)（完成 = 对照计划，不是 exit 0 · 业务语言优先 · 进度看得见）  
+> 架构：[`../architecture-redesign-2026-07-20.md`](../architecture-redesign-2026-07-20.md)（confirm 唯一开跑 · MVVM · 文件硬上限）  
+> 拆分行为短规则：[`../split-product-rules.md`](../split-product-rules.md)（**行为规则现行**）  
+> 拆分存储真源：[`../cco-split-format-sqlite-2026-07-21.md`](../cco-split-format-sqlite-2026-07-21.md)（字段表含 `verify_cmd`；**本计划勾选不进 S2–S6**）  
+> 并行 / 混跑参考：[`../multi-cli-collaboration-2026-07-18.md`](../multi-cli-collaboration-2026-07-18.md)（无自动 git merge）  
+> 巡检对照：[`../plan-execute-inspect-rework-2026-07-19.md`](../plan-execute-inspect-rework-2026-07-19.md)（inspect 权威 · 清单不 auto-run）  
 > 记忆地基：`project_last_summary` / `compose_last_summary`（P2-2 · archive pilotdeck）  
-> 状态：**H0–H3 ✅**
+> 状态：**H0–H3 ✅ · 2026-07-24 迁入 archive/**
 
-[PROTOCOL]: **勾选只认本文件 §3**。禁止平行第二套「人话/状态」阶段表；禁止把计划验收 checklist 升为 host 自动真源；禁止 JS 里写 `looks_like_shell` / Mode B / 状态叙事策略；禁止 STATE.md 与 job/run 争真源；禁止 host 自动 git merge/PR。文件软 400 / 硬 600；`services/live.rs` 已 ~777 → **只抽不堆**。
+[PROTOCOL]: **历史勾选 · 勿再当任务表**。行为规则已进 split-product-rules / cco-split 字段表。禁止平行第二套「人话/状态」阶段表；禁止把计划验收 checklist 升为 host 自动真源；禁止 JS 里写 `looks_like_shell` / Mode B / 状态叙事策略；禁止 STATE.md 与 job/run 争真源；禁止 host 自动 git merge/PR。
 
 ---
 
@@ -67,12 +67,12 @@
 
 关键路径：
 
-- [`src/domain/plan/cco_split/convert.rs`](../src/domain/plan/cco_split/convert.rs)  
-- [`src/runtime/acceptance.rs`](../src/runtime/acceptance.rs) · [`src/runtime/scheduler/tick.rs`](../src/runtime/scheduler/tick.rs)  
-- [`src/report/mod.rs`](../src/report/mod.rs) · [`src/state/project_memory.rs`](../src/state/project_memory.rs) · [`src/app/memory.rs`](../src/app/memory.rs)  
-- [`src/cli/commands/common.rs`](../src/cli/commands/common.rs) · [`src/cli/commands/status.rs`](../src/cli/commands/status.rs)  
-- [`src/plan/system_post.rs`](../src/plan/system_post.rs)  
-- [`web/js/features/split/`](../web/js/features/split/) · [`web/js/features/run/`](../web/js/features/run/) · [`web/js/features/result/`](../web/js/features/result/)
+- [`src/domain/plan/cco_split/convert.rs`](../../src/domain/plan/cco_split/convert.rs)  
+- [`src/runtime/acceptance.rs`](../../src/runtime/acceptance.rs) · [`src/runtime/scheduler/tick.rs`](../../src/runtime/scheduler/tick.rs)  
+- [`src/report/mod.rs`](../../src/report/mod.rs) · [`src/state/project_memory.rs`](../../src/state/project_memory.rs) · [`src/app/memory.rs`](../../src/app/memory.rs)  
+- [`src/cli/commands/common.rs`](../../src/cli/commands/common.rs) · [`src/cli/commands/status.rs`](../../src/cli/commands/status.rs)  
+- [`src/plan/system_post.rs`](../../src/plan/system_post.rs)  
+- [`web/js/features/split/`](../../web/js/features/split/) · [`web/js/features/run/`](../../web/js/features/run/) · [`web/js/features/result/`](../../web/js/features/result/)
 
 ---
 
@@ -112,7 +112,7 @@ H3  并行/合并验人话（merge_check）      ~0.5–1 人日
 | **必须** | SQLite **无** `ALTER` 迁移惯例（`CREATE IF NOT EXISTS` only）。H2 加列须写清：`ensure_column` 模式或 `meta_json.verify_cmd` 过渡，**禁止**假设空库重建。 | H2-1 步骤补迁移 |
 | **必须** | H1 `StatusOneLiner` 双源（PlanJob ∥ Run）优先级未写：有 **active run** 时以 run 为准；仅 job 且 `planned` → 等你确认；`planning` → 规划中。 | H1-1 步骤钉死 |
 | **必须** | H3 默认句勿写死 **MERGE.md**（仅部分 collab 示例有）。应：「整合产物 / 各步 SUMMARY / 计划验收」，有 integrate 再点名其 outputs。 | H3-1 改文案 |
-| **必须** | H0/H2 回归：[`tests/acceptance_and_term.rs`](../tests/acceptance_and_term.rs)（`exit 1` shell）+ system_post 注入后 fake 跑不得因中文 Failed。 | H0-7 |
+| **必须** | H0/H2 回归：[`tests/acceptance_and_term.rs`](../../tests/acceptance_and_term.rs)（`exit 1` shell）+ system_post 注入后 fake 跑不得因中文 Failed。 | H0-7 |
 | **建议** | H2 blast：`TaskIR.acceptance` 读点含 tick、live verification、report fallback、planner/view、cco_v1 adapter、convert；改名需兼容 serde `acceptance` 旧键。 | H2-1 列兼容表 |
 | **建议** | H1-5 进行中写回 **默认砍**（标 ⛔ 或 N/A），避免与 finish writeback 抢、刷库。 | H1-5 |
 | **建议** | 概念预算：状态句是 **壳层一条**，不算拆分台第四概念；`verify_cmd`/`merge_check` **禁止**进拆分台首屏三概念。 | §0.3 已有 · H1-3/H3 再钉 |
@@ -144,17 +144,17 @@ H3  并行/合并验人话（merge_check）      ~0.5–1 人日
 
 | 项 | 内容 |
 |----|------|
-| **落点** | [`src/runtime/scheduler/tick.rs`](../src/runtime/scheduler/tick.rs) `apply_post_done_gates` · 可选写 `acceptance.json` 注明 `skipped_not_shell` |
+| **落点** | [`src/runtime/scheduler/tick.rs`](../../src/runtime/scheduler/tick.rs) `apply_post_done_gates` · 可选写 `acceptance.json` 注明 `skipped_not_shell` |
 | **步骤** | 1. `if let Some(cmd) = &task.acceptance` 时先 `is_runnable_verify`。 2. false → 不 spawn shell、不因 acceptance 标 Failed；仍走 `enforce_outputs` / inspect。 3. true → 维持 `run_acceptance_soft`。 4. 日志一行 info：skipped reason。 5. **语义钉死**：skipped ≠ 验收通过；结果台/report 不得把「跳过 shell」写成 PASS。 |
 | **完成定义** | 仅人话 acceptance 的任务 Done 后不再变 Failed（除非 outputs/inspect） |
-| **自测** | 单测或 integration：fixture 中文 acceptance + 无 outputs → Done；`test -f` 缺文件 → Failed；[`tests/acceptance_and_term.rs`](../tests/acceptance_and_term.rs) 仍红（`exit 1`） |
+| **自测** | 单测或 integration：fixture 中文 acceptance + 无 outputs → Done；`test -f` 缺文件 → Failed；[`tests/acceptance_and_term.rs`](../../tests/acceptance_and_term.rs) 仍红（`exit 1`） |
 | **依赖** | H0-1 |
 
 #### H0-2b ·（建议同 PR）convert 短路：人话不写入 `TaskIR.acceptance` ✅
 
 | 项 | 内容 |
 |----|------|
-| **落点** | [`src/domain/plan/cco_split/convert.rs`](../src/domain/plan/cco_split/convert.rs) `to_plan_ir` |
+| **落点** | [`src/domain/plan/cco_split/convert.rs`](../../src/domain/plan/cco_split/convert.rs) `to_plan_ir` |
 | **步骤** | 1. 替换 `acceptance: t.done_when.clone()`：仅当 `done_when`/`verify` 经 `is_runnable_verify` 为 true 时写入 `acceptance`；否则 `acceptance: None`（人话留在 split SoT `done_when`，执行靠 outputs/inspect）。 2. `from_plan_ir` 保持：旧 shell acceptance → done_when 展示可保留短句，但 H2 再拆 verify。 3. 单测：中文 done_when → PlanIR.acceptance is None。 |
 | **完成定义** | Mode B confirm 后 resolved 计划不再把中文塞进 acceptance |
 | **自测** | domain convert 测；可选与 H2 合并若怕两轮改 convert |
@@ -164,7 +164,7 @@ H3  并行/合并验人话（merge_check）      ~0.5–1 人日
 
 | 项 | 内容 |
 |----|------|
-| **落点** | [`src/plan/system_post.rs`](../src/plan/system_post.rs) |
+| **落点** | [`src/plan/system_post.rs`](../../src/plan/system_post.rs) |
 | **步骤** | 1. **三处**现况：inspect ~L128 中文 + 有 outputs；**git-push L212 中文 + outputs 空**；open-pr L288 中文 + outputs 空。 2. 策略（选一写进 PR 说明）：**A（推荐 H0）** 三处 `acceptance: None`，验收入 prompt；inspect 保留 outputs；push/pr 仍靠 worker 约定（与今产品一致，只是去掉假 shell）。 **B** inspect/push 改为显式 `test -f` / `git` 探测命令（须可本地无副作用）。 3. **禁止**只改 inspect 漏掉 push/pr。 4. 人话完成标准留 prompt，H2 后再映射 done_when。 |
 | **完成定义** | `rg 'acceptance: Some' src/plan/system_post.rs` 无纯中文；或全为 is_runnable 命令 |
 | **自测** | 单测生成 TaskIR；开系统收尾的 fake/目视不因 acceptance 假 Failed |
@@ -174,7 +174,7 @@ H3  并行/合并验人话（merge_check）      ~0.5–1 人日
 
 | 项 | 内容 |
 |----|------|
-| **落点** | [`src/cli/commands/common.rs`](../src/cli/commands/common.rs)（`finish_with_reports` 前后）· 复用 [`report_summary_line`](../src/report/mod.rs) |
+| **落点** | [`src/cli/commands/common.rs`](../../src/cli/commands/common.rs)（`finish_with_reports` 前后）· 复用 [`report_summary_line`](../../src/report/mod.rs) |
 | **步骤** | 1. 在 `status: {:?}` **之上或替代为次要**：先 `println!` 人话 `report_summary_line(&st)`（加载 RunState 后）。 2. Debug 枚举可保留在下行或 `--verbose`。 3. 不改 exit code 语义。 |
 | **完成定义** | `cco run` 结束 stdout 可见「本轮状态：**…** · 完成 n/m 项任务」类句子 |
 | **自测** | fake provider 短跑；目视 stdout |
@@ -184,7 +184,7 @@ H3  并行/合并验人话（merge_check）      ~0.5–1 人日
 
 | 项 | 内容 |
 |----|------|
-| **落点** | [`src/cli/commands/status.rs`](../src/cli/commands/status.rs) |
+| **落点** | [`src/cli/commands/status.rs`](../../src/cli/commands/status.rs) |
 | **步骤** | 1. 首行：`report_summary_line` 或 H1 暂用同构规则。 2. 其后可保留机读字段。 3. H1 落地后改调 `StatusOneLiner`。 |
 | **完成定义** | 非开发打开终端第一行能懂「完成了没 / 进行中」 |
 | **自测** | 对已有 run_id 执行 `cco status` |
@@ -194,7 +194,7 @@ H3  并行/合并验人话（merge_check）      ~0.5–1 人日
 
 | 项 | 内容 |
 |----|------|
-| **落点** | 本文件状态 · [`docs/CLAUDE.md`](./CLAUDE.md) 已索引 · [`split-product-rules.md`](./split-product-rules.md) 一句「done_when ≠ shell」 |
+| **落点** | 本文件状态 · [`docs/CLAUDE.md`](../CLAUDE.md) 已索引 · [`split-product-rules.md`](../split-product-rules.md) 一句「done_when ≠ shell」 |
 | **步骤** | 勾选 H0 完成项；短规则补硬句（无第二阶段表）。 |
 | **完成定义** | 新人只读短规则 + 本文件可知禁双用 |
 | **自测** | 文档审阅 |
@@ -204,7 +204,7 @@ H3  并行/合并验人话（merge_check）      ~0.5–1 人日
 
 | 项 | 内容 |
 |----|------|
-| **落点** | [`tests/acceptance_and_term.rs`](../tests/acceptance_and_term.rs) 扩展或新测 · domain verify 单测 |
+| **落点** | [`tests/acceptance_and_term.rs`](../../tests/acceptance_and_term.rs) 扩展或新测 · domain verify 单测 |
 | **步骤** | 1. 保留/确认：`acceptance: "exit 1"` → 任务 Failed + 可有 acceptance.json。 2. 新增：`acceptance: "存在 VERDICT 与 ISSUES"`（或 system_post 原句）→ 任务 **Done**（无 outputs 要求时）。 3. 可选：`done_when` 经 convert 后 PlanIR.acceptance 为空（若做了 H0-2b）。 |
 | **完成定义** | CI 红绿稳定表达双语义 |
 | **自测** | `cargo test -p cco --test acceptance_and_term`（及 domain） |
@@ -269,7 +269,7 @@ H3  并行/合并验人话（merge_check）      ~0.5–1 人日
 
 | 项 | 内容 |
 |----|------|
-| **落点** | [`src/domain/plan/types.rs`](../src/domain/plan/types.rs) `TaskIR` · [`src/domain/plan/cco_split/types.rs`](../src/domain/plan/cco_split/types.rs) · SQLite [`src/state/sqlite.rs`](../src/state/sqlite.rs) / `cco_split_store.rs` · desk [`plan/planner/view.rs`](../src/plan/planner/view.rs) |
+| **落点** | [`src/domain/plan/types.rs`](../../src/domain/plan/types.rs) `TaskIR` · [`src/domain/plan/cco_split/types.rs`](../../src/domain/plan/cco_split/types.rs) · SQLite [`src/state/sqlite.rs`](../../src/state/sqlite.rs) / `cco_split_store.rs` · desk [`plan/planner/view.rs`](../../src/plan/planner/view.rs) |
 | **步骤** | 1. 保留 `done_when: Option<String>`（人话）。 2. 新增 `verify_cmd: Option<String>`（仅 shell 一行）。 3. `TaskIR`：新增 `verify_cmd`；**serde 兼容**：保留字段名 `acceptance` 作 **读别名**（`#[serde(alias)]` 或自定义）→ 填入 `verify_cmd` 或 `done_when`（`is_runnable_verify`）；写出时可继续写 `acceptance` 一版以免打碎旧工具，或双写一版后弃。 4. 目标终态：scheduler **只读 `verify_cmd`**（过渡可读 acceptance 若 verify 空且 runnable）。 5. **SQLite 迁移（钉死）**：现库 **无 ALTER 惯例**。采用 `ensure_column(conn, "cco_split_tasks", "verify_cmd", "TEXT")`（`PRAGMA table_info` + `ALTER TABLE … ADD COLUMN`）在 `with_conn`/init 路径执行；旧行 NULL。 **备选**：先只放 `meta_json.verify_cmd` 避免改表——若选备选须在本任务注明并改存储文。 6. **PlanTaskView** 增加 `verify_cmd`（可选序列化）；`done_when` 继续只给人话。 7. 触达清单：tick · convert · cco_v1 adapter · live/report `collect_task_acceptance_items`（task 行用 done_when）· system_post · examples YAML。 |
 | **完成定义** | 类型编译 + 金样/单测：人话与命令可同时存在且语义不串；**旧 cco.db 升级不炸** |
 | **自测** | convert 往返；serde 旧 `acceptance: "test -f x"` → verify_cmd；临时拷贝用户库 schema 跑 ensure_column |
@@ -309,7 +309,7 @@ H3  并行/合并验人话（merge_check）      ~0.5–1 人日
 
 | 项 | 内容 |
 |----|------|
-| **落点** | [`cco-split-format-sqlite-2026-07-21.md`](./cco-split-format-sqlite-2026-07-21.md) §1.1 字段表加 `verify_cmd` · [`split-product-rules.md`](./split-product-rules.md) schema 行 |
+| **落点** | [`cco-split-format-sqlite-2026-07-21.md`](../cco-split-format-sqlite-2026-07-21.md) §1.1 字段表加 `verify_cmd` · [`split-product-rules.md`](../split-product-rules.md) schema 行 |
 | **步骤** | 1. 字段用途一行。 2. **勾选仍只在本计划 H2**，不把 H2 任务复制进 S2–S6。 3. materialize 映射写清。 |
 | **完成定义** | 地图与地形同构 |
 | **自测** | 文档审阅 |
@@ -468,10 +468,11 @@ merge_check: Option<String>     // 浅白一句；默认规则生成，可空
 | 2026-07-24 | **H2 ✅**：`verify_cmd` 字段 · SQLite `ensure_column` · convert 双轨 · `effective_verify_cmd` · tick 只跑 shell · desk 高级折叠 · H2-6 仍 ⛔ |
 | 2026-07-24 | **H3 ✅**：`merge_check` domain+live+结果台 · soft_accept 中文排队 · handoff integrate/inspect 纪律 · multi-cli 互链无自动 merge |
 | 2026-07-24 | **核验收口**：合入 `e6e1ddb`（H0–H3）+ `bb30704`（金样 `grain_hint`/`effort`）；`cargo test` domain verify/status_line/merge_check/cco_split · `acceptance_and_term` · `a0_behavior_golden` · `mode_b_golden` 全绿；H1-5 / H2-6 仍 ⛔ |
+| 2026-07-24 | **归档**：`git mv` → [`docs/archive/`](./) · 索引 docs/CLAUDE + L1 + archive/README；交叉链 multi-cli / split-product-rules / cco-split 改 archive 路径；**行为规则**仍在短规则与字段表 |
 
 ---
 
-## 9. 实施提示（Agent）
+## 9. 实施提示（Agent · 历史）
 
 1. **先 H0 再 H2**，避免未止血就扩 schema。  
 2. 每波结束：相关 L2 头部 PROTOCOL 一行 + 本表勾选。  

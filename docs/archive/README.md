@@ -1,6 +1,6 @@
 # docs/archive/
 
-> 角色：**已闭环落地子计划归档**（2026-07-21 档 B + **2026-07-22 再归档**）  
+> 角色：**已闭环落地子计划归档**（2026-07-21 档 B + **2026-07-22 再归档** + **2026-07-24** human-status）  
 > 父索引：[`../CLAUDE.md`](../CLAUDE.md)  
 > **不是**实施真源 · **不是**缺口清单 · **禁止**继承阶段勾选
 
@@ -32,5 +32,6 @@
 | p2-7-sdk-provider-2026-07-21.md | 非 CLI `sdk` WorkerPort · S0–S2 ✅ | P2-7 · sdk |
 | split-soft-sqlite-2026-07-21.md | 拆分软接受+SQLite 过渡（开项见 cco-split 文末） | 过渡 · soft |
 | subjective-desire-decision-concept.md | 接近主观渴望 · 构思全文（无排期） | 构思 · 无排期 |
+| human-status-verify-dual-landing-2026-07-24.md | 人话状态 + 可执行验收双层 · H0–H3 ✅ | status · verify · H0–H3 |
 
 [PROTOCOL]: 再归档时 `git mv` 入本目录，并更新本表与 [`../CLAUDE.md`](../CLAUDE.md) / 根 L1。**禁止**把仍有 ☐ 的活跃计划写进本表当可勾选真源；S2–S6 只认 `../cco-split-format-sqlite-2026-07-21.md` 文末。
