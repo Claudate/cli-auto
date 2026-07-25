@@ -7,6 +7,7 @@
 > 轻记忆地基：[`archive/pilotdeck-borrow-landing-2026-07-21.md`](./archive/pilotdeck-borrow-landing-2026-07-21.md) P2-2 pin/summary ✅（**已 archive** · 薄表可复用）  
 > 产品方向：[`../PRODUCT.md`](../PRODUCT.md)（cco = 任务控制台 · 主受众 PM/出海）  
 > 架构：[`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)（confirm 唯一开跑 · MVVM）  
+> **澄清相子集指针**（vibe-check 轻量落地 · 非本文件串味）：[`clarify-phase-vibe-check-subset.md`](./clarify-phase-vibe-check-subset.md)（三入口 · Brief 认领 · 黄条不拦 · **非** vibe-check/guided 全量）  
 > 状态：☐ 波次 D0–D2 待做
 
 [PROTOCOL]: **勾选只认本文件 §3**。禁止平行第二套「人生 OS」阶段表；禁止旁路 `confirm`；禁止把 Brief 冻结写成业务开跑；禁止 Worker `role` 与「内心诉求角色」混词。全量渴望仪器 / 医学包 / 向量人格 = **永不在本计划**。
@@ -226,3 +227,4 @@ D2  Brief 中间态（可选入口 · 认领→plan） ~1–2 人日
 |------|------|
 | 2026-07-22 | 初版：从 subjective-desire 构思 §5.8 抽出 D0–D2 可拆任务表 |
 | 2026-07-22 | **docs-cleanup C3**：构思真源 / pilotdeck 链改 `archive/…`；D0–D2 ☐ 保留 |
+| 2026-07-25 | 头注加澄清相子集指针 → `clarify-phase-vibe-check-subset.md`（不串味、不另起勾选） |

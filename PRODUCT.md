@@ -75,7 +75,7 @@
 
 | 步 | 用户语言 | 产品规则（思路层） |
 |----|----------|-------------------|
-| 生成 | 「我想做 XXX，帮我写成计划」 | 产出人能读的计划文档；不在聊天里直接开干 |
+| 生成 | 「我想做 XXX，帮我写成计划」 | 产出人能读的计划文档；不在聊天里直接开干。模糊一句时可走**澄清相**（三入口 → Brief 认领 → plan；认领 ≠ 开跑）——边界见 [`docs/clarify-phase-vibe-check-subset.md`](./docs/clarify-phase-vibe-check-subset.md) |
 | 核对 | 「对不对？改一句再定」 | 未执行过的可改；草稿和已跑过的要分得清 |
 | 拆分 | 「拆成能并行的步骤」 | AI 拆；人可微调；默认少打断，关键时可先看一眼 |
 | 并行 | 「几路一起干，我看进度」 | 排队 / 进行中 / 完成 / 卡住都可见；卡住要能醒 |
@@ -169,6 +169,7 @@
 | 产品给谁用、主循环、轻不轻 | **本文件** |
 | **系统架构大改 / 实施真源** | [`docs/architecture-redesign-2026-07-20.md`](./docs/architecture-redesign-2026-07-20.md)（**A0–A5 ✅ 收口** · MVVM · 编排边界 · A5-5 可选不做） |
 | 拆分台/结果台等交互意图参考 | [`docs/product-mainpath-optimize-2026-07-20.md`](./docs/product-mainpath-optimize-2026-07-20.md) |
+| **澄清相边界**（① 子集 · 非 vibe-check/guided 全量） | [`docs/clarify-phase-vibe-check-subset.md`](./docs/clarify-phase-vibe-check-subset.md) |
 | 历史编排设计（M0–M4 已落地） | [`docs/archive/claude-cli-orchestrator-plan.md`](./docs/archive/claude-cli-orchestrator-plan.md) |
 | 规划/确认/开跑业务规则 | [`docs/product-mode-b-ai-planner.md`](./docs/product-mode-b-ai-planner.md) |
 | 还缺什么、排不排期 | [`docs/gap-and-landing-plan-2026-07-18.md`](./docs/gap-and-landing-plan-2026-07-18.md) |

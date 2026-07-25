@@ -44,6 +44,8 @@ Cargo.toml — workspace（cco + cco-desktop）
 [`docs/multi-cli-collaboration-2026-07-18.md`](./docs/multi-cli-collaboration-2026-07-18.md) — provider/role/scope · handoff · tags 路由
 [`docs/plan-execute-inspect-rework-2026-07-19.md`](./docs/plan-execute-inspect-rework-2026-07-19.md) — 巡检对照勾选 · 回补波（P-loop）
 [`docs/product-mainpath-optimize-2026-07-20.md`](./docs/product-mainpath-optimize-2026-07-20.md) — 拆分台三栏/结果台交互意图（P2-16 UI 已闭环）
+[`docs/clarify-phase-vibe-check-subset.md`](./docs/clarify-phase-vibe-check-subset.md) — 澄清相边界（vibe-check 轻量子集 · 认领≠开跑 · ⊆ PRODUCT ①）
+[`docs/chat-20260725-0402.md`](./docs/chat-20260725-0402.md) — 澄清相实施计划（t1–t5 ✅ · t6 inspect pending）
 [`docs/subjective-desire-cco-subset-landing-2026-07-22.md`](./docs/subjective-desire-cco-subset-landing-2026-07-22.md) — 主观渴望子集落地（D0–D2 ☐）
 [`docs/guided-plan-memory-decision-2026-07-21.md`](./docs/guided-plan-memory-decision-2026-07-21.md) — 引导/记忆/对抗草稿（G0–G4 ☐ · 后置）
 [`docs/gap-and-landing-plan-2026-07-18.md`](./docs/gap-and-landing-plan-2026-07-18.md) — 历史总账 + D5 池导航（D0–D4 已闭环；**不**新开阶段表）

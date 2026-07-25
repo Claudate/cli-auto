@@ -7,7 +7,7 @@
 
 | 文件 | 注入点 |
 |------|--------|
-| [`chat-plan-writing.md`](./chat-plan-writing.md) | 桌面聊天 system prompt（计划写作助手） |
+| [`chat-plan-writing.md`](./chat-plan-writing.md) | 桌面聊天 system prompt（计划写作助手；含澄清相三入口 / Brief / V1 闸） |
 | [`ui-delivery-recipes.md`](./ui-delivery-recipes.md) | 聊天 + 拆分 **优先**（效果配方：布局·色·字·文案·动效·图·后端） |
 | [`ui-layout-systems.md`](./ui-layout-systems.md) | 聊天 + 拆分 Agent 追加（站点类型 · 区块顺序 · 变体） |
 | [`ui-color-systems.md`](./ui-color-systems.md) | 聊天 + 拆分 Agent 追加（色系 kit / CSS token） |
