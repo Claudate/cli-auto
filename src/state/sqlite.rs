@@ -314,6 +314,96 @@ pub struct PlanSplitIndexRow {
     pub task_count: Option<i64>,
     pub plan_name: Option<String>,
     pub updated_at: String,
+    /// parse | fake | ai | direct | fast …
+    #[serde(default)]
+    pub plan_mode: Option<String>,
+    /// raw-single / planner-ai-llm / cco-split/… — used for restore quality rank.
+    #[serde(default)]
+    pub adapter: Option<String>,
+}
+
+/// Desk restore / prior-success rank for **status** (higher wins among same quality).
+///
+/// Note: quality (multi-step AI vs direct 1-step) is ranked separately via
+/// [`split_graph_quality`] — a planned 8-step AI graph must beat a confirmed
+/// direct 1-step when recovering after a failed re-split.
+pub fn split_status_rank(status: &str) -> u8 {
+    match status.trim().to_ascii_lowercase().as_str() {
+        "confirmed" => 3,
+        "planned" | "ready" => 2,
+        "planning" => 1,
+        _ => 0,
+    }
+}
+
+/// Graph quality for restore preference (higher = better desk to keep).
+///
+/// Rules (product, 2026-07-24):
+/// 1. **direct / raw-single** (整份 1 步) = lowest non-zero quality — never hide a
+///    multi-step AI split just because direct was confirmed first.
+/// 2. Multi-step graphs (`task_count ≥ 2`) outrank single-step.
+/// 3. LLM / cco-split adapters outrank heuristic / parse residuals of same size.
+/// 4. Larger task_count wins ties (capped so one huge residual cannot dominate forever).
+pub fn split_graph_quality(
+    plan_mode: Option<&str>,
+    adapter: Option<&str>,
+    task_count: Option<u32>,
+) -> u32 {
+    let mode = plan_mode.unwrap_or("").trim().to_ascii_lowercase();
+    let adapter = adapter.unwrap_or("").trim().to_ascii_lowercase();
+    let n = task_count.unwrap_or(0).min(64);
+
+    let is_direct = mode == "direct"
+        || adapter == "raw-single"
+        || adapter.ends_with("/raw-single")
+        || (n <= 1 && (adapter.contains("raw-single") || mode == "direct"));
+
+    if is_direct {
+        // Confirmed direct still restorable, but loses to any multi-step graph.
+        return 10 + n.min(1);
+    }
+
+    let mut q: u32 = 100;
+    // Prefer real multi-step graphs.
+    if n >= 2 {
+        q += 200 + n.saturating_mul(3);
+    } else if n == 1 {
+        q += 20;
+    }
+
+    let is_llm = adapter.contains("llm")
+        || adapter.contains("cco-split")
+        || adapter.contains("split-agent")
+        || mode == "ai";
+    let is_heuristic = adapter.contains("heuristic") || mode == "fast" || mode == "heuristic";
+    if is_llm {
+        q += 80;
+    } else if is_heuristic {
+        q += 30;
+    } else if mode == "parse" || adapter.contains("serial") || adapter.contains("cco-v1") {
+        q += 40;
+    }
+
+    q
+}
+
+/// Compare two split candidates for desk restore / prior success.
+/// Order: quality desc → status rank desc → updated_at desc → job_id desc.
+pub fn cmp_split_restore(
+    a_quality: u32,
+    a_status: &str,
+    a_updated: &str,
+    a_job_id: &str,
+    b_quality: u32,
+    b_status: &str,
+    b_updated: &str,
+    b_job_id: &str,
+) -> std::cmp::Ordering {
+    a_quality
+        .cmp(&b_quality)
+        .then_with(|| split_status_rank(a_status).cmp(&split_status_rank(b_status)))
+        .then_with(|| a_updated.cmp(b_updated))
+        .then_with(|| a_job_id.cmp(b_job_id))
 }
 
 /// Normalize plan path for equality (relative preferred; slash-unified).
@@ -350,9 +440,13 @@ fn project_key(project: &Path) -> String {
 /// Source: SQLite `plan_jobs` (dual-write on every job.save). Used by plan list
 /// 「查看拆分结果」so memory `state.planJob` is not the only gate.
 ///
-/// Prefer **confirmed** (already used to open a run) over a newer **planned**
-/// residual, then planning, then updated_at. Incomplete re-splits must not hide
-/// a successful desk graph.
+/// Preference (2026-07-24):
+/// 1. **Graph quality** — multi-step AI/cco-split ≫ direct/raw-single 1-step
+/// 2. Status rank among same quality (confirmed > planned > planning)
+/// 3. Newer `updated_at`
+///
+/// Incomplete re-splits must not hide a better prior graph; a confirmed direct
+/// 1-step must **not** hide a planned 8-step AI desk.
 pub fn latest_job_id_for_plan_path(
     config: &Config,
     project: &Path,
@@ -370,18 +464,28 @@ pub fn latest_job_id_for_plan_path(
     if matched.is_empty() {
         return Ok(None);
     }
-    fn status_rank(s: &str) -> u8 {
-        match s.to_ascii_lowercase().as_str() {
-            "confirmed" => 3,
-            "planned" => 2,
-            "planning" => 1,
-            _ => 0,
-        }
-    }
     matched.sort_by(|a, b| {
-        status_rank(&b.status)
-            .cmp(&status_rank(&a.status))
-            .then_with(|| b.updated_at.cmp(&a.updated_at))
+        let qa = split_graph_quality(
+            a.plan_mode.as_deref(),
+            a.adapter.as_deref(),
+            a.task_count.map(|n| n.max(0) as u32),
+        );
+        let qb = split_graph_quality(
+            b.plan_mode.as_deref(),
+            b.adapter.as_deref(),
+            b.task_count.map(|n| n.max(0) as u32),
+        );
+        // sort_by wants ascending comparator; reverse for "best first"
+        cmp_split_restore(
+            qb,
+            &b.status,
+            &b.updated_at,
+            &b.job_id,
+            qa,
+            &a.status,
+            &a.updated_at,
+            &a.job_id,
+        )
     });
     Ok(matched.into_iter().next().map(|r| r.job_id))
 }
@@ -397,7 +501,8 @@ pub fn list_plan_split_index(
     with_conn(config, |conn| {
         ensure_schema(conn)?;
         let mut stmt = conn.prepare(
-            r#"SELECT job_id, plan_path, status, task_count, plan_name, updated_at, project
+            r#"SELECT job_id, plan_path, status, task_count, plan_name, updated_at, project,
+                      plan_mode, adapter
                FROM plan_jobs
                WHERE status IN ('planning','planned','confirmed')
                ORDER BY updated_at DESC"#,
@@ -412,11 +517,22 @@ pub fn list_plan_split_index(
                 r.get::<_, Option<String>>(4)?,
                 r.get::<_, String>(5)?,
                 r.get::<_, String>(6)?,
+                r.get::<_, Option<String>>(7)?,
+                r.get::<_, Option<String>>(8)?,
             ))
         })?;
         for row in rows {
-            let (job_id, plan_path, status, task_count, plan_name, updated_at, row_project) =
-                row?;
+            let (
+                job_id,
+                plan_path,
+                status,
+                task_count,
+                plan_name,
+                updated_at,
+                row_project,
+                plan_mode,
+                adapter,
+            ) = row?;
             // project column may be absolute or not-canonicalized
             let rp = PathBuf::from(&row_project);
             let same = project_key(&rp) == proj
@@ -434,6 +550,8 @@ pub fn list_plan_split_index(
                 task_count,
                 plan_name,
                 updated_at,
+                plan_mode,
+                adapter,
             });
         }
         Ok(out)
@@ -456,6 +574,30 @@ pub fn reset_for_test() {
 mod tests {
     use super::*;
     use crate::config::Config;
+
+    #[test]
+    fn graph_quality_direct_loses_to_multi_step_ai() {
+        let q_direct = split_graph_quality(Some("direct"), Some("raw-single"), Some(1));
+        let q_ai8 = split_graph_quality(Some("ai"), Some("planner-ai-llm"), Some(8));
+        let q_ai1 = split_graph_quality(Some("ai"), Some("planner-ai-llm"), Some(1));
+        assert!(
+            q_ai8 > q_direct,
+            "8-step AI ({q_ai8}) must beat direct 1 ({q_direct})"
+        );
+        assert!(
+            q_ai8 > q_ai1,
+            "8-step AI must beat 1-step AI residual"
+        );
+        // Confirmed vs planned is status rank, not quality — both multi-step AI close.
+        let q_confirmed7 =
+            split_graph_quality(Some("ai"), Some("planner-ai-llm"), Some(7));
+        let q_heur5 =
+            split_graph_quality(Some("ai"), Some("planner-ai-heuristic"), Some(5));
+        assert!(
+            q_confirmed7 > q_heur5,
+            "larger LLM graph outranks smaller heuristic"
+        );
+    }
     use crate::plan::planner::{PlanJob, PlanJobStatus};
     use crate::plan::{OnFailure, PlanIR, TaskIR};
     use chrono::Utc;
@@ -675,7 +817,7 @@ mod tests {
             .expect("job id");
         assert_eq!(id, "plan-new");
 
-        // Confirmed (opened a run) must win over a newer residual planned job.
+        // Same-quality multi-step: confirmed AI must beat a newer smaller residual.
         let confirmed = PlanJob {
             job_id: "plan-confirmed".into(),
             status: PlanJobStatus::Confirmed,
@@ -738,10 +880,79 @@ mod tests {
         upsert_plan_job(&cfg, &residual).unwrap();
         let prefer = latest_job_id_for_plan_path(&cfg, &project, "docs/a.md")
             .unwrap()
-            .expect("prefer confirmed");
+            .expect("prefer confirmed multi-step");
         assert_eq!(
             prefer, "plan-confirmed",
-            "confirmed must beat newer planned residual"
+            "confirmed multi-step AI must beat smaller heuristic residual"
+        );
+
+        // Product bug 2026-07-24: confirmed direct 1-step must NOT hide planned 8-step AI.
+        let direct1 = PlanJob {
+            job_id: "plan-direct-1".into(),
+            status: PlanJobStatus::Confirmed,
+            project: project.clone(),
+            plan_path: PathBuf::from("docs/a.md"),
+            plan_mode: "direct".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: None,
+            run_id: Some("run-d".into()),
+            created_at: Utc::now() - chrono::Duration::seconds(200),
+            updated_at: Utc::now() - chrono::Duration::seconds(10),
+            plan_name: Some("direct".into()),
+            task_count: Some(1),
+            max_parallel: Some(1),
+            adapter: Some("raw-single".into()),
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+            grain_hint: None,
+            effort: None,
+        };
+        let ai8 = PlanJob {
+            job_id: "plan-ai-8".into(),
+            status: PlanJobStatus::Planned,
+            project: project.clone(),
+            plan_path: PathBuf::from("docs/a.md"),
+            plan_mode: "ai".into(),
+            provider: "claude".into(),
+            exec_mode: "print".into(),
+            error: None,
+            run_id: None,
+            created_at: Utc::now() - chrono::Duration::seconds(180),
+            updated_at: Utc::now() - chrono::Duration::seconds(60),
+            plan_name: Some("ai-8".into()),
+            task_count: Some(8),
+            max_parallel: Some(2),
+            adapter: Some("planner-ai-llm".into()),
+            planner_cost_usd: None,
+            digest_mode: None,
+            critic_summary: None,
+            critic_edges_removed: None,
+            critic_titles_rewritten: None,
+            critic_prompts_tagged: None,
+            critic_notes: vec![],
+            critic_llm_used: None,
+            critic_llm_cost_usd: None,
+            critic_llm_ms: None,
+            grain_hint: None,
+            effort: None,
+        };
+        upsert_plan_job(&cfg, &direct1).unwrap();
+        upsert_plan_job(&cfg, &ai8).unwrap();
+        let prefer_ai = latest_job_id_for_plan_path(&cfg, &project, "docs/a.md")
+            .unwrap()
+            .expect("prefer multi-step AI over direct");
+        assert_eq!(
+            prefer_ai, "plan-ai-8",
+            "planned 8-step AI must beat confirmed direct 1-step"
         );
 
         let idx = list_plan_split_index(&cfg, &project).unwrap();

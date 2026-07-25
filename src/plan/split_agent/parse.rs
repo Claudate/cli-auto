@@ -7,6 +7,7 @@
 
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
+use serde::Deserializer;
 
 use super::extract::extract_json_object;
 use crate::domain::plan::{
@@ -15,11 +16,135 @@ use crate::domain::plan::{
 };
 use crate::ports::split_agent::SplitRequest;
 
+/// LLM often emits string fields as arrays (or the reverse). Coerce both shapes
+/// so `invalid type: sequence, expected a string` does not kill a whole split.
+fn deserialize_opt_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = serde_json::Value::deserialize(deserializer)?;
+    Ok(value_to_opt_string(&v))
+}
+
+fn deserialize_string_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = serde_json::Value::deserialize(deserializer)?;
+    Ok(value_to_string_vec(&v))
+}
+
+fn value_to_opt_string(v: &serde_json::Value) -> Option<String> {
+    match v {
+        serde_json::Value::Null => None,
+        serde_json::Value::String(s) => {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.to_string())
+            }
+        }
+        serde_json::Value::Number(n) => Some(n.to_string()),
+        serde_json::Value::Bool(b) => Some(b.to_string()),
+        serde_json::Value::Array(arr) => {
+            let parts: Vec<String> = arr
+                .iter()
+                .filter_map(|x| match x {
+                    serde_json::Value::String(s) => {
+                        let t = s.trim();
+                        if t.is_empty() {
+                            None
+                        } else {
+                            Some(t.to_string())
+                        }
+                    }
+                    serde_json::Value::Number(n) => Some(n.to_string()),
+                    serde_json::Value::Bool(b) => Some(b.to_string()),
+                    _ => None,
+                })
+                .collect();
+            if parts.is_empty() {
+                None
+            } else {
+                // Join checklist-like arrays into one done_when / body block.
+                Some(parts.join("\n"))
+            }
+        }
+        serde_json::Value::Object(_) => {
+            // Refuse opaque objects as free text (too lossy).
+            None
+        }
+    }
+}
+
+fn value_to_string_vec(v: &serde_json::Value) -> Vec<String> {
+    match v {
+        serde_json::Value::Null => vec![],
+        serde_json::Value::String(s) => {
+            let t = s.trim();
+            if t.is_empty() {
+                vec![]
+            } else if t.contains(',') {
+                // "a, b, c" → list (common LLM slip for depends_on)
+                t.split(',')
+                    .map(|p| p.trim().to_string())
+                    .filter(|p| !p.is_empty())
+                    .collect()
+            } else {
+                vec![t.to_string()]
+            }
+        }
+        serde_json::Value::Array(arr) => arr
+            .iter()
+            .filter_map(|x| match x {
+                serde_json::Value::String(s) => {
+                    let t = s.trim();
+                    if t.is_empty() {
+                        None
+                    } else {
+                        Some(t.to_string())
+                    }
+                }
+                serde_json::Value::Number(n) => Some(n.to_string()),
+                // Nested array: flatten one level (["t1", ["t2"]] rare but seen)
+                serde_json::Value::Array(inner) => {
+                    let joined: Vec<String> = inner
+                        .iter()
+                        .filter_map(|y| y.as_str().map(|s| s.trim().to_string()))
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    if joined.is_empty() {
+                        None
+                    } else {
+                        Some(joined.join(","))
+                    }
+                }
+                _ => None,
+            })
+            .flat_map(|s| {
+                if s.contains(',') && !s.contains('/') && !s.contains('.') {
+                    // depends_on "t1,t2" flattened earlier as single string with comma
+                    s.split(',')
+                        .map(|p| p.trim().to_string())
+                        .filter(|p| !p.is_empty())
+                        .collect::<Vec<_>>()
+                } else {
+                    vec![s]
+                }
+            })
+            .collect(),
+        serde_json::Value::Number(n) => vec![n.to_string()],
+        serde_json::Value::Bool(b) => vec![b.to_string()],
+        serde_json::Value::Object(_) => vec![],
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct AgentDoc {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_string")]
     schema: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_string")]
     title: Option<String>,
     #[serde(default)]
     max_parallel: Option<usize>,
@@ -29,32 +154,40 @@ struct AgentDoc {
 
 #[derive(Debug, Deserialize)]
 struct AgentTask {
-    #[serde(default, alias = "task_id")]
+    #[serde(
+        default,
+        alias = "task_id",
+        deserialize_with = "deserialize_opt_string"
+    )]
     id: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_string")]
     title: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_string")]
     summary: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_string")]
     body: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_vec")]
     depends_on: Vec<String>,
     #[serde(default)]
     optional: bool,
     #[serde(default)]
     enabled: Option<bool>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_string")]
     kind: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_string")]
     done_when: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_string")]
     verify_cmd: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_string")]
     plan_ref: Option<String>,
     #[serde(default)]
     can_parallel: Option<bool>,
     /// File ownership for parallel waves (Q2).
-    #[serde(default, alias = "scope")]
+    #[serde(
+        default,
+        alias = "scope",
+        deserialize_with = "deserialize_string_vec"
+    )]
     scope_paths: Vec<String>,
 }
 
@@ -307,6 +440,52 @@ Here is the plan:
     fn empty_tasks_err() {
         let raw = r#"{"schema":"cco-split/v1","tasks":[]}"#;
         assert!(parse_agent_output(raw, &req()).is_err());
+    }
+
+    /// 2026-07-24: model emitted string fields as arrays → hard fail entire split.
+    /// Coerce sequence→string and string→list so desk can accept the graph.
+    #[test]
+    fn coerce_string_fields_from_arrays() {
+        let raw = r#"{
+          "schema": "cco-split/v1",
+          "title": "demo",
+          "tasks": [
+            {
+              "id": "t1",
+              "title": "做 A",
+              "body": ["完成 A 的实现", "写验收说明"],
+              "done_when": ["A 可编译", "有单测"],
+              "depends_on": "ghost-missing",
+              "scope_paths": "web/a.js",
+              "kind": "do"
+            },
+            {
+              "id": "t2",
+              "title": "做 B",
+              "body": "完成 B",
+              "depends_on": "t1, ghost-missing",
+              "scope_paths": ["web/b.js", "web/c.js"],
+              "kind": "check"
+            }
+          ]
+        }"#;
+        let job = parse_agent_output(raw, &req()).expect("coerced parse");
+        assert_eq!(job.tasks.len(), 2);
+        assert!(job.tasks[0].body.contains("完成 A"));
+        assert!(
+            job.tasks[0]
+                .done_when
+                .as_deref()
+                .unwrap_or("")
+                .contains("可编译"),
+            "done_when array joined"
+        );
+        // ghost edges pruned by soft_accept; string depends_on still accepted as list
+        assert!(job.tasks[0].depends_on.is_empty(), "missing deps pruned");
+        assert_eq!(job.tasks[0].scope_paths, vec!["web/a.js".to_string()]);
+        // string "t1, ghost-missing" → [t1, ghost] then ghost pruned → [t1]
+        assert_eq!(job.tasks[1].depends_on, vec!["t1".to_string()]);
+        assert_eq!(job.tasks[1].scope_paths.len(), 2);
     }
 
     #[test]

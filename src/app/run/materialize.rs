@@ -13,6 +13,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 
 use crate::config::Config;
+use crate::domain::plan::{
+    assign_closeout_owners, build_host_checklist, format_checklist_for_prompt, inject_closeout_task,
+    SYS_CLOSEOUT_ID,
+};
 use crate::domain::worker::RouteFillReport;
 use crate::plan::{load_plan, materialize_selected_tasks, PlanIR};
 use crate::state::{self, RunState};
@@ -54,8 +58,20 @@ pub fn materialize_run_with_route(
     }
     // Drop optional && !include before any disk write or scheduler handoff.
     let mut ir = materialize_selected_tasks(ir.clone())?;
+    // Ensure E1/E2: host checklist + optional sys-closeout before soft-fill.
+    let plan_md = std::fs::read_to_string(&ir.source_path).ok();
+    let mut checklist = build_host_checklist(&ir, plan_md.as_deref());
+    let paste = format_checklist_for_prompt(&checklist.items);
+    inject_closeout_task(&mut ir, config.default.auto_closeout, Some(&paste));
+    if ir.tasks.iter().any(|t| t.id == SYS_CLOSEOUT_ID) {
+        assign_closeout_owners(&mut checklist, SYS_CLOSEOUT_ID);
+    }
     // Soft-fill Claude effort from config when task opts lack it (does not overwrite explicit).
     apply_effort(&mut ir, config, None);
+    // Soft-fill permission_mode so unattended workers can Edit/Bash (default bypass).
+    apply_permission_mode(&mut ir, config, None);
+    ir.validate()
+        .with_context(|| "validate after ensure closeout inject")?;
     let run_id = state::new_run_id();
     let run_dir = state::prepare_run_dir(&config.runs_dir(), &run_id)?;
     let project = project
@@ -70,6 +86,11 @@ pub fn materialize_run_with_route(
     run_state.save()?;
     let resolved = run_dir.join("plan.resolved.json");
     std::fs::write(&resolved, serde_json::to_string_pretty(&ir)?)?;
+    // Host checklist for E1/E3 prompts and report compare.
+    let checklist_path = run_dir.join("plan.checklist.json");
+    if let Ok(body) = serde_json::to_string_pretty(&checklist) {
+        let _ = std::fs::write(&checklist_path, body);
+    }
     Ok((run_id, run_state, ir))
 }
 
@@ -106,6 +127,39 @@ pub fn apply_effort(ir: &mut PlanIR, config: &Config, override_effort: Option<&s
     }
 }
 
+/// Apply Claude `permission_mode` onto task `provider_opts`.
+///
+/// Unattended workers have no permission UI. Soft-fill defaults to
+/// `bypassPermissions` (from config) so Edit/Bash are not auto-denied.
+/// Explicit per-task values are kept; `override_mode` forces all claude/fake tasks.
+pub fn apply_permission_mode(ir: &mut PlanIR, config: &Config, override_mode: Option<&str>) {
+    let force = override_mode.and_then(crate::config::normalize_permission_mode);
+    let soft = crate::config::normalize_permission_mode(&config.default.permission_mode)
+        .unwrap_or_else(|| "bypassPermissions".into());
+    for t in &mut ir.tasks {
+        let p = t.provider.to_ascii_lowercase();
+        if p != "claude" && p != "fake" {
+            continue;
+        }
+        if !t.provider_opts.is_object() {
+            t.provider_opts = serde_json::json!({});
+        }
+        if let Some(ref m) = force {
+            t.provider_opts["permission_mode"] = serde_json::json!(m);
+            continue;
+        }
+        let missing = t
+            .provider_opts
+            .get("permission_mode")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true);
+        if missing {
+            t.provider_opts["permission_mode"] = serde_json::json!(soft);
+        }
+    }
+}
+
 /// ParseOnly / structured / `--skip-plan`: load plan from disk and materialize.
 ///
 /// **Not** Mode B. Documented ParseOnly path — does not create a plan job.
@@ -132,6 +186,63 @@ mod tests {
         let mut c = Config::default();
         c.state_root = root.to_path_buf();
         c
+    }
+
+    #[test]
+    fn apply_permission_mode_soft_fills_bypass_default() {
+        let cfg = Config::default();
+        assert_eq!(cfg.default.permission_mode, "bypassPermissions");
+        let mut ir = PlanIR {
+            schema: "cco-plan/v1".into(),
+            name: "p".into(),
+            adapter: "test".into(),
+            source_path: std::path::PathBuf::from("p.md"),
+            max_parallel: 1,
+            on_failure: OnFailure::Pause,
+            retry_max: 0,
+            default_provider: "claude".into(),
+            default_mode: "print".into(),
+            worktree: false,
+            require_inspect: false,
+            tasks: vec![TaskIR {
+                id: "t1".into(),
+                title: "t".into(),
+                depends_on: vec![],
+                group: None,
+                provider: "claude".into(),
+                mode: "print".into(),
+                prompt: "x".into(),
+                verify_cmd: None,
+                acceptance: None,
+                timeout_secs: None,
+                worktree: Some(false),
+                provider_opts: serde_json::json!({}),
+                optional: false,
+                include: true,
+                role: None,
+                scope: None,
+                outputs: vec![],
+                tags: vec![],
+            }],
+        };
+        apply_permission_mode(&mut ir, &cfg, None);
+        assert_eq!(
+            ir.tasks[0].provider_opts["permission_mode"].as_str(),
+            Some("bypassPermissions")
+        );
+        // explicit kept
+        ir.tasks[0].provider_opts["permission_mode"] = serde_json::json!("dontAsk");
+        apply_permission_mode(&mut ir, &cfg, None);
+        assert_eq!(
+            ir.tasks[0].provider_opts["permission_mode"].as_str(),
+            Some("dontAsk")
+        );
+        // force override
+        apply_permission_mode(&mut ir, &cfg, Some("bypass"));
+        assert_eq!(
+            ir.tasks[0].provider_opts["permission_mode"].as_str(),
+            Some("bypassPermissions")
+        );
     }
 
     fn sample_ir(project: &std::path::Path) -> PlanIR {

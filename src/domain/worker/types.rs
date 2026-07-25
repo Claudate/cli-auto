@@ -15,6 +15,12 @@ pub enum ProviderId {
     Fake,
     /// Non-CLI path (P2-7 S0 inline · S1 Messages HTTP). Registry opt-in.
     Sdk,
+    Gemini,
+    Qwen,
+    Kimi,
+    Deepseek,
+    Copilot,
+    Codebuddy,
 }
 
 impl ProviderId {
@@ -24,6 +30,12 @@ impl ProviderId {
             Self::Codex => "codex",
             Self::Fake => "fake",
             Self::Sdk => "sdk",
+            Self::Gemini => "gemini",
+            Self::Qwen => "qwen",
+            Self::Kimi => "kimi",
+            Self::Deepseek => "deepseek",
+            Self::Copilot => "copilot",
+            Self::Codebuddy => "codebuddy",
         }
     }
 
@@ -34,8 +46,28 @@ impl ProviderId {
             "codex" => Some(Self::Codex),
             "fake" | "mock" => Some(Self::Fake),
             "sdk" | "claude-sdk" | "claude_sdk" => Some(Self::Sdk),
+            "gemini" | "google" => Some(Self::Gemini),
+            "qwen" | "tongyi" => Some(Self::Qwen),
+            "kimi" | "moonshot" => Some(Self::Kimi),
+            "deepseek" => Some(Self::Deepseek),
+            "copilot" | "github-copilot" | "github_copilot" => Some(Self::Copilot),
+            "codebuddy" | "tencent" | "cbc" => Some(Self::Codebuddy),
             _ => None,
         }
+    }
+
+    /// True for shell-print adapters (not claude / fake / sdk).
+    pub fn is_shell_print(self) -> bool {
+        matches!(
+            self,
+            Self::Codex
+                | Self::Gemini
+                | Self::Qwen
+                | Self::Kimi
+                | Self::Deepseek
+                | Self::Copilot
+                | Self::Codebuddy
+        )
     }
 }
 
@@ -83,8 +115,15 @@ mod tests {
         assert_eq!(ProviderId::parse("CODEX"), Some(ProviderId::Codex));
         assert_eq!(ProviderId::parse("mock"), Some(ProviderId::Fake));
         assert_eq!(ProviderId::parse("sdk"), Some(ProviderId::Sdk));
-        assert_eq!(ProviderId::parse("claude-sdk"), Some(ProviderId::Sdk));
         assert_eq!(ProviderId::as_str(ProviderId::Sdk), "sdk");
+        assert_eq!(ProviderId::parse("gemini"), Some(ProviderId::Gemini));
+        assert_eq!(ProviderId::parse("qwen"), Some(ProviderId::Qwen));
+        assert_eq!(ProviderId::parse("kimi"), Some(ProviderId::Kimi));
+        assert_eq!(ProviderId::parse("deepseek"), Some(ProviderId::Deepseek));
+        assert_eq!(ProviderId::parse("copilot"), Some(ProviderId::Copilot));
+        assert_eq!(ProviderId::parse("codebuddy"), Some(ProviderId::Codebuddy));
         assert_eq!(ProviderId::parse("other"), None);
+        assert!(ProviderId::Gemini.is_shell_print());
+        assert!(!ProviderId::Claude.is_shell_print());
     }
 }

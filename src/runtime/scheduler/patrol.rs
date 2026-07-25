@@ -41,25 +41,47 @@ impl Scheduler {
 
     /// Pure failover policy object (A1-4); preflight stays here (IO).
     pub(super) fn failover_policy(&self) -> FailoverPolicy {
-        FailoverPolicy::new(self.failover_enabled, self.fallback_extra_attempts)
+        FailoverPolicy::with_order(
+            self.failover_enabled,
+            self.fallback_extra_attempts,
+            self.failover_order.clone(),
+        )
     }
 
     /// Resolve a live fallback provider when H4 failover is armed and preflight passes.
-    pub(super) async fn resolve_failover_provider(&self, current: &str) -> Option<String> {
-        let target = self.failover_policy().target_for(current)?;
-        let provider = match self.registry.get(target) {
-            Ok(p) => p,
-            Err(_) => return None,
-        };
-        if provider.preflight().await.is_err() {
-            warn!(
-                from = %current,
-                to = %target,
-                "failover preflight failed — skipping switch"
-            );
-            return None;
+    /// Walks order; skips candidates that are not registered or fail preflight.
+    pub(super) async fn resolve_failover_provider(
+        &self,
+        current: &str,
+        already_tried: &[String],
+    ) -> Option<String> {
+        let policy = self.failover_policy();
+        let mut tried = already_tried.to_vec();
+        loop {
+            let target = policy.target_for(current, &tried)?;
+            let provider = match self.registry.get(&target) {
+                Ok(p) => p,
+                Err(_) => {
+                    warn!(
+                        from = %current,
+                        to = %target,
+                        "failover target not registered — try next"
+                    );
+                    tried.push(target);
+                    continue;
+                }
+            };
+            if provider.preflight().await.is_err() {
+                warn!(
+                    from = %current,
+                    to = %target,
+                    "failover preflight failed — try next"
+                );
+                tried.push(target);
+                continue;
+            }
+            return Some(target);
         }
-        Some(target.to_string())
     }
 
     /// Attempt budget for this task: after failover, only `fallback_extra_attempts`.

@@ -1,13 +1,15 @@
 # cco 计划驱动执行闭环（拆分 · 落地 · 巡检 · 回补）
 
-> **状态：规则有效 · 阶段勾选勿继承**  
+> **状态：已落地 · 阶段勾选勿继承**（P-loop / P2-11 主线已闭环；Ensure 关账见独立活跃文）  
 > 阶段勾选史：**L0–L2 已落地**（2026-07-19；**P-loop / P2-11**；**不**回灌 D0–D4 / P-chat / multi-cli 已勾项）——**勿**当未做工作再开。  
 > 日期：2026-07-19  
 > 范围：Mode B 规划拆分质量 · 工作包完成定义 · **专门巡检**对照计划勾选 · 遗漏分级 · **回补波**强制闭环 · host 门禁与启发式模板  
 > 角色：执行方法论与产品/host 真源——把「有计划 → 能拆清 → 做完可验 → 漏了必补」钉成可派工契约；**不**替代 Mode B `confirm_start`；**不**重做聊天 UX；**不**扩 C3 流式  
+> **Q3 修订（2026-07-24 Ensure）**：inspect **仍**不改业务 L1/源码凑 PASS；台账/地图有界关账改由 Ensure E2（`role=closeout` / `sys-closeout`）承担——见 [`inspect-ensure-close-loop-2026-07-24.md`](./inspect-ensure-close-loop-2026-07-24.md)（**不**复活本文件阶段勾选）。  
 > 关联真源：
 > - Mode B → [`product-mode-b-ai-planner.md`](./product-mode-b-ai-planner.md)（分配后 Planner → 确认 → 执行）
 > - 多 CLI / 检验员 → [`multi-cli-collaboration-2026-07-18.md`](./multi-cli-collaboration-2026-07-18.md)（role/scope/inspect VERDICT · handoff · REWORK_HOOK；本计划**补全「对照计划勾选 + 回补闭环」**，**不**另开第二套 Scheduler）
+> - Ensure 关账闭环 → [`inspect-ensure-close-loop-2026-07-24.md`](./inspect-ensure-close-loop-2026-07-24.md)（**本问题活跃勾选**）
 > - 总账 → [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md)（本计划 → **P-loop / P2-11 已落地**；**勿**回灌 D0–D4）
 > - 反例触发 → [`chat-utf8-fence-panic-2026-07-19.md`](./archive/chat-utf8-fence-panic-2026-07-19.md)（四波 PASS 仍有 I-1 文档滞后 / I-2 验收降级 / inspect 只开单不修）  
 > GEB 入口：[`/CLAUDE.md`](../CLAUDE.md)（L1）· [`./CLAUDE.md`](./CLAUDE.md)（L2 docs）

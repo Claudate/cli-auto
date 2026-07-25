@@ -2,7 +2,7 @@
 > L2 | 父级: /src/CLAUDE.md
 
 成员清单
-mod.rs: Config · AllowedProject · providers/terminal/tui 段 · retry_max/stall_secs · failover_enabled/fallback_extra_attempts(H4) · post_inspect/post_git_push/**post_open_pr**（系统收尾总开关默认关 · S-PR） · planner_critic_enabled（可选 LLM 第二跳校对，默认关） · **effort**（`low|medium|high|xhigh|max|ultracode` · 默认 high · env `CCO_EFFORT` · `normalize_effort` / `effort_cli_level` / ultracode→xhigh + `ULTRACODE_SYSTEM_HINT`） · **providers.sdk**（P2-7 非 CLI，**默认 enabled=false**；`bin=inline|messages|tools` · S1 HTTP · S2 tool loop） · load/save · state_root
+mod.rs: Config · AllowedProject · providers/terminal/tui 段 · retry_max/stall_secs · failover_enabled/fallback_extra_attempts/**failover_order**(H4 可配顺序，默认 claude,codex；fake/sdk 永不自动) · post_inspect/post_git_push/**post_open_pr**（系统收尾默认关） · planner_critic_enabled · **effort** · **permission_mode**（默认 **bypassPermissions** · 无人 worker 可写；dontAsk 会假完成）· **auto_closeout / auto_rework**（Ensure 默认开）· **auto_rework_docs_only**（默认**关**·真 blocking 也自动回补；手点 residual 主机降级不触发）· normalize_permission_mode · **builtin_provider_map**（claude/codex/fake/sdk + gemini/qwen/kimi/deepseek/copilot/codebuddy；`CCO_*_BIN`） · load/save · state_root
 
 法则: 成员完整·一行一文件·父级链接·技术词前置
 

@@ -145,8 +145,15 @@ export function engineLabel(provider) {
   if (typeof fn === "function") return fn(provider);
   const p = String(provider || "claude").toLowerCase();
   if (p === "codex") return "备用通道";
+  if (p === "claude") return "默认通道";
+  if (p === "gemini") return "Gemini";
+  if (p === "qwen" || p === "tongyi") return "通义 Qwen";
+  if (p === "kimi" || p === "moonshot") return "Kimi";
+  if (p === "deepseek" || p === "codewhale" || p === "codew") return "CodeWhale";
+  if (p === "copilot") return "Copilot";
+  if (p === "codebuddy" || p === "cbc") return "CodeBuddy";
   if (p === "fake") return "演练";
-  return "默认通道";
+  return p || "默认通道";
 }
 
 /**

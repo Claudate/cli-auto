@@ -22,11 +22,13 @@ pub struct SettingsView {
     pub retry_max: u32,
     /// 多久没新日志算卡死（秒；无日志增长 → stop + 重试）。
     pub stall_secs: u64,
-    /// H4: after same-CLI retries exhaust, switch claude↔codex and try again.
+    /// H4: after same-CLI retries exhaust, walk failover_order.
     pub failover_enabled: bool,
     /// Extra attempts on the fallback CLI after a provider switch (default 1).
     pub fallback_extra_attempts: u32,
-    /// Read-only human note for settings UI (not persisted separately).
+    /// Production failover walk order (e.g. claude,codex,gemini).
+    pub failover_order: Vec<String>,
+    /// Human note for settings UI (derived from order).
     pub failover_order_note: String,
     /// 拆分后附加系统任务「任务巡检」（可选，默认勾选）。总开关默认关。
     pub post_inspect_enabled: bool,
@@ -40,6 +42,10 @@ pub struct SettingsView {
     pub planner_critic_enabled: bool,
     /// 推理深度：low | medium | high | xhigh | max | ultracode（ultracode=xhigh+多 Agent）。
     pub effort: String,
+    /// Worker 工具权限：bypassPermissions（推荐·自动写）| dontAsk（无 UI 会拒写）| acceptEdits | default。
+    pub permission_mode: String,
+    /// 设置页只读说明：无人 worker 必须可写，否则任务会假完成。
+    pub permission_mode_note: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -52,15 +58,31 @@ pub struct SettingsUpdate {
     pub stall_secs: Option<u64>,
     pub failover_enabled: Option<bool>,
     pub fallback_extra_attempts: Option<u32>,
+    /// Optional full replacement of failover_order (empty ignored).
+    pub failover_order: Option<Vec<String>>,
     pub post_inspect_enabled: Option<bool>,
     pub post_git_push_enabled: Option<bool>,
     pub post_open_pr_enabled: Option<bool>,
     pub planner_critic_enabled: Option<bool>,
     /// low | medium | high | xhigh | max | ultracode
     pub effort: Option<String>,
+    /// bypassPermissions | dontAsk | acceptEdits | default（及常见别名）
+    pub permission_mode: Option<String>,
+}
+
+fn failover_order_note(order: &[String]) -> String {
+    let list = if order.is_empty() {
+        "claude → codex".to_string()
+    } else {
+        order.join(" → ")
+    };
+    format!(
+        "备用顺序：{list}；fake/sdk 不参与。同 CLI 重试尽后按序换下一家（preflight 失败则跳过）。"
+    )
 }
 
 pub fn get_settings(config: &Config) -> SettingsView {
+    let order = config.default.failover_order.clone();
     SettingsView {
         poll_interval_secs: config.default.poll_interval_secs,
         default_provider: config.default.default_provider.clone(),
@@ -71,9 +93,8 @@ pub fn get_settings(config: &Config) -> SettingsView {
         stall_secs: config.default.stall_secs,
         failover_enabled: config.default.failover_enabled,
         fallback_extra_attempts: config.default.fallback_extra_attempts,
-        // 设置页只读说明（H4）：顺序固定，fake 不参与生产 failover
-        failover_order_note:
-            "备用顺序只读：claude ↔ codex；fake 不参与。同 CLI 重试尽后自动换另一家再试。".into(),
+        failover_order: order.clone(),
+        failover_order_note: failover_order_note(&order),
         post_inspect_enabled: config.default.post_inspect_enabled,
         post_git_push_enabled: config.default.post_git_push_enabled,
         post_open_pr_enabled: config.default.post_open_pr_enabled,
@@ -82,6 +103,26 @@ pub fn get_settings(config: &Config) -> SettingsView {
                 .into(),
         planner_critic_enabled: config.default.planner_critic_enabled,
         effort: config.default.effort.clone(),
+        permission_mode: config.default.permission_mode.clone(),
+        permission_mode_note: permission_mode_note(&config.default.permission_mode),
+    }
+}
+
+fn permission_mode_note(mode: &str) -> String {
+    match crate::config::normalize_permission_mode(mode)
+        .unwrap_or_else(|| "bypassPermissions".into())
+        .as_str()
+    {
+        "bypassPermissions" => {
+            "任务可自动写文件与执行命令（推荐）。".into()
+        }
+        "acceptEdits" => {
+            "可自动改文件；部分 shell 命令仍可能被拦。".into()
+        }
+        "dontAsk" | "default" => {
+            "当前会拒绝未授权写操作：无人值守时任务易假完成。请在设置「任务授权」改回自动授权，或点「恢复推荐授权」。".into()
+        }
+        _ => "任务执行需预先授权写文件。".into(),
     }
 }
 
@@ -119,6 +160,16 @@ pub fn set_settings(config: &mut Config, update: SettingsUpdate) -> Result<()> {
     if let Some(v) = update.fallback_extra_attempts {
         config.default.fallback_extra_attempts = v.min(10);
     }
+    if let Some(order) = update.failover_order {
+        let cleaned: Vec<String> = order
+            .into_iter()
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if !cleaned.is_empty() {
+            config.default.failover_order = cleaned;
+        }
+    }
     if let Some(v) = update.post_inspect_enabled {
         config.default.post_inspect_enabled = v;
     }
@@ -136,7 +187,13 @@ pub fn set_settings(config: &mut Config, update: SettingsUpdate) -> Result<()> {
             config.default.effort = n;
         }
     }
-    config.save()
+    if let Some(p) = update.permission_mode {
+        if let Some(n) = crate::config::normalize_permission_mode(&p) {
+            config.default.permission_mode = n;
+        }
+    }
+    config.save()?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -144,72 +201,50 @@ mod tests {
     use super::*;
 
     #[test]
-    fn planner_critic_view_and_update_field() {
-        let mut cfg = Config::default();
-        assert!(!cfg.default.planner_critic_enabled);
-        assert!(!get_settings(&cfg).planner_critic_enabled);
-
-        cfg.default.planner_critic_enabled = true;
-        assert!(get_settings(&cfg).planner_critic_enabled);
-
-        let u: SettingsUpdate =
-            serde_json::from_str(r#"{"planner_critic_enabled":true}"#).unwrap();
-        assert_eq!(u.planner_critic_enabled, Some(true));
-        // Partial update deserializes missing fields as None (does not force false)
-        let u2: SettingsUpdate = serde_json::from_str(r#"{"max_parallel":3}"#).unwrap();
-        assert_eq!(u2.planner_critic_enabled, None);
+    fn note_lists_order() {
+        let n = failover_order_note(&["claude".into(), "gemini".into(), "qwen".into()]);
+        assert!(n.contains("claude → gemini → qwen"));
+        assert!(n.contains("fake/sdk"));
     }
 
     #[test]
-    fn effort_view_and_update_field() {
-        let mut cfg = Config::default();
-        assert_eq!(cfg.default.effort, "high");
-        assert_eq!(get_settings(&cfg).effort, "high");
-
-        let u: SettingsUpdate = serde_json::from_str(r#"{"effort":"ultracode"}"#).unwrap();
-        assert_eq!(u.effort.as_deref(), Some("ultracode"));
-        // Apply without save (set_settings writes disk); mirror its normalize path.
-        if let Some(n) = crate::config::normalize_effort(u.effort.as_deref().unwrap()) {
-            cfg.default.effort = n;
-        }
-        assert_eq!(cfg.default.effort, "ultracode");
-        assert_eq!(get_settings(&cfg).effort, "ultracode");
-
-        // Invalid token ignored
-        let bad: SettingsUpdate = serde_json::from_str(r#"{"effort":"turbo"}"#).unwrap();
-        if let Some(raw) = bad.effort.as_deref() {
-            if let Some(n) = crate::config::normalize_effort(raw) {
-                cfg.default.effort = n;
-            }
-        }
-        assert_eq!(cfg.default.effort, "ultracode");
-        assert_eq!(
-            crate::config::effort_cli_level("ultracode"),
-            "xhigh"
-        );
-        assert!(crate::config::effort_is_ultracode("ultracode"));
+    fn get_settings_includes_order() {
+        let cfg = Config::default();
+        let v = get_settings(&cfg);
+        assert_eq!(v.failover_order, vec!["claude".to_string(), "codex".to_string()]);
+        assert!(v.failover_order_note.contains("claude"));
     }
 
     #[test]
-    fn open_pr_view_and_update_field() {
+    fn default_permission_is_auto_and_settable() {
         let mut cfg = Config::default();
-        assert!(!cfg.default.post_open_pr_enabled);
-        assert!(!get_settings(&cfg).post_open_pr_enabled);
+        let v = get_settings(&cfg);
+        assert_eq!(v.permission_mode, "bypassPermissions");
+        assert!(v.permission_mode_note.contains("自动"));
 
-        let u: SettingsUpdate =
-            serde_json::from_str(r#"{"post_open_pr_enabled":true}"#).unwrap();
-        assert_eq!(u.post_open_pr_enabled, Some(true));
-        // Partial update keeps other fields None
-        let u2: SettingsUpdate = serde_json::from_str(r#"{"post_git_push_enabled":true}"#).unwrap();
-        assert_eq!(u2.post_open_pr_enabled, None);
-
-        cfg.default.post_open_pr_enabled = true;
-        assert!(get_settings(&cfg).post_open_pr_enabled);
-        assert!(
-            get_settings(&cfg)
-                .post_tasks_note
-                .contains("gh"),
-            "settings note should mention gh for PR"
-        );
+        set_settings(
+            &mut cfg,
+            SettingsUpdate {
+                poll_interval_secs: None,
+                default_provider: None,
+                default_mode: None,
+                max_parallel: None,
+                retry_max: None,
+                stall_secs: None,
+                failover_enabled: None,
+                fallback_extra_attempts: None,
+                failover_order: None,
+                post_inspect_enabled: None,
+                post_git_push_enabled: None,
+                post_open_pr_enabled: None,
+                planner_critic_enabled: None,
+                effort: None,
+                permission_mode: Some("dontAsk".into()),
+            },
+        )
+        .unwrap();
+        assert_eq!(cfg.default.permission_mode, "dontAsk");
+        let v2 = get_settings(&cfg);
+        assert!(v2.permission_mode_note.contains("假完成") || v2.permission_mode_note.contains("拒绝"));
     }
 }

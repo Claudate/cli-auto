@@ -7,64 +7,113 @@
 
 use super::types::{InspectVerdict, IssueSeverity, ParsedIssue};
 
-/// Parse raw VERDICT text: first clear PASS/FAIL wins (line-oriented, then whole body).
+/// Parse raw VERDICT text into Pass / Fail / Unknown.
+///
+/// **Contract (host gate — no prose guessing):**
+/// 1. Prefer structured result lines only:
+///    `Result: PASS|FAIL`, `Result: **PASS**`, `VERDICT: …`, `VERDICT=…`,
+///    bare first token `PASS` / `FAIL` on its own line.
+/// 2. Scan the **head** of the file (first ~40 non-empty lines) for the first
+///    structured result; that wins.
+/// 3. **Never** whole-body scan for bare `FAIL` / `PASS` words — reinspect prose
+///    often says「P1b 可选 FAIL 不阻塞」and must not flip a structured PASS
+///    (wros check-p0-acceptance · 2026-07-24).
 pub fn parse_verdict_text(text: &str) -> InspectVerdict {
+    let mut seen = 0usize;
     for line in text.lines() {
         let t = line.trim();
         if t.is_empty() {
             continue;
         }
-        // Prefer first meaningful line: "FAIL" / "PASS" or "VERDICT: FAIL"
-        let upper = t.to_ascii_uppercase();
-        // Word-boundary style: avoid matching FAIL inside longer tokens poorly.
-        if upper == "FAIL"
-            || upper.starts_with("FAIL ")
-            || upper.starts_with("FAIL:")
-            || upper.starts_with("FAIL|")
-            || upper.contains("VERDICT=FAIL")
-            || upper.contains("VERDICT: FAIL")
-            || upper.contains("VERDICT:FAIL")
-            || upper.contains("RESULT: FAIL")
-            || upper.contains("RESULT:FAIL")
-            || upper.contains("**RESULT: FAIL**")
-        {
-            return InspectVerdict::Fail;
+        seen += 1;
+        if let Some(v) = structured_verdict_on_line(t) {
+            return v;
         }
-        if upper == "PASS"
-            || upper.starts_with("PASS ")
-            || upper.starts_with("PASS:")
-            || upper.starts_with("PASS|")
-            || upper.contains("VERDICT=PASS")
-            || upper.contains("VERDICT: PASS")
-            || upper.contains("VERDICT:PASS")
-            || upper.contains("RESULT: PASS")
-            || upper.contains("RESULT:PASS")
-            || upper.contains("**RESULT: PASS**")
-        {
-            return InspectVerdict::Pass;
+        // Skip title / meta lines; stop after head window.
+        if seen >= 40 {
+            break;
         }
-        // First non-empty line had content but neither — keep scanning body below.
-        break;
     }
-    let upper = text.to_ascii_uppercase();
-    // Whole-body fallback: FAIL takes precedence if both appear.
-    let has_fail = upper.split_whitespace().any(|w| {
-        w == "FAIL" || w.starts_with("FAIL:") || w.starts_with("FAIL|")
-    }) || upper.contains("VERDICT=FAIL")
-        || upper.contains("VERDICT: FAIL")
-        || upper.contains("VERDICT:FAIL");
-    let has_pass = upper.split_whitespace().any(|w| {
-        w == "PASS" || w.starts_with("PASS:") || w.starts_with("PASS|")
-    }) || upper.contains("VERDICT=PASS")
-        || upper.contains("VERDICT: PASS")
-        || upper.contains("VERDICT:PASS");
-    if has_fail {
-        InspectVerdict::Fail
-    } else if has_pass {
-        InspectVerdict::Pass
-    } else {
-        InspectVerdict::Unknown
+    InspectVerdict::Unknown
+}
+
+/// Structured result on a single line (markdown bold/code stripped for match).
+///
+/// Accepts only:
+/// - bare `PASS` / `FAIL` (optional trailing `.` / `。`)
+/// - bare grade with delimiter: `FAIL: reason` / `PASS | ok` / `FAIL — …`
+/// - keyed: `Result: PASS` / `VERDICT=FAIL` (anywhere on the line after strip)
+///
+/// Rejects prose like `PASS was hoped` or `P1b optional FAIL` (no key, not bare grade).
+fn structured_verdict_on_line(line: &str) -> Option<InspectVerdict> {
+    // Collapse markdown emphasis so `Result: **PASS**` / `**Result: PASS**` share path.
+    let stripped: String = line
+        .chars()
+        .filter(|c| *c != '*' && *c != '`' && *c != '_')
+        .collect();
+    let t = stripped.trim();
+    if t.is_empty() {
+        return None;
     }
+    let upper = t.to_ascii_uppercase();
+
+    // Bare grade alone.
+    if matches!(
+        upper.as_str(),
+        "FAIL" | "FAIL." | "FAIL。" | "PASS" | "PASS." | "PASS。"
+    ) {
+        return if upper.starts_with("FAIL") {
+            Some(InspectVerdict::Fail)
+        } else {
+            Some(InspectVerdict::Pass)
+        };
+    }
+
+    // Bare grade + delimiter (not space-separated prose).
+    for (grade, verdict) in [
+        ("FAIL", InspectVerdict::Fail),
+        ("PASS", InspectVerdict::Pass),
+    ] {
+        if upper == grade {
+            return Some(verdict);
+        }
+        for sep in [":", "|", "—", "–", " -"] {
+            let prefix = format!("{grade}{sep}");
+            if upper.starts_with(&prefix) {
+                return Some(verdict);
+            }
+        }
+    }
+
+    // Keyed forms: Result / VERDICT (first key occurrence on the line).
+    for key in ["RESULT:", "RESULT =", "RESULT=", "VERDICT:", "VERDICT =", "VERDICT="] {
+        if let Some(idx) = upper.find(key) {
+            let after = upper[idx + key.len()..].trim_start();
+            let token = after
+                .split(|c: char| {
+                    c.is_whitespace()
+                        || c == '|'
+                        || c == ','
+                        || c == ';'
+                        || c == '—'
+                        || c == '–'
+                        || c == '('
+                        || c == '（'
+                })
+                .next()
+                .unwrap_or("")
+                .trim_matches(|c: char| {
+                    c == '.' || c == '。' || c == ':' || c == '*' || c == '`' || c == '"' || c == '\''
+                });
+            if token == "FAIL" {
+                return Some(InspectVerdict::Fail);
+            }
+            if token == "PASS" {
+                return Some(InspectVerdict::Pass);
+            }
+        }
+    }
+    None
 }
 
 /// Parse ISSUES body into graded rows (P-loop §3.4.3).
@@ -99,11 +148,13 @@ pub fn parse_issues_text(text: &str) -> Vec<ParsedIssue> {
         // block (otherwise `### I-1` alone becomes fail-closed Blocking).
         let severity_field_only = is_severity_field_only_line(t);
         // Block starts: classic `- id:` / `### I-1`, residual/oos headings
-        // (`### R1 · …` / `### O1 · …`), or single-line severity bullets.
+        // (`### R1 · …` / `### O1 · …` / `### issue_id=R1`), or single-line
+        // severity bullets (not field-only under an existing block).
         let starts_block = t.starts_with("- id:")
             || t.starts_with("-id:")
             || t.starts_with("## I-")
             || t.starts_with("### I-")
+            || is_issue_id_field_heading(t)
             || (t.starts_with('-') || t.starts_with('*'))
                 && (t[1..].trim_start().starts_with("I-")
                     || t[1..].trim_start().starts_with("R")
@@ -168,6 +219,9 @@ pub fn parse_issues_text(text: &str) -> Vec<ParsedIssue> {
         // Title / section preamble is not an ISSUE. Free-form bullets without
         // severity still fail-closed → Blocking.
         let has_issue_id = block.lines().any(|l| {
+            if extract_issue_id_from_heading_line(l).is_some() {
+                return true;
+            }
             let t = l.trim().trim_start_matches('#').trim();
             let bare = t
                 .trim_start_matches(|c: char| c == '-' || c == '*' || c == '•')
@@ -198,9 +252,13 @@ pub fn parse_issues_text(text: &str) -> Vec<ParsedIssue> {
         }
         let severity = parse_severity_token(&block).unwrap_or(IssueSeverity::Blocking);
         let id = extract_kv(&block, "id")
+            .or_else(|| extract_kv(&block, "issue_id"))
             .or_else(|| {
                 block.lines().next().and_then(|l| {
-                    // `### I-1` / `### R1 · title` / `- O2 · …` / `I-3`
+                    // `### I-1` / `### R1 · title` / `### issue_id=R1` / `- O2 · …`
+                    if let Some(id) = extract_issue_id_from_heading_line(l) {
+                        return Some(id);
+                    }
                     let t = l
                         .trim()
                         .trim_start_matches('#')
@@ -299,8 +357,12 @@ fn is_severity_field_only_line(t: &str) -> bool {
         && !rest.contains("fix_wp")
 }
 
-/// Heading line for a single ISSUE block (`### I-1`, `### R1 · …`, `### O2 · …`).
+/// Heading line for a single ISSUE block (`### I-1`, `### R1 · …`, `### O2 · …`,
+/// `### issue_id=R1`).
 fn is_issue_heading_line(t: &str) -> bool {
+    if is_issue_id_field_heading(t) {
+        return true;
+    }
     let s = t.trim_start_matches('#').trim();
     let first = s
         .split_whitespace()
@@ -308,6 +370,42 @@ fn is_issue_heading_line(t: &str) -> bool {
         .unwrap_or("")
         .trim_end_matches(|c: char| c == '·' || c == ':' || c == ',' || c == '—');
     is_issue_heading_token(first)
+}
+
+/// `### issue_id=R1` / `- issue_id: R2` / `issue_id=B6` style headings (common in reinspect).
+fn is_issue_id_field_heading(t: &str) -> bool {
+    extract_issue_id_from_heading_line(t).is_some()
+}
+
+fn extract_issue_id_from_heading_line(line: &str) -> Option<String> {
+    let s = line
+        .trim()
+        .trim_start_matches('#')
+        .trim_start_matches(|c: char| c == '-' || c == '*' || c == '•')
+        .trim();
+    let lower = s.to_ascii_lowercase();
+    let rest = if let Some(r) = lower.strip_prefix("issue_id=") {
+        Some(r)
+    } else if let Some(r) = lower.strip_prefix("issue_id:") {
+        Some(r)
+    } else if let Some(r) = lower.strip_prefix("issue_id ") {
+        Some(r)
+    } else {
+        None
+    }?;
+    // Map back to original slice length for the value after the key.
+    let key_len = s.len() - rest.len();
+    let val = s[key_len..]
+        .trim()
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .trim_matches(|c: char| c == '`' || c == '*' || c == '"' || c == '\'' || c == '·' || c == ',' || c == ':');
+    if val.is_empty() {
+        return None;
+    }
+    // Prefer classic I-/R/O tokens; otherwise keep the token (B6, R1, …).
+    Some(val.to_string())
 }
 
 /// Token form of an ISSUE id/heading: `I-1`, `I1`, `R1`, `R-2`, `O1`, `O-3`.
@@ -360,6 +458,10 @@ fn severity_from_token(token: &str) -> Option<IssueSeverity> {
 }
 
 /// Explicit `severity=` / `severity:` / `**severity**: residual` fields only.
+///
+/// **Must not** match prose like「存在 severity=blocking 或 severity=map」— that
+/// falsely fail-closed residual ISSUES when the whole preamble was one block
+/// (wros reinspect-r1 · 2026-07-24).
 fn parse_severity_field_only(block: &str) -> Option<IssueSeverity> {
     let lower = block.to_ascii_lowercase();
     for line in lower.lines() {
@@ -373,16 +475,14 @@ fn parse_severity_field_only(block: &str) -> Option<IssueSeverity> {
             .filter(|c| *c != '*' && *c != '`' && *c != '_')
             .collect();
         let s = stripped.trim();
+        // Field-only: key at line start (after bullet/bold strip). No mid-prose find.
         let rest = if let Some(r) = s.strip_prefix("severity=") {
             Some(r)
         } else if let Some(r) = s.strip_prefix("severity:") {
             Some(r)
         } else if let Some(r) = s.strip_prefix("severity ") {
+            // `severity residual` rare form — only when next token is a grade
             Some(r)
-        } else if let Some(idx) = s.find("severity=") {
-            Some(&s[idx + "severity=".len()..])
-        } else if let Some(idx) = s.find("severity:") {
-            Some(&s[idx + "severity:".len()..])
         } else {
             None
         };
@@ -485,7 +585,7 @@ mod tests {
         );
         assert_eq!(parse_verdict_text("VERDICT=PASS"), InspectVerdict::Pass);
         assert_eq!(parse_verdict_text("maybe later"), InspectVerdict::Unknown);
-        // FAIL wins when both present in body
+        // Structured VERDICT= line wins; prose "PASS was hoped" is ignored.
         assert_eq!(
             parse_verdict_text("notes\nPASS was hoped\nbut VERDICT=FAIL overall"),
             InspectVerdict::Fail
@@ -501,6 +601,36 @@ mod tests {
         assert_eq!(
             parse_verdict_text("Result: PASS\nok"),
             InspectVerdict::Pass
+        );
+        assert_eq!(
+            parse_verdict_text("Result: **PASS**\n\n- role: inspect"),
+            InspectVerdict::Pass
+        );
+    }
+
+    /// Contract: structured Result: PASS must not be flipped by body prose mentioning FAIL.
+    #[test]
+    fn structured_pass_not_flipped_by_prose_fail() {
+        let text = r#"# VERDICT · check-p0-acceptance
+
+Result: **PASS**
+
+- role: inspect
+- plan_ref: P0
+
+## Summary
+
+P1b 可选 FAIL 不计入 P0 blocking。
+open: blocking=0 · residual=4 → Result: PASS
+
+| 门 | 结果 |
+| W1 | PASS |
+"#;
+        assert_eq!(parse_verdict_text(text), InspectVerdict::Pass);
+        // No Result/VERDICT key → Unknown (do not whole-body guess).
+        assert_eq!(
+            parse_verdict_text("smoke failed\nsee logs\nFAIL path"),
+            InspectVerdict::Unknown
         );
     }
 
@@ -679,6 +809,55 @@ Result companion: VERDICT.md → **PASS**
         );
         // Unknown bare token does not invent Blocking at token layer.
         assert_eq!(severity_from_token("mystery-grade"), None);
+    }
+
+    
+    /// Regression: reinspect used `### issue_id=R1` + prose mentioning severity=blocking
+    /// in the preamble. Host used to merge the whole file into one Blocking issue.
+    #[test]
+    fn issue_id_heading_and_prose_severity_not_blocking() {
+        let text = r#"# ISSUES · reinspect-r1
+
+Companion: VERDICT.md → Result: **PASS**
+规则：存在 **open** severity=blocking 或 severity=map（map 默认 blocking）则不得 PASS。
+本表 **open blocking=0 · open map=0** → 允许 PASS。
+
+## Open issues（仅 residual）
+
+### issue_id=R1
+- severity: residual
+- plan_ref: git 卫生
+- path: inkos-rs/**
+- symptom: 业务源码未 commit
+- fix_wp: commit wave
+
+### issue_id=R2
+- severity: residual
+- plan_ref: GUI
+- path: ContinuityDrawer.tsx
+- symptom: 无录像
+- fix_wp: optional
+
+### issue_id=R3
+- severity: residual
+- plan_ref: gitignore
+- path: .gitignore
+- symptom: 未 staged
+- fix_wp: stage
+
+## Closed this reinspect
+| B6 | was-blocking | closed |
+"#;
+        let parsed = parse_issues_text(text);
+        assert_eq!(parsed.len(), 3, "parsed={parsed:?}");
+        assert!(
+            parsed.iter().all(|i| i.severity == IssueSeverity::Residual),
+            "parsed={parsed:?}"
+        );
+        assert_eq!(count_blocking_for_test(&parsed), 0);
+        assert!(parsed.iter().any(|i| i.id == "R1"));
+        assert!(parsed.iter().any(|i| i.id == "R2"));
+        assert!(parsed.iter().any(|i| i.id == "R3"));
     }
 
     fn count_blocking_for_test(issues: &[ParsedIssue]) -> usize {

@@ -113,6 +113,25 @@
 
 ---
 
+## 7.1 终端 Ensure / 关账（巡检可终结）
+
+> 实施勾选真源：[`inspect-ensure-close-loop-2026-07-24.md`](./inspect-ensure-close-loop-2026-07-24.md)。  
+> 修订 P-loop Q3：inspect **仍**不改业务源码；**有界关账**由 `role=closeout`（`sys-closeout`）做。
+
+| 规则 | 说明 |
+|------|------|
+| **终端目标** | 对照计划勾选 → 有界关账（台账/地图）→ 再验 → 可自动回补直至终结 |
+| **inspect ≠ closeout** | 巡检只写 VERDICT/ISSUES；**禁止** title/body「并回写台账 / commit」 |
+| **plan_ref 主人** | 必做勾选 ≥1 主人；ledger/map 无主人 → 归 `sys-closeout`；清单落 `plan.checklist.json` |
+| **有界关账白名单** | docs/**、README*、CLAUDE.md、.cco-out/progress/**；**禁止**改 `src/**` 凑 PASS |
+| **自动 rework** | 默认开；`auto_rework_docs_only` 时仅 blocking 全为 docs-closeout 才自动 |
+| **UI** | 门禁失败主 CTA =「回补并再巡检」；「再跑一次」次要 |
+| **配置** | `default.auto_closeout` / `auto_rework` / `auto_rework_docs_only`（默认 true） |
+
+Mode B confirm 仍是**唯一业务开跑**；rework/ensure 是 P-loop 延续，不是第二入口。
+
+---
+
 ## 8. 失败 fallback 须标明来源
 
 | 情况 | 行为 |

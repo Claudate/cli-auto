@@ -155,6 +155,7 @@ mod tests {
                     attempt: 1,
                     last_retry_reason: None,
                     failover_used: false,
+                    failover_tried: vec![],
                     route_source: None,
                     route_previous: None,
                     route_note: None,

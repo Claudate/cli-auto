@@ -16,6 +16,7 @@ import {
   canEditTask,
   $,
 } from "./splitDetail.js";
+import * as gateway from "../../shared/gateway.js";
 
 function g(name) {
   const w = typeof window !== "undefined" ? window : globalThis;
@@ -288,8 +289,14 @@ export function bindSplitView(vm, bridge = {}) {
         }
         return;
       }
+      // Resume only when the paused live is **this job's** run.
+      // Foreign paused history (other plan / older job) must not hijack「执行规划」—
+      // that restarts wrong tasks while the split desk still shows the new graph.
       const live = g("state")?.live;
-      if (isRunPaused() && live?.run_id) {
+      const jobRunId = s.job?.run_id || s.job?.runId || null;
+      const liveIsThisJob =
+        !!(live?.run_id && jobRunId && String(live.run_id) === String(jobRunId));
+      if (isRunPaused() && liveIsThisJob) {
         try {
           await vm.resume(live.run_id);
           toast("正在继续…");
@@ -328,6 +335,37 @@ export function bindSplitView(vm, bridge = {}) {
             return;
           }
         } catch (_) {}
+      }
+      // Unattended workers cannot pop Claude permission UI. If config is
+      // dontAsk/default, offer to switch to auto-authorize before starting.
+      if (provider !== "fake") {
+        try {
+          const settings = await gateway.getSettings();
+          const mode = String(settings?.permission_mode || "");
+          if (mode === "dontAsk" || mode === "default") {
+            const ok = window.confirm(
+              "当前「任务授权」会拒绝写文件（执行时没有人点允许）。\n\n" +
+                "任务将无法改代码，看起来像软件坏了。\n\n" +
+                "点「确定」：改为自动授权并开始执行。\n" +
+                "点「取消」：不开始（可到设置 → 任务授权 修改）。"
+            );
+            if (!ok) {
+              if (err) {
+                err.textContent =
+                  "已取消开跑：请到设置 → 任务授权，打开自动授权";
+                err.hidden = false;
+              }
+              toast("已取消：请先开启任务自动授权");
+              return;
+            }
+            await gateway.setSettings({
+              permission_mode: "bypassPermissions",
+            });
+            toast("已开启任务自动授权");
+          }
+        } catch (_) {
+          /* best-effort; spawn still defaults to bypass if opts missing */
+        }
       }
       try {
         await vm.confirm();

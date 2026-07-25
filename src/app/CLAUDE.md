@@ -6,8 +6,9 @@ mod.rs: 用例层根 · A1-7 presentation map 注释
 split.rs: **A1-2/A1-7/A5-1** Mode B — `confirm`（后台唯一业务开跑）· **`confirm_materialize`**（CLI 前台同契约）· start_job/get_job/**latest_job_for_plan_path**/**list_plan_split_index**（计划列表回看拆分 · SQLite 索引）· edit_task(**role/scope_paths S-role**)/remove_task/sanitize_deps
 run/: **A1-3/A1-7/A5-1/A5-3 · S-run 多文件** Run 用例面（单文件 ≤400）
   · mod.rs: lifecycle facade（list/load/stop/resume/**retry_task**/rework）· domain maps · observe · re-export
-  · materialize.rs: materialize_run / **materialize_run_with_route**（**返回 (run_id,state,ir)** · drop optional · stamp route_source · A0-R4/D-T3-1）· materialize_parse_only
-  · foreground.rs: ForegroundOpts · prepare_scheduler · preflight_plan · prepare_resume · finish_with_reports
+  · materialize.rs: materialize_run / **materialize_run_with_route**（**返回 (run_id,state,ir)** · drop optional · **Ensure inject closeout + plan.checklist.json** · stamp route_source · A0-R4/D-T3-1）· **apply_effort** · **apply_permission_mode**（默认 bypassPermissions · 无人 worker 可写）· materialize_parse_only
+  · foreground.rs: ForegroundOpts · prepare_scheduler · preflight_plan · prepare_resume · finish_with_reports（**Ensure auto_rework 钩子**）
+  · **ensure_loop.rs（E3）**：`maybe_auto_rework` / quiet — docs-closeout FAIL → `start_rework`（非 Mode B 旁路）
   · route.rs: apply_provider_override（soft/force · 返回 RouteFillReport · A0-R3）
   · provenance.rs: **P1-2** stamp_route_fill / stamp_route_inferred / stamp_failover → TaskState.route_* · **P1-3** compose_route_label / provider_product_label（live 人话）
   · **status_line.rs（H1）**：`from_run_state` / `from_job_view` / `resolve` → `StatusOneLiner`；CLI/live 共用

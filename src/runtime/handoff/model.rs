@@ -261,15 +261,7 @@ impl Handoff {
 }
 
 pub(super) fn role_str(role: Option<TaskRole>) -> Option<String> {
-    role.map(|r| {
-        match r {
-            TaskRole::Scout => "scout",
-            TaskRole::Implement => "implement",
-            TaskRole::Integrate => "integrate",
-            TaskRole::Inspect => "inspect",
-        }
-        .to_string()
-    })
+    role.map(|r| r.as_str().to_string())
 }
 
 pub(super) fn scope_summary(task: &TaskIR) -> String {

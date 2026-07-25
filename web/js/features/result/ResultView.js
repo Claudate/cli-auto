@@ -14,6 +14,7 @@
 import {
   inspectStripParts,
   honestInspectCopy,
+  inspectActionVisibility,
 } from "./inspectCopy.js";
 import {
   taskBucket,
@@ -107,12 +108,25 @@ export function bindResultView(vm, bridge = {}) {
    */
   function renderInspectLoopStrip(live, finished, active) {
     const strip = $("inspect-loop-strip");
-    // 结果台 CTA：回补/先这样结束 不露出；结束本轮用日志栏「结束计划」
+    // 结果台：失败且可回补时露出主 CTA；结束本轮仍用日志栏「结束计划」
     const btnRework = $("btn-ws-rework");
     const btnAccept = $("btn-ws-accept-residual");
-    if (btnRework) btnRework.hidden = true;
-    if (btnAccept) btnAccept.hidden = true;
     const loop = live?.inspect_loop;
+    const vis = inspectActionVisibility(loop, { finished, active });
+    if (btnRework) {
+      if (vis.canRework) {
+        const round = Number(loop?.rework_round) || 0;
+        const max = Number(loop?.rework_max) || 2;
+        const n = Math.min(round + 1, max);
+        btnRework.hidden = false;
+        btnRework.textContent = `回补并再巡检（第 ${n}/${max} 轮）`;
+        btnRework.title = "按巡检遗漏回补并再对照计划（不是再跑考官）";
+        btnRework.classList.add("primary");
+      } else {
+        btnRework.hidden = true;
+      }
+    }
+    if (btnAccept) btnAccept.hidden = !vis.showAccept;
     if (!strip) return;
 
     const parts = inspectStripParts(loop);
@@ -126,8 +140,6 @@ export function bindResultView(vm, bridge = {}) {
     strip.textContent = parts.bits.join(" · ");
     strip.classList.toggle("bad", parts.kind === "bad");
     strip.classList.toggle("ok", parts.kind === "ok");
-    void finished;
-    void active;
   }
 
   /**

@@ -15,9 +15,9 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::inspect::{
-    can_start_rework, count_blocking_issues, count_residual_issues, parse_issues_text,
-    parse_verdict_text, InspectVerdict, IssueSeverity, ParsedIssue, INSPECT_ISSUES_REL,
-    INSPECT_VERDICT_REL, MAP_REWORK_PATH_WHITELIST, REWORK_MAX_ROUNDS,
+    all_blocking_are_docs_closeout, can_start_rework, count_blocking_issues, count_residual_issues,
+    parse_issues_text, parse_verdict_text, InspectVerdict, IssueSeverity, ParsedIssue,
+    INSPECT_ISSUES_REL, INSPECT_VERDICT_REL, MAP_REWORK_PATH_WHITELIST, REWORK_MAX_ROUNDS,
 };
 use crate::plan::{PlanIR, TaskIR, TaskRole};
 use crate::state::{RunState, RunStatus};
@@ -138,10 +138,11 @@ pub fn build_rework_plan(
          {issues_body}\n\
          ## 任务\n\
          1. 按每条 fix_wp / plan_ref 修改代码或允许的文档路径。\n\
-         2. map 类仅改 GEB/文档指针（CLAUDE.md、docs/CLAUDE.md、总账/本计划勾选行）。\n\
+         2. map / docs-closeout 类仅改 GEB/文档指针、台账勾选、README 进度、acceptance 索引（CLAUDE.md、docs/**、.cco-out/progress/**）。\n\
          3. 每完成一条在 `.cco-out/progress/SUMMARY.md` 追加：`plan_ref → 证据`。\n\
          4. 写 `.cco-out/rework/ROUND-{round}.md`：改了什么、对应 ISSUE id。\n\
-         5. 不要扩大范围；非目标不实现。\n\n\
+         5. 文档/台账修复完成后：按需 `git add` 相关 md 与 progress，并 `git commit`（信息含 ISSUE id 与 plan_ref）。\n\
+         6. 不要扩大范围；非目标不实现；禁止无证据勾 ✅。\n\n\
          全部完成后最后一行：CCO_DONE ok\n"
     );
 
@@ -274,7 +275,7 @@ pub fn accept_residual_on_handoff(plan: &PlanIR, state: &RunState, note: &str) -
     h.save(&state.run_dir)
 }
 
-/// Snapshot for desktop / live view (P-loop L2).
+/// Snapshot for desktop / live view (P-loop L2 + Ensure E3/E4).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct InspectLoopView {
     pub verdict: Option<String>,
@@ -286,6 +287,15 @@ pub struct InspectLoopView {
     pub rework_max: u32,
     pub accepted_residual: bool,
     pub require_inspect: bool,
+    /// When host auto-started a rework wave from this run (Ensure E3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_rework_run_id: Option<String>,
+    /// Ensure phase hint for UI: audit | closeout | reinspect | rework.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ensure_phase: Option<String>,
+    /// True when all current blocking ISSUES are docs-closeout (DTO only; UI must not re-classify).
+    #[serde(default)]
+    pub docs_closeout_only: bool,
 }
 
 /// Build inspect-loop summary from project inspect products + handoff.
@@ -393,6 +403,34 @@ pub fn inspect_loop_view(
         run_is_terminal,
         view.verdict.as_deref(),
     );
+    view.docs_closeout_only =
+        view.blocking_count > 0 && all_blocking_are_docs_closeout(&parsed);
+
+    // Ensure E3 marker written by app::run::ensure_loop.
+    let marker = state.run_dir.join("auto_rework.json");
+    if marker.is_file() {
+        if let Some(v) = std::fs::read_to_string(&marker)
+            .ok()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        {
+            view.auto_rework_run_id = v
+                .get("auto_rework_run_id")
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string());
+            view.ensure_phase = v
+                .get("ensure_phase")
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string())
+                .or_else(|| Some("rework".into()));
+        }
+    } else if plan
+        .map(|p| p.tasks.iter().any(|t| t.role == Some(TaskRole::Closeout)))
+        .unwrap_or(false)
+    {
+        view.ensure_phase = Some("closeout".into());
+    } else if view.verdict.is_some() {
+        view.ensure_phase = Some("audit".into());
+    }
 
     view
 }

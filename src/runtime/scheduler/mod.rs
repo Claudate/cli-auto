@@ -67,11 +67,13 @@ pub struct Scheduler {
     pub retry_max: u32,
     /// No stdout growth for this long → stall → stop + retry (or pause if exhausted).
     pub stall_secs: u64,
-    /// H4: after same-provider retries exhaust, switch claude↔codex and re-try.
+    /// H4: after same-provider retries exhaust, walk failover_order and re-try.
     /// Manual stop never triggers failover. Default true (config.default.failover_enabled).
     pub failover_enabled: bool,
     /// Extra attempts allowed on the fallback provider after a switch (default 1).
     pub fallback_extra_attempts: u32,
+    /// Production failover walk order (default claude,codex). Empty → policy default.
+    pub failover_order: Vec<String>,
 }
 
 impl Scheduler {

@@ -34,6 +34,37 @@ function badge(kind) {
 }
 
 /**
+ * Safe external https URL only (doctor help links).
+ * @param {unknown} raw
+ * @returns {string|null}
+ */
+function safeHelpUrl(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  try {
+    const u = new URL(s);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Detail cell: text + optional 「官网下载」link (opens in browser).
+ * @param {{ detail?: string, help_url?: string, ok?: boolean }} line
+ */
+function detailCellHtml(line) {
+  const detail = esc(line.detail || "");
+  const url = safeHelpUrl(line.help_url);
+  if (!url) {
+    return `<td class="muted">${detail}</td>`;
+  }
+  const link = `<a class="linkish doctor-help-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">官网下载</a>`;
+  return `<td class="muted doctor-detail">${detail}<span class="doctor-help"> · ${link}</span></td>`;
+}
+
+/**
  * Doctor page table from doctor_cmd DTO.
  */
 export async function loadDoctor() {
@@ -53,14 +84,16 @@ export async function loadDoctor() {
             (l) => `<tr>
           <td>${esc(l.name)}</td>
           <td>${l.ok ? badge("ok") : badge("failed")}</td>
-          <td class="muted">${esc(l.detail)}</td>
+          ${detailCellHtml(l)}
         </tr>`
           )
           .join("")}
       </tbody>
     </table>
     <p class="muted" style="margin-top:.75rem">${
-      d.ok ? "全部检查通过" : "存在失败项，请按详情处理"
+      d.ok
+        ? "全部检查通过"
+        : "存在失败项：未安装的 CLI 可点「官网下载」；装好后点重新检查"
     }</p>`;
     }
     renderDoctorWarn();
@@ -123,15 +156,18 @@ export function renderDoctorWarn() {
     return;
   }
   const detail = fails
-    .map((l) => `${l.name}: ${l.detail}`)
+    .map((l) => {
+      const short = String(l.detail || "").split("·")[0].trim();
+      return `${l.name}: ${short}`;
+    })
     .slice(0, 2)
     .join(" · ");
   bar.classList.add("soft");
   const textEl = $("#doctor-warn-text");
   if (textEl) {
     textEl.textContent =
-      detail ||
-      "环境检查未通过。若 Claude 已安装，点「重新检查」或设置 CCO_CLAUDE_BIN。";
+      (detail ? detail + "。" : "") +
+      "可到「环境检查」点「官网下载」安装缺失 CLI，装好后重新检查。";
   }
   bar.hidden = false;
 }

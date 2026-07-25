@@ -94,6 +94,7 @@ pub fn prepare_scheduler(
         stall_secs: config.default.stall_secs,
         failover_enabled: config.default.failover_enabled,
         fallback_extra_attempts: config.default.fallback_extra_attempts,
+        failover_order: config.default.failover_order.clone(),
     })
 }
 
@@ -135,11 +136,22 @@ pub fn prepare_resume(config: &Config, run_id: &str) -> Result<(PlanIR, RunState
     Ok((ir, rs, n))
 }
 
-/// After scheduler finishes: write reports and map status → process exit code.
+/// After scheduler finishes: write reports, maybe Ensure auto-rework, map exit code.
 pub fn finish_with_reports(config: &Config, run_id: &str, status: RunStatus) -> Result<i32> {
     let run_dir = config.runs_dir().join(run_id);
     let st = RunState::load(&run_dir)?;
     report::write_reports(&st)?;
+    // Ensure E3: docs-closeout FAIL → auto rework (best-effort; never fails finish).
+    if matches!(status, RunStatus::Failed | RunStatus::Paused) {
+        if let Some(resp) = super::ensure_loop::maybe_auto_rework_quiet(config, run_id) {
+            tracing::info!(
+                %run_id,
+                new_run = %resp.run_id,
+                round = resp.round,
+                "ensure auto_rework started"
+            );
+        }
+    }
     Ok(match status {
         RunStatus::Completed => 0,
         RunStatus::Paused => 2,

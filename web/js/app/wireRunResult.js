@@ -180,8 +180,10 @@ export function wireRunResult(deps) {
       const id = live?.run_id || null;
       if (!id || id === lastGoResultRunId) return;
       const s = legacyState();
-      // 仅 workspace + running 时进结果台；chat / pick / 拆分台不抢屏
-      if (!s || s.page !== "workspace" || s.phase !== "running") return;
+      // 仅 workspace 执行/结果台进结果态；chat / 拆分台不抢屏
+      // loadLive 可能已把 phase 从 running→done，仍须 goShellResult 一次
+      if (!s || s.page !== "workspace") return;
+      if (s.phase !== "running" && s.phase !== "done") return;
       if (!live?.run_id) return;
       lastGoResultRunId = id;
       goShellResult();

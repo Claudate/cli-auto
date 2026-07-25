@@ -256,6 +256,12 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                       <select id="confirm-task-provider" disabled>
                         <option value="claude">默认通道</option>
                         <option value="codex">备用通道</option>
+                        <option value="gemini">Gemini</option>
+                        <option value="qwen">通义 Qwen</option>
+                        <option value="kimi">Kimi</option>
+                        <option value="deepseek">CodeWhale</option>
+                        <option value="copilot">Copilot</option>
+                        <option value="codebuddy">CodeBuddy</option>
                         <option value="fake">演练</option>
                       </select>
                     </label>
@@ -277,6 +283,12 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                     <select id="confirm-edit-provider">
                       <option value="claude">默认通道</option>
                       <option value="codex">备用通道</option>
+                      <option value="gemini">Gemini</option>
+                      <option value="qwen">通义 Qwen</option>
+                      <option value="kimi">Kimi</option>
+                      <option value="deepseek">CodeWhale</option>
+                      <option value="copilot">Copilot</option>
+                      <option value="codebuddy">CodeBuddy</option>
                       <option value="fake">演练模式</option>
                     </select>
                   </label>
@@ -700,6 +712,56 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
               </label>
             </section>
 
+            <section class="settings-group" aria-labelledby="sg-auth" id="s-permission-group">
+              <h3 class="settings-group-title" id="sg-auth">任务授权</h3>
+              <p class="settings-group-note field-hint" id="s-permission-lead">
+                执行规划时没有人点「允许」。必须预先授权，任务才能改文件、跑命令；否则会静默失败、看起来像软件坏了。
+              </p>
+              <p
+                class="settings-auth-status"
+                id="s-permission-status"
+                role="status"
+                data-state="ok"
+              >
+                任务可自动写文件与执行命令
+              </p>
+              <label
+                class="settings-row"
+                title="无人值守 worker 的默认权限。推荐开启：自动授权写文件与命令。"
+              >
+                <span class="settings-row-text">
+                  <span class="settings-label">自动授权写文件与命令</span>
+                  <span class="field-hint" id="s-permission-mode-note">推荐开启 · 任务才能真正落地</span>
+                </span>
+                <input id="s-permission-auto" type="checkbox" checked />
+              </label>
+              <label
+                class="settings-row"
+                title="对应 Claude CLI --permission-mode。自动授权 = bypassPermissions。"
+              >
+                <span class="settings-row-text">
+                  <span class="settings-label">授权模式</span>
+                  <span class="field-hint">一般用「自动授权」即可</span>
+                </span>
+                <select id="s-permission-mode" class="settings-select">
+                  <option value="bypassPermissions" selected>自动授权（推荐）</option>
+                  <option value="acceptEdits">只自动改文件（命令仍可能被拦）</option>
+                  <option value="dontAsk">拒绝未授权（会假完成）</option>
+                  <option value="default">CLI 默认（可能弹窗/拒写）</option>
+                </select>
+              </label>
+              <div class="settings-tool-row" id="s-permission-actions">
+                <button
+                  class="btn ghost sm"
+                  id="btn-permission-restore"
+                  type="button"
+                  title="立刻改回自动授权并保存"
+                >
+                  恢复推荐授权
+                </button>
+              </div>
+            </section>
+
             <section class="settings-group" aria-labelledby="sg-post">
               <h3 class="settings-group-title" id="sg-post">拆分后附加</h3>
               <p class="settings-group-note field-hint" id="s-post-tasks-note">
@@ -760,6 +822,12 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                     <select id="s-default-provider" class="settings-select">
                       <option value="claude">默认通道</option>
                       <option value="codex">备用通道</option>
+                      <option value="gemini">Gemini</option>
+                      <option value="qwen">通义 Qwen</option>
+                      <option value="kimi">Kimi</option>
+                      <option value="deepseek">CodeWhale</option>
+                      <option value="copilot">Copilot</option>
+                      <option value="codebuddy">CodeBuddy</option>
                       <option value="fake">演练模式</option>
                     </select>
                   </label>
@@ -976,6 +1044,12 @@ bin = "/Users/你/.local/bin/claude"</pre>
                 <select id="pp-provider">
                   <option value="claude" selected>默认通道</option>
                   <option value="codex">备用通道</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="qwen">通义 Qwen</option>
+                  <option value="kimi">Kimi</option>
+                  <option value="deepseek">CodeWhale</option>
+                  <option value="copilot">Copilot</option>
+                  <option value="codebuddy">CodeBuddy</option>
                   <option value="fake">演练模式</option>
                 </select>
               </label>

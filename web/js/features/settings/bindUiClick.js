@@ -262,6 +262,21 @@ export function attachDocumentClick(deps) {
           .catch((err) => toast(String(err?.message || err)));
         return;
       }
+      // Ensure E4: inspect fail primary CTA → start_rework (not re-run examiner).
+      const reworkBtn = e.target?.closest?.("[data-rework]");
+      if (reworkBtn?.dataset?.rework) {
+        e.preventDefault();
+        e.stopPropagation();
+        const cco = typeof window !== "undefined" ? window.ccoResult : null;
+        if (cco && typeof cco.startRework === "function") {
+          Promise.resolve(cco.startRework()).catch((err) =>
+            toast(String(err?.message || err))
+          );
+          return;
+        }
+        toast("结果台未就绪，请稍后重试");
+        return;
+      }
       const rerunBtn = e.target?.closest?.("[data-rerun]");
       if (rerunBtn?.dataset?.rerun) {
         e.preventDefault();

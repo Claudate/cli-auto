@@ -69,16 +69,21 @@ pub fn materialize_role_defaults(plan: &mut PlanIR) {
     }
 }
 
-/// Business leaves = non-inspect, non-system-post tasks that no *other* business
-/// task lists in `depends_on` (DAG sinks of implement/scout work).
+/// Business leaves = non-inspect, non-closeout, non-system-post tasks that no
+/// *other* business task lists in `depends_on` (DAG sinks of implement/scout work).
 ///
 /// Inspect with empty `depends_on` waits on those leaves (transitively covers the
 /// whole business wave). Explicit inspect edges are left alone.
+/// Closeout is host-owned Ensure and is not a business leaf.
 pub(crate) fn wire_empty_inspect_depends_on(plan: &mut PlanIR) {
     let business_ids: Vec<String> = plan
         .tasks
         .iter()
-        .filter(|t| t.role != Some(TaskRole::Inspect) && !is_system_post_task(&t.id))
+        .filter(|t| {
+            t.role != Some(TaskRole::Inspect)
+                && t.role != Some(TaskRole::Closeout)
+                && !is_system_post_task(&t.id)
+        })
         .map(|t| t.id.clone())
         .collect();
     if business_ids.is_empty() {
@@ -87,7 +92,10 @@ pub(crate) fn wire_empty_inspect_depends_on(plan: &mut PlanIR) {
 
     let mut is_predecessor: HashSet<String> = HashSet::new();
     for t in &plan.tasks {
-        if t.role == Some(TaskRole::Inspect) || is_system_post_task(&t.id) {
+        if t.role == Some(TaskRole::Inspect)
+            || t.role == Some(TaskRole::Closeout)
+            || is_system_post_task(&t.id)
+        {
             continue;
         }
         for d in &t.depends_on {
@@ -138,6 +146,26 @@ pub(crate) fn materialize_inspect_task(task: &mut TaskIR) {
         let mut scope = task.scope.take().unwrap_or_default();
         scope.paths = vec![INSPECT_DEFAULT_WRITE_SCOPE.to_string()];
         task.scope = Some(scope);
+    }
+
+    // Prefer GATE.json when the plan already lists inspect products; do **not**
+    // hard-require GATE as missing_outputs (legacy VERDICT-only runs must still gate).
+    // Prompt + host prefer GATE when present (see inspect_io::load_inspect_gate_doc).
+    use crate::domain::inspect::{INSPECT_GATE_REL, INSPECT_ISSUES_REL, INSPECT_VERDICT_REL};
+    let has_inspect_product = task.outputs.iter().any(|o| {
+        let l = o.to_ascii_lowercase();
+        l.contains("verdict") || l.contains("issues") || l.contains("gate.json")
+    }) || task.role == Some(TaskRole::Inspect);
+    if has_inspect_product {
+        for req in [INSPECT_VERDICT_REL, INSPECT_ISSUES_REL] {
+            if !task.outputs.iter().any(|o| o == req) {
+                task.outputs.push(req.into());
+            }
+        }
+        // Soft list GATE so workers know the path; host does not fail missing GATE.
+        if !task.outputs.iter().any(|o| o == INSPECT_GATE_REL) {
+            // Keep out of hard outputs — document only in prompt.
+        }
     }
 
     // ── system prompt segment ────────────────────────────────────────

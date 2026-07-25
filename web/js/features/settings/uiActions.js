@@ -377,6 +377,10 @@ export function createUiActions() {
       window.ccoSettings?.saveSettings
         ? window.ccoSettings.saveSettings()
         : call("saveSettings"),
+    "btn-permission-restore": () =>
+      window.ccoSettings?.restoreRecommendedPermission
+        ? window.ccoSettings.restoreRecommendedPermission()
+        : call("restoreRecommendedPermission"),
     "btn-settings-back": () =>
       window.ccoSettings?.backFromSubpage
         ? window.ccoSettings.backFromSubpage()

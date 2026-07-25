@@ -20,11 +20,11 @@ handoff/: **A1-5 多文件适配器**（单文件 ≤600；实现 `ports::Handof
   · inspect_io.rs: read_inspect_verdict/issues · collect · system_push_inspect_gate（调 domain 纯规则）
   · lifecycle.rs: write_shell · on_task_start/end · on_run_end
   · prefix.rs: build_prompt_prefix · with_handoff_prefix（**H3** integrate/inspect 拼验纪律 3 条 · 无自动 merge）
-  · rework.rs: build_rework_plan · accept_residual · inspect_loop_view · count_rework_rounds
+  · rework.rs: build_rework_plan（prompt 补 commit）· accept_residual · inspect_loop_view（**auto_rework_run_id / ensure_phase / docs_closeout_only**）· count_rework_rounds
   · store.rs: FsHandoffStore
   · tests.rs: 单元测（原 monolith 迁入）
 log_events.rs: worker stdout/stderr → LogEvent · compact_text_tail/floor_char_boundary（CJK 安全）
-provider/: **A1-4** 实现 `ports::WorkerPort`（claude/codex/fake）· **P2-7** `sdk`（S0 inline · S1 messages HTTP · **S2** tool loop · 默认关）· ProviderRegistry · DTO re-export；`WorkerProvider` = 历史别名
+provider/: **A1-4** WorkerPort（claude + **shell_print** 多 CLI：codex/gemini/qwen/kimi/deepseek/copilot/codebuddy + fake）· **P2-7** `sdk`（默认关）· ProviderRegistry · DTO re-export；`WorkerProvider` 别名
 worktree.rs: git worktree 隔离创建/清理 · on_fail 映射 domain IsolationOnFail（混跑 FailClosed）
 acceptance.rs: 任务后软验收命令（仅 `is_runnable_verify` 为真时 `sh -c`；人话跳过写 `skipped_not_shell`，≠ PASS）
 

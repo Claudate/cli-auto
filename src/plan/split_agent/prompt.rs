@@ -42,6 +42,7 @@ pub fn system_prompt() -> String {
 - 禁止把：修订历史、非目标清单本身、PROTOCOL、纯目录说明、空话口号 拆成任务
 - 禁止输出 provider/role（高级字段留给人在拆分台填）；**必须**输出 scope_paths
 - 一步一个可验收结果；任务数宜 3–12，除非计划明确更多
+- **验收/巡检任务 ≠ 关账**：check 类只对照计划写 VERDICT/ISSUES 语义；**禁止**在 title/body 写「并回写台账 / commit / 勾选进度」——台账关账由 host `sys-closeout` 注入，勿揉进巡检一步
 "#;
     // Product delivery + recipes + backend + layout + color + type + copy + motion.
     format!(

@@ -24,6 +24,7 @@ cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**�
 
 ### 还在做（活跃落地 · 可有 ☐）
 
+inspect-ensure-close-loop-2026-07-24.md: **巡检关账闭环 Ensure**（wros 末尾 inspect 死循环根治 · **E0–E6 ✅**（自动化金样+打包）· **wros 人工 V1–V5 ☐** · host 勾选表 · closeout · 有界关账 · 自动 rework · UI 反误导；**本问题唯一勾选落点**）
 subjective-desire-cco-subset-landing-2026-07-22.md: **主观渴望 · 对本仓有用子集落地**（从构思抽出 · **D0–D2 ☐** · 计划五节/缺槽追问/Brief≠confirm · 无人生 Pack）
 guided-plan-memory-decision-2026-07-21.md: **引导/记忆/对抗工程草稿**（G0–G4 ☐ 全量未 ship；§5.6.1 可复用 pilotdeck 薄表；文首后置；**不**开第二套波次）
 

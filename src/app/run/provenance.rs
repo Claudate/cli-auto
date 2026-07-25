@@ -20,6 +20,13 @@ pub fn provider_product_label(provider: &str) -> String {
         "codex" => "Codex".into(),
         "fake" | "mock" => "演练".into(),
         "sdk" | "claude-sdk" | "claude_sdk" => "SDK".into(),
+        "gemini" | "google" => "Gemini".into(),
+        "qwen" | "tongyi" => "通义 Qwen".into(),
+        "kimi" | "moonshot" => "Kimi".into(),
+        // Channel id stays deepseek; product is CodeWhale (DeepSeek-native harness).
+        "deepseek" | "codewhale" | "codew" => "CodeWhale".into(),
+        "copilot" | "github-copilot" | "github_copilot" => "Copilot".into(),
+        "codebuddy" | "tencent" | "cbc" => "CodeBuddy".into(),
         "" => "未知".into(),
         other => {
             // Keep unknown ids readable without inventing a brand.
@@ -334,5 +341,12 @@ mod tests {
         assert_eq!(provider_product_label("claude"), "Claude");
         assert_eq!(provider_product_label("CODEX"), "Codex");
         assert_eq!(provider_product_label("fake"), "演练");
+        assert_eq!(provider_product_label("gemini"), "Gemini");
+        assert_eq!(provider_product_label("qwen"), "通义 Qwen");
+        assert_eq!(provider_product_label("kimi"), "Kimi");
+        assert_eq!(provider_product_label("deepseek"), "CodeWhale");
+        assert_eq!(provider_product_label("codewhale"), "CodeWhale");
+        assert_eq!(provider_product_label("copilot"), "Copilot");
+        assert_eq!(provider_product_label("codebuddy"), "CodeBuddy");
     }
 }

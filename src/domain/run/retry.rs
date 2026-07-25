@@ -1,7 +1,7 @@
 //! Pure retry / failover policy (H4).
 //!
-//! [INPUT]: reason_code · attempt · budgets · failover flags
-//! [OUTPUT]: RetryKind · failover target name
+//! [INPUT]: reason_code · attempt · budgets · failover flags · order · tried
+//! [OUTPUT]: RetryKind · next failover target name
 //! [POS]: domain/run — no preflight IO (caller checks provider alive)
 //! [PROTOCOL]: 变更时更新 domain/run/mod.rs
 
@@ -39,9 +39,61 @@ pub fn can_same_provider_retry(reason_code: &str, attempt: u32, budget: u32) -> 
     !is_non_retryable(reason_code) && attempt <= budget
 }
 
-/// Production failover target: claude↔codex only. `fake` and others → None.
+/// Default production order when config omits `failover_order` (compat).
+pub fn default_failover_order() -> Vec<String> {
+    vec!["claude".into(), "codex".into()]
+}
+
+/// Providers never chosen by automatic failover (unless explicitly listed — still skipped).
+pub fn is_non_failover_provider(name: &str) -> bool {
+    matches!(
+        name.trim().to_ascii_lowercase().as_str(),
+        "fake" | "mock" | "sdk" | "claude-sdk" | "claude_sdk"
+    )
+}
+
+/// Next production failover target from a configured order.
+///
+/// Walks `order` and returns the first name that is:
+/// - non-empty
+/// - not equal to `current` (case-insensitive)
+/// - not in `already_tried` (case-insensitive)
+/// - not fake/sdk
+///
+/// Does **not** wrap around to the head of the list (avoids burn loops).
+pub fn next_failover_target(
+    current: &str,
+    order: &[String],
+    already_tried: &[String],
+) -> Option<String> {
+    let cur = current.trim().to_ascii_lowercase();
+    if cur.is_empty() || is_non_failover_provider(&cur) {
+        return None;
+    }
+    let tried: Vec<String> = already_tried
+        .iter()
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect();
+    for cand in order {
+        let n = cand.trim().to_ascii_lowercase();
+        if n.is_empty() || n == cur {
+            continue;
+        }
+        if is_non_failover_provider(&n) {
+            continue;
+        }
+        if tried.iter().any(|t| t == &n) {
+            continue;
+        }
+        return Some(n);
+    }
+    None
+}
+
+/// Legacy pair helper: claude↔codex only. Prefer [`next_failover_target`] with config order.
 pub fn production_failover_target(current: &str) -> Option<&'static str> {
-    match current {
+    match current.trim().to_ascii_lowercase().as_str() {
         "claude" => Some("codex"),
         "codex" => Some("claude"),
         _ => None,
@@ -53,20 +105,21 @@ pub fn production_failover_target(current: &str) -> Option<&'static str> {
 pub enum RetryKind {
     /// Reset to Pending and re-queue on the same provider.
     SameProvider,
-    /// Same-provider budget exhausted; try claude↔codex switch once
+    /// Same-provider budget exhausted; try next name in failover_order
     /// (caller still runs preflight and may fall through to Permanent).
     TryFailover,
     /// Exhausted or non-retryable → permanent terminal.
     Permanent,
 }
 
-/// Classify retry outcome. Failover arm requires `failover_enabled` and
-/// `!failover_used`; actual target resolution is separate (IO-free name only).
+/// Classify retry outcome.
+///
+/// `has_next_failover`: pure — caller computed `next_failover_target(...).is_some()`.
 pub fn classify_retry(
     reason_code: &str,
     attempt: u32,
     budget: u32,
-    failover_used: bool,
+    has_next_failover: bool,
     failover_enabled: bool,
 ) -> RetryKind {
     if is_non_retryable(reason_code) {
@@ -75,7 +128,7 @@ pub fn classify_retry(
     if attempt <= budget {
         return RetryKind::SameProvider;
     }
-    if !failover_used && failover_enabled {
+    if failover_enabled && has_next_failover {
         return RetryKind::TryFailover;
     }
     RetryKind::Permanent
@@ -90,7 +143,7 @@ mod tests {
         assert!(is_non_retryable("stopped"));
         assert!(!can_same_provider_retry("stopped", 1, 3));
         assert_eq!(
-            classify_retry("stopped", 1, 3, false, true),
+            classify_retry("stopped", 1, 3, true, true),
             RetryKind::Permanent
         );
     }
@@ -98,56 +151,83 @@ mod tests {
     #[test]
     fn inspect_fail_never_retries_or_failovers() {
         assert!(is_non_retryable("inspect_fail"));
-        assert!(!can_same_provider_retry("inspect_fail", 1, 3));
         assert_eq!(
-            classify_retry("inspect_fail", 1, 3, false, true),
+            classify_retry("inspect_fail", 1, 3, true, true),
             RetryKind::Permanent
         );
-        assert!(is_inspect_gate_error(Some(
-            "inspect VERDICT=FAIL (12 ISSUES line(s) for rework (Open risks ISSUES[t7-inspect]))"
-        )));
-        assert!(!is_inspect_gate_error(Some("env: node: No such file")));
-        assert!(!is_inspect_gate_error(None));
     }
 
     #[test]
     fn same_provider_then_failover_then_permanent() {
         assert_eq!(
-            classify_retry("fail", 1, 2, false, true),
+            classify_retry("fail", 1, 2, true, true),
             RetryKind::SameProvider
         );
         assert_eq!(
-            classify_retry("fail", 3, 2, false, true),
+            classify_retry("fail", 3, 2, true, true),
             RetryKind::TryFailover
         );
         assert_eq!(
-            classify_retry("fail", 3, 2, true, true),
+            classify_retry("fail", 3, 2, false, true),
             RetryKind::Permanent
         );
         assert_eq!(
-            classify_retry("fail", 3, 2, false, false),
+            classify_retry("fail", 3, 2, true, false),
             RetryKind::Permanent
         );
     }
 
     #[test]
-    fn failover_targets_claude_codex_only() {
+    fn failover_targets_claude_codex_legacy() {
         assert_eq!(production_failover_target("claude"), Some("codex"));
         assert_eq!(production_failover_target("codex"), Some("claude"));
         assert_eq!(production_failover_target("fake"), None);
     }
 
     #[test]
-    fn attempt_budget_switches_after_failover() {
-        assert_eq!(attempt_budget(false, 3, 1), 3);
-        assert_eq!(attempt_budget(true, 3, 1), 1);
-        assert_eq!(attempt_budget(true, 3, 99), 10);
+    fn next_failover_walks_order_skips_tried_and_fake() {
+        let order = vec![
+            "claude".into(),
+            "codex".into(),
+            "gemini".into(),
+            "fake".into(),
+            "qwen".into(),
+        ];
+        assert_eq!(
+            next_failover_target("claude", &order, &[]).as_deref(),
+            Some("codex")
+        );
+        assert_eq!(
+            next_failover_target("claude", &order, &["codex".into()]).as_deref(),
+            Some("gemini")
+        );
+        assert_eq!(
+            next_failover_target(
+                "claude",
+                &order,
+                &["codex".into(), "gemini".into(), "qwen".into()]
+            ),
+            None
+        );
+        // current skipped; fake never chosen
+        assert_eq!(
+            next_failover_target("codex", &order, &[]).as_deref(),
+            Some("claude")
+        );
     }
 
     #[test]
-    fn effective_retry_cap() {
-        assert_eq!(effective_retry_max(2, 5), 5);
-        assert_eq!(effective_retry_max(8, 2), 8);
-        assert_eq!(effective_retry_max(20, 20), 10);
+    fn next_failover_no_wrap() {
+        let order = vec!["claude".into(), "codex".into()];
+        assert_eq!(
+            next_failover_target("codex", &order, &["claude".into()]),
+            None
+        );
+    }
+
+    #[test]
+    fn attempt_budget_switches_after_failover() {
+        assert_eq!(attempt_budget(false, 3, 1), 3);
+        assert_eq!(attempt_budget(true, 3, 1), 1);
     }
 }

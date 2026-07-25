@@ -182,12 +182,33 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
         </div>
         <div class="cli-window-actions">
           ${
-            // 失败/中止/超时：只重跑该步；完成态不显示（不是重拆分）
-            !isLiveStatus(S().live?.run_status) &&
-            S().live?.run_id &&
-            (bucket === "fail" || bucket === "stop")
-              ? `<button type="button" class="btn primary sm cli-rerun-btn" data-rerun="${esc(t.task_id)}" title="再跑这一步">再跑一次</button>`
-              : ""
+            // Ensure E4: inspect gate fail → primary CTA is rework, not re-run examiner.
+            // Other fails: keep「再跑一次」as primary single-step retry.
+            (() => {
+              if (isLiveStatus(S().live?.run_status) || !S().live?.run_id) return "";
+              if (bucket !== "fail" && bucket !== "stop") return "";
+              const loop = S().live?.inspect_loop;
+              const role = String(t.role || "").toLowerCase();
+              const isInspect =
+                role === "inspect" ||
+                /inspect|巡检|门禁|verdict|gates/i.test(String(t.title || t.task_id || ""));
+              const canRework = !!(loop && loop.can_rework);
+              if (isInspect && canRework) {
+                const round = Number(loop.rework_round) || 0;
+                const max = Number(loop.rework_max) || 2;
+                const n = Math.min(round + 1, max);
+                const reworkLabel = `回补并再巡检（第 ${n}/${max} 轮）`;
+                return `<button type="button" class="btn primary sm cli-rework-btn" data-rework="${esc(
+                  S().live.run_id
+                )}" title="按巡检遗漏回补并再对照计划">${esc(reworkLabel)}</button>
+                <button type="button" class="btn ghost sm cli-rerun-btn" data-rerun="${esc(
+                  t.task_id
+                )}" title="仅当怀疑巡检本身坏了时再跑考官">再跑一次</button>`;
+              }
+              return `<button type="button" class="btn primary sm cli-rerun-btn" data-rerun="${esc(
+                t.task_id
+              )}" title="再跑这一步">再跑一次</button>`;
+            })()
           }
           <button type="button" class="btn ghost sm cli-log-toggle" data-log-toggle="${esc(t.task_id)}" title="展开或折叠详细日志">${
             expanded ? "收起日志" : "详细日志"

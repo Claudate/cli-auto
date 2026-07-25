@@ -12,6 +12,8 @@ import {
   loadProjectPins,
   addProjectPin,
   deleteProjectPin,
+  restoreRecommendedPermission,
+  paintPermissionUi,
 } from "./settingsForm.js";
 import {
   loadDoctor,
@@ -38,6 +40,8 @@ export function createSettingsDesk() {
     api: settingsApi,
     loadSettings,
     saveSettings,
+    restoreRecommendedPermission,
+    paintPermissionUi,
     loadProjectPins,
     addProjectPin,
     deleteProjectPin,

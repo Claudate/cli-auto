@@ -27,8 +27,9 @@ mod store;
 mod tests;
 
 pub use inspect_io::{
-    collect_inspect_issues, inspect_pass_blocked_by_issues, load_parsed_inspect_issues,
-    read_inspect_issues_text, read_inspect_verdict, system_push_inspect_gate, task_has_verdict_gate,
+    collect_inspect_issues, inspect_pass_blocked_by_issues, load_inspect_gate_doc,
+    load_parsed_inspect_issues, read_inspect_issues_text, read_inspect_verdict,
+    system_push_inspect_gate, task_has_verdict_gate,
 };
 pub use lifecycle::{on_run_end, on_task_end, on_task_start, write_shell};
 pub use model::{
@@ -45,8 +46,8 @@ pub use store::FsHandoffStore;
 
 // Domain pure surface re-exported for stable `crate::runtime::handoff::*` call sites.
 pub use crate::domain::inspect::{
-    count_blocking_issues, inspect_gate_fail_reason, issues_candidate_paths, parse_issues_text,
-    parse_verdict_text, rework_placeholder_note, verdict_candidate_paths, InspectVerdict,
-    IssueSeverity, ParsedIssue, INSPECT_ISSUES_REL, INSPECT_VERDICT_REL, MAP_REWORK_PATH_WHITELIST,
-    REWORK_MAX_ROUNDS,
+    count_blocking_issues, inspect_gate_fail_reason, issues_candidate_paths, parse_gate_json,
+    parse_issues_text, parse_verdict_text, rework_placeholder_note, verdict_candidate_paths,
+    InspectGateDoc, InspectVerdict, IssueSeverity, ParsedIssue, INSPECT_GATE_REL,
+    INSPECT_ISSUES_REL, INSPECT_VERDICT_REL, MAP_REWORK_PATH_WHITELIST, REWORK_MAX_ROUNDS,
 };

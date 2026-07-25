@@ -119,6 +119,21 @@ export async function loadLive(deps = {}) {
     logMaxBytes: deps.logMaxBytes ?? 96000,
   });
   const path = state.selectedPath;
+  // 防抖：执行/结果台轮询偶发 empty live 时勿抹掉上一次任务板 → #cli-empty
+  // （run 刚失败/完成瞬间 list 竞态、或短暂 IO 失败都会返回 run_id=null）
+  const prevSnapshot = state.live;
+  const emptyIncoming = !live || !live.run_id;
+  const keepPrevOnDesk =
+    emptyIncoming &&
+    prevSnapshot?.run_id &&
+    (state.phase === "running" || state.phase === "done") &&
+    // 仅保留同项目上一次快照；dismiss 后服务端 empty 且 phase 会变 pick，不走这里
+    (!path ||
+      !prevSnapshot.project_path ||
+      String(prevSnapshot.project_path) === String(path));
+  if (keepPrevOnDesk) {
+    live = prevSnapshot;
+  }
   if (path && live?.run_id) {
     if (!state.lastRunIdByProject) state.lastRunIdByProject = {};
     state.lastRunIdByProject[path] = String(live.run_id);
@@ -127,7 +142,7 @@ export async function loadLive(deps = {}) {
 
   const nowLive = !!hasActiveRun();
   // 仅「本轮正在跑 → 自然结束」才进 done；用户已 dismiss 的不回结果台
-  if (prevLive && !nowLive && state.phase === "running" && state.live) {
+  if (prevLive && !nowLive && state.phase === "running" && state.live?.run_id) {
     state.phase = "done";
   }
   // 终态切换后刷新侧栏 last_status

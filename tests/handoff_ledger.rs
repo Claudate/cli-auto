@@ -34,6 +34,7 @@ fn make_scheduler(
         stall_secs: 600,
         failover_enabled: false,
         fallback_extra_attempts: 1,
+        failover_order: vec![],
     }
 }
 

@@ -163,7 +163,9 @@ export function runContext(live, legacy = {}) {
     phase === "planning" ||
     phase === "confirm" ||
     phase === "plan_failed";
-  // 打开拆分会话时，项目「最近一次」历史 run 不算本轮
+  // 打开拆分会话时，项目「最近一次」历史 run 不算本轮。
+  // SoT = liveBelongsToOpenPlan（planned 新图 + 外国 paused 必须 false）。
+  // 禁止再用「任意 live/paused → belongs=true」覆盖，否则拆分 8 步会画成旧 run 任务卡。
   let belongs = true;
   try {
     const w = typeof window !== "undefined" ? window : globalThis;
@@ -171,31 +173,12 @@ export function runContext(live, legacy = {}) {
       belongs = !!w.liveBelongsToOpenPlan();
     } else if (planning) {
       belongs = false;
+    } else if (live?.run_id && isLiveStatus(live.run_status)) {
+      // 无绑定函数时：仅真在跑保留进度台
+      belongs = true;
     }
   } catch (_) {
     if (planning) belongs = false;
-  }
-  // SoT dismiss 已在 project_live_view 过滤；双保险：
-  // - 真在跑：绝不刷空执行台
-  // - paused：仅当 isRunPaused() 为真（已排除 last_dismissed）
-  if (live?.run_id && isLiveStatus(live.run_status)) {
-    belongs = true;
-  } else if (live?.run_id) {
-    try {
-      const w = typeof window !== "undefined" ? window : globalThis;
-      if (typeof w.isRunPaused === "function" && w.isRunPaused()) {
-        belongs = true;
-      } else if (
-        String(live.run_status || "").toLowerCase() === "paused" &&
-        typeof w.isRunPaused !== "function"
-      ) {
-        belongs = true;
-      }
-    } catch (_) {
-      if (String(live.run_status || "").toLowerCase() === "paused") {
-        belongs = true;
-      }
-    }
   }
   const runStatus = belongs ? live?.run_status : null;
   const hasRun = belongs && !!live?.run_id;

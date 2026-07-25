@@ -455,21 +455,39 @@ export function renderPlanPicker() {
     }
   }
 
-  // A4：有待确认且在 chat →「继续核对拆分」；有活动 run →「返回执行」
+  // A4：有待确认且在 chat →「继续核对拆分」；有活动 run →「返回执行」；终态 →「查看结果」
   // 系统页不展示（设置/环境检查/帮助与执行态无关）
   if (btnMonitor) {
+    const jobSt = String(state.planJob?.status || "").toLowerCase();
+    const jobRunId = state.planJob?.run_id || state.planJob?.runId || null;
+    // confirmed 已 spawn run 的不算「待确认新图」——应回执行/结果台
     const pendingSplit =
       hasSplit &&
       !runActive &&
-      ["planned", "confirmed"].includes(
-        String(state.planJob?.status || "").toLowerCase()
+      !isRunPaused() &&
+      !jobRunId &&
+      (jobSt === "planned" ||
+        (jobSt === "confirmed" && !state.live?.run_id) ||
+        state.phase === "confirm");
+    const finishedLive =
+      !!state.live?.run_id &&
+      !runActive &&
+      !isRunPaused() &&
+      (typeof host.liveBelongsToOpenPlan === "function"
+        ? host.liveBelongsToOpenPlan()
+        : true) &&
+      ["completed", "done", "failed", "aborted", "stopped"].includes(
+        String(state.live?.run_status || "").toLowerCase()
       );
     const showMon =
       !isSystemPage &&
       !!state.selectedPath &&
       state.page !== "workspace" &&
       state.page !== "welcome" &&
-      (host.hasMonitorableActivity() || pendingSplit || host.isPlanSessionActive());
+      (host.hasMonitorableActivity() ||
+        pendingSplit ||
+        finishedLive ||
+        host.isPlanSessionActive());
     btnMonitor.hidden = !showMon;
     if (showMon) {
       const urgent = runActive || pendingSplit || state.phase === "planning";
@@ -490,6 +508,14 @@ export function renderPlanPicker() {
       } else if (isRunPaused()) {
         btnMonitor.textContent = "返回执行";
         btnMonitor.title = "返回工作区查看已暂停的计划";
+      } else if (
+        finishedLive ||
+        state.phase === "done" ||
+        (jobRunId && state.live?.run_id)
+      ) {
+        // 完成/失败/中止：优先「查看结果」，勿被 confirmed job 文案盖成「继续核对拆分」
+        btnMonitor.textContent = "查看结果";
+        btnMonitor.title = "返回工作区查看运行结果";
       } else if (pendingSplit || state.phase === "confirm") {
         btnMonitor.textContent = "继续核对拆分";
         btnMonitor.title = "回到拆分台核对后点「执行规划」";

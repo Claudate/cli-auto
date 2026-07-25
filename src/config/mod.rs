@@ -85,14 +85,18 @@ pub struct DefaultSection {
     /// UI 文案：「多久没新日志算卡死」。User-overridden config.toml is never rewritten.
     #[serde(default = "default_stall_secs")]
     pub stall_secs: u64,
-    /// After same-provider retries exhaust, switch to the other production CLI
-    /// (claude↔codex) and retry once more (H4). Default true; set false to disable.
+    /// After same-provider retries exhaust, walk [`failover_order`] and retry (H4).
+    /// Default true; set false to disable.
     #[serde(default = "default_failover_enabled")]
     pub failover_enabled: bool,
     /// Extra attempts allowed on the fallback provider after a switch (default 1).
     /// Same semantics as retry_max: 1 ⇒ first try + 1 re-try on the new CLI.
     #[serde(default = "default_fallback_extra_attempts")]
     pub fallback_extra_attempts: u32,
+    /// Production failover walk order (default claude, codex). Empty → same default.
+    /// fake/sdk are never chosen even if listed.
+    #[serde(default = "default_failover_order")]
+    pub failover_order: Vec<String>,
     /// When true, each Mode B split appends a system optional task「任务巡检」
     /// (not produced by the planner). Confirm screen defaults it **checked**.
     /// Master switch off → never inject. Default **false**.
@@ -118,6 +122,17 @@ pub struct DefaultSection {
     /// Passed as `claude --effort <level>` (ultracode → xhigh on the flag).
     #[serde(default = "default_effort")]
     pub effort: String,
+    /// Ensure: inject `sys-closeout` before inspect when a gate exists (default **true**).
+    #[serde(default = "default_ensure_on")]
+    pub auto_closeout: bool,
+    /// Ensure: after inspect FAIL, auto-start rework when conditions match (default **true**).
+    #[serde(default = "default_ensure_on")]
+    pub auto_rework: bool,
+    /// Ensure: only auto-rework when all blocking ISSUES are docs-closeout.
+    /// Default **false** — any real blocking should spawn a rework wave to close
+    /// the plan (handwalk residual is demoted host-side and does not trigger).
+    #[serde(default = "default_ensure_off")]
+    pub auto_rework_docs_only: bool,
 }
 
 fn default_retry_max() -> u32 {
@@ -132,11 +147,20 @@ fn default_failover_enabled() -> bool {
 fn default_fallback_extra_attempts() -> u32 {
     1
 }
+fn default_failover_order() -> Vec<String> {
+    vec!["claude".into(), "codex".into()]
+}
 fn default_post_feature_off() -> bool {
     false
 }
 fn default_effort() -> String {
     "high".into()
+}
+fn default_ensure_on() -> bool {
+    true
+}
+fn default_ensure_off() -> bool {
+    false
 }
 
 /// Allowed effort tokens (product + Claude CLI).
@@ -150,6 +174,42 @@ pub fn normalize_effort(raw: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+/// Claude CLI permission modes for unattended workers.
+pub const PERMISSION_MODES: &[&str] = &["bypassPermissions", "dontAsk", "acceptEdits", "default"];
+
+/// Normalize permission_mode for Claude worker spawn. Unknown → None.
+///
+/// Accepts common aliases: `bypass` / `auto` → bypassPermissions;
+/// `dont-ask` / `dont_ask` → dontAsk.
+pub fn normalize_permission_mode(raw: &str) -> Option<String> {
+    let s = raw.trim();
+    if s.is_empty() {
+        return None;
+    }
+    // Preserve CLI camelCase tokens.
+    match s {
+        "bypassPermissions" | "dontAsk" | "acceptEdits" | "default" => Some(s.into()),
+        _ => match s.to_ascii_lowercase().as_str() {
+            "bypass" | "auto" | "bypasspermissions" | "bypass_permissions" => {
+                Some("bypassPermissions".into())
+            }
+            "dontask" | "dont-ask" | "dont_ask" | "deny" => Some("dontAsk".into()),
+            "acceptedits" | "accept-edits" | "accept_edits" => Some("acceptEdits".into()),
+            "default" => Some("default".into()),
+            _ => None,
+        },
+    }
+}
+
+/// True when mode auto-denies tools that need confirmation (no permission UI).
+/// Unattended implement workers must not use this — writes become false Done.
+pub fn permission_mode_blocks_unattended_writes(mode: &str) -> bool {
+    matches!(
+        normalize_permission_mode(mode).as_deref(),
+        Some("dontAsk") | Some("default")
+    )
 }
 
 /// CLI `--effort` value: `ultracode` maps to `xhigh` (Claude accepts only low…max).
@@ -218,7 +278,9 @@ impl Default for DefaultSection {
             max_turns: 40,
             max_budget_usd: 10.0,
             run_max_budget_usd: None,
-            permission_mode: "dontAsk".into(),
+            // Unattended workers (print/bg) have no permission UI — dontAsk auto-denies
+            // Edit/Bash and yields false Done. Default must auto-authorize writes.
+            permission_mode: "bypassPermissions".into(),
             allowed_tools: vec![
                 "Read".into(),
                 "Edit".into(),
@@ -231,11 +293,15 @@ impl Default for DefaultSection {
             stall_secs: default_stall_secs(),
             failover_enabled: default_failover_enabled(),
             fallback_extra_attempts: default_fallback_extra_attempts(),
+            failover_order: default_failover_order(),
             post_inspect_enabled: default_post_feature_off(),
             post_git_push_enabled: default_post_feature_off(),
             post_open_pr_enabled: default_post_feature_off(),
             planner_critic_enabled: default_post_feature_off(),
             effort: default_effort(),
+            auto_closeout: default_ensure_on(),
+            auto_rework: default_ensure_on(),
+            auto_rework_docs_only: default_ensure_off(),
         }
     }
 }
@@ -276,51 +342,60 @@ impl Default for TuiConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        let mut providers = HashMap::new();
-        providers.insert(
-            "claude".into(),
-            ProviderConfig {
-                enabled: true,
-                bin: "claude".into(),
-                extra_args: vec![],
-                max_parallel: None,
-            },
-        );
-        providers.insert(
-            "fake".into(),
-            ProviderConfig {
-                enabled: true,
-                bin: "fake-claude".into(),
-                extra_args: vec![],
-                max_parallel: None,
-            },
-        );
-        providers.insert(
-            "codex".into(),
-            ProviderConfig {
-                enabled: true,
-                bin: "codex".into(),
-                extra_args: vec![],
-                max_parallel: None,
-            },
-        );
-        // P2-7 S0 non-CLI path: present in defaults but off until explicitly enabled.
-        providers.insert(
-            "sdk".into(),
-            ProviderConfig {
-                enabled: false,
-                bin: "inline".into(),
-                extra_args: vec![],
-                max_parallel: None,
-            },
-        );
         Self {
             default: DefaultSection::default(),
-            providers,
+            providers: builtin_provider_map(),
             terminal: TerminalConfig::default(),
             tui: TuiConfig::default(),
             projects: Vec::new(),
             state_root: default_state_root(),
+        }
+    }
+}
+
+fn provider_cfg(bin: &str, enabled: bool) -> ProviderConfig {
+    ProviderConfig {
+        enabled,
+        bin: bin.into(),
+        extra_args: vec![],
+        max_parallel: None,
+    }
+}
+
+/// Built-in provider table (claude/codex/fake/sdk + multi-CLI shell-print).
+fn builtin_provider_map() -> HashMap<String, ProviderConfig> {
+    let mut providers = HashMap::new();
+    providers.insert("claude".into(), provider_cfg("claude", true));
+    providers.insert("fake".into(), provider_cfg("fake-claude", true));
+    providers.insert("codex".into(), provider_cfg("codex", true));
+    // P2-7 non-CLI path: present but off until explicitly enabled.
+    providers.insert("sdk".into(), provider_cfg("inline", false));
+    // Multi-CLI shell-print (enabled like codex; missing bin → doctor hint).
+    for (name, bin) in [
+        ("gemini", "gemini"),
+        ("qwen", "qwen"),
+        ("kimi", "kimi"),
+        // DeepSeek channel uses CodeWhale CLI (https://github.com/Hmbown/CodeWhale)
+        ("deepseek", "codewhale"),
+        ("copilot", "copilot"),
+        ("codebuddy", "codebuddy"),
+    ] {
+        providers.insert(name.into(), provider_cfg(bin, true));
+    }
+    providers
+}
+
+/// Ensure built-in keys exist on load without flipping user enabled flags when present.
+fn ensure_builtin_providers(c: &mut Config) {
+    for (name, cfg) in builtin_provider_map() {
+        c.providers.entry(name).or_insert(cfg);
+    }
+    // Legacy: deepseek channel used bin "deepseek" / deepseek-tui; product is CodeWhale.
+    // Only rewrite bare historical defaults so intentional custom paths stay.
+    if let Some(pc) = c.providers.get_mut("deepseek") {
+        let b = pc.bin.trim();
+        if b == "deepseek" || b == "deepseek-tui" || b.is_empty() {
+            pc.bin = "codewhale".into();
         }
     }
 }
@@ -344,44 +419,30 @@ impl Config {
             let mut c: Config = toml::from_str(&text)
                 .with_context(|| format!("parse config {}", path.display()))?;
             c.state_root = default_state_root();
-            // Ensure built-in providers exist even if file omitted them
-            c.providers.entry("claude".into()).or_default();
-            c.providers.entry("codex".into()).or_insert(ProviderConfig {
-                enabled: true,
-                bin: "codex".into(),
-                extra_args: vec![],
-                max_parallel: None,
-            });
-            c.providers.entry("fake".into()).or_insert(ProviderConfig {
-                enabled: true,
-                bin: "fake-claude".into(),
-                extra_args: vec![],
-                max_parallel: None,
-            });
-            // Opt-in only: do not flip existing installs to enabled.
-            c.providers.entry("sdk".into()).or_insert(ProviderConfig {
-                enabled: false,
-                bin: "inline".into(),
-                extra_args: vec![],
-                max_parallel: None,
-            });
+            ensure_builtin_providers(&mut c);
             c
         } else {
             Config::default()
         };
 
-        // Env overrides
-        if let Ok(bin) = std::env::var("CCO_CODEX_BIN") {
-            cfg.providers.entry("codex".into()).or_default().bin = bin;
-        }
-        if let Ok(bin) = std::env::var("CCO_CLAUDE_BIN") {
-            cfg.providers
-                .entry("claude".into())
-                .or_default()
-                .bin = bin.clone();
-            // Convenience: also wire fake when pointing at a stub
-            if bin.contains("fake") {
-                cfg.providers.entry("fake".into()).or_default().bin = bin;
+        // Env overrides (shell-print + claude)
+        for (env_key, provider) in [
+            ("CCO_CLAUDE_BIN", "claude"),
+            ("CCO_CODEX_BIN", "codex"),
+            ("CCO_GEMINI_BIN", "gemini"),
+            ("CCO_QWEN_BIN", "qwen"),
+            ("CCO_KIMI_BIN", "kimi"),
+            ("CCO_DEEPSEEK_BIN", "codewhale"),
+            ("CCO_COPILOT_BIN", "copilot"),
+            ("CCO_CODEBUDDY_BIN", "codebuddy"),
+        ] {
+            if let Ok(bin) = std::env::var(env_key) {
+                if !bin.trim().is_empty() {
+                    cfg.providers.entry(provider.into()).or_default().bin = bin.clone();
+                    if provider == "claude" && bin.contains("fake") {
+                        cfg.providers.entry("fake".into()).or_default().bin = bin;
+                    }
+                }
             }
         }
         if let Ok(p) = std::env::var("CCO_STATE_ROOT") {
@@ -420,10 +481,13 @@ max_budget_usd = 10.0
 retry_max = 2
 # 多久没新日志算卡死（秒）→ stop + 重试（用尽则 pause）。默认 180；旧默认 600 偏钝。
 stall_secs = 180
-# After same-CLI retries exhaust, switch claude↔codex and try again (H4).
+# After same-CLI retries exhaust, walk failover_order (H4).
 failover_enabled = true
-# Extra attempts allowed on the fallback CLI after a switch (default 1).
+# Extra attempts allowed on each fallback CLI after a switch (default 1).
 fallback_extra_attempts = 1
+# Production failover walk order (fake/sdk never chosen). Expand as needed:
+# failover_order = ["claude", "codex", "gemini", "qwen", "kimi", "deepseek", "copilot", "codebuddy"]
+failover_order = ["claude", "codex"]
 # System post-tasks (not from planner): optional tail after every split.
 # Off by default; when on, injected as optional + default-checked on confirm.
 post_inspect_enabled = false
@@ -436,7 +500,9 @@ planner_critic_enabled = false
 # Claude reasoning effort: low | medium | high | xhigh | max | ultracode
 # ultracode = xhigh + multi-agent thoroughness. Also CCO_EFFORT env.
 effort = "high"
-permission_mode = "dontAsk"
+# Worker print/bg has no permission UI. Use bypassPermissions so Edit/Bash run.
+# dontAsk auto-denies writes and produces false Done (whole plan looks "broken").
+permission_mode = "bypassPermissions"
 allowed_tools = ["Read", "Edit", "Bash", "Glob", "Grep", "Write"]
 
 [providers.claude]

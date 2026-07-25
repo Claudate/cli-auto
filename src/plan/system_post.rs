@@ -103,15 +103,23 @@ fn make_inspect_task(ir: &PlanIR, depends_on: &[String]) -> TaskIR {
 - 成功标准 / 验收勾选（计划内 § 或任务说明）
 
 ## 必须产出（仅可写报告目录）
-- `.cco-out/inspect/VERDICT.md` — 一行总判：`PASS` / `FAIL` / `SKIP` + 简述
+- `.cco-out/inspect/GATE.json` — 机器门：`{{"schema":"cco-inspect-gate/v1","result":"pass"|"fail","blocking":N,"map":N,"residual":N}}`
+- `.cco-out/inspect/VERDICT.md` — 一行总判：`Result: PASS` / `Result: FAIL` + 简述
 - `.cco-out/inspect/ISSUES.md` — 问题列表（无则写「无」）
-  - 每条尽量含：严重度（blocking / non-blocking）、位置、复现/证据、建议
+  - 每条必须含：`severity=blocking|map|residual|out-of-scope`、plan_ref、path、symptom、fix_wp
+
+## 严重度（写错会卡死整轮 · 必须遵守）
+- **blocking**：功能/验收未落地、红测、编译失败、主路径不可用 → `result=fail` + blocking≥1
+- **map**：台账/索引/L1 不同构 → map≥1（默认挡关账，走 closeout/回补）
+- **residual（不挡 PASS）**：真书手点/30s 录像/截图未做、工作区未 commit、gitignore 卫生、可选 polish
+- **禁止**把 residual 写成 blocking；仅 residual 时 **GATE result=pass**、blocking=0、residual=N
 
 ## 硬规则
 1. **业务源码只读**；禁止为「刷绿」改应用代码
 2. 只允许写入 `.cco-out/inspect/**`
-3. 有阻塞遗漏 → VERDICT=FAIL，写清 ISSUES；不要假装 PASS
-4. 本任务由 cco 设置「拆分后附加：任务巡检」注入；用户可在确认屏取消勾选
+3. 真阻塞遗漏 → VERDICT=FAIL + ISSUES；**可修的 blocking 写清 fix_wp**，交给回补波补齐（不是甩给用户）
+4. 仅 residual → **必须 PASS**（附录 ISSUES），禁止 FAIL 卡轮
+5. 本任务由 cco 设置「拆分后附加：任务巡检」注入；用户可在确认屏取消勾选
 
 计划名：{name}
 "#,

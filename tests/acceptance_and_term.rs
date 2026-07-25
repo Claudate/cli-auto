@@ -69,6 +69,7 @@ tasks:
         stall_secs: 600,
         failover_enabled: false,
         fallback_extra_attempts: 1,
+        failover_order: vec![],
     }
     .run()
     .await
@@ -147,6 +148,7 @@ tasks:
         stall_secs: 600,
         failover_enabled: false,
         fallback_extra_attempts: 1,
+        failover_order: vec![],
     }
     .run()
     .await

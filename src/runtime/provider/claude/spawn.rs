@@ -160,7 +160,11 @@ impl ClaudeProvider {
         // Workers omit the key → defaults 40 turns / $10.
         let max_turns = Self::opt_limit_u32(opts, "max_turns", 40);
         let max_budget = Self::opt_limit_f64(opts, "max_budget_usd", 10.0);
-        let perm = Self::opt_str(opts, "permission_mode").unwrap_or_else(|| "dontAsk".into());
+        // Unattended print/bg has no permission UI. Default must auto-authorize writes
+        // (bypassPermissions); dontAsk only when task opts / config explicitly set it.
+        let perm = Self::opt_str(opts, "permission_mode")
+            .and_then(|s| crate::config::normalize_permission_mode(&s))
+            .unwrap_or_else(|| "bypassPermissions".into());
         let tools = Self::opt_tools(opts);
         let model = Self::opt_str(opts, "model");
 

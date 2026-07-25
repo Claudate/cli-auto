@@ -35,6 +35,24 @@ pub fn verdict_candidate_paths(task: &TaskIR) -> Vec<String> {
     out
 }
 
+/// Candidate machine gate paths (GATE.json) — host SoT when present.
+pub fn gate_candidate_paths(task: &TaskIR) -> Vec<String> {
+    use super::types::INSPECT_GATE_REL;
+    let mut out: Vec<String> = task
+        .outputs
+        .iter()
+        .filter(|o| {
+            let l = o.to_ascii_lowercase();
+            l.contains("gate.json") || l.ends_with("gate.json")
+        })
+        .cloned()
+        .collect();
+    if task.role == Some(TaskRole::Inspect) && !out.iter().any(|o| o == INSPECT_GATE_REL) {
+        out.push(INSPECT_GATE_REL.into());
+    }
+    out
+}
+
 /// Candidate ISSUES paths for rework consumption.
 pub fn issues_candidate_paths(task: &TaskIR) -> Vec<String> {
     let mut out: Vec<String> = task
@@ -105,6 +123,9 @@ pub fn inspect_gate_fail_reason(
 ) -> Option<String> {
     let blocked = blocking_n > 0;
     match verdict {
+        // Residual-only (blocking_n already demoted to 0, ISSUES non-empty): keep Done.
+        // Agent often writes VERDICT=FAIL for handwalk; host must not pause the run.
+        InspectVerdict::Fail if !blocked && issues_len > 0 => None,
         InspectVerdict::Fail => {
             let issues_hint = if issues_len == 0 {
                 format!("see {INSPECT_ISSUES_REL}")
@@ -231,6 +252,8 @@ mod tests {
     #[test]
     fn inspect_gate_fail_reason_covers_fail_unknown_pass_blocked() {
         assert!(inspect_gate_fail_reason(InspectVerdict::Fail, 0, 0, false, "i").is_some());
+        // residual-only (blocking demoted to 0, ISSUES non-empty): keep Done
+        assert!(inspect_gate_fail_reason(InspectVerdict::Fail, 0, 3, false, "i").is_none());
         assert!(inspect_gate_fail_reason(InspectVerdict::Unknown, 0, 0, true, "i").is_some());
         assert!(inspect_gate_fail_reason(InspectVerdict::Unknown, 0, 0, false, "i").is_none());
         assert!(inspect_gate_fail_reason(InspectVerdict::Pass, 2, 2, false, "i").is_some());

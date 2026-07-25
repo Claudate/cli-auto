@@ -650,7 +650,8 @@ pub(super) fn planner_system_prompt_with_memory(
 9. 若文档像「落地/回归某方案」：默认最后一波含 **检验/验收** 任务（只读检查 + 写结论，不写大段业务代码），可 optional。
 10. **多 CLI 协作字段（P2-5，建议填写；缺省可省略）**：
    - `provider`：`claude` | `codex` | `fake`。缺省 = 配置默认引擎。
-   - `role`：`scout` | `implement` | `integrate` | `inspect`。检验/验收任务写 `inspect`；主实现写 `implement`。
+   - `role`：`scout` | `implement` | `integrate` | `inspect`（`closeout` 一般由 host 注入，勿手写兼差）。检验/验收写 `inspect`；主实现写 `implement`。
+   - **inspect ≠ closeout**：巡检任务 title/prompt **禁止**「并回写台账 / commit / 勾选进度」；只对照计划写 VERDICT/ISSUES。台账关账另步或交 host。
    - `tags`：短标签数组，供路由（例：`["frontend"]`、`["codex"]`、`["inspect"]`）。可空。
    - `scope`：`paths` 可写白名单 glob；并行 implement 的 paths **不应相交**。inspect 可只写 inspect 输出目录。
    - `outputs`：完成后必须存在的相对路径（inspect 建议含 `.cco-out/inspect/VERDICT.md`）。
@@ -660,7 +661,7 @@ pub(super) fn planner_system_prompt_with_memory(
 - **计划是唯一勾选真源**：拆分与巡检都对照计划 § 阶段 / S* / V*，不另造第二清单。
 - 每个工作包 prompt 写清：**plan_ref**、改哪些路径、不做哪些、完成标志、验收可否降级（默认否）。
 - 落地/回归任务须要求 worker 在 progress 写 `plan_ref → 证据`；**禁止**静默把成功标准改弱。
-- 若有检验任务：prompt 要求产出计划勾选对照表 + `.cco-out/inspect/VERDICT.md`（Result: PASS|FAIL）+ `ISSUES.md`（severity=blocking|map|residual|out-of-scope、plan_ref、fix_wp）。
+- 若有检验任务：prompt 要求 `GATE.json` + `VERDICT.md`（Result: PASS|FAIL）+ `ISSUES.md`（severity=blocking|map|residual|out-of-scope、plan_ref、fix_wp）。手点/录像/未 commit=**residual 且 GATE pass**；真功能缺口=blocking + fix_wp，由 rework 补齐。
 - **禁止**存在 blocking/map 时写 PASS；map（L1/L2 不同构）默认 blocking。
 - 回补由后续 rework 波做；检验员默认不改业务代码。
 

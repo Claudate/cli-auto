@@ -16,11 +16,16 @@ use super::validate::{first_overlapping_paths, scope_paths_overlap};
 pub fn soften_plan_for_accept(ir: &mut PlanIR) -> Vec<String> {
     let mut notes = Vec::new();
 
-    // 1) codex + bg → print
+    // 1) non-claude shell + bg → print (claude/fake may keep bg)
     for t in ir.tasks.iter_mut() {
-        if t.provider.eq_ignore_ascii_case("codex") && t.mode.eq_ignore_ascii_case("bg") {
+        if t.mode.eq_ignore_ascii_case("bg")
+            && !t.provider.eq_ignore_ascii_case("claude")
+            && !t.provider.eq_ignore_ascii_case("fake")
+            && !t.provider.eq_ignore_ascii_case("mock")
+        {
+            let p = t.provider.clone();
             t.mode = "print".into();
-            notes.push(format!("task {}: codex+bg → mode=print", t.id));
+            notes.push(format!("task {}: {}+bg → mode=print", t.id, p));
         }
     }
 

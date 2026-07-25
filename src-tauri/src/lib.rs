@@ -57,6 +57,9 @@ struct DoctorLineDto {
     name: String,
     ok: bool,
     detail: String,
+    /// Official docs / download page when CLI missing (desktop 「官网下载」).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    help_url: Option<String>,
 }
 
 #[tauri::command]
@@ -220,6 +223,7 @@ async fn doctor_cmd(
             name: l.name,
             ok: l.ok,
             detail: l.detail,
+            help_url: l.help_url,
         })
         .collect();
     Ok(json!({ "ok": report.ok, "lines": lines }))

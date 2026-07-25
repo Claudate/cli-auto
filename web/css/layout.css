@@ -899,6 +899,25 @@ th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
   line-height: 1.4;
   max-width: 36rem;
 }
+/* 任务授权状态条：ok=可写 · warn=会拒写 */
+.settings-auth-status {
+  margin: 0 0 0.25rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  line-height: 1.4;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent, #0071e3) 10%, var(--bg2));
+  color: var(--text);
+}
+.settings-auth-status[data-state="warn"] {
+  background: color-mix(in srgb, #c47b00 14%, var(--bg2));
+  border-color: color-mix(in srgb, #c47b00 45%, var(--border));
+}
+.settings-auth-status[data-state="ok"] {
+  background: color-mix(in srgb, #1f8a4c 12%, var(--bg2));
+  border-color: color-mix(in srgb, #1f8a4c 40%, var(--border));
+}
 .settings-label {
   color: var(--text);
   font-size: 0.92rem;

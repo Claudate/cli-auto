@@ -104,12 +104,17 @@ impl PlanIR {
     ///
     /// Old single-provider plans without `role` keep passing (back-compat).
     fn validate_collab_rules(&self) -> Result<()> {
-        // ── 4. codex + mode=bg ───────────────────────────────────────────
+        // ── 4. non-claude shell providers + mode=bg ─────────────────────
         for t in &self.tasks {
-            if t.provider.eq_ignore_ascii_case("codex") && t.mode.eq_ignore_ascii_case("bg") {
+            if t.mode.eq_ignore_ascii_case("bg")
+                && !t.provider.eq_ignore_ascii_case("claude")
+                && !t.provider.eq_ignore_ascii_case("fake")
+                && !t.provider.eq_ignore_ascii_case("mock")
+            {
                 bail!(
-                    "task {}: codex does not support mode=bg (use print/exec)",
-                    t.id
+                    "task {}: provider `{}` does not support mode=bg (use print/exec)",
+                    t.id,
+                    t.provider
                 );
             }
         }

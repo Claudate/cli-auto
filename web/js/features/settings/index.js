@@ -16,7 +16,12 @@
  */
 
 export * as settingsApi from "./settingsApi.js";
-export { loadSettings, saveSettings } from "./settingsForm.js";
+export {
+  loadSettings,
+  saveSettings,
+  restoreRecommendedPermission,
+  paintPermissionUi,
+} from "./settingsForm.js";
 export {
   loadDoctor,
   ensureDoctor,

@@ -315,29 +315,10 @@ pub fn start_run_from_plan_with_route(
     ir: &PlanIR,
     route_report: Option<&crate::domain::worker::RouteFillReport>,
 ) -> Result<String> {
-    if !project.is_dir() {
-        bail!("项目路径不是目录: {}", project.display());
-    }
-    let mut ir = crate::plan::materialize_selected_tasks(ir.clone())?;
-    // Soft-fill effort if still missing (confirm already force-applied when UI picked).
-    crate::app::run::apply_effort(&mut ir, &config, None);
-
-    let run_id = state::new_run_id();
-    let run_dir = state::prepare_run_dir(&config.runs_dir(), &run_id)?;
-    let project = project
-        .canonicalize()
-        .with_context(|| format!("canonicalize {}", project.display()))?;
-    // P1-2: stamp route_source at RunState assembly (never in domain).
-    let mut run_state = RunState::new(run_id.clone(), project, &ir, run_dir.clone());
-    if let Some(report) = route_report {
-        crate::app::run::stamp_route_fill(&mut run_state, &ir, report);
-    }
-    crate::app::run::stamp_route_inferred(&mut run_state, &ir);
-    run_state.save()?;
-
-    // Persist resolved plan for resume (scheduler also writes this; write early for UI).
-    let resolved = run_dir.join("plan.resolved.json");
-    std::fs::write(&resolved, serde_json::to_string_pretty(&ir)?)?;
+    // Single materialize path (Ensure closeout + checklist + optional drop + route stamp).
+    let (run_id, run_state, ir) =
+        crate::app::run::materialize_run_with_route(&config, project, ir, route_report)?;
+    let run_dir = run_state.run_dir.clone();
 
     let registry = ProviderRegistry::from_config(&config)?;
     let max_parallel = ir.max_parallel;
@@ -354,12 +335,13 @@ pub fn start_run_from_plan_with_route(
     let budget = config.default.run_max_budget_usd;
     let runs_dir = config.runs_dir();
     let rid = run_id.clone();
-    let ir = ir.clone();
     let poll_secs = config.default.poll_interval_secs.clamp(1, 30);
     let retry_max = config.default.retry_max;
     let stall_secs = config.default.stall_secs;
     let failover_enabled = config.default.failover_enabled;
     let fallback_extra_attempts = config.default.fallback_extra_attempts;
+    let failover_order = config.default.failover_order.clone();
+    let config_for_ensure = config.clone();
 
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -400,12 +382,17 @@ pub fn start_run_from_plan_with_route(
                 stall_secs,
                 failover_enabled,
                 fallback_extra_attempts,
+                failover_order,
             };
             match sched.run().await {
                 Ok(status) => {
                     tracing::info!(%rid, ?status, "desktop run finished");
                     if let Ok(rs) = RunState::load(&runs_dir.join(&rid)) {
                         let _ = report::write_reports(&rs);
+                    }
+                    // Ensure E3 (thin IO hook → app; strategy not inlined here).
+                    if matches!(status, RunStatus::Failed | RunStatus::Paused) {
+                        let _ = crate::app::run::maybe_auto_rework_quiet(&config_for_ensure, &rid);
                     }
                 }
                 Err(e) => tracing::error!(%rid, error = %e, "desktop run failed"),
@@ -553,6 +540,8 @@ fn spawn_resume(config: Config, run_id: &str, only_task: Option<String>) -> Resu
     let stall_secs = config.default.stall_secs;
     let failover_enabled = config.default.failover_enabled;
     let fallback_extra_attempts = config.default.fallback_extra_attempts;
+    let failover_order = config.default.failover_order.clone();
+    let config_for_ensure = config.clone();
 
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -580,10 +569,16 @@ fn spawn_resume(config: Config, run_id: &str, only_task: Option<String>) -> Resu
                 stall_secs,
                 failover_enabled,
                 fallback_extra_attempts,
+                failover_order,
             };
-            let _ = sched.run().await;
+            let status = sched.run().await;
             if let Ok(st) = RunState::load(&runs_dir.join(&rid)) {
                 let _ = report::write_reports(&st);
+            }
+            if let Ok(st) = status {
+                if matches!(st, RunStatus::Failed | RunStatus::Paused) {
+                    let _ = crate::app::run::maybe_auto_rework_quiet(&config_for_ensure, &rid);
+                }
             }
         });
     });

@@ -17,6 +17,7 @@ pub fn tag_implied_provider(tags: &[String]) -> Option<&'static str> {
         .map(|s| s.trim().to_ascii_lowercase())
         .filter(|s| !s.is_empty())
         .collect();
+    // First match wins — keep historical codex/claude before newer engines.
     if tags_lower
         .iter()
         .any(|x| x == "codex" || x == "gpt" || x == "openai")
@@ -29,6 +30,39 @@ pub fn tag_implied_provider(tags: &[String]) -> Option<&'static str> {
     {
         return Some("claude");
     }
+    if tags_lower
+        .iter()
+        .any(|x| x == "gemini" || x == "google")
+    {
+        return Some("gemini");
+    }
+    if tags_lower
+        .iter()
+        .any(|x| x == "qwen" || x == "tongyi")
+    {
+        return Some("qwen");
+    }
+    if tags_lower
+        .iter()
+        .any(|x| x == "kimi" || x == "moonshot")
+    {
+        return Some("kimi");
+    }
+    if tags_lower.iter().any(|x| x == "deepseek") {
+        return Some("deepseek");
+    }
+    if tags_lower
+        .iter()
+        .any(|x| x == "copilot" || x == "github-copilot" || x == "github")
+    {
+        return Some("copilot");
+    }
+    if tags_lower
+        .iter()
+        .any(|x| x == "codebuddy" || x == "tencent" || x == "cbc")
+    {
+        return Some("codebuddy");
+    }
     if tags_lower.iter().any(|x| x == "fake" || x == "mock") {
         return Some("fake");
     }
@@ -37,13 +71,6 @@ pub fn tag_implied_provider(tags: &[String]) -> Option<&'static str> {
 
 /// P2-4 L1 routing: map free-form `tags` (and inspect role) to provider when the
 /// task still carries the plan default / empty / `"default"`.
-///
-/// Rules (first match wins, case-insensitive tags):
-/// - tag `codex` | `gpt` | `openai` → `codex`
-/// - tag `claude` | `anthropic` → `claude`
-/// - tag `fake` | `mock` → `fake`
-/// - tag `inspect` or `role: inspect` → keep current provider (inspect defaults
-///   handle tools/scope; do not force codex)
 ///
 /// Does **not** rewrite tasks that already declare a concrete non-default engine.
 ///
@@ -64,9 +91,7 @@ pub fn apply_tag_routing(plan: &mut PlanIR) -> Vec<String> {
             rewritten.push(t.id.clone());
             continue;
         }
-        // Title/tag soft hint for inspect does not change provider here.
         let _ = t.role;
     }
     rewritten
 }
-

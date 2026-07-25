@@ -9,6 +9,8 @@
 //! [PROTOCOL]: 变更时更新此头部与 src/domain/CLAUDE.md
 
 pub mod cco_split;
+mod checklist;
+mod closeout;
 mod materialize;
 mod merge_check;
 mod optional;
@@ -24,6 +26,14 @@ pub use cco_split::{
     split_topo_layers, to_plan_ir, CcoSplitJob, CcoSplitSource, CcoSplitStatus, CcoSplitTask,
     CcoTaskKind, CcoTaskStatus, CCO_SPLIT_SCHEMA,
 };
+pub use checklist::{
+    assign_closeout_owners, build_host_checklist, format_checklist_for_prompt, ChecklistKind,
+    HostChecklist, HostChecklistItem, CHECKLIST_SCHEMA_VERSION,
+};
+pub use closeout::{
+    inject_closeout_task, inspect_has_closeout_duty, looks_like_inspect_gate, should_inject_closeout,
+    strip_inspect_closeout_duty,
+};
 pub use materialize::{materialize_role_defaults, materialize_selected_tasks};
 pub use merge_check::{
     humanize_soft_accept_note, merge_check_for_integrate, merge_check_for_plan,
@@ -35,12 +45,15 @@ pub use optional::{
 pub use routing::{apply_tag_routing, tag_implied_provider};
 pub use soften::soften_plan_for_accept;
 pub use system_ids::{
-    is_system_post_task, SYS_POST_GIT_PUSH_ID, SYS_POST_INSPECT_ID, SYS_POST_OPEN_PR_ID,
+    is_system_closeout_task, is_system_ensure_task, is_system_post_task, SYS_POST_GIT_PUSH_ID,
+    SYS_POST_INSPECT_ID, SYS_POST_OPEN_PR_ID,
 };
 pub use types::{
-    parse_role_input, OnFailure, PlanIR, TaskIR, TaskRole, TaskScope, INSPECT_DEFAULT_ALLOWED_TOOLS,
-    INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_SYSTEM_PROMPT, INSPECT_SYSTEM_PROMPT_MARKER,
-    MAX_PROMPT_CHARS, MAX_TASKS, MAX_TIMEOUT_SECS, PLANNER_MAX_BUDGET_USD, PLANNER_MAX_TASKS,
+    parse_role_input, OnFailure, PlanIR, TaskIR, TaskRole, TaskScope, CLOSEOUT_DEFAULT_FORBID,
+    CLOSEOUT_DEFAULT_WRITE_SCOPE, CLOSEOUT_SYSTEM_PROMPT, CLOSEOUT_SYSTEM_PROMPT_MARKER,
+    INSPECT_DEFAULT_ALLOWED_TOOLS, INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_SYSTEM_PROMPT,
+    INSPECT_SYSTEM_PROMPT_MARKER, MAX_PROMPT_CHARS, MAX_TASKS, MAX_TIMEOUT_SECS,
+    PLANNER_MAX_BUDGET_USD, PLANNER_MAX_TASKS, SYS_CLOSEOUT_ID,
 };
 pub use verify::{is_runnable_verify, looks_like_shell_acceptance};
 

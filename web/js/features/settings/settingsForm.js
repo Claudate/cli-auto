@@ -24,11 +24,138 @@ function state() {
   return typeof window !== "undefined" ? window.state : null;
 }
 
+const PERMISSION_MODES = [
+  "bypassPermissions",
+  "acceptEdits",
+  "dontAsk",
+  "default",
+];
+
+/** Modes that auto-deny tools needing confirmation (unattended write fails). */
+function permissionBlocks(mode) {
+  const m = String(mode || "");
+  return m === "dontAsk" || m === "default";
+}
+
+/** Modes that count as "auto authorize" for the main checkbox. */
+function permissionIsAuto(mode) {
+  const m = String(mode || "bypassPermissions");
+  return m === "bypassPermissions" || m === "acceptEdits";
+}
+
+/**
+ * Paint 任务授权 section from a permission_mode string.
+ * @param {string} mode
+ * @param {{ skipSelect?: boolean }} [opts]
+ */
+export function paintPermissionUi(mode, opts = {}) {
+  const m = PERMISSION_MODES.includes(String(mode || ""))
+    ? String(mode)
+    : "bypassPermissions";
+  const blocks = permissionBlocks(m);
+  const auto = permissionIsAuto(m);
+
+  const select = $("#s-permission-mode");
+  if (select && !opts.skipSelect) select.value = m;
+
+  const chk = $("#s-permission-auto");
+  if (chk) chk.checked = auto;
+
+  const note = $("#s-permission-mode-note");
+  if (note) {
+    if (m === "bypassPermissions") {
+      note.textContent = "推荐开启 · 任务才能真正落地";
+    } else if (m === "acceptEdits") {
+      note.textContent = "可改文件；shell 命令仍可能被拦";
+    } else if (m === "dontAsk") {
+      note.textContent = "当前会拒写 → 任务易假完成";
+    } else {
+      note.textContent = "CLI 默认 · 无人值守时可能拒写";
+    }
+  }
+
+  const status = $("#s-permission-status");
+  if (status) {
+    status.dataset.state = blocks ? "warn" : "ok";
+    if (m === "bypassPermissions") {
+      status.textContent = "任务可自动写文件与执行命令";
+    } else if (m === "acceptEdits") {
+      status.textContent = "可自动改文件；部分命令仍可能被拦";
+    } else {
+      status.textContent =
+        "当前会拒绝写操作：执行规划时任务可能假完成，请改回自动授权";
+    }
+  }
+
+  const restore = $("#btn-permission-restore");
+  if (restore) restore.hidden = m === "bypassPermissions";
+}
+
+let _permissionUiWired = false;
+
+/** One-time listeners: checkbox ↔ select stay in sync (save still via 保存). */
+function wirePermissionUi() {
+  if (_permissionUiWired) return;
+  _permissionUiWired = true;
+
+  const chk = $("#s-permission-auto");
+  if (chk && !chk.dataset.ccoPermWire) {
+    chk.dataset.ccoPermWire = "1";
+    chk.addEventListener("change", () => {
+      const next = chk.checked ? "bypassPermissions" : "dontAsk";
+      paintPermissionUi(next);
+    });
+  }
+
+  const select = $("#s-permission-mode");
+  if (select && !select.dataset.ccoPermWire) {
+    select.dataset.ccoPermWire = "1";
+    select.addEventListener("change", () => {
+      paintPermissionUi(select.value || "bypassPermissions");
+    });
+  }
+
+  const restore = $("#btn-permission-restore");
+  if (restore && !restore.dataset.ccoPermWire) {
+    restore.dataset.ccoPermWire = "1";
+    restore.addEventListener("click", () => {
+      restoreRecommendedPermission().catch((e) => {
+        const toast = typeof window.toast === "function" ? window.toast : null;
+        if (toast) toast(String(e?.message || e));
+      });
+    });
+  }
+}
+
+/**
+ * Immediately set + persist bypassPermissions (one-click fix).
+ * @returns {Promise<object|null>} updated settings or null
+ */
+export async function restoreRecommendedPermission() {
+  paintPermissionUi("bypassPermissions");
+  const updated = await settingsApi.setSettings({
+    permission_mode: "bypassPermissions",
+  });
+  if (updated?.permission_mode) {
+    paintPermissionUi(updated.permission_mode);
+  }
+  const status = $("#s-save-status");
+  if (status) {
+    status.className = "save-status ok";
+    status.textContent = "已恢复自动授权并保存";
+    status.hidden = false;
+  }
+  const toast = typeof window.toast === "function" ? window.toast : null;
+  if (toast) toast("已恢复推荐授权（自动写文件与命令）");
+  return updated;
+}
+
 /**
  * Fill settings page from backend DTO (+ local-only prefs).
  */
 export async function loadSettings() {
   try {
+    wirePermissionUi();
     const s = await settingsApi.getSettings();
     const poll = $("#s-poll-interval");
     if (poll) poll.value = s.poll_interval_secs;
@@ -44,6 +171,7 @@ export async function loadSettings() {
         effortEl.value = e;
       }
     }
+    paintPermissionUi(s.permission_mode || "bypassPermissions");
     // Seed chat composer select from config default (unless user already picked)
     const chatEffort = $("#chat-effort");
     if (chatEffort) {
@@ -260,6 +388,16 @@ export async function saveSettings() {
   const modeVal = parseInt($("#s-default-mode")?.value, 10);
   const providerVal = ($("#s-default-provider")?.value || "").trim();
   const effortVal = ($("#s-effort")?.value || "").trim().toLowerCase();
+  // Prefer explicit select; if user only flipped the main checkbox, derive mode.
+  let permissionModeVal = ($("#s-permission-mode")?.value || "").trim();
+  const autoChk = $("#s-permission-auto");
+  if (autoChk) {
+    if (autoChk.checked && permissionBlocks(permissionModeVal)) {
+      permissionModeVal = "bypassPermissions";
+    } else if (!autoChk.checked && permissionIsAuto(permissionModeVal)) {
+      permissionModeVal = "dontAsk";
+    }
+  }
   const maxParallelVal = parseInt($("#s-max-parallel")?.value, 10);
   const retryMaxVal = parseInt($("#s-retry-max")?.value, 10);
   const stallSecsVal = parseInt($("#s-stall-secs")?.value, 10);
@@ -318,6 +456,16 @@ export async function saveSettings() {
     ) {
       update.effort = effortVal;
     }
+    if (
+      [
+        "bypassPermissions",
+        "acceptEdits",
+        "dontAsk",
+        "default",
+      ].includes(permissionModeVal)
+    ) {
+      update.permission_mode = permissionModeVal;
+    }
     if (failoverEnabled !== undefined) {
       update.failover_enabled = failoverEnabled;
     }
@@ -360,6 +508,9 @@ export async function saveSettings() {
     }
     if ($("#s-effort") && updated?.effort) {
       $("#s-effort").value = updated.effort;
+    }
+    if (updated?.permission_mode) {
+      paintPermissionUi(updated.permission_mode);
     }
     if ($("#pp-provider")) $("#pp-provider").value = providerVal;
     if ($("#pp-max-parallel") && !$("#pp-max-parallel").dataset.touched) {

@@ -82,13 +82,23 @@ export async function loadLive() {
     });
   }
   const path = state.selectedPath;
+  // 与 features/run/loadLive 同：执行/结果台勿被空 live 抹掉
+  const prevSnapshot = state.live;
+  const emptyIncoming = !live || !live.run_id;
+  if (
+    emptyIncoming &&
+    prevSnapshot?.run_id &&
+    (state.phase === "running" || state.phase === "done")
+  ) {
+    live = prevSnapshot;
+  }
   if (path && live?.run_id) {
     if (!state.lastRunIdByProject) state.lastRunIdByProject = {};
     state.lastRunIdByProject[path] = String(live.run_id);
   }
   state.live = live;
   const nowLive = hasActiveRun();
-  if (prevLive && !nowLive && state.phase === "running" && state.live) {
+  if (prevLive && !nowLive && state.phase === "running" && state.live?.run_id) {
     state.phase = "done";
   }
   if (prevLive !== nowLive) {

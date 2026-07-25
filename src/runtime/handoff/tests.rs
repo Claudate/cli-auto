@@ -505,3 +505,138 @@ fn write_task_diff_lists_outputs_without_git() {
         "expected outputs listed: {text}"
     );
 }
+
+/// Host SoT: GATE.json wins over VERDICT.md prose that mentions FAIL.
+#[test]
+fn gate_json_wins_over_verdict_prose_fail() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let inspect_dir = root.join(".cco-out/inspect");
+    std::fs::create_dir_all(&inspect_dir).unwrap();
+    std::fs::write(
+        inspect_dir.join("VERDICT.md"),
+        "# VERDICT\n\nResult: **PASS**\n\nP1b 可选 FAIL 不阻塞\n",
+    )
+    .unwrap();
+    std::fs::write(
+        inspect_dir.join("ISSUES.md"),
+        "### issue_id=R1\n- severity: residual\n- symptom: uncommitted\n",
+    )
+    .unwrap();
+    std::fs::write(
+        inspect_dir.join("GATE.json"),
+        r#"{"schema":"cco-inspect-gate/v1","result":"pass","blocking":0,"map":0,"residual":1}"#,
+    )
+    .unwrap();
+
+    let task = TaskIR {
+        id: "inspect".into(),
+        title: "inspect".into(),
+        depends_on: vec![],
+        group: None,
+        provider: "fake".into(),
+        mode: "print".into(),
+        prompt: "p".into(),
+        verify_cmd: None,
+        acceptance: None,
+        timeout_secs: None,
+        worktree: None,
+        provider_opts: serde_json::json!({}),
+        optional: false,
+        include: true,
+        role: Some(TaskRole::Inspect),
+        scope: None,
+        outputs: vec![
+            ".cco-out/inspect/VERDICT.md".into(),
+            ".cco-out/inspect/ISSUES.md".into(),
+        ],
+        tags: vec![],
+    };
+
+    assert_eq!(
+        read_inspect_verdict(&task, root, root),
+        InspectVerdict::Pass
+    );
+    let (blocked, n) = inspect_pass_blocked_by_issues(&task, root, root);
+    assert!(!blocked && n == 0, "GATE residual must not block");
+    let reason = inspect_gate_fail_reason(
+        read_inspect_verdict(&task, root, root),
+        n,
+        1,
+        true,
+        "inspect",
+    );
+    assert!(reason.is_none(), "gate must pass, got {reason:?}");
+}
+
+/// Agent wrote GATE fail + blocking=1 for handwalk residual — host must not pause.
+#[test]
+fn handwalk_gate_fail_demoted_pass() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let inspect_dir = root.join(".cco-out/inspect");
+    std::fs::create_dir_all(&inspect_dir).unwrap();
+    std::fs::write(
+        inspect_dir.join("VERDICT.md"),
+        "# VERDICT · check-handwalk-logs\n\nResult: **FAIL**\n",
+    )
+    .unwrap();
+    std::fs::write(
+        inspect_dir.join("ISSUES.md"),
+        r#"### issue_id=B1
+- severity: blocking
+- plan_ref: UI-4 / 成功标准 #8
+- path: docs/one/logs/**
+- symptom: 真书 30 秒主路径手点观察未写入可验收 logs；无录像
+- fix_wp: optional-gui-handwalk-record
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        inspect_dir.join("GATE.json"),
+        r#"{"schema":"cco-inspect-gate/v1","result":"fail","blocking":1,"map":0,"residual":3}"#,
+    )
+    .unwrap();
+
+    let task = TaskIR {
+        id: "check-handwalk-logs".into(),
+        title: "handwalk".into(),
+        depends_on: vec![],
+        group: None,
+        provider: "fake".into(),
+        mode: "print".into(),
+        prompt: "p".into(),
+        verify_cmd: None,
+        acceptance: None,
+        timeout_secs: None,
+        worktree: None,
+        provider_opts: serde_json::json!({}),
+        optional: false,
+        include: true,
+        role: Some(TaskRole::Inspect),
+        scope: None,
+        outputs: vec![
+            ".cco-out/inspect/VERDICT.md".into(),
+            ".cco-out/inspect/ISSUES.md".into(),
+            ".cco-out/inspect/GATE.json".into(),
+        ],
+        tags: vec![],
+    };
+
+    assert_eq!(
+        read_inspect_verdict(&task, root, root),
+        InspectVerdict::Pass,
+        "residual-only handwalk must host-Pass"
+    );
+    let (blocked, n) = inspect_pass_blocked_by_issues(&task, root, root);
+    assert!(!blocked && n == 0, "must not block, got blocked={blocked} n={n}");
+    let issues = load_parsed_inspect_issues(&task, root, root);
+    let reason = inspect_gate_fail_reason(
+        read_inspect_verdict(&task, root, root),
+        n,
+        issues.len(),
+        true,
+        "check-handwalk-logs",
+    );
+    assert!(reason.is_none(), "must keep Done, got {reason:?}");
+}

@@ -19,6 +19,9 @@
  *   rework_round?: number,
  *   rework_max?: number,
  *   accepted_residual?: boolean,
+ *   auto_rework_run_id?: string|null,
+ *   ensure_phase?: string|null,
+ *   docs_closeout_only?: boolean,
  * }} InspectLoopDto
  */
 
@@ -111,6 +114,12 @@ export function inspectStripParts(loop) {
   if (loop.accepted_residual) {
     bits.push("已接受遗漏");
   }
+  if (loop.auto_rework_run_id) {
+    bits.push("已自动发起回补");
+  }
+  if (loop.docs_closeout_only) {
+    bits.push("属台账/地图缺口");
+  }
   const preview = (loop.issue_preview || []).slice(0, 2).join(" · ");
   if (preview) bits.push(preview);
 
@@ -151,10 +160,22 @@ export function honestInspectCopy(loop) {
 
   if (cmp === "fail") {
     const blocking = Number(loop?.blocking_count) || 0;
+    const autoId = loop?.auto_rework_run_id
+      ? String(loop.auto_rework_run_id).trim()
+      : "";
+    if (autoId) {
+      return {
+        hidden: false,
+        text: `${PLAN_COMPARE_COPY.fail}。已自动发起回补，正在跟进新一轮。`,
+      };
+    }
+    const round = Number(loop?.rework_round) || 0;
+    const max = Number(loop?.rework_max) || 2;
+    const n = Math.min(round + 1, max);
     const extra =
       blocking > 0
-        ? `需优先处理 ${blocking} 项阻塞/地图遗漏，可用「回补并再巡检」。`
-        : `可用「回补并再巡检」。`;
+        ? `需优先处理 ${blocking} 项。主操作：「回补并再巡检（第 ${n}/${max} 轮）」；「再跑一次」仅当怀疑巡检本身坏了。`
+        : `主操作：「回补并再巡检（第 ${n}/${max} 轮）」。`;
     return {
       hidden: false,
       text: `${PLAN_COMPARE_COPY.fail}。${extra}`,

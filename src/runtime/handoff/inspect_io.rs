@@ -11,8 +11,9 @@
 use std::path::Path;
 
 use crate::domain::inspect::{
-    inspect_pass_blocked, parse_issues_text, parse_verdict_text, push_inspect_gate_decision,
-    InspectVerdict, ParsedIssue, INSPECT_ISSUES_REL,
+    demote_residual_evidence_issues, effective_blocking_count, gate_candidate_paths,
+    inspect_pass_blocked, parse_gate_json, parse_issues_text, parse_verdict_text,
+    push_inspect_gate_decision, InspectGateDoc, InspectVerdict, ParsedIssue, INSPECT_ISSUES_REL,
 };
 use crate::plan::{PlanIR, TaskIR, TaskRole};
 
@@ -23,12 +24,48 @@ pub use crate::domain::inspect::{
     issues_candidate_paths, task_has_verdict_gate, verdict_candidate_paths,
 };
 
-/// Read inspect VERDICT product; Unknown if no file / unparseable.
+/// Load machine GATE.json if present (host SoT).
+pub fn load_inspect_gate_doc(
+    task: &TaskIR,
+    work_dir: &Path,
+    project_root: &Path,
+) -> Option<InspectGateDoc> {
+    for rel in gate_candidate_paths(task) {
+        let path = resolve_output_path(&rel, work_dir, project_root);
+        if !path.is_file() {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        if let Some(doc) = parse_gate_json(&text) {
+            return Some(doc);
+        }
+    }
+    None
+}
+
+/// Read inspect VERDICT; **prefer GATE.json** then structured VERDICT.md.
+///
+/// When ISSUES are residual-only after host demotion (handwalk / hygiene), force
+/// **Pass** so a mis-written FAIL does not pause a finished implement wave.
 pub fn read_inspect_verdict(
     task: &TaskIR,
     work_dir: &Path,
     project_root: &Path,
 ) -> InspectVerdict {
+    let mut issues = load_parsed_inspect_issues(task, work_dir, project_root);
+    demote_residual_evidence_issues(&mut issues);
+    if !issues.is_empty() && effective_blocking_count(&issues) == 0 {
+        return InspectVerdict::Pass;
+    }
+
+    if let Some(doc) = load_inspect_gate_doc(task, work_dir, project_root) {
+        let v = doc.verdict();
+        if v != InspectVerdict::Unknown {
+            return v;
+        }
+    }
     let candidates = verdict_candidate_paths(task);
     if candidates.is_empty() {
         return InspectVerdict::Unknown;
@@ -68,25 +105,50 @@ pub fn read_inspect_issues_text(
 }
 
 /// Read + parse ISSUES; empty if no file / none.
+/// Host demotes mis-graded handwalk/hygiene rows to residual before return.
 pub fn load_parsed_inspect_issues(
     task: &TaskIR,
     work_dir: &Path,
     project_root: &Path,
 ) -> Vec<ParsedIssue> {
-    match read_inspect_issues_text(task, work_dir, project_root) {
+    let mut issues = match read_inspect_issues_text(task, work_dir, project_root) {
         Some(text) => parse_issues_text(&text),
         None => vec![],
-    }
+    };
+    demote_residual_evidence_issues(&mut issues);
+    issues
 }
 
 /// True when PASS is invalid because blocking/map ISSUES remain (P-loop R-inspect).
+///
+/// Prefer **demoted ISSUES body** over raw GATE.blocking — agents often set
+/// `blocking:1` for handwalk residual; host must not pause on that alone.
 pub fn inspect_pass_blocked_by_issues(
     task: &TaskIR,
     work_dir: &Path,
     project_root: &Path,
 ) -> (bool, usize) {
     let parsed = load_parsed_inspect_issues(task, work_dir, project_root);
-    inspect_pass_blocked(&parsed)
+    let n = effective_blocking_count(&parsed);
+    if n == 0 && !parsed.is_empty() {
+        return (false, 0);
+    }
+    if let Some(doc) = load_inspect_gate_doc(task, work_dir, project_root) {
+        if n == 0 && parsed.is_empty() {
+            let g = doc.gate_blocking_n();
+            return (g > 0, g);
+        }
+        // ISSUES body wins when it has rows (after demote).
+        if !parsed.is_empty() {
+            return (n > 0, n);
+        }
+        let g = doc.gate_blocking_n();
+        return (g > 0, g);
+    }
+    if parsed.is_empty() {
+        return inspect_pass_blocked(&parsed);
+    }
+    (n > 0, n)
 }
 
 /// Read ISSUES product into short consumable lines (for Open risks / rework hook).

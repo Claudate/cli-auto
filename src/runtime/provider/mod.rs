@@ -21,6 +21,7 @@ pub mod fake;
 pub mod sdk;
 pub mod sdk_http;
 pub mod sdk_tool_loop;
+pub mod shell_print;
 
 // re-export parse helper for tests
 pub use claude::parse_agent_id;
@@ -68,10 +69,17 @@ impl ProviderRegistry {
                 providers.push(Arc::new(fake::FakeProvider::new(bin)));
             }
         }
-        if let Some(pc) = config.provider("codex") {
-            if pc.enabled {
-                let bin = resolve_provider_bin(&pc.bin, "CCO_CODEX_BIN");
-                providers.push(Arc::new(codex::CodexProvider::new(bin, pc.extra_args.clone())));
+        // Shell-print CLIs (codex + multi-CLI profiles). codex keeps historical key.
+        for profile in shell_print::ALL_SHELL_PROFILES {
+            if let Some(pc) = config.provider(profile.name) {
+                if pc.enabled {
+                    let bin = resolve_provider_bin(&pc.bin, profile.bin_env);
+                    providers.push(Arc::new(shell_print::ShellPrintProvider::new(
+                        *profile,
+                        bin,
+                        pc.extra_args.clone(),
+                    )));
+                }
             }
         }
         // P2-7: non-CLI sdk path — opt-in only (default enabled=false).
@@ -324,6 +332,15 @@ mod tests {
             "sdk must stay off by default: {names:?}"
         );
         assert!(names.contains(&"claude") || names.contains(&"fake") || names.contains(&"codex"));
+        // Multi-CLI shell-print defaults enabled (missing bin → preflight/doctor, not omit).
+        for id in [
+            "codex", "gemini", "qwen", "kimi", "deepseek", "copilot", "codebuddy",
+        ] {
+            assert!(
+                names.contains(&id),
+                "expected shell provider {id} in registry: {names:?}"
+            );
+        }
     }
 
     #[test]

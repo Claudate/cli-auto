@@ -229,13 +229,17 @@ export function renderWorkspaceShell() {
   const body = $("#workspace-body");
   if (!body) return;
   body.classList.remove("mode-idle", "mode-running", "mode-done", "mode-plan");
-  if (
+  // 活动 run 优先：phase 误留在 confirm 时仍要露出 CLI 看板（聊天「返回执行」）
+  const liveRun = isLiveStatus(state.live?.run_status);
+  if (liveRun && (state.phase === "running" || state.phase === "done")) {
+    body.classList.add("mode-running");
+  } else if (
     state.phase === "planning" ||
     state.phase === "confirm" ||
     state.phase === "plan_failed"
   ) {
     body.classList.add("mode-plan");
-  } else if (isLiveStatus(state.live?.run_status)) body.classList.add("mode-running");
+  } else if (liveRun) body.classList.add("mode-running");
   else if (state.phase === "done") body.classList.add("mode-done");
   else body.classList.add("mode-idle");
 }

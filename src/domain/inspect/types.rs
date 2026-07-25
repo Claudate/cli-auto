@@ -16,21 +16,33 @@
 use serde::{Deserialize, Serialize};
 
 /// Conventional inspect verdict product (relative to work_dir / project_root).
+/// Human-readable; host gate **prefers** [`INSPECT_GATE_REL`] when present.
 pub const INSPECT_VERDICT_REL: &str = ".cco-out/inspect/VERDICT.md";
 /// Conventional inspect issues product for rework consumption (P2-3).
+/// Human-readable; host gate **prefers** [`INSPECT_GATE_REL`] when present.
 pub const INSPECT_ISSUES_REL: &str = ".cco-out/inspect/ISSUES.md";
+/// Machine gate product — **host SoT** for Pass/Fail + open blocking/map counts.
+/// Schema: `{ "schema":"cco-inspect-gate/v1", "result":"pass"|"fail", "blocking":N, "map":N, "residual":N }`.
+/// Markdown prose must not be the sole fail-closed input.
+pub const INSPECT_GATE_REL: &str = ".cco-out/inspect/GATE.json";
 
 /// Default max rework waves after inspect FAIL / blocking ISSUES (P-loop Q5).
 pub const REWORK_MAX_ROUNDS: u32 = 2;
 
-/// Map-class rework may only touch GEB/docs pointers (P-loop Q2/Q3; inspect still read-only).
+/// Map-class / docs-closeout rework may only touch GEB/docs pointers
+/// (P-loop Q2/Q3 + Ensure E2; inspect still read-only).
 pub const MAP_REWORK_PATH_WHITELIST: &[&str] = &[
     "CLAUDE.md",
     "docs/CLAUDE.md",
     "docs/gap-and-landing-plan-2026-07-18.md",
     "docs/plan-execute-inspect-rework-2026-07-19.md",
+    "docs/inspect-ensure-close-loop-2026-07-24.md",
     "docs/**",
+    "**/*.md",
+    "README*",
     ".cco-out/**",
+    ".cco-out/progress/**",
+    "tests/**/README*",
 ];
 
 /// Classification of inspect VERDICT product (P2-3).

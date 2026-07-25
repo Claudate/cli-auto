@@ -107,6 +107,12 @@ function platformLabel(provider) {
   const p = String(provider || "").trim().toLowerCase();
   if (p === "claude") return "Claude";
   if (p === "codex") return "Codex";
+  if (p === "gemini") return "Gemini";
+  if (p === "qwen" || p === "tongyi") return "通义 Qwen";
+  if (p === "kimi" || p === "moonshot") return "Kimi";
+  if (p === "deepseek" || p === "codewhale" || p === "codew") return "CodeWhale";
+  if (p === "copilot") return "Copilot";
+  if (p === "codebuddy" || p === "cbc") return "CodeBuddy";
   if (p === "fake") return "模拟";
   if (p === "sdk") return "SDK";
   return p ? p : "—";

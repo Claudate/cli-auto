@@ -95,6 +95,12 @@ export function ensureAdvancedRouteDom() {
     `<select id="split-route-provider">` +
     `<option value="claude">默认通道</option>` +
     `<option value="codex">备用通道</option>` +
+    `<option value="gemini">Gemini</option>` +
+    `<option value="qwen">通义 Qwen</option>` +
+    `<option value="kimi">Kimi</option>` +
+    `<option value="deepseek">CodeWhale</option>` +
+    `<option value="copilot">Copilot</option>` +
+    `<option value="codebuddy">CodeBuddy</option>` +
     `<option value="fake">演练</option>` +
     `</select>` +
     `</label>` +

@@ -72,6 +72,7 @@ tasks:
         stall_secs: 600,
         failover_enabled: false,
         fallback_extra_attempts: 1,
+        failover_order: vec![],
     };
 
     let status = sched.run().await.unwrap();
@@ -189,6 +190,7 @@ tasks:
         stall_secs: 600,
         failover_enabled: false,
         fallback_extra_attempts: 1,
+        failover_order: vec![],
     };
 
     let status = sched.run().await.unwrap();
@@ -300,6 +302,7 @@ tasks:
         stall_secs: 600,
         failover_enabled: false,
         fallback_extra_attempts: 1,
+        failover_order: vec![],
     };
 
     let status = sched.run().await.unwrap();
@@ -391,6 +394,7 @@ tasks:
         stall_secs: 600,
         failover_enabled: false,
         fallback_extra_attempts: 1,
+        failover_order: vec![],
     };
 
     let status = sched.run().await.unwrap();

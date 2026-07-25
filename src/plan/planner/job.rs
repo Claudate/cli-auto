@@ -532,6 +532,9 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
             job.critic_llm_used = Some(llm_out.used);
             job.critic_llm_cost_usd = llm_out.cost_usd;
             job.critic_llm_ms = llm_out.duration_ms;
+            // Persist critic before any later disk refresh can wipe in-memory fields.
+            job.updated_at = Utc::now();
+            let _ = job.save(config);
             // System post-tasks（巡检 / git push）：不参与拆解，按设置注入可选尾任务
             crate::plan::inject_system_post_tasks(&mut ir, config);
             // P2-2: re-apply human confirm-screen patches (title match) before write.
@@ -771,19 +774,35 @@ pub fn latest_plan_job_for_plan_path(
         let replace = match &best {
             None => true,
             Some(b) => {
-                // Prefer confirmed > planned > planning; then newer updated_at.
-                // Incomplete re-splits (newer planned residual) must not hide a prior confirmed graph.
-                fn rank(s: &PlanJobStatus) -> u8 {
-                    match s {
-                        PlanJobStatus::Confirmed => 3,
-                        PlanJobStatus::Planned => 2,
-                        PlanJobStatus::Planning => 1,
-                        _ => 0,
-                    }
-                }
-                let rj = rank(&job.status);
-                let rb = rank(&b.status);
-                rj > rb || (rj == rb && job.updated_at > b.updated_at)
+                // Quality first (multi-step AI ≫ direct 1-step), then status, then time.
+                // Incomplete re-splits must not hide a better prior graph; confirmed
+                // direct must not hide a planned multi-step AI desk.
+                use crate::state::sqlite::{cmp_split_restore, split_graph_quality};
+                let qj = split_graph_quality(
+                    Some(job.plan_mode.as_str()),
+                    job.adapter.as_deref(),
+                    job.task_count.map(|n| n as u32),
+                );
+                let qb = split_graph_quality(
+                    Some(b.plan_mode.as_str()),
+                    b.adapter.as_deref(),
+                    b.task_count.map(|n| n as u32),
+                );
+                let sj = match job.status {
+                    PlanJobStatus::Confirmed => "confirmed",
+                    PlanJobStatus::Planned => "planned",
+                    PlanJobStatus::Planning => "planning",
+                    _ => "other",
+                };
+                let sb = match b.status {
+                    PlanJobStatus::Confirmed => "confirmed",
+                    PlanJobStatus::Planned => "planned",
+                    PlanJobStatus::Planning => "planning",
+                    _ => "other",
+                };
+                let uj = job.updated_at.to_rfc3339();
+                let ub = b.updated_at.to_rfc3339();
+                cmp_split_restore(qj, sj, &uj, &job.job_id, qb, sb, &ub, &b.job_id).is_gt()
             }
         };
         if replace {
@@ -1482,9 +1501,10 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
                         ),
                     );
                     bail!(
-                        "智能拆分未完整完成，已保留上次成功的拆分（{} 步）。\
+                        "智能拆分未完整完成，已保留上次成功的拆分（{} 步 · {}）。\
 失败结果不展示、不覆盖。可「再拆一次」或更多选项显式「本地规则拆分」。",
-                        n
+                        n,
+                        prior.job_id
                     );
                 }
                 append_log(
@@ -1595,15 +1615,35 @@ fn find_prior_successful_split(
         let replace = match &best {
             None => true,
             Some(b) => {
-                // Prefer confirmed, then newer updated_at.
-                let rank = |s: &PlanJobStatus| match s {
-                    PlanJobStatus::Confirmed => 2,
-                    PlanJobStatus::Planned => 1,
-                    _ => 0,
+                // Same product rank as latest_job restore: multi-step AI ≫ direct 1-step,
+                // then status, then updated_at. Confirmed raw-single must not win over
+                // a planned 8-step AI graph when re-split fails.
+                use crate::state::sqlite::{cmp_split_restore, split_graph_quality};
+                let qo = split_graph_quality(
+                    Some(other.plan_mode.as_str()),
+                    other.adapter.as_deref(),
+                    other.task_count.map(|n| n as u32),
+                );
+                let qb = split_graph_quality(
+                    Some(b.plan_mode.as_str()),
+                    b.adapter.as_deref(),
+                    b.task_count.map(|n| n as u32),
+                );
+                let so = match other.status {
+                    PlanJobStatus::Confirmed => "confirmed",
+                    PlanJobStatus::Planned => "planned",
+                    PlanJobStatus::Planning => "planning",
+                    _ => "other",
                 };
-                let rb = rank(&b.status);
-                let ro = rank(&other.status);
-                ro > rb || (ro == rb && other.updated_at >= b.updated_at)
+                let sb = match b.status {
+                    PlanJobStatus::Confirmed => "confirmed",
+                    PlanJobStatus::Planned => "planned",
+                    PlanJobStatus::Planning => "planning",
+                    _ => "other",
+                };
+                let uo = other.updated_at.to_rfc3339();
+                let ub = b.updated_at.to_rfc3339();
+                cmp_split_restore(qo, so, &uo, &other.job_id, qb, sb, &ub, &b.job_id).is_gt()
             }
         };
         if replace {

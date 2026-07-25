@@ -3,6 +3,7 @@
 //! [INPUT]: Config · run_id · task_id · log_max_bytes
 //! [OUTPUT]: ProjectLiveView · task_logs · open_task_terminal · stop_task
 //! [POS]: services 子模块；桌面 monitor / LogConsole 主数据源
+//! note: choose_current_run — hard-live 优先；paused 不盖更新终态（空台根因修复）
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md
 //!
 //! P1-3: each task carries App-composed `route_label` (+ optional `route_source`);
@@ -172,59 +173,16 @@ pub fn project_live_view(
         .filter(|r| paths_match(Path::new(&r.project_root), project))
         .collect();
     // SQLite：用户「结束计划」后的 run 不当作当前 live（避免重开项目又进结果台）
-    // 含 paused：stop_task 残留 pending 时常为 paused，仍须尊重 dismiss。
+    // paused = 台态/残留，不是「真在跑」；不得盖住更新的 completed/aborted（wros 空台根因）。
     let dismissed = crate::state::project_ui::try_get_dismissed_run_id(config, project);
-    let chosen = for_proj
-        .iter()
-        .find(|r| {
-            matches!(
-                r.status.as_str(),
-                "running" | "validated" | "init" | "paused" | "starting" | "queued" | "resuming"
-            ) && !crate::state::project_ui::should_hide_run_as_current(
-                dismissed.as_deref(),
-                &r.run_id,
-                &r.status,
-            )
-        })
-        .copied()
-        .or_else(|| {
-            // Prefer newest non-dismissed terminal; if newest is dismissed, do not
-            // promote an older historical run as "current" (empty live instead).
-            let newest = for_proj.first().copied();
-            if let Some(n) = newest {
-                if crate::state::project_ui::should_hide_run_as_current(
-                    dismissed.as_deref(),
-                    &n.run_id,
-                    &n.status,
-                ) {
-                    return None;
-                }
-            }
-            newest
-        });
-
-    let Some(sum) = chosen else {
+    let Some(sum) = choose_current_run(&for_proj, dismissed.as_deref()) else {
         return Ok(empty_live_view(project, &name, config));
     };
 
-    // If the only candidate was dismissed terminal, surface empty live
-    if crate::state::project_ui::should_hide_run_as_current(
-        dismissed.as_deref(),
-        &sum.run_id,
-        &sum.status,
-    ) {
-        return Ok(empty_live_view(project, &name, config));
-    }
-
     let rs = load_run(config, &sum.run_id)?;
-    // New live run id different from dismissed → clear dismiss (new round)
+    // New hard-live run id different from dismissed → clear dismiss (new round)
     if let Some(ref d) = dismissed {
-        if d != &sum.run_id
-            && matches!(
-                sum.status.as_str(),
-                "running" | "validated" | "init" | "paused" | "starting" | "queued" | "resuming"
-            )
-        {
+        if d != &sum.run_id && is_hard_live_run_status(&sum.status) {
             crate::state::project_ui::try_clear_dismissed_run_id(config, project);
         }
     }
@@ -474,6 +432,38 @@ fn empty_live_view(project: &Path, name: &str, config: &Config) -> ProjectLiveVi
         status_one_liner: super::live_status::latest_job_line(config, project),
         merge_check: None,
     }
+}
+
+/// Statuses that mean a worker is actually executing (not desk residual).
+///
+/// `paused` is intentionally excluded: stop_task / old wave leftovers often stay
+/// `paused` forever and must not outrank a newer completed/aborted run for the
+/// same project (desktop empty desk when planJob.run_id ≠ hijacked paused id).
+fn is_hard_live_run_status(status: &str) -> bool {
+    matches!(
+        status.to_ascii_lowercase().as_str(),
+        "running" | "validated" | "init" | "starting" | "queued" | "resuming"
+    )
+}
+
+/// Pick current project live among newest-first summaries.
+///
+/// 1. First hard-live, non-dismissed run (true executing).
+/// 2. Else newest non-dismissed run (completed / failed / aborted / paused).
+///    Dismissed newest → skip to older non-dismissed (unlike prior “empty if
+///    newest dismissed” which hid valid earlier results after a re-run abort).
+fn choose_current_run<'a>(
+    for_proj: &[&'a RunSummary],
+    dismissed: Option<&str>,
+) -> Option<&'a RunSummary> {
+    let hide = |r: &RunSummary| {
+        crate::state::project_ui::should_hide_run_as_current(dismissed, &r.run_id, &r.status)
+    };
+    for_proj
+        .iter()
+        .find(|r| is_hard_live_run_status(&r.status) && !hide(r))
+        .copied()
+        .or_else(|| for_proj.iter().find(|r| !hide(r)).copied())
 }
 
 /// P2-1: best-effort plan md + task acceptance → VerificationView (no fail).
@@ -778,4 +768,65 @@ fn stall_idle_secs_for(stdout: &Path, ts: &state::TaskState) -> Option<u64> {
             .num_seconds()
             .max(0) as u64
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::runs::RunSummary;
+
+    fn sum(id: &str, status: &str, plan: &str) -> RunSummary {
+        RunSummary {
+            run_id: id.into(),
+            status: status.into(),
+            project_root: "/proj".into(),
+            plan_path: plan.into(),
+            started_at: "2026-07-24T00:00:00Z".into(),
+            task_count: 1,
+        }
+    }
+
+    #[test]
+    fn choose_prefers_hard_live_over_older_paused() {
+        let a = sum("new-aborted", "aborted", "docs/one/new.md");
+        let b = sum("old-paused", "paused", "docs/one/old.md");
+        // newest-first
+        let list = vec![&a, &b];
+        let c = choose_current_run(&list, None).unwrap();
+        assert_eq!(c.run_id, "new-aborted");
+    }
+
+    #[test]
+    fn choose_hard_live_beats_newer_terminal() {
+        let a = sum("new-done", "completed", "docs/one/new.md");
+        let b = sum("live", "running", "docs/one/live.md");
+        let list = vec![&a, &b];
+        let c = choose_current_run(&list, None).unwrap();
+        assert_eq!(c.run_id, "live");
+    }
+
+    #[test]
+    fn choose_skips_dismissed_newest_to_older() {
+        let a = sum("newest", "aborted", "docs/one/new.md");
+        let b = sum("older", "completed", "docs/one/old.md");
+        let list = vec![&a, &b];
+        let c = choose_current_run(&list, Some("newest")).unwrap();
+        assert_eq!(c.run_id, "older");
+    }
+
+    #[test]
+    fn choose_paused_only_when_newest_and_not_dismissed() {
+        let a = sum("paused-only", "paused", "docs/one/p.md");
+        let list = vec![&a];
+        let c = choose_current_run(&list, None).unwrap();
+        assert_eq!(c.run_id, "paused-only");
+        assert!(choose_current_run(&list, Some("paused-only")).is_none());
+    }
+
+    #[test]
+    fn hard_live_excludes_paused() {
+        assert!(!is_hard_live_run_status("paused"));
+        assert!(is_hard_live_run_status("running"));
+        assert!(is_hard_live_run_status("Starting"));
+    }
 }

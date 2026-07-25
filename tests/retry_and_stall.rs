@@ -39,6 +39,7 @@ fn sched(
         stall_secs,
         failover_enabled,
         fallback_extra_attempts,
+        failover_order: vec![],
     }
 }
 

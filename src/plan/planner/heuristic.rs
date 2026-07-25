@@ -1199,13 +1199,17 @@ fn work_order_template_from_spec(text: &str) -> Vec<(String, String)> {
             "你是**检验员**（独立波，不是实现者自测）。对照**计划勾选**与 progress 证据：\n\
              1. 产出计划勾选对照表（嵌 VERDICT 或 CHECKLIST）：\n\
                 | plan_ref | status(PASS|FAIL|SKIP|DEGRADED) | evidence | 备注 |\n\
-             2. 写入 `.cco-out/inspect/VERDICT.md`：首行 `Result: PASS` 或 `Result: FAIL`。\n\
-             3. 写入 `.cco-out/inspect/ISSUES.md`：每条含\n\
+             2. 写入 `.cco-out/inspect/GATE.json`：`result=pass|fail` + blocking/map/residual 计数。\n\
+             3. 写入 `.cco-out/inspect/VERDICT.md`：首行 `Result: PASS` 或 `Result: FAIL`。\n\
+             4. 写入 `.cco-out/inspect/ISSUES.md`：每条含\n\
                 id / severity=blocking|map|residual|out-of-scope / plan_ref / path / symptom / fix_wp\n\
-             4. **禁止**存在未处理 blocking/map 时写 PASS。\n\
-             5. residual（可选/不排期）可 PASS 附录；map（L1/L2 不同构）默认 blocking。\n\
-             6. 验收被静默降级 → DEGRADED + severity=blocking（除非计划写明允许）。\n\
-             7. 默认不改业务代码；只写 `.cco-out/inspect/**`。回补由 rework 波做。\n\
+                · 手点/录像/未 commit = **residual**（不得 blocking；仅 residual 时 GATE pass）\n\
+                · 真功能缺口 = blocking + 可执行 fix_wp，交给 rework 补齐\n\
+             5. **禁止**存在未处理 blocking/map 时写 PASS；仅 residual 时必须 GATE pass。\n\
+             6. residual（手点/录像/未 commit/可选）可 PASS 附录；map 默认 blocking。\n\
+             7. 验收被静默降级 → DEGRADED + severity=blocking（除非计划写明允许）。\n\
+             8. 默认不改业务代码；只写 `.cco-out/inspect/**`。真缺口由 rework 波补齐，不甩给用户。\n\
+             9. **禁止**回写台账/勾选/commit（关账由 host `sys-closeout` 或落地波负责）。\n\
              跑仓库已有测试/检查（若有）。"
                 .into(),
         ),

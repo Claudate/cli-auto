@@ -55,7 +55,9 @@ mod tests {
         assert_eq!(ProviderId::parse("claude"), Some(ProviderId::Claude));
         assert_eq!(isolation_on_fail(true), IsolationOnFail::FailClosed);
         assert_eq!(
-            FailoverPolicy::new(true, 1).target_for("claude"),
+            FailoverPolicy::new(true, 1)
+                .target_for("claude", &[])
+                .as_deref(),
             Some("codex")
         );
     }

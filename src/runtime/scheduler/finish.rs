@@ -39,18 +39,25 @@ impl Scheduler {
             .map(|t| t.attempt.max(1))
             .unwrap_or(1);
         let budget = self.attempt_budget_for(id, retry_budget);
-        let failover_used = self
+        let current_for_classify = self
+            .plan
+            .task(id)
+            .map(|t| t.provider.clone())
+            .or_else(|| self.state.tasks.get(id).map(|t| t.provider.clone()))
+            .unwrap_or_default();
+        let tried_for_classify = self
             .state
             .tasks
             .get(id)
-            .map(|t| t.failover_used)
-            .unwrap_or(false);
+            .map(|t| t.failover_tried.clone())
+            .unwrap_or_default();
         // A1-4: FailoverPolicy object (pure classify); stop never failovers.
         let kind = self.failover_policy().classify(
             reason_code,
             attempt,
             budget,
-            failover_used,
+            &current_for_classify,
+            &tried_for_classify,
         );
 
         if kind == RetryKind::SameProvider {
@@ -92,13 +99,9 @@ impl Scheduler {
         }
 
         if kind == RetryKind::TryFailover {
-            let current = self
-                .plan
-                .task(id)
-                .map(|t| t.provider.clone())
-                .or_else(|| self.state.tasks.get(id).map(|t| t.provider.clone()))
-                .unwrap_or_default();
-            if let Some(fallback) = self.resolve_failover_provider(&current).await {
+            let current = current_for_classify.clone();
+            let tried = tried_for_classify.clone();
+            if let Some(fallback) = self.resolve_failover_provider(&current, &tried).await {
                 self.archive_attempt_logs(id, attempt);
                 self.clear_done_flag(id);
 
@@ -113,6 +116,13 @@ impl Scheduler {
                 if let Some(ts) = self.state.tasks.get_mut(id) {
                     ts.provider = fallback.clone();
                     ts.failover_used = true;
+                    if !ts
+                        .failover_tried
+                        .iter()
+                        .any(|p| p.eq_ignore_ascii_case(&current))
+                    {
+                        ts.failover_tried.push(current.clone());
+                    }
                     ts.attempt = 0;
                     ts.status = TaskStatus::Pending;
                     ts.error = result.error.clone().or_else(|| {

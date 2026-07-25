@@ -204,6 +204,9 @@ export async function replanFromConfirm() {
   }
 
   // P2-2: remember current job so the next start_plan_job can re-apply edits.
+  // Prefer the job on the desk (human edits). If desk is thin direct/raw-single
+  // but a multi-step split exists for this plan, backend restore ranking still
+  // prefers multi-step on fail; preserve still copies edits from the desk job.
   const preserveFrom =
     state.planJobId ||
     state.planJob?.job_id ||

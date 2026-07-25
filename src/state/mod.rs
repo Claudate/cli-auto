@@ -92,6 +92,9 @@ pub struct TaskState {
     /// True once H4 provider failover has been applied for this task (run-state only).
     #[serde(default)]
     pub failover_used: bool,
+    /// Providers already left via H4 failover (for multi-hop order). Old runs omit → [].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failover_tried: Vec<String>,
     /// Provenance of current `provider` (optional; old runs omit → None).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route_source: Option<RouteSource>,
@@ -125,6 +128,7 @@ impl TaskState {
             attempt: 0,
             last_retry_reason: None,
             failover_used: false,
+            failover_tried: vec![],
             route_source: None,
             route_previous: None,
             route_note: None,

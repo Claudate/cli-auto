@@ -197,9 +197,15 @@ function stripWorkerScaffold(prompt) {
 /** Map provider id → short product label (only when advanced shows engine). */
 function flowEngineLabel(provider) {
   const p = String(provider || "").toLowerCase();
-  if (p === "codex") return "Codex";
+  if (p === "codex") return "备用通道";
+  if (p === "claude") return "默认通道";
+  if (p === "gemini") return "Gemini";
+  if (p === "qwen" || p === "tongyi") return "通义 Qwen";
+  if (p === "kimi" || p === "moonshot") return "Kimi";
+  if (p === "deepseek" || p === "codewhale" || p === "codew") return "CodeWhale";
+  if (p === "copilot") return "Copilot";
+  if (p === "codebuddy" || p === "cbc") return "CodeBuddy";
   if (p === "fake") return "演练";
-  if (p === "claude") return "Claude";
   return provider || "";
 }
 

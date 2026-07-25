@@ -16,8 +16,9 @@
 //! | File | Responsibility |
 //! |------|----------------|
 //! | `mod.rs` (this) | lifecycle facade · domain maps · observe helpers · re-export |
-//! | [`materialize`] | disk materialize / ParseOnly load+materialize（返回 ir · drop optional） |
+//! | [`materialize`] | disk materialize / ParseOnly load+materialize（返回 ir · drop optional · **Ensure closeout**） |
 //! | [`foreground`] | ForegroundOpts · prepare_scheduler · preflight · prepare_resume · finish |
+//! | [`ensure_loop`] | Ensure E3 auto rework（docs-closeout · 非 Mode B 旁路） |
 //! | [`route`] | soft/force provider override (A0-R3) |
 //! | [`provenance`] | stamp `route_source` (P1-2) · compose live `route_label` (P1-3) |
 //!
@@ -35,17 +36,20 @@
 //! | `cco run --provider` | [`apply_provider_override`] → domain soft/force |
 //! | CLI foreground loop | [`prepare_scheduler`] · [`finish_with_reports`] |
 
+mod ensure_loop;
 mod foreground;
 mod materialize;
 pub mod provenance;
 mod route;
 pub mod status_line;
 
+pub use ensure_loop::{maybe_auto_rework, maybe_auto_rework_quiet};
 pub use foreground::{
     finish_with_reports, preflight_plan, prepare_resume, prepare_scheduler, ForegroundOpts,
 };
 pub use materialize::{
-    apply_effort, materialize_parse_only, materialize_run, materialize_run_with_route,
+    apply_effort, apply_permission_mode, materialize_parse_only, materialize_run,
+    materialize_run_with_route,
 };
 pub use provenance::{
     compose_route_label, provider_product_label, stamp_failover, stamp_route_fill,

@@ -315,12 +315,20 @@ impl WorkerProvider for ClaudeProvider {
                 .and_then(|x| x.as_f64())
         });
 
-        let status = match exit_code {
+        let mut status = match exit_code {
             None if handle.mode == "bg" && ensure_done_marker(&stdout) => TaskStatus::Done,
             other => super::task_status_from_exit(other),
         };
 
-        let error = if status == TaskStatus::Failed {
+        // dontAsk / missing allow: CLI returns exit 0 but tools were denied → false Done.
+        // Count permission_denials on the final result object and demote to Failed.
+        let denial_n = parsed
+            .as_ref()
+            .and_then(|v| v.get("permission_denials"))
+            .and_then(|d| d.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0);
+        let mut error = if status == TaskStatus::Failed {
             let stderr = handle
                 .stdout_path
                 .parent()
@@ -334,6 +342,12 @@ impl WorkerProvider for ClaudeProvider {
         } else {
             None
         };
+        if denial_n > 0 && status == TaskStatus::Done {
+            status = TaskStatus::Failed;
+            error = Some(format!(
+                "permission denied: {denial_n} tool call(s) blocked (permission_mode cannot auto-write; set bypassPermissions or authorize before run)"
+            ));
+        }
 
         Ok(TaskResult {
             status,

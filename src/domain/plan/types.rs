@@ -32,13 +32,45 @@ pub const INSPECT_DEFAULT_WRITE_SCOPE: &str = ".cco-out/inspect/**";
 /// Marker injected into `provider_opts.append_system_prompt` (idempotent).
 pub const INSPECT_SYSTEM_PROMPT_MARKER: &str = "CCO role=inspect:";
 /// System-prompt segment for inspect workers (Claude append-system-prompt / host).
-pub const INSPECT_SYSTEM_PROMPT: &str = "CCO role=inspect: terminal quality gate, not an implementer. Business tree is READ-ONLY. You may WRITE only under `.cco-out/inspect/**` (VERDICT.md, ISSUES.md, etc.). Do not edit application source to force a pass. On FAIL, document issues for a future rework wave; do not silently rework.";
+///
+/// Host gate contract is structural — prose PASS/FAIL words in body do **not** count.
+pub const INSPECT_SYSTEM_PROMPT: &str = "CCO role=inspect: terminal quality gate, not an implementer. Business tree is READ-ONLY. You may WRITE only under `.cco-out/inspect/**`. Do not edit application source to force a pass. Ledger/map closeout is owned by role=closeout (`sys-closeout`), not by inspect.\n\
+\n\
+## Host gate contract (must follow exactly)\n\
+**Machine SoT (required):** write `.cco-out/inspect/GATE.json` as:\n\
+  {\"schema\":\"cco-inspect-gate/v1\",\"result\":\"pass\"|\"fail\",\"blocking\":N,\"map\":N,\"residual\":N}\n\
+Host uses GATE.json first. residual does not block pass. Open blocking/map → result fail.\n\
+\n\
+**Human products (also write):**\n\
+VERDICT.md: first structured line `Result: PASS` or `Result: FAIL` (bold ok). Host ignores bare FAIL/PASS in prose.\n\
+ISSUES.md: blocks headed `### I-1` / `### R1` / `### issue_id=R1` with line-start `severity: residual|blocking|map|out-of-scope`.\n\
+On FAIL, document issues for rework; do not silently rework business code.";
 /// Tools that mutate business source — stripped for inspect unless `allow_business_write`.
 pub(crate) const INSPECT_STRIP_TOOLS: &[&str] = &["Edit", "MultiEdit", "NotebookEdit"];
 
-/// Collaboration role for multi-CLI plans (P1-1).
+/// Fixed id for host-injected Ensure closeout task (E1).
+pub const SYS_CLOSEOUT_ID: &str = "sys-closeout";
+/// Marker injected into closeout `append_system_prompt` (idempotent).
+pub const CLOSEOUT_SYSTEM_PROMPT_MARKER: &str = "CCO role=closeout:";
+/// System-prompt segment for closeout workers (bounded docs/ledger write).
+pub const CLOSEOUT_SYSTEM_PROMPT: &str = "CCO role=closeout: bounded ledger/map closeout after implement. You may WRITE docs/**, README*, CLAUDE.md, .cco-out/progress/**, tests/**/README* only when evidence (smoke/tests/progress) already supports the checkbox. Never edit business source (src/**, web app code) to force green. Never weaken acceptance criteria. No evidence → do not mark plan items done.";
+/// Default writable paths for closeout.
+pub const CLOSEOUT_DEFAULT_WRITE_SCOPE: &[&str] = &[
+    "docs/**",
+    "**/*.md",
+    "README*",
+    "CLAUDE.md",
+    ".cco-out/progress/**",
+    ".cco-out/**",
+    "tests/**/README*",
+];
+/// Hard forbid for closeout (business source).
+pub const CLOSEOUT_DEFAULT_FORBID: &[&str] =
+    &["**/src/**", "src/**", "src-tauri/**", "web/js/**", "web/css/**", "crates/**"];
+
+/// Collaboration role for multi-CLI plans (P1-1 + Ensure closeout).
 ///
-/// Serialized as snake_case: `scout` | `implement` | `integrate` | `inspect`.
+/// Serialized as snake_case: `scout` | `implement` | `integrate` | `inspect` | `closeout`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskRole {
@@ -46,6 +78,8 @@ pub enum TaskRole {
     Implement,
     Integrate,
     Inspect,
+    /// Bounded docs/ledger closeout (Ensure E2). Not a second inspect.
+    Closeout,
 }
 
 impl TaskRole {
@@ -55,10 +89,11 @@ impl TaskRole {
             Self::Implement => "implement",
             Self::Integrate => "integrate",
             Self::Inspect => "inspect",
+            Self::Closeout => "closeout",
         }
     }
 
-    /// Parse `scout|implement|integrate|inspect` (case-insensitive).
+    /// Parse role names (case-insensitive).
     /// Empty / `none` / `auto` / `-` → clear (returns `Ok(None)` when used via
     /// [`parse_role_input`]); this method only accepts known role names.
     pub fn parse(s: &str) -> Option<Self> {
@@ -67,6 +102,7 @@ impl TaskRole {
             "implement" | "impl" => Some(Self::Implement),
             "integrate" | "integration" => Some(Self::Integrate),
             "inspect" | "review" | "check" => Some(Self::Inspect),
+            "closeout" | "ledger" | "docs-closeout" => Some(Self::Closeout),
             _ => None,
         }
     }
@@ -86,7 +122,11 @@ pub fn parse_role_input(raw: &str) -> Result<Option<TaskRole>, String> {
     }
     TaskRole::parse(s)
         .map(Some)
-        .ok_or_else(|| format!("不支持的角色: {s}（可选 scout / implement / integrate / inspect，或留空）"))
+        .ok_or_else(|| {
+            format!(
+                "不支持的角色: {s}（可选 scout / implement / integrate / inspect / closeout，或留空）"
+            )
+        })
 }
 
 #[cfg(test)]
@@ -97,12 +137,18 @@ mod tests {
     fn task_role_parse_and_as_str() {
         assert_eq!(TaskRole::parse("IMPLEMENT"), Some(TaskRole::Implement));
         assert_eq!(TaskRole::parse("check"), Some(TaskRole::Inspect));
+        assert_eq!(TaskRole::parse("closeout"), Some(TaskRole::Closeout));
         assert_eq!(TaskRole::as_str(TaskRole::Scout), "scout");
+        assert_eq!(TaskRole::as_str(TaskRole::Closeout), "closeout");
         assert_eq!(parse_role_input("").unwrap(), None);
         assert_eq!(parse_role_input("none").unwrap(), None);
         assert_eq!(
             parse_role_input("integrate").unwrap(),
             Some(TaskRole::Integrate)
+        );
+        assert_eq!(
+            parse_role_input("closeout").unwrap(),
+            Some(TaskRole::Closeout)
         );
         assert!(parse_role_input("wizard").is_err());
     }

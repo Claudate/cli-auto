@@ -3,6 +3,7 @@
  * [OUTPUT]: plan session stash + entry route (A1 confirm desk) + selectProject + bg banner
  * [POS]: A5-2b-fin features/project/sessionEntry.js
  * note: 打开项目默认 chat；仅活动 run/暂停 → workspace 运行页；拆分台不默认抢入口
+ * note: goToPlanMonitor 活动→running、终态→done（勿停 pick 空引导 / 历史拆分只读）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -59,12 +60,18 @@ export function isPlanSessionActive(phase = state.phase) {
 }
 
 /**
- * project_live 返回的是「项目最近一次 run」（含历史 completed）。
+ * project_live 返回的是「项目最近一次 run」（含历史 completed / 其它计划的 paused）。
  * 打开拆分会话且尚未/不匹配本 job 的 run 时，不得把旧 run 当成「本轮结果」。
- * plan_failed 同样不得用历史 completed 当「本轮结果」。
  *
- * 例外：live 仍在跑 / 暂停时一律算本轮——重开项目、单任务再跑、续跑都不能因
- * planJob 缺 run_id 而把执行台刷成空白（cli-empty）。
+ * 绑定规则（本轮 round）：
+ * 1. dismissed 的 run 永不回绑。
+ * 2. 真在跑 / 暂停 → 本轮（执行台优先，不被残留 planned job 解绑）。
+ * 3. phase=running|done → 本轮（完成/失败后仍要画结果台；仅「待确认新图且无 run_id」除外）。
+ * 4. 人在拆分台（planning/confirm/plan_failed）时：
+ *    - job 已有 run_id → 仅同 id 算本轮；
+ *    - job 尚无 run_id（待确认新图）→ 历史 live 一律不算本轮。
+ * 5. pick / 冷启动：历史终态不算本轮（打开项目默认 chat）。
+ * 6. job 已 confirmed 且带 run_id：同 id 终态也算本轮（返回结果，不要求 phase 已是 done）。
  */
 export function liveBelongsToOpenPlan() {
   const live = state.live;
@@ -82,46 +89,90 @@ export function liveBelongsToOpenPlan() {
       return false;
     }
   } catch (_) {}
-  // 真在执行或暂停：进度台必须可见（isRunPaused 已排除 dismissed）
+
+  const job = state.planJob;
+  const jobSt = String(job?.status || "").toLowerCase();
+  const jrid = job?.run_id || job?.runId || null;
+  const phase = state.phase;
+  const onSplitUi =
+    phase === "confirm" ||
+    phase === "planning" ||
+    phase === "plan_failed";
+  // 待确认新图（无 run_id）：只在拆分 UI / planned 会话上挡历史 live
+  const blockingNewSplit =
+    !!job &&
+    !jrid &&
+    (onSplitUi || jobSt === "planned" || jobSt === "planning" || jobSt === "plan_failed");
+
+  // 真在执行 / 暂停：优先认本轮（勿被 jobSt=planned 残留解绑执行台）
   if (typeof isLiveStatus === "function" && isLiveStatus(live.run_status)) {
+    if (blockingNewSplit && onSplitUi) return false;
     return true;
   }
   if (typeof isRunPaused === "function" && isRunPaused()) {
+    if (blockingNewSplit && onSplitUi) return false;
     return true;
   }
   const rs = String(live.run_status || "").toLowerCase();
-  // paused only if not dismissed (above); still allow when no project row yet
-  if (rs === "paused") return true;
-  // 拆分失败/进行中：没有本 job 的 run，历史 live 一律不算本轮
-  if (state.phase === "plan_failed" || state.phase === "planning") {
+  if (rs === "paused") {
+    if (blockingNewSplit && onSplitUi) return false;
+    return true;
+  }
+
+  // 已在执行/结果台：终态 live 必须能画结果；仅「拆分台上看新图」才挡
+  if (phase === "running" || phase === "done") {
+    if (blockingNewSplit && onSplitUi) return false;
+    if (jrid) return String(jrid) === String(live.run_id);
+    return true;
+  }
+
+  // 拆分台 UI：严格按 job.run_id 绑定
+  if (onSplitUi) {
+    if (jobSt === "plan_failed" || jobSt === "planning" || phase === "plan_failed" || phase === "planning") {
+      return !!(jrid && String(jrid) === String(live.run_id));
+    }
+    if (jobSt === "planned" || phase === "confirm") {
+      if (!jrid) return false;
+      return String(jrid) === String(live.run_id);
+    }
+    if (jobSt === "confirmed") {
+      if (jrid) return String(jrid) === String(live.run_id);
+    }
     return false;
   }
+
+  // job 已确认并绑定本 run：聊天页点「查看结果/返回执行」时 phase 可能仍是 pick
+  if (job && jobSt === "confirmed" && jrid && String(jrid) === String(live.run_id)) {
+    return true;
+  }
+
   // 打开项目默认 chat：pick 下历史终态 live 不算「本轮」
-  if (state.phase === "pick" || !state.phase) {
+  if (phase === "pick" || !phase) {
     return false;
   }
-  // 本轮已进入执行/结果：允许用项目 live 画台
-  if (state.phase === "running" || state.phase === "done") {
-    return true;
-  }
-  const job = state.planJob;
   if (!job) return true;
-  const st = String(job.status || "").toLowerCase();
-  if (st === "plan_failed" || st === "planning") return false;
-  if (st !== "planned" && st !== "confirmed") return true;
-  const jrid = job.run_id || job.runId || null;
-  if (!jrid) {
-    if (state.phase === "confirm") return false;
-    return true;
-  }
-  return String(jrid) === String(live.run_id);
+  if (jrid) return String(jrid) === String(live.run_id);
+  return false;
 }
 
 /** 历史 live 仅作项目档案，不驱动 phase / 本轮结果台 */
 export function hasCurrentRoundLive() {
-  if (typeof hasActiveRun === "function" && hasActiveRun()) return true;
-  if (typeof isRunPaused === "function" && isRunPaused()) return true;
+  // 只认「属于本轮」的 live；拆分台上的外国 paused 不得当本轮
   return liveBelongsToOpenPlan();
+}
+
+/**
+ * 仅在 job 已 confirmed 且缺 run_id、且 live 属于本轮时回填。
+ * planned 待确认图禁止把项目历史 paused run 写进 job.run_id。
+ */
+function stampJobRunIdFromLiveIfSafe() {
+  if (!state.planJob || !state.live?.run_id) return;
+  const jrid = state.planJob.run_id || state.planJob.runId || null;
+  if (jrid) return;
+  const st = String(state.planJob.status || "").toLowerCase();
+  if (st !== "confirmed") return;
+  if (!liveBelongsToOpenPlan()) return;
+  state.planJob = { ...state.planJob, run_id: state.live.run_id };
 }
 
 /**
@@ -356,6 +407,8 @@ export function hasMonitorableActivity() {
   if (hasActiveRun() || isRunPaused()) return true;
   if (isPlanSessionActive() && state.planJobId) return true;
   if (state.live?.run_id && (state.phase === "running" || state.phase === "done")) return true;
+  // 终态 live 在 phase 仍是 pick/confirm 残留时也要能回结果台（完成/失败后常见）
+  if (state.live?.run_id && liveBelongsToOpenPlan()) return true;
   return false;
 }
 
@@ -367,11 +420,27 @@ export function hasMonitorableActivity() {
  * 不改 Mode B confirm_start。
  */
 export function resolveEntryRoute() {
-  // 1) 真的有任务在跑，或暂停可续跑 → 运行页
-  if (typeof hasActiveRun === "function" && hasActiveRun()) {
+  // 1) 本轮真在跑 / 本轮暂停 → 运行页（外国历史 paused 不抢入口）
+  if (liveBelongsToOpenPlan()) {
+    const rs = String(state.live?.run_status || "").toLowerCase();
+    const live =
+      typeof isLiveStatus === "function"
+        ? isLiveStatus(state.live?.run_status)
+        : ["running", "starting", "queued", "validated", "init", "resuming"].includes(rs);
+    const paused =
+      typeof isRunPaused === "function"
+        ? isRunPaused()
+        : rs === "paused";
+    if (live || paused) {
+      return { page: "workspace", phaseHint: "running" };
+    }
+  } else if (typeof hasActiveRun === "function" && hasActiveRun() && !state.planJob) {
     return { page: "workspace", phaseHint: "running" };
-  }
-  if (typeof isRunPaused === "function" && isRunPaused()) {
+  } else if (
+    typeof isRunPaused === "function" &&
+    isRunPaused() &&
+    !state.planJob
+  ) {
     return { page: "workspace", phaseHint: "running" };
   }
   // 2) 默认聊天主窗（planning / confirm / done / 冷启动）
@@ -432,6 +501,63 @@ export async function applyEntryRoute() {
   return route;
 }
 
+/** Terminal run statuses that still have a result desk (not actively executing). */
+function isTerminalRunStatus(st) {
+  return ["completed", "done", "failed", "aborted", "stopped", "paused"].includes(
+    String(st || "").toLowerCase()
+  );
+}
+
+/**
+ * Enter CLI/result desk from chat etc. Lifts phase for active OR finished live.
+ * Bugfix: only lifting active/paused left completed/failed on pick → empty #cli-empty.
+ */
+function liftWorkspacePhaseForLive() {
+  const jobSt = String(state.planJob?.status || "").toLowerCase();
+  const jrid = state.planJob?.run_id || state.planJob?.runId || null;
+  const okRound =
+    typeof liveBelongsToOpenPlan === "function"
+      ? liveBelongsToOpenPlan() || !state.planJob
+      : true;
+  // 待确认新图且 live 不属于本轮：勿用外国 run 劫持拆分台
+  const blockingNewSplit =
+    (jobSt === "planned" || state.phase === "confirm") &&
+    !jrid &&
+    !okRound;
+  if (blockingNewSplit) return;
+
+  const runLive =
+    (typeof hasActiveRun === "function" && hasActiveRun()) ||
+    (typeof isRunPaused === "function" && isRunPaused()) ||
+    (typeof isLiveStatus === "function" &&
+      isLiveStatus(state.live?.run_status));
+
+  if (runLive) {
+    state.phase = "running";
+  } else if (state.live?.run_id && isTerminalRunStatus(state.live?.run_status)) {
+    // 完成/失败/中止：抬到 done，画结果台（勿停在 pick 导致空引导）
+    // confirmed job 同 run_id 或无挡新图时都算本轮
+    const sameJob =
+      !jrid || String(jrid) === String(state.live.run_id);
+    if (sameJob || okRound || !state.planJob) {
+      state.phase = "done";
+    } else {
+      return;
+    }
+  } else {
+    return;
+  }
+
+  state.planCollapsed = true;
+  state.confirmEditing = false;
+  stampJobRunIdFromLiveIfSafe();
+  try {
+    if (typeof host.setPlanCollapsed === "function") {
+      host.setPlanCollapsed(true);
+    }
+  } catch (_) {}
+}
+
 /** 从聊天/设置等页回到 workspace 监视（规划相位或 CLI 看板） */
 export function goToPlanMonitor() {
   const path = state.selectedPath || state.lastWorkspacePath;
@@ -445,19 +571,48 @@ export function goToPlanMonitor() {
   }
   // 用户主动点「监控」：强制进 workspace（不是 H0 默认入口）
   showPage("workspace");
-  if (isPlanSessionActive()) {
+
+  // 活动/暂停 → running；完成/失败/中止 → done。
+  // 聊天页点「返回执行/查看结果」时 phase 常仍是 confirm/pick，
+  // 若不抬 phase：要么拆分台挡住 CLI，要么 liveBelongs 在 pick 下拒终态 → #cli-empty。
+  liftWorkspacePhaseForLive();
+
+  if (isPlanSessionActive() && state.phase !== "running" && state.phase !== "done") {
     host.renderPhasePanels();
     host.renderPlanPicker();
     if (state.phase === "planning" && state.planJobId) {
       host.startPlanJobPoll();
       host.refreshPlanJob().catch(() => {});
     }
+  } else {
+    // running / done：隐藏 planning/confirm 面板，露出 #monitor CLI 看板
+    host.renderPhasePanels();
+    host.renderPlanPicker();
   }
   renderWorkspace();
   host.updateTopPlanInfo();
   updateBgPlanBanner();
   try {
     if (typeof host.renderPlanPicker === "function") host.renderPlanPicker();
+  } catch (_) {}
+  // 刷新 live，避免聊天页停留期间任务条过期；刷新后再抬一次 phase（live 可能刚到位）
+  try {
+    if (typeof host.loadLive === "function") {
+      host.loadLive()
+        .then(() => {
+          const before = state.phase;
+          liftWorkspacePhaseForLive();
+          if (state.phase !== before) {
+            try {
+              host.renderPhasePanels();
+            } catch (_) {}
+            try {
+              renderWorkspace();
+            } catch (_) {}
+          }
+        })
+        .catch(() => {});
+    }
   } catch (_) {}
 }
 
@@ -659,12 +814,8 @@ export async function selectProject(path) {
     if (hasActiveRun()) {
       state.phase = "running";
       state.planCollapsed = true;
-      if (state.planJob && state.live?.run_id) {
-        const jrid = state.planJob.run_id || state.planJob.runId || null;
-        if (!jrid) {
-          state.planJob = { ...state.planJob, run_id: state.live.run_id };
-        }
-      }
+      // 仅当 job 已 confirmed 且缺 run_id 时回填；planned 新图禁止偷绑历史 live
+      stampJobRunIdFromLiveIfSafe();
     }
     await applyEntryRoute();
     if (state.phase === "planning" && state.planJobId) {
@@ -696,14 +847,11 @@ export async function selectProject(path) {
   }
 
   if (hasActiveRun() || (typeof isRunPaused === "function" && isRunPaused())) {
-    state.planCollapsed = true;
-    state.phase = "running";
-    // 活动 run 已接管本轮：把 job.run_id 补上，避免后续 liveBelongs 再误判
-    if (state.planJob && state.live?.run_id) {
-      const jrid = state.planJob.run_id || state.planJob.runId || null;
-      if (!jrid) {
-        state.planJob = { ...state.planJob, run_id: state.live.run_id };
-      }
+    // 拆分台 planned 新图 + 外国 paused：不要被推进 running
+    if (liveBelongsToOpenPlan() || !state.planJob) {
+      state.planCollapsed = true;
+      state.phase = "running";
+      stampJobRunIdFromLiveIfSafe();
     }
   }
   // 终态历史 run 不再设 phase=done：打开项目默认 chat（用户可再进结果/监控）
