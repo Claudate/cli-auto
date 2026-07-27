@@ -17,6 +17,7 @@ contracts/: A0 契约冻结（behavior-golden · run-dir · plan-job · README�
 runtime-prompts/: **软件内底层提示真源**（Markdown 加载 · 聊天/拆分/规划器 · **ui-delivery-recipes** 效果配方 · layout/color/type/**copy**/motion · **backend-architecture** · **landing-gates**；覆盖序见目录 README）
 split-product-rules.md: **拆分产品规则短真源**（改拆分/拆分台/confirm 行为；**无**平行阶段表；全文波次史见 archive）
 cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**（顺序/并发/是否执行 + 完整任务字段；**S3/S4 ✅ 核销** · S2/S5/S6 ☐ 可选/中长期 · 文末唯一勾选）
+browser-automation-cco.md: **浏览器自动化契约**（网页验收/抓取回填/冒烟 · Kitewright 默认 MCP · tags `browser` · **W0/W1/W2 文档+risk ✅** · W3 结果台 ☐ · **本能力唯一勾选**）
 
 ---
 

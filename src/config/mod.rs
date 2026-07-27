@@ -1,7 +1,7 @@
 //! Global config: ~/.cco/config.toml + env overrides.
 //!
 //! [INPUT]: 磁盘 config · 环境变量
-//! [OUTPUT]: Config · AllowedProject · load/save · runs_dir · failover · post_inspect/post_git_push/post_open_pr
+//! [OUTPUT]: Config · AllowedProject · BrowserConfig · load/save · runs_dir · failover · post_* · browser
 //! [POS]: 全局配置真源；桌面项目白名单存此
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/config/CLAUDE.md
 
@@ -20,12 +20,77 @@ pub struct Config {
     pub providers: HashMap<String, ProviderConfig>,
     pub terminal: TerminalConfig,
     pub tui: TuiConfig,
+    /// Browser MCP for workers (screenshot / scrape / smoke). Default **off**.
+    #[serde(default)]
+    pub browser: BrowserConfig,
     /// Allowed projects shown in the desktop sidebar (not a filesystem tree).
     #[serde(default)]
     pub projects: Vec<AllowedProject>,
     /// Resolved home state root (~/.cco)
     #[serde(skip)]
     pub state_root: PathBuf,
+}
+
+/// Optional browser automation via MCP (Kitewright default · Playwright fallback).
+///
+/// See `docs/browser-automation-cco.md`. Does **not** embed a browser engine.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BrowserConfig {
+    /// Master switch. Default false — workers get no browser MCP until opted in.
+    pub enabled: bool,
+    /// `kitewright` (default, chromiumoxide/CDP) | `playwright_mcp`
+    pub engine: String,
+    /// Launcher binary (`npx`, `kite`, …).
+    pub command: String,
+    /// Args after command (stdio MCP server).
+    pub args: Vec<String>,
+    /// Evidence root relative to project (task subdir appended at runtime).
+    pub out_dir: String,
+    /// ui-verify: prefer injecting preview URL; document gap when missing.
+    pub require_preview: bool,
+    /// Pass `--strict-mcp-config` so only the task MCP file is used.
+    pub strict_mcp: bool,
+}
+
+impl Default for BrowserConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            engine: "kitewright".into(),
+            command: "npx".into(),
+            args: vec!["-y".into(), "@kitewright/mcp".into()],
+            out_dir: ".cco-out/browser".into(),
+            require_preview: true,
+            strict_mcp: true,
+        }
+    }
+}
+
+impl BrowserConfig {
+    /// Effective enabled: config or `CCO_BROWSER_ENABLED=1|true|yes`.
+    pub fn is_enabled(&self) -> bool {
+        if self.enabled {
+            return true;
+        }
+        matches!(
+            std::env::var("CCO_BROWSER_ENABLED")
+                .unwrap_or_default()
+                .trim()
+                .to_ascii_lowercase()
+                .as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    }
+
+    /// Engine id after env override `CCO_BROWSER_ENGINE`.
+    pub fn effective_engine(&self) -> String {
+        std::env::var("CCO_BROWSER_ENGINE")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| self.engine.clone())
+    }
 }
 
 /// A project the user has explicitly allowed / pinned for the app.
@@ -361,6 +426,7 @@ impl Default for Config {
             providers: builtin_provider_map(),
             terminal: TerminalConfig::default(),
             tui: TuiConfig::default(),
+            browser: BrowserConfig::default(),
             projects: Vec::new(),
             state_root: default_state_root(),
         }
@@ -565,6 +631,17 @@ auto_close_on_done = false
 [tui]
 tick_ms = 200
 default_page = "dashboard"
+
+# Browser automation for workers (screenshot / scrape / smoke). Default off.
+# Docs: docs/browser-automation-cco.md · engine kitewright (CDP) or playwright_mcp
+[browser]
+enabled = false
+engine = "kitewright"
+command = "npx"
+args = ["-y", "@kitewright/mcp"]
+out_dir = ".cco-out/browser"
+require_preview = true
+strict_mcp = true
 "#;
         std::fs::write(path, template)
             .with_context(|| format!("write config template {}", path.display()))?;
