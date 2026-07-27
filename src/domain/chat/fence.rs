@@ -83,12 +83,16 @@ fn close_fence_body(body: &str) -> Option<(usize, usize)> {
     None
 }
 
-/// Pull ```plan … ``` body (last fence wins).
+/// Pull last line-start fenced body whose language tag equals `want_tag` (ASCII, case-insensitive).
 ///
 /// CJK-safe: never advances with a fixed byte offset into multi-byte runes.
-/// Nested fences: plan bodies often embed ```text diagrams; extraction must
-/// nest-count line-start fences so the outer ```plan is not closed early.
-pub fn extract_plan_fence(text: &str) -> Option<String> {
+/// Nested fences: bodies may embed ```text diagrams; extraction nest-counts
+/// line-start fences so the outer fence is not closed early.
+pub fn extract_tagged_fence(text: &str, want_tag: &str) -> Option<String> {
+    let want = want_tag.trim();
+    if want.is_empty() {
+        return None;
+    }
     let mut search = text;
     let mut best: Option<String> = None;
     while let Some(idx) = search.find("```") {
@@ -101,7 +105,7 @@ pub fn extract_plan_fence(text: &str) -> Option<String> {
         let after = &search[idx + 3..];
         let tag_len = fence_lang_tag_len(after);
         let tag = &after[..tag_len];
-        if tag.eq_ignore_ascii_case("plan") {
+        if tag.eq_ignore_ascii_case(want) {
             let body = after[tag_len..]
                 .trim_start_matches(|c: char| c == '\n' || c == '\r' || c == ' ' || c == '\t');
             if let Some((end, cont)) = close_fence_body(body) {
@@ -111,11 +115,11 @@ pub fn extract_plan_fence(text: &str) -> Option<String> {
                 }
                 search = &body[cont..];
             } else {
-                // Unclosed ```plan — stop; keep last complete if any.
+                // Unclosed target fence — stop; keep last complete if any.
                 break;
             }
         } else {
-            // Not a plan fence (plain / markdown / rust / …). Skip this opener;
+            // Other fence (plain / markdown / rust / …). Skip this opener;
             // jump past its closer (nesting-aware so ``` inside markdown fences is fine).
             let body = after[tag_len..]
                 .trim_start_matches(|c: char| c == '\n' || c == '\r' || c == ' ' || c == '\t');
@@ -130,4 +134,81 @@ pub fn extract_plan_fence(text: &str) -> Option<String> {
         }
     }
     best
+}
+
+/// Pull ```plan … ``` body (last fence wins).
+pub fn extract_plan_fence(text: &str) -> Option<String> {
+    extract_tagged_fence(text, "plan")
+}
+
+/// Pull ```session-digest … ``` body (last fence wins).
+pub fn extract_session_digest_fence(text: &str) -> Option<String> {
+    extract_tagged_fence(text, "session-digest")
+}
+
+/// Remove all complete line-start ```session-digest fences from assistant prose
+/// (host stores digest on the session; UI reply stays human-first).
+pub fn strip_session_digest_fences(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    loop {
+        let Some(idx) = rest.find("```") else {
+            out.push_str(rest);
+            break;
+        };
+        if !is_line_start_fence(rest, idx) {
+            out.push_str(&rest[..idx + 3]);
+            rest = &rest[idx + 3..];
+            continue;
+        }
+        let after = &rest[idx + 3..];
+        let tag_len = fence_lang_tag_len(after);
+        let tag = &after[..tag_len];
+        let body = after[tag_len..]
+            .trim_start_matches(|c: char| c == '\n' || c == '\r' || c == ' ' || c == '\t');
+        if tag.eq_ignore_ascii_case("session-digest") {
+            out.push_str(&rest[..idx]);
+            if let Some((_end, cont)) = close_fence_body(body) {
+                rest = body[cont..].trim_start_matches(['\n', '\r']);
+            } else {
+                // Unclosed digest fence: drop it and stop.
+                break;
+            }
+            continue;
+        }
+        // Keep other fences: copy from opener through nested-aware closer.
+        if let Some((_end, cont)) = close_fence_body(body) {
+            let prefix_len = rest.len() - body.len();
+            let end = prefix_len + cont;
+            out.push_str(&rest[..end]);
+            rest = &rest[end..];
+        } else {
+            out.push_str(rest);
+            break;
+        }
+    }
+    // Collapse runs of blank lines left by removals; keep single trailing trim.
+    let collapsed = out
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut cleaned = String::new();
+    let mut blank = 0usize;
+    for line in collapsed.lines() {
+        if line.is_empty() {
+            blank += 1;
+            if blank <= 1 {
+                cleaned.push('\n');
+            }
+        } else {
+            blank = 0;
+            if !cleaned.is_empty() && !cleaned.ends_with('\n') {
+                cleaned.push('\n');
+            }
+            cleaned.push_str(line);
+            cleaned.push('\n');
+        }
+    }
+    cleaned.trim().to_string()
 }

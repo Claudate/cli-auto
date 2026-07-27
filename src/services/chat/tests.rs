@@ -263,6 +263,19 @@ fn fake_send_persists_messages() {
     assert!(r.env_note.is_none(), "forced fake has no env_note");
     // 联调路径仍产出 fence
     assert!(r.reply.contains("```plan"), "got: {}", r.reply);
+    // Built-in digest: stored on session, stripped from user-visible reply.
+    assert!(
+        !r.reply.contains("```session-digest"),
+        "digest fence must not stay in UI reply: {}",
+        r.reply
+    );
+    let sess = chat_session_get(&project, Some("default")).unwrap();
+    let dig = sess
+        .session_digest
+        .as_ref()
+        .expect("built-in session_digest after fake send");
+    assert!(dig.contains("session-digest/v1"), "got: {dig}");
+    assert!(dig.contains("goal:"), "got: {dig}");
     // Fresh fence is never "already saved" to a plan path.
     let d = r.draft_plan.as_ref().unwrap();
     assert!(!d.saved, "new fence must be unsaved");
@@ -545,6 +558,7 @@ fn session_clarify_meta_roundtrip_and_legacy_compat() {
         updated_at: None,
         title: Some("浇水工具".into()),
         clarify: Some(clarify.clone()),
+        session_digest: None,
     };
     save_session(&project, &sess).unwrap();
 

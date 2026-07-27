@@ -7,8 +7,9 @@ use chrono::Utc;
 
 use crate::config::Config;
 use crate::domain::chat::{
-    extract_plan_fence, extract_title_from_md, normalize_plan_markdown, structure_plan_markdown,
-    DEFAULT_SESSION,
+    extract_plan_fence, extract_session_digest_fence, extract_title_from_md,
+    normalize_plan_markdown, session_digest_looks_valid, strip_session_digest_fences,
+    structure_plan_markdown, truncate_session_digest, DEFAULT_SESSION,
 };
 
 use super::attachment::{
@@ -124,7 +125,20 @@ pub fn chat_send(
 
     // Host truth: strip AI "已启动/200" lies when localhost URL is not serving.
     // Session-bound Bash dies with the turn; only cco detached preview survives.
-    let reply = crate::services::annotate_false_preview_claims(&reply_raw);
+    let reply_checked = crate::services::annotate_false_preview_claims(&reply_raw);
+
+    // Built-in session compression: pull ```session-digest, store on session, strip from UI body.
+    // Soft-fallback (env_note) may lack a fence — keep prior digest.
+    if !(used_fake && env_note.is_some()) {
+        if let Some(raw_dig) = extract_session_digest_fence(&reply_checked) {
+            if session_digest_looks_valid(&raw_dig) {
+                sess.session_digest = Some(truncate_session_digest(&raw_dig));
+            } else {
+                tracing::debug!("chat: session-digest fence rejected by shallow check");
+            }
+        }
+    }
+    let reply = strip_session_digest_fences(&reply_checked);
 
     // Only extract plan fence for real AI or forced fake-template联调.
     // Production soft-fallback has no fence; do not fabricate draft_plan.

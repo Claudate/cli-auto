@@ -3,9 +3,9 @@
 //! ## Pure parse vs session IO vs CLI spawn
 //! | Pure (`domain::chat`) | Session / plan IO (this mod) | CLI spawn |
 //! |-----------------------|------------------------------|-----------|
-//! | extract_plan_fence · title · normalize | session JSON · attachment · plan.md | cli_call (claude print) |
+//! | extract_plan_fence · session_digest fence/strip · title · normalize | session JSON（**含 session_digest**）· attachment · plan.md | cli_call (claude print) |
 //! | extract_assistant_text · truncate | stream partial disk read | normalize optional CLI |
-//! | sanitize_session_id | TTL cleanup 48h | soft-fallback / fake template |
+//! | sanitize_session_id · session_digest 浅检 | TTL cleanup 48h | soft-fallback / fake template（含 digest 围栏） |
 //!
 //! [INPUT]: project path · user message · optional session_id · Config (provider bin)
 //! [OUTPUT]: chat_session_get · list/new/delete · chat_send · chat_save_plan · read_plan_md · stream_partial

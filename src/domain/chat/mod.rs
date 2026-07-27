@@ -3,12 +3,13 @@
 //! ## Pure parse/normalize vs session IO
 //! | Pure (this module) | IO (`services/chat` · future adapters) |
 //! |--------------------|----------------------------------------|
-//! | extract_plan_fence · nest fence depth | `.cco/chat/*.json` load/save/list |
+//! | extract_plan_fence · extract_session_digest_fence · strip · nest fence depth | `.cco/chat/*.json` load/save/list |
 //! | sanitize_plan_title · extract_title_from_md | attachments write · plan.md write |
 //! | normalize/structure_plan_markdown · acceptance_quality (P1-4) · parse_acceptance_checklist / build_verification (P2-1) | Claude CLI spawn / stream poll |
 //! | truncate_chars · sanitize_session_id | chat_stream_partial disk read |
 //! | extract_assistant_text · stream_result_summary | TTL cleanup · path resolve |
 //! | **clarify** 槽位/三入口/缺槽检测（纯） | session.clarify meta 读写 |
+//! | **session_digest** 合格浅检 · prompt 块（内置压缩） | session.session_digest 持久化 |
 //!
 //! [INPUT]: strings only (assistant text · md · session id tokens) · clarify fill state
 //! [OUTPUT]: pure transforms; **no** path join / fs / provider
@@ -20,6 +21,7 @@ mod fence;
 mod id;
 mod normalize;
 mod plan_writing_guidance;
+mod session_digest;
 mod stream_parse;
 mod text;
 mod title;
@@ -30,7 +32,10 @@ pub use clarify::{
     ClarifySlotId, ClarifyState, MissingSlotsReport, SlotFillKind, CLARIFY_SCHEMA_VERSION,
     REQUIRED_SLOTS,
 };
-pub use fence::extract_plan_fence;
+pub use fence::{
+    extract_plan_fence, extract_session_digest_fence, extract_tagged_fence,
+    strip_session_digest_fences,
+};
 pub use plan_writing_guidance::{
     backend_architecture_guidance, chat_plan_writing_guidance, planner_greenfield_stack_blurb,
     split_agent_delivery_guidance, ui_color_systems_guidance, ui_copy_systems_guidance,
@@ -45,6 +50,10 @@ pub use normalize::{
     VerificationInputs, VerificationItem, VerificationItemStatus, VerificationSource,
     VerificationView,
 };
+pub use session_digest::{
+    format_session_digest_prompt_block, session_digest_looks_valid, session_digest_reject_reason,
+    truncate_session_digest, SESSION_DIGEST_SOFT_MAX_CHARS,
+};
 pub use stream_parse::{extract_assistant_text, stream_result_summary};
 pub use text::truncate_chars;
 pub use title::{extract_title_from_md, sanitize_plan_title, PLAN_TITLE_MAX_CHARS};
@@ -57,6 +66,21 @@ mod tests {
     fn extract_plan_fence_last_wins() {
         let t = "intro\n```plan\n# A\n```\nmore\n```plan\n# B\nbody\n```\n";
         assert_eq!(extract_plan_fence(t).as_deref(), Some("# B\nbody"));
+    }
+
+    #[test]
+    fn extract_and_strip_session_digest_fence() {
+        let t = "人话回复\n\n```session-digest\nschema: session-digest/v1\ngoal: 测\nconstraints:\n  - id: C1\n    text: x\n    source: s\n```\n\n```plan\n# P\n```\n";
+        let dig = extract_session_digest_fence(t).expect("digest");
+        assert!(dig.contains("session-digest/v1"));
+        assert!(dig.contains("goal: 测"));
+        let stripped = strip_session_digest_fences(t);
+        assert!(
+            !stripped.contains("session-digest"),
+            "strip left digest: {stripped}"
+        );
+        assert!(stripped.contains("```plan"), "plan fence must remain");
+        assert!(stripped.contains("人话回复"));
     }
 
     /// Desktop 2026-07-19: plain ``` then CJK used to panic with

@@ -10,7 +10,7 @@
 > · 项目轻记忆 pin/summary：[`archive/pilotdeck-borrow-landing-2026-07-21.md`](./archive/pilotdeck-borrow-landing-2026-07-21.md) P2-2 ✅ · `src/state/project_memory.rs`  
 > · 全量引导/记忆：[`guided-plan-memory-decision-2026-07-21.md`](./guided-plan-memory-decision-2026-07-21.md) G0–G4 ☐ — **本计划不重开**  
 > · 协调序：[`next-landing-sequence-2026-07-27.md`](./next-landing-sequence-2026-07-27.md) — 本能力为 **旁轨**，不替代 W0–W4  
-> 状态：**C0 ✅ · C1 ✅ · C2-1/C2-2 ✅（契约内）· C2-3 可选 · C3 可选 · C4 后置**
+> 状态：**C0–C2 ✅ · 内置默认每轮（非口令）✅ 桌面 chat 已接线 · C3 可选 pin 消费 · C4 hook 后置**
 
 [PROTOCOL]: **勾选只认本文件 §5**。禁止平行第二套「记忆 OS」阶段表；禁止旁路 `confirm`；禁止把 free-form 摘要当硬约束真源；禁止用 gzip/zstd/文言充当模型上下文；禁止因本计划勾 ✅ guided G 波。落地后同步 `docs/CLAUDE.md` 活跃索引；改 schema 须同步 §3 与 runtime-prompt。
 
@@ -18,15 +18,16 @@
 
 ## 0. 一句话
 
-**把长会话压成一份带 ID 的结构化 digest（goal / constraints / decisions+rejected / open / dont / artifacts），AI 再读只信字段与指针；原文仍是真源，digest 是可执行缓存。**
+**把长会话压成一份带 ID 的结构化 digest；压缩是全聊天默认内置（非「说了才压」）；AI 再读只信字段与指针；原文仍是真源。**
 
 ```text
-长 transcript / 多轮 Agent
+每轮 chat_send / Agent 波次（默认 · 无需口令）
         │
-        ▼  固定 schema 抽取（LLM 或人 · 缺字段 = 失败）
-session-digest.yaml（+ 可选 arc 一行时间线）
+        ▼  助手附 ```session-digest · 主机抽取浅检
+session.session_digest 或 .cco-out/session-digest.yaml
         │
-        ├─ 下一轮 system/前缀只挂 digest + 指针
+        ├─ 下一轮 system 前缀自动挂 digest + 指针
+        ├─ UI 剥 fence · 主路径只留人话
         └─ 需要细节 → Read 原文路径（延迟加载）
 ```
 
@@ -39,7 +40,7 @@ session-digest.yaml（+ 可选 arc 一行时间线）
 | # | 目标 | 可感成功 |
 |---|------|----------|
 | T1 | 有一份 **机器可校验** 的 digest schema | 缺 `dont`/`rejected` 能被检查器或提示词拒收 |
-| T2 | Agent/人 **会话收束** 能产出 digest，不靠自由散文 | 同一会话二次进入，先读 digest 即可续作 |
+| T2 | **每轮默认**维护 digest（非口令）；不靠自由散文 | 同会话下一轮自动带压缩块；二次进入可续作 |
 | T3 | 压缩比高且 **硬约束不丢** | 关键 `dont`/开跑闸/路径字面量仍在 |
 | T4 | 与现有记忆分层 **同构不打架** | Claude `MEMORY.md` 原子条 · cco pin/summary · 本 digest 职责清晰 |
 
@@ -158,13 +159,14 @@ arc_one_liner: optional-string
 
 ```text
 C0  契约落地     schema 文 + 抽取 prompt + 合格示例     ✅
-C1  Agent 工作流  skill/协议：收束必抽 · 续作先读      ✅
+C1  Agent 工作流  skill/协议（内置默认 · 非口令）       ✅
+C1b 桌面内置接线  chat_send 抽/存/剥/注入 session_digest ✅
 C2  记忆同构      与 MEMORY 原子条分工 + 写入纪律      ✅ 主路径（C2-3 可选）
 C3  cco 薄消费    （可选）summary/pin 或 DTO 挂一行    ☐  有痛再做
-C4  自动化钩子    （后置）会话结束 hook / 定时重抽      ☐  不排期除非痛
+C4  自动化钩子    结束/定时重抽（主路径已被每轮内置覆盖） ☐  仅补强
 ```
 
-依赖：C0 → C1 → C2；C3/C4 不阻塞 C0–C2 关账。
+依赖：C0 → C1/C1b → C2；**压缩=聊天自带默认**；C3/C4 不阻塞。
 
 ---
 
@@ -191,7 +193,17 @@ C4  自动化钩子    （后置）会话结束 hook / 定时重抽      ☐  �
 | C1-2 | 可选：仓库 skill 薄封装（读契约 + 跑抽取提示 + 写 `.cco-out/session-digest.yaml`） | `.claude/skills/` 下新 skill **或** 扩既有 skill 一节 | `/…` 可触发；**不**调 confirm；无 GUI 强依赖 | ✅ |
 | C1-3 | `.gitignore` 若需要忽略实例 digest | 根 `.gitignore` | 实例不误提交；契约/示例仍跟踪 | ✅（已有 `.cco-out/`） |
 
-**C1 不做**：Always-on 后台自跑；桌面新主 phase。
+**C1 不做**：Always-on 无人确认业务开跑；桌面新主 phase；把压缩做成默认关的设置项。
+
+### 波次 C1b — 桌面聊天内置接线
+
+| # | 任务 | 落点 | 完成定义 | 状态 |
+|---|------|------|----------|------|
+| C1b-1 | 每轮 system 要求 ```session-digest；fake 模板带合格块 | `services/chat/cli_call.rs` | 模型/联调路径默认产出围栏 | ✅ |
+| C1b-2 | `chat_send` 抽取 · 浅检 · 写入 `session.session_digest` · UI strip | `send.rs` · `types.rs` · `domain/chat` | fake 测：UI 无围栏、会话有 YAML | ✅ |
+| C1b-3 | 下一轮注入 digest 块；历史 strip 防回声 | `cli_call::system_prompt_with_session_context` | 有缓存则前缀含压缩状态 | ✅ |
+
+**C1b 不做**：第二套开跑；主路径第一句展示 YAML。
 
 ### 波次 C2 — 与原子记忆同构
 
@@ -303,6 +315,7 @@ C4  自动化钩子    （后置）会话结束 hook / 定时重抽      ☐  �
 |------|------|
 | 2026-07-27 | 定稿发布 · C0–C2 ☐ · C3 可选 · C4 后置 |
 | 2026-07-27 | **C0–C2 主路径 ✅**（契约+示例+extract+workflow+skill+索引）；C3/C4 仍后置 |
+| 2026-07-27 | **产品铁律：压缩=聊天自带默认**；C1b 桌面 `chat_send` 抽/存/剥/注入 `session.session_digest` ✅ |
 
 ---
 

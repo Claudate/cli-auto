@@ -13,11 +13,11 @@ chat/: **A1-6 多文件 IO 适配**（单文件 ≤600；出巨石榜）
   · mod.rs: facade re-export + domain pure re-export
   · types.rs: ChatSession/Message/Draft/Send/Stream/Normalize DTO
   · session.rs: get/list/new/rename/delete · save · cleanup 48h
-  · send.rs: chat_send（fake/soft-fallback · draft from fence）
+  · send.rs: chat_send（fake/soft-fallback · draft from fence · **内置 session_digest 抽/存/剥**）
   · stream.rs: chat_stream_partial
   · plan_md.rs: chat_save_plan · read_plan_md
   · attachment.rs: chat_save_attachment
-  · cli_call.rs: Claude print spawn for chat/normalize（chat：`permission_mode=bypassPermissions` + spawn allow 旗，可本项目内装依赖/起 dev；normalize 仍 dontAsk）
+  · cli_call.rs: Claude print spawn for chat/normalize（chat：`permission_mode=bypassPermissions` + spawn allow 旗，可本项目内装依赖/起 dev；normalize 仍 dontAsk；**system 默认要求 ```session-digest** · 注入 session 缓存）
   · normalize.rs: chat_normalize_plan G0b
   · paths.rs: `.cco/chat` · plan path resolve
   · tests.rs: 集成测

@@ -1,50 +1,38 @@
-# session-digest 工作流（读 / 写）
+# session-digest 工作流（内置 · 默认每轮）
 
-> **不注入**产品 LLM。  
+> **产品铁律**：压缩是**聊天自带能力**，不是口令开关。用户**不必**说「压缩上下文」才会压。  
 > 契约：[`../contracts/session-digest.md`](../contracts/session-digest.md)  
-> 抽取：[`session-digest-extract.md`](./session-digest-extract.md)  
-> 勾选：[`../context-digest-compress-landing-2026-07-27.md`](../context-digest-compress-landing-2026-07-27.md) C1
+> 抽取形状：[`session-digest-extract.md`](./session-digest-extract.md)（Agent 手写/重抽仍可用）  
+> 勾选：[`../context-digest-compress-landing-2026-07-27.md`](../context-digest-compress-landing-2026-07-27.md)
 
 ---
 
-## 何时写（压缩）
+## 主机行为（cco 桌面聊天 · 已接线）
 
-- 波次 / 计划阶段结束  
-- 上下文将满或多工具长会话  
-- 用户说：「压缩上下文」「写 digest」「收束状态」
+每轮 `chat_send`：
 
-步骤：
+1. **读**：若 `session.session_digest` 有值 → 注入下一轮 system 前缀（在 pin/summary 之后）。  
+2. **写**：助手回复末尾的 ```session-digest 由主机抽取 → 浅检合格则写入 `session.session_digest`。  
+3. **显**：从落库的 assistant `content` / UI `reply` **剥掉** digest 围栏，主路径只留人话（```plan 保留）。  
+4. **史**：再拼历史时对消息再 strip 一次，避免旧回声占 token。
 
-1. 收集目标、决策（含否决）、约束、禁止、未决、产物路径。  
-2. 用 `session-digest-extract` 只出 YAML。  
-3. 按契约 §4 合格判定；失败则重抽。  
-4. 写入 `.cco-out/session-digest.yaml`（已 gitignore）。  
-5. 可选三行 `arc.md`（lossy，不承载硬约束）。  
-6. `dont[]` 只增；废止用 `superseded_by`。
+用户**零操作**；口令「压缩上下文」仅作调试/强制重抽，**不是**功能开关。
 
-## 何时读（续作）
+## Claude Code / 仓外 Agent
 
-- 新开会话同题 / 用户说「按 digest 续」  
-- 长中断后恢复
+- 默认：长波次结束或上下文将满时**自动**维护 `.cco-out/session-digest.yaml` 或会话等价物。  
+- `/session-digest`：显式读写/检修，不是「打开压缩」。  
+- 续作：有 digest 则**先读**再按指针展开。
 
-步骤：
+## 合并纪律
 
-1. 若存在 `.cco-out/session-digest.yaml`（或用户指定路径）→ **先读**。  
-2. 行动前核 `dont` 与 `constraints`。  
-3. 需要细节再 `Read` `source` / `artifacts`。  
-4. 新决策追加（含 rejected）；新禁止追加 dont。  
-5. 波次结束回到「何时写」。
-
-## 口令
-
-| 用户说 | 做 |
-|--------|-----|
-| 压缩上下文 / 写 digest | 写 |
-| 按 digest 续 | 读 |
-| 升格为记忆 | 仅显式把稳定铁律写成 MEMORY 原子条；不整文件塞索引 |
+1. `dont[]` 只增；废止用 `superseded_by`。  
+2. `decisions` 必含 `rejected`。  
+3. 冲突取更严，记入 `open[]`。  
+4. **禁止**用 digest 调 confirm / 开跑。
 
 ## 禁止
 
-- 用 digest 调用 confirm / 开跑  
+- 把压缩做成高级设置默认关  
 - 自由散文冒充 digest  
 - 与 plan `digest.rs` 模式字段混写

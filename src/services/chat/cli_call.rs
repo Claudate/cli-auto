@@ -78,6 +78,13 @@ pub(crate) fn system_prompt(project: &Path) -> String {
 - 演示档禁止硬套完整 DDD/微服务；展示站勿无故上重后端。
 - 先配方/结构，再关键文案，再色字动效与真图；开发项目 UI 文案人话、主 CTA 一致；禁 Lorem/占位句/内部 ID 第一句；禁占位图；动效不挡 CTA + reduced-motion。
 
+**会话压缩（内置 · 默认每轮 · 无需用户说「压缩」）**：
+- 在回复**末尾**附加一个 ```session-digest 代码块（语言标签必须是 session-digest）。
+- 块内是 session-digest/v1 YAML：schema、updated_at、goal、constraints[]（id/text/source）、decisions[]（chose+**rejected**+why）、open[]、dont[]（只增）、artifacts[]。
+- 有「会话压缩状态」历史时：在其上合并；dont 不无故变少；冲突取更严并写入 open。
+- 主机保存该块并在下一轮注入；用户主路径读人话，**不要**把 YAML 当第一句。
+- **禁止**用 digest 假装已开跑或调用分配计划以外的执行入口。
+
 {guidance}
 
 {recipes}
@@ -117,8 +124,29 @@ pub(crate) fn system_prompt_with_memory(config: &Config, project: &Path) -> Stri
     }
 }
 
+/// System + project pins/summary + **built-in session-digest** (per-session cache).
+pub(crate) fn system_prompt_with_session_context(
+    config: &Config,
+    project: &Path,
+    sess: &ChatSession,
+) -> String {
+    let mut base = system_prompt_with_memory(config, project);
+    if let Some(d) = sess
+        .session_digest
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
+        let block = crate::domain::chat::format_session_digest_prompt_block(d);
+        if !block.is_empty() {
+            base = format!("{base}\n\n{block}");
+        }
+    }
+    base
+}
+
 pub(crate) fn build_user_prompt(config: &Config, sess: &ChatSession, project: &Path) -> String {
-    let mut parts = vec![system_prompt_with_memory(config, project)];
+    let mut parts = vec![system_prompt_with_session_context(config, project, sess)];
     parts.push("\n\n--- 对话历史 ---\n".into());
     for m in &sess.messages {
         let role = match m.role.as_str() {
@@ -126,10 +154,18 @@ pub(crate) fn build_user_prompt(config: &Config, sess: &ChatSession, project: &P
             "system" => "系统",
             _ => "用户",
         };
-        let content = truncate_chars(&m.content, 4000);
+        // Prefer human prose in history: drop prior digest fences if model echoed them.
+        let content = truncate_chars(
+            &crate::domain::chat::strip_session_digest_fences(&m.content),
+            4000,
+        );
         parts.push(format!("\n[{role}]\n{content}\n"));
     }
-    parts.push("\n请根据最新用户消息回复。若应输出计划，请使用 ```plan 代码块。\n".into());
+    parts.push(
+        "\n请根据最新用户消息回复。若应输出计划，请使用 ```plan 代码块。\
+末尾默认附加 ```session-digest（内置压缩，无需用户口令）。\n"
+            .into(),
+    );
     parts.join("")
 }
 
@@ -190,6 +226,25 @@ pub(crate) fn fake_chat_reply(user_msg: &str, project: &Path) -> String {
 ## 约束
 - 仅改项目内必要文件
 - 不引入第二套执行入口
+```
+
+```session-digest
+schema: session-digest/v1
+updated_at: "1970-01-01T00:00:00Z"
+goal: "根据用户描述推进可验证交付（模拟）"
+constraints:
+  - id: C1
+    text: "仅改项目内必要文件；不引入第二套执行入口"
+    source: "user:chat"
+decisions:
+  - id: D1
+    chose: "先落可分配计划草稿"
+    rejected: "在聊天里默默重写半个仓库"
+    why: "主路径是生成→核对→拆分→确认"
+dont:
+  - id: X1
+    text: "禁止旁路 Split 确认开跑"
+    source: "product"
 ```
 
 若需调整范围或拆分粒度，直接说；满意后点「保存为计划」，再「分配计划」。"#

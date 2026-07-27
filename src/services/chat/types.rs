@@ -51,6 +51,10 @@ pub struct ChatSession {
     /// absent on legacy sessions → None (not a second Planner).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clarify: Option<ClarifyState>,
+    /// Built-in session-digest/v1 YAML cache (every chat turn maintains; not opt-in slogan).
+    /// Host extracts from ```session-digest fence; absent on legacy sessions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_digest: Option<String>,
 }
 
 /// C3: lightweight row for multi-session list (no full messages).
