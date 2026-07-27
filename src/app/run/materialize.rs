@@ -101,7 +101,7 @@ pub fn materialize_run_with_route_opts(
     // Soft-fill permission_mode so unattended workers can Edit/Bash (default bypass).
     apply_permission_mode(&mut ir, config, None);
 
-    // P0+P2: role→tier→cheapest (+ sticky wave + budget ceiling at open-run spent=0).
+    // P0–P3: role→tier→cheapest (+ sticky · budget · optional intent).
     let cost_report = if opts.skip_cost_route || !config.default.cost_route_enabled {
         CostRouteReport::default()
     } else {
@@ -115,6 +115,7 @@ pub fn materialize_run_with_route_opts(
                 spent_usd: 0.0,
                 budget_cap_usd: config.default.run_max_budget_usd,
                 sticky: true,
+                intent: config.default.cost_intent_enabled,
             },
             crate::domain::worker::default_cost_catalog(),
         )

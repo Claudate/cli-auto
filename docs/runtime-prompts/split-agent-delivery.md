@@ -9,5 +9,5 @@
 - **图片**：禁占位图；Hero/作品按配方填；alt 必填。
 - **色 / 字 / 动效**：同 kit；动效库≤2；CTA 不挡、reduced-motion。
 - **营销站验收**：底 CTA≠footer、无 example.com、顶栏唯一主名、门禁无 FAIL。
-- **网页自动化（可选）**：涉及「预览验收 / 截图 / 抓竞品文案 / 表单冒烟」时，可拆 **optional** 步骤，tags 含 `browser`（再加 `ui-verify` | `scrape` | `ui-smoke`）。【怎样算做完】人话；产物约定 `.cco-out/browser/<任务id>/`（shot.png、report.md / raw.md / smoke.md）。抓取必须写 **源 URL + 写入相对路径**，scope 覆盖写入目标。默认不强制；宿主 `browser.enabled` 关则 worker 无浏览器工具（见 `docs/browser-automation-cco.md`）。
+- **网页自动化（可选）**：涉及「预览验收 / 截图 / 抓竞品文案 / 表单冒烟」时，可拆 **optional** 步骤，tags 含 `browser`（再加 `ui-verify` | `scrape` | `ui-smoke`）。【怎样算做完】人话；产物约定 `.cco-out/browser/<任务id>/`（shot.png、report.md / raw.md / smoke.md）。抓取必须写 **源 URL + 写入相对路径**，scope 覆盖写入目标。`ui-smoke`：打开 → 填最小必填 → 主 CTA → 成功态，写 smoke.md。默认不强制；宿主 `browser.enabled` 关则 worker 无浏览器工具；结果台可展示证据缩略（见 `docs/browser-automation-cco.md`）。
 - **后端**：深度 A–D；A 禁 DDD 空壳；C 骨架须一接口可跑（`backend-architecture`）。

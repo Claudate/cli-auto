@@ -8,6 +8,7 @@
  * 费用展示在标题右侧 #result-cost-chip（shellChrome.updateBudgetChip）。
  * P1-3: miss 行展示 live.route_label（App 拼好人话）；主路径不露 raw route_source enum。
  * P2-1: live.verification → 可折叠「原计划要验收」副栏（巡检为准 / 未自动对照）。
+ * W3: live.browser_evidence → 网页验收证据（截图 data URL / 摘录）。
  * 第一屏标题固定「本轮结果」，不写 run_id。
  */
 
@@ -20,6 +21,7 @@ import {
   taskBucket,
   fiveStateLabel,
 } from "../run/runBuckets.js";
+import { renderBrowserEvidence } from "./browserEvidence.js";
 
 function g(name) {
   const w = typeof window !== "undefined" ? window : globalThis;
@@ -271,6 +273,9 @@ export function bindResultView(vm, bridge = {}) {
     // P2-1: plan checklist vs inspect side-by-side (live.verification DTO)
     renderVerificationPanel(live?.verification);
 
+    // W3: browser evidence (shots / smoke / report) — DTO only, no strategy
+    renderBrowserEvidence(live, { $ });
+
     // 回补/再写/先这样结束/顶栏结束 均不露出；结束本轮用 #btn-log-end-plan
     const btnBack = $("btn-ws-back-chat");
     if (btnBack) btnBack.hidden = true;
@@ -397,6 +402,7 @@ export function bindResultView(vm, bridge = {}) {
     renderInspectLoopStrip,
     renderInspectAndResult,
     renderVerificationPanel,
+    renderBrowserEvidence: (live) => renderBrowserEvidence(live, { $ }),
     startRework: () => vm.startRework(),
     acceptResidual: () => vm.acceptResidual(),
     finishRound: () => vm.finishRound(),

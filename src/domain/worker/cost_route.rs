@@ -1,14 +1,15 @@
-//! Cost-aware CLI tier routing (P0) + escalate target (P1).
+//! Cost-aware CLI catalog · tier · select · escalate (P0/P1 primitives).
 //!
-//! [INPUT]: PlanIR · role · available provider names · optional unhealthy set
-//! [OUTPUT]: mutated still-default providers · CostRouteReport · escalate peer
+//! Apply orchestration lives in [`super::cost_apply`]. Intent in [`super::cost_intent`].
+//!
+//! [INPUT]: role · available provider names · unhealthy · catalog
+//! [OUTPUT]: CostPick · CostRouteReport types · escalate peer name
 //! [POS]: domain/worker — pure; no registry / preflight / RunState
-//! [PROTOCOL]: never rewrite explicit non-default routes; never auto-pick fake/sdk
+//! [PROTOCOL]: never auto-pick fake/sdk
 //!   See docs/cost-aware-cli-router-2026-07-27.md
 
-use crate::domain::plan::{PlanIR, TaskRole};
+use crate::domain::plan::TaskRole;
 
-use super::route::is_still_default_route;
 use super::types::ProviderId;
 
 /// Quality / cost band for worker CLIs.
@@ -269,156 +270,6 @@ impl CostRouteReport {
     }
 }
 
-/// Open-run / materialize options for cost routing (P0 + P2).
-#[derive(Debug, Clone)]
-pub struct CostRouteOpts {
-    pub enabled: bool,
-    /// Run spend so far (0 at first materialize).
-    pub spent_usd: f64,
-    /// `run_max_budget_usd` when set.
-    pub budget_cap_usd: Option<f64>,
-    /// P2: same group / wave reuses prior pick (default true).
-    pub sticky: bool,
-}
-
-impl Default for CostRouteOpts {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            spent_usd: 0.0,
-            budget_cap_usd: None,
-            sticky: true,
-        }
-    }
-}
-
-/// Rewrite still-default task providers by role→tier→cheapest available.
-///
-/// No-op when `enabled` is false. Does not touch explicit / tag-kept engines.
-pub fn apply_cost_aware_routing(
-    plan: &mut PlanIR,
-    available: &[String],
-    unhealthy: &[String],
-    enabled: bool,
-) -> CostRouteReport {
-    apply_cost_aware_routing_with_opts(
-        plan,
-        available,
-        unhealthy,
-        CostRouteOpts {
-            enabled,
-            ..CostRouteOpts::default()
-        },
-        default_cost_catalog(),
-    )
-}
-
-pub fn apply_cost_aware_routing_with_catalog(
-    plan: &mut PlanIR,
-    available: &[String],
-    unhealthy: &[String],
-    enabled: bool,
-    catalog: &[ProviderCostEntry],
-) -> CostRouteReport {
-    apply_cost_aware_routing_with_opts(
-        plan,
-        available,
-        unhealthy,
-        CostRouteOpts {
-            enabled,
-            ..CostRouteOpts::default()
-        },
-        catalog,
-    )
-}
-
-/// Full P0+P2 pass: wave order · sticky cohort · budget tier ceiling.
-pub fn apply_cost_aware_routing_with_opts(
-    plan: &mut PlanIR,
-    available: &[String],
-    unhealthy: &[String],
-    opts: CostRouteOpts,
-    catalog: &[ProviderCostEntry],
-) -> CostRouteReport {
-    use super::cost_budget::{
-        budget_tier_ceiling, clamp_tier, route_pass_order, select_with_sticky, sticky_provider,
-    };
-
-    let mut report = CostRouteReport::default();
-    if !opts.enabled {
-        return report;
-    }
-    let ceiling = budget_tier_ceiling(opts.spent_usd, opts.budget_cap_usd);
-    let default = plan.default_provider.clone();
-    let order = route_pass_order(plan);
-    let mut committed: Vec<(String, String)> = Vec::new();
-    // Only engines chosen by this auto pass (wave sticky ignores bare explicit seeds).
-    let mut auto_committed: Vec<(String, String)> = Vec::new();
-
-    // Seed committed with already-explicit engines so **group** sticky can follow them.
-    for t in &plan.tasks {
-        if !is_still_default_route(&t.provider, &default) {
-            committed.push((t.id.clone(), t.provider.clone()));
-        }
-    }
-
-    for id in order {
-        let Some(idx) = plan.tasks.iter().position(|t| t.id == id) else {
-            continue;
-        };
-        // Snapshot fields we need without holding a long mut borrow across helpers.
-        let (provider, role, tags) = {
-            let t = &plan.tasks[idx];
-            (t.provider.clone(), t.role, t.tags.clone())
-        };
-        if !is_still_default_route(&provider, &default) {
-            continue;
-        }
-        if let Some(implied) = crate::domain::plan::tag_implied_provider(&tags) {
-            if provider.eq_ignore_ascii_case(implied) {
-                committed.push((id.clone(), provider));
-                continue;
-            }
-        }
-        let role_tier = role_default_tier(role);
-        let requested = clamp_tier(role_tier, ceiling);
-        let sticky = if opts.sticky {
-            sticky_provider(plan, &id, &committed, &auto_committed)
-        } else {
-            None
-        };
-        let Some(mut pick) = select_with_sticky(
-            role_tier,
-            ceiling,
-            sticky.as_deref(),
-            available,
-            unhealthy,
-            catalog,
-        ) else {
-            report.skipped_ids.push(id);
-            continue;
-        };
-        pick.budget_clamped = ceiling.is_some() && role_tier > requested;
-        let from = provider;
-        let to = pick.provider.clone();
-        let tier = pick.tier;
-        let rationale = pick.rationale_zh();
-        if !from.eq_ignore_ascii_case(&to) {
-            plan.tasks[idx].provider = to.clone();
-        }
-        report.changed.push(CostRouteChange {
-            task_id: id.clone(),
-            from,
-            to: to.clone(),
-            tier,
-            rationale,
-        });
-        committed.push((id.clone(), to.clone()));
-        auto_committed.push((id, to));
-    }
-    report
-}
-
 /// P1: next higher-cost auto peer after a failure (tier-up, then cost_rank up).
 ///
 /// Walks catalog entries strictly more expensive than `current`, preferring the
@@ -477,48 +328,6 @@ pub fn filter_auto_available(names: impl IntoIterator<Item = impl AsRef<str>>) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::plan::{OnFailure, TaskIR};
-    use std::path::PathBuf;
-
-    fn task(id: &str, provider: &str, role: Option<TaskRole>) -> TaskIR {
-        TaskIR {
-            id: id.into(),
-            title: id.into(),
-            depends_on: vec![],
-            group: None,
-            provider: provider.into(),
-            mode: "print".into(),
-            prompt: "p".into(),
-            verify_cmd: None,
-            acceptance: None,
-            timeout_secs: None,
-            worktree: None,
-            provider_opts: serde_json::json!({}),
-            optional: false,
-            include: true,
-            role,
-            scope: None,
-            outputs: vec![],
-            tags: vec![],
-        }
-    }
-
-    fn plan(tasks: Vec<TaskIR>) -> PlanIR {
-        PlanIR {
-            schema: "cco-plan/v1".into(),
-            name: "cost".into(),
-            adapter: "cco-plan/v1".into(),
-            source_path: PathBuf::from("c.cco.yaml"),
-            max_parallel: 2,
-            on_failure: OnFailure::Pause,
-            retry_max: 0,
-            default_provider: "claude".into(),
-            default_mode: "print".into(),
-            worktree: true,
-            require_inspect: false,
-            tasks,
-        }
-    }
 
     #[test]
     fn role_tiers_match_product_table() {
@@ -548,43 +357,6 @@ mod tests {
         assert_eq!(pick.provider, "claude");
         assert!(pick.borrowed_up);
         assert_eq!(pick.tier, CostTier::Flagship);
-    }
-
-    #[test]
-    fn apply_rewrites_default_implement_to_codex() {
-        let mut ir = plan(vec![
-            task("impl", "claude", Some(TaskRole::Implement)),
-            task("insp", "claude", Some(TaskRole::Inspect)),
-            task("kept", "gemini", None), // explicit non-default
-        ]);
-        let avail = vec!["claude".into(), "codex".into(), "gemini".into()];
-        let r = apply_cost_aware_routing(&mut ir, &avail, &[], true);
-        assert_eq!(ir.tasks[0].provider, "codex");
-        assert_eq!(ir.tasks[1].provider, "claude"); // flagship
-        assert_eq!(ir.tasks[2].provider, "gemini"); // explicit kept
-        assert!(r.changed.iter().any(|c| c.task_id == "impl" && c.to == "codex"));
-        assert!(r.summary_line().unwrap().contains("Codex"));
-    }
-
-    #[test]
-    fn disabled_is_noop() {
-        let mut ir = plan(vec![task("impl", "claude", Some(TaskRole::Implement))]);
-        let avail = vec!["codex".into(), "claude".into()];
-        let r = apply_cost_aware_routing(&mut ir, &avail, &[], false);
-        assert!(r.changed.is_empty());
-        assert_eq!(ir.tasks[0].provider, "claude");
-    }
-
-    #[test]
-    fn tag_kept_not_overridden() {
-        let mut t = task("t", "codex", Some(TaskRole::Implement));
-        t.tags = vec!["codex".into()];
-        let mut ir = plan(vec![t]);
-        // default is claude; codex is explicit non-default → still_default false
-        let avail = vec!["claude".into(), "codex".into()];
-        let r = apply_cost_aware_routing(&mut ir, &avail, &[], true);
-        assert_eq!(ir.tasks[0].provider, "codex");
-        assert!(r.changed.is_empty());
     }
 
     #[test]

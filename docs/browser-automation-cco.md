@@ -94,9 +94,9 @@ Inspect：可读 `.cco-out/browser/**` 作证据；**仍不改业务源码**。
 | 波 | 内容 | 状态 |
 |----|------|------|
 | **W0** | 本文 + prompts/L2 交叉 · 产物路径约定 | ✅ |
-| **W1** | config · doctor · mcp 注入 · preview env · BROWSER system 片段 · 示例 optional 验收任务 · 单测 | ✅（本轮） |
+| **W1** | config · doctor · mcp 注入 · preview env · BROWSER system 片段 · 示例 optional 验收任务 · 单测 | ✅ |
 | **W2** | scrape 模板 · risk 会外发 · scope 强制 | ✅（risk tag + 文档；模板随 prompts） |
-| **W3** | ui-smoke 模板 · 结果台截图（可选后置） | ☐ 模板 W0/W1 提示已点到；结果台 UI ☐ |
+| **W3** | ui-smoke 示例 · live `browser_evidence` · 结果台「网页验收证据」缩略/摘录 | ✅ |
 
 ---
 

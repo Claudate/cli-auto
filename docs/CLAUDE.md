@@ -17,7 +17,7 @@ contracts/: A0 契约冻结（behavior-golden · run-dir · plan-job · README�
 runtime-prompts/: **软件内底层提示真源**（Markdown 加载 · 聊天/拆分/规划器 · **ui-delivery-recipes** 效果配方 · layout/color/type/**copy**/motion · **backend-architecture** · **landing-gates**；覆盖序见目录 README）
 split-product-rules.md: **拆分产品规则短真源**（改拆分/拆分台/confirm 行为；**无**平行阶段表；全文波次史见 archive）
 cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**（顺序/并发/是否执行 + 完整任务字段；**S3/S4 ✅ 核销** · S2/S5/S6 ☐ 可选/中长期 · 文末唯一勾选）
-browser-automation-cco.md: **浏览器自动化契约**（网页验收/抓取回填/冒烟 · Kitewright 默认 MCP · tags `browser` · **W0/W1/W2 文档+risk ✅** · W3 结果台 ☐ · **本能力唯一勾选**）
+browser-automation-cco.md: **浏览器自动化契约**（网页验收/抓取回填/冒烟 · Kitewright 默认 MCP · tags `browser` · **W0–W3 ✅** · 结果台 browser_evidence · **本能力唯一勾选**）
 
 ---
 
@@ -25,7 +25,7 @@ browser-automation-cco.md: **浏览器自动化契约**（网页验收/抓取回
 
 ### 还在做（活跃落地 · 可有 ☐）
 
-cost-aware-cli-router-2026-07-27.md: **费用感知 CLI 优选**（**P0/P1/P2 ✅** · P3 intent ☐；role→tier→最便宜 · 失败升档 · 预算收紧/同波粘滞 · 显式 route 不动）
+cost-aware-cli-router-2026-07-27.md: **费用感知 CLI 优选**（**P0–P3 ✅**；role→tier · 升档 · 预算/粘滞 · **intent 默认关** · 显式 route 不动）
 next-landing-sequence-2026-07-27.md: **下一轮落地序（协调）**（**W0/W1/W3 ✅** · W2 自动化代理 ✅ / **真人 V1–V5 ☐** · W0 GUI 目视 residual · W4 无新痛；**不**替代各题勾选真源）
 inspect-ensure-close-loop-2026-07-24.md: **巡检关账闭环 Ensure**（**E0–E6 ✅** · §6.1 自动化代理 ✅ · **wros 真人 V1–V5 ☐** · closeout · 有界关账 · 自动 rework · UI 反误导；**本问题唯一勾选落点**）
 clarify-phase-vibe-check-subset.md: **澄清相 · 能力边界真源**（vibe-check 轻量子集 · 三入口/Brief 认领≠开跑 · 非 vibe-check/guided 全量 · ⊆ PRODUCT ①）

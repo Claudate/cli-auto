@@ -73,6 +73,8 @@ tasks:
         failover_enabled: false,
         fallback_extra_attempts: 1,
         failover_order: vec![],
+        cost_escalate_enabled: false,
+        browser: cco::config::BrowserConfig::default(),
     };
 
     let status = sched.run().await.unwrap();
@@ -191,6 +193,8 @@ tasks:
         failover_enabled: false,
         fallback_extra_attempts: 1,
         failover_order: vec![],
+        cost_escalate_enabled: false,
+        browser: cco::config::BrowserConfig::default(),
     };
 
     let status = sched.run().await.unwrap();
@@ -303,6 +307,8 @@ tasks:
         failover_enabled: false,
         fallback_extra_attempts: 1,
         failover_order: vec![],
+        cost_escalate_enabled: false,
+        browser: cco::config::BrowserConfig::default(),
     };
 
     let status = sched.run().await.unwrap();
@@ -395,6 +401,8 @@ tasks:
         failover_enabled: false,
         fallback_extra_attempts: 1,
         failover_order: vec![],
+        cost_escalate_enabled: false,
+        browser: cco::config::BrowserConfig::default(),
     };
 
     let status = sched.run().await.unwrap();

@@ -40,6 +40,8 @@ fn sched(
         failover_enabled,
         fallback_extra_attempts,
         failover_order: vec![],
+        cost_escalate_enabled: false,
+        browser: cco::config::BrowserConfig::default(),
     }
 }
 

@@ -1,0 +1,30 @@
+# Optional form / main-path smoke (docs/browser-automation-cco.md · W3).
+# Requires: config.browser.enabled + Chrome + Kitewright/Playwright MCP + a live preview URL.
+schema: cco-plan/v1
+name: browser-ui-smoke-demo
+defaults:
+  provider: claude
+  mode: print
+  worktree: false
+tasks:
+  - id: smoke-main
+    title: 主路径表单冒烟（可选）
+    optional: true
+    include: false
+    tags: [browser, ui-smoke]
+    role: implement
+    prompt: |
+      使用浏览器工具做主路径冒烟（优先 CCO_PREVIEW_URL）。
+      1. 打开预览；无 URL 时在 smoke.md 写「无法冒烟」并结束（不要假装通过）。
+      2. 按人话主路径：进入主 CTA / 表单 → 填最小必填 → 提交或等价主操作。
+      3. 断言成功态（成功文案、跳转、列表出现新项等）；失败写清卡在哪一步。
+      4. 可选截图 shot.png；必写 smoke.md（步骤 + 结果）。
+      证据目录：$CCO_BROWSER_OUT 或 .cco-out/browser/smoke-main/
+      最后一行：CCO_DONE ok
+    acceptance: 主路径可点通；smoke.md 落盘；失败不得写成 PASS
+    scope:
+      paths:
+        - .cco-out/browser/**
+        - .cco-out/browser/smoke-main/**
+    outputs:
+      - .cco-out/browser/smoke-main/smoke.md

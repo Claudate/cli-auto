@@ -1,6 +1,6 @@
 # 费用感知 CLI 优选（Cost-aware Worker Router）
 
-> **状态：P0/P1/P2 ✅ · 本文件 = 本能力勾选真源**  
+> **状态：P0–P3 ✅ · 本文件 = 本能力勾选真源**  
 > 日期：2026-07-27  
 > 范围：task 级 `provider` 自动优选（**不**做 HTTP model gateway）  
 > 非目标：LiteLLM/Portkey 整站代理 · 静默覆盖显式 route · 自研 ML 分类器（P3 后置）  
@@ -28,7 +28,7 @@ role/tags → tier → 池内最便宜可用 → soft 填 default 任务
 | **P0** | 静态 tier 目录 + role→tier + 可用∩未熔断∩单价最低；`route_source=cost_auto`；人话 rationale | ✅ |
 | **P1** | cheap/mid 失败 → 升一档重试（`cost_escalate`）；Verify=既有 acceptance/inspect | ✅ |
 | **P2** | run 预算阈值降档（≥70% mid / ≥90% cheap）· 同 group/同档 wave 粘滞 · `route_source=cost_budget` | ✅ |
-| **P3** | 可选 intent 分类器；禁止默认甩外部 SaaS 代理 | ☐ |
+| **P3** | 启发式 intent（title/prompt/tags）· **默认关** · Inspect/Integrate 不降 · 无外部代理 | ✅ |
 
 ---
 
@@ -68,8 +68,19 @@ role/tags → tier → 池内最便宜可用 → soft 填 default 任务
 ```toml
 # ~/.cco/config.toml [default]
 cost_route_enabled = true          # P0 总开关；false = 行为与改前一致
-cost_escalate_enabled = true       # P1；依赖 cost 路径或任意失败升档
+cost_escalate_enabled = true       # P1；失败后升档
+# cost_intent_enabled = false      # P3 默认关；开则 title/prompt/tags 微调档
+# run_max_budget_usd = 25.0        # P2 预算阈值（有 cap 才中途降档）
 ```
+
+### P3 意图规则（启发式 · 可解释）
+
+| 信号 | 效果（role 非 inspect/integrate） |
+|------|-----------------------------------|
+| tags `hard`/`arch`/`critical` 或文案「架构/跨模块/…」 | 升一档（mid→flagship） |
+| tags `simple`/`docs`/`typo` 或「错别字/格式化/…」 | 降一档（mid→cheap） |
+| 极短 prompt（&lt;48 非空白字） | 偏简 |
+| Inspect / Integrate | **永不**因意图降档 |
 
 ---
 
@@ -100,10 +111,10 @@ cost_escalate_enabled = true       # P1；依赖 cost 路径或任意失败升�
 
 | 层 | 位置 |
 |----|------|
-| Domain | `cost_route.rs` · `cost_budget.rs`（P2 ceiling / sticky / downgrade） |
+| Domain | `cost_route` 目录/选型 · `cost_apply` 编排 · `cost_budget` P2 · `cost_intent` P3 |
 | App | `materialize` 应用优选 · `provenance` stamp/label |
 | Runtime | `patrol` 升档 · `tick.maybe_budget_downgrade_task` 开跑前降档 |
-| Config | `cost_route_enabled` / `cost_escalate_enabled` · 预算用既有 `run_max_budget_usd` |
+| Config | `cost_route_enabled` / `cost_escalate_enabled` / **`cost_intent_enabled`** · `run_max_budget_usd` |
 
 ---
 

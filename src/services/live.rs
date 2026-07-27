@@ -128,6 +128,9 @@ pub struct ProjectLiveView {
     /// H3: shallow “how to verify after parallel/integrate” sentence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub merge_check: Option<String>,
+    /// W3: browser automation evidence (shots / report / smoke) under `.cco-out/browser`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub browser_evidence: Vec<crate::runtime::browser_mcp::BrowserEvidenceItem>,
 }
 
 /// Compact Board row for desktop handoff strip (multi-cli P2-6).
@@ -386,6 +389,10 @@ pub fn project_live_view(
     let merge_check = resolved
         .as_ref()
         .and_then(|p| crate::domain::plan::merge_check_for_plan(&p.tasks));
+    let browser_evidence = crate::runtime::browser_mcp::collect_browser_evidence(
+        &rs.project_root,
+        &config.browser.out_dir,
+    );
 
     Ok(ProjectLiveView {
         project_path: project.display().to_string(),
@@ -407,6 +414,7 @@ pub fn project_live_view(
         verification,
         status_one_liner,
         merge_check,
+        browser_evidence,
     })
 }
 
@@ -431,6 +439,7 @@ fn empty_live_view(project: &Path, name: &str, config: &Config) -> ProjectLiveVi
         verification: None,
         status_one_liner: super::live_status::latest_job_line(config, project),
         merge_check: None,
+        browser_evidence: vec![],
     }
 }
 

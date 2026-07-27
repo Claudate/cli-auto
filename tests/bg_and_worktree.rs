@@ -72,6 +72,8 @@ tasks:
         failover_enabled: false,
         fallback_extra_attempts: 1,
         failover_order: vec![],
+        cost_escalate_enabled: false,
+        browser: cco::config::BrowserConfig::default(),
     }
     .run()
     .await
@@ -273,6 +275,8 @@ tasks:
         failover_enabled: false,
         fallback_extra_attempts: 1,
         failover_order: vec![],
+        cost_escalate_enabled: false,
+        browser: cco::config::BrowserConfig::default(),
     }
     .run()
     .await

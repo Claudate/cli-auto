@@ -214,6 +214,160 @@ fn chrome_on_path() -> bool {
         || Path::new("/Applications/Chromium.app/Contents/MacOS/Chromium").is_file()
 }
 
+// ── W3: evidence for result desk ─────────────────────────────────────
+
+/// One browser artifact under `.cco-out/browser/<task>/` for desktop result.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BrowserEvidenceItem {
+    pub task_id: String,
+    /// `shot` | `report` | `smoke` | `raw` | `other`
+    pub kind: String,
+    /// Path relative to project root (posix-ish display).
+    pub rel_path: String,
+    /// Absolute path (open in Finder / debug).
+    pub abs_path: String,
+    /// Small PNG as `data:image/png;base64,…` when kind=shot and file is small enough.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview_data_url: Option<String>,
+    /// First ~400 chars of report/smoke/raw markdown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub excerpt: Option<String>,
+}
+
+const MAX_SHOT_BYTES: u64 = 280_000;
+const MAX_EVIDENCE_ITEMS: usize = 12;
+const EXCERPT_CHARS: usize = 400;
+
+/// Scan `project/{out_dir}/**` for shot.png / report.md / smoke.md / raw.md.
+pub fn collect_browser_evidence(
+    project_root: &Path,
+    out_dir_rel: &str,
+) -> Vec<BrowserEvidenceItem> {
+    let rel = out_dir_rel.trim().trim_start_matches('/');
+    let base = if rel.is_empty() {
+        project_root.join(".cco-out/browser")
+    } else {
+        project_root.join(rel)
+    };
+    if !base.is_dir() {
+        return vec![];
+    }
+    let mut items = Vec::new();
+    let Ok(task_dirs) = std::fs::read_dir(&base) else {
+        return vec![];
+    };
+    let mut dirs: Vec<_> = task_dirs.filter_map(|e| e.ok()).collect();
+    dirs.sort_by_key(|e| e.file_name());
+    for ent in dirs {
+        if !ent.path().is_dir() {
+            continue;
+        }
+        let task_id = ent.file_name().to_string_lossy().into_owned();
+        if task_id.starts_with('.') {
+            continue;
+        }
+        for (name, kind) in [
+            ("shot.png", "shot"),
+            ("shot.jpg", "shot"),
+            ("screenshot.png", "shot"),
+            ("report.md", "report"),
+            ("smoke.md", "smoke"),
+            ("raw.md", "raw"),
+        ] {
+            let path = ent.path().join(name);
+            if !path.is_file() {
+                continue;
+            }
+            let rel_path = path
+                .strip_prefix(project_root)
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|_| path.display().to_string());
+            let mut item = BrowserEvidenceItem {
+                task_id: task_id.clone(),
+                kind: kind.into(),
+                rel_path: rel_path.replace('\\', "/"),
+                abs_path: path.display().to_string(),
+                preview_data_url: None,
+                excerpt: None,
+            };
+            if kind == "shot" {
+                item.preview_data_url = shot_data_url(&path);
+            } else {
+                item.excerpt = text_excerpt(&path, EXCERPT_CHARS);
+            }
+            items.push(item);
+            if items.len() >= MAX_EVIDENCE_ITEMS {
+                return items;
+            }
+        }
+    }
+    items
+}
+
+fn shot_data_url(path: &Path) -> Option<String> {
+    let meta = std::fs::metadata(path).ok()?;
+    if meta.len() == 0 || meta.len() > MAX_SHOT_BYTES {
+        return None;
+    }
+    let bytes = std::fs::read(path).ok()?;
+    let b64 = encode_base64_std(&bytes);
+    let mime = if path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("jpg") || e.eq_ignore_ascii_case("jpeg"))
+        .unwrap_or(false)
+    {
+        "image/jpeg"
+    } else {
+        "image/png"
+    };
+    Some(format!("data:{mime};base64,{b64}"))
+}
+
+/// Standard base64 (no external crate).
+fn encode_base64_std(data: &[u8]) -> String {
+    const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    let mut i = 0;
+    while i + 3 <= data.len() {
+        let n = ((data[i] as u32) << 16) | ((data[i + 1] as u32) << 8) | (data[i + 2] as u32);
+        out.push(T[((n >> 18) & 63) as usize] as char);
+        out.push(T[((n >> 12) & 63) as usize] as char);
+        out.push(T[((n >> 6) & 63) as usize] as char);
+        out.push(T[(n & 63) as usize] as char);
+        i += 3;
+    }
+    let rem = data.len() - i;
+    if rem == 1 {
+        let n = (data[i] as u32) << 16;
+        out.push(T[((n >> 18) & 63) as usize] as char);
+        out.push(T[((n >> 12) & 63) as usize] as char);
+        out.push('=');
+        out.push('=');
+    } else if rem == 2 {
+        let n = ((data[i] as u32) << 16) | ((data[i + 1] as u32) << 8);
+        out.push(T[((n >> 18) & 63) as usize] as char);
+        out.push(T[((n >> 12) & 63) as usize] as char);
+        out.push(T[((n >> 6) & 63) as usize] as char);
+        out.push('=');
+    }
+    out
+}
+
+fn text_excerpt(path: &Path, max_chars: usize) -> Option<String> {
+    let raw = std::fs::read_to_string(path).ok()?;
+    let t = raw.trim();
+    if t.is_empty() {
+        return None;
+    }
+    let s: String = t.chars().take(max_chars).collect();
+    if t.chars().count() > max_chars {
+        Some(format!("{s}…"))
+    } else {
+        Some(s)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,5 +424,33 @@ mod tests {
         let raw = std::fs::read_to_string(path).unwrap();
         assert!(raw.contains("cco-browser"));
         assert!(raw.contains("@kitewright/mcp"));
+    }
+
+
+    #[test]
+    fn collect_finds_shot_and_report() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let task_dir = root.join(".cco-out/browser/ui-shot");
+        std::fs::create_dir_all(&task_dir).unwrap();
+        // minimal 1x1 PNG
+        let png: &[u8] = &[
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+            0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90,
+            0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0xd7, 0x63, 0xf8,
+            0xcf, 0xc0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x01, 0x00, 0x05, 0xfe, 0xd4, 0xef, 0x00, 0x00,
+            0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+        ];
+        std::fs::write(task_dir.join("shot.png"), png).unwrap();
+        std::fs::write(task_dir.join("report.md"), "# ok\n主 CTA 可见\n").unwrap();
+        let items = collect_browser_evidence(root, ".cco-out/browser");
+        assert!(items.iter().any(|i| i.kind == "shot" && i.preview_data_url.is_some()));
+        assert!(items.iter().any(|i| i.kind == "report" && i.excerpt.as_deref().unwrap_or("").contains("主 CTA")));
+    }
+
+    #[test]
+    fn base64_roundtrip_len() {
+        let s = encode_base64_std(b"hi");
+        assert_eq!(s, "aGk=");
     }
 }

@@ -1574,6 +1574,61 @@
   background: #faf8ff;
   border-color: #e6e0f5;
 }
+/* W3: browser evidence strip on result desk */
+.result-desk-browser {
+  margin: 0.45rem 0 0;
+  padding: 0.4rem 0.55rem 0.55rem;
+  border-radius: 8px;
+  background: #f6faf8;
+  border: 1px solid #d5e8dc;
+}
+.result-desk-browser[hidden] {
+  display: none !important;
+}
+.result-desk-browser-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.35rem;
+}
+.result-browser-card {
+  margin: 0;
+  padding: 0.35rem;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--border, #e2e6ea);
+  min-width: 0;
+}
+.result-browser-shot {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #0f1419;
+}
+.result-browser-cap {
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  word-break: break-all;
+}
+.result-browser-excerpt {
+  margin: 0.25rem 0 0;
+  padding: 0.35rem;
+  max-height: 120px;
+  overflow: auto;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f3f5f7;
+  border-radius: 4px;
+}
+.result-browser-path {
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
+}
 .cli-empty-ai { padding: 0.75rem 0.5rem; font-size: 0.8rem; color: #9aa3ad; }
 
 

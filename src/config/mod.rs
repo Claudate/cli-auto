@@ -207,6 +207,10 @@ pub struct DefaultSection {
     /// walking [`failover_order`]. Default **true**.
     #[serde(default = "default_cost_route_on")]
     pub cost_escalate_enabled: bool,
+    /// P3: heuristic intent (title/prompt/tags) nudges tier. Default **false**
+    /// (opt-in; rules stay explainable). No external model proxy.
+    #[serde(default = "default_ensure_off")]
+    pub cost_intent_enabled: bool,
 }
 
 fn default_retry_max() -> u32 {
@@ -381,6 +385,7 @@ impl Default for DefaultSection {
             auto_rework_docs_only: default_ensure_off(),
             cost_route_enabled: default_cost_route_on(),
             cost_escalate_enabled: default_cost_route_on(),
+            cost_intent_enabled: default_ensure_off(),
         }
     }
 }
@@ -589,6 +594,8 @@ allowed_tools = ["Read", "Edit", "Bash", "Glob", "Grep", "Write"]
 cost_route_enabled = true
 # After same-CLI retries exhaust, try a higher-cost tier before failover_order.
 cost_escalate_enabled = true
+# P3: keyword/tag intent nudge (typo→cheap, architecture→flagship). Default off.
+# cost_intent_enabled = false
 
 [providers.claude]
 enabled = true

@@ -9,7 +9,8 @@
  *   inspectCopy   → inspect_loop 人话 · 与 report「对照计划」同词（P0-4）
  *   resultSummary → live 费用人话（无 DOM；不下沉 Rust）
  *   ResultViewModel → 意图
- *   ResultView    → 结果台 DOM · verification 副栏（P2-1）· 发意图
+ *   ResultView    → 结果台 DOM · verification 副栏（P2-1）· browser 证据（W3）· 发意图
+ *   browserEvidence → live.browser_evidence 纯渲染
  */
 
 export { createResultViewModel } from "./ResultViewModel.js";
@@ -17,6 +18,7 @@ export { bindResultView } from "./ResultView.js";
 export * as resultApi from "./resultApi.js";
 export * as inspectCopy from "./inspectCopy.js";
 export * as resultSummary from "./resultSummary.js";
+export { renderBrowserEvidence } from "./browserEvidence.js";
 export {
   formatLiveCostPhrase,
   summarizeLiveCost,

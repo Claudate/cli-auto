@@ -27,7 +27,7 @@ log_events.rs: worker stdout/stderr → LogEvent · compact_text_tail/floor_char
 provider/: **A1-4** WorkerPort（claude + **shell_print** 多 CLI：codex/gemini/qwen/kimi/deepseek/copilot/codebuddy + fake）· **P2-7** `sdk`（默认关）· ProviderRegistry · DTO re-export；`WorkerProvider` 别名
 worktree.rs: git worktree 隔离创建/清理 · on_fail 映射 domain IsolationOnFail（混跑 FailClosed）
 acceptance.rs: 任务后软验收命令（仅 `is_runnable_verify` 为真时 `sh -c`；人话跳过写 `skipped_not_shell`，≠ PASS）
-browser_mcp.rs: **W1 浏览器 MCP** — tags∋`browser` 且 `config.browser.enabled` → 写 `mcp-browser.json` · env `CCO_PREVIEW_URL`/`CCO_BROWSER_OUT` · Claude `--mcp-config`；默认引擎 kitewright（见 `docs/browser-automation-cco.md`）
+browser_mcp.rs: **W1/W3 浏览器 MCP** — tags∋`browser` 且 enabled → `mcp-browser.json` · env · Claude `--mcp-config`；**collect_browser_evidence**（shot data URL / report 摘录 → live 结果台）；默认 kitewright（`docs/browser-automation-cco.md`）
 
 ## 硬规则（继承 L1）
 
