@@ -16,7 +16,7 @@ a5-5-workspace-crates-eval-2026-07-21.md: **A5-5** workspace/`cco-domain`/`cco-a
 contracts/: A0 契约冻结（behavior-golden · run-dir · plan-job · README）
 runtime-prompts/: **软件内底层提示真源**（Markdown 加载 · 聊天/拆分/规划器 · **ui-delivery-recipes** 效果配方 · layout/color/type/**copy**/motion · **backend-architecture** · **landing-gates**；覆盖序见目录 README）
 split-product-rules.md: **拆分产品规则短真源**（改拆分/拆分台/confirm 行为；**无**平行阶段表；全文波次史见 archive）
-cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**（顺序/并发/是否执行 + 完整任务字段；**S2–S6 残余债唯一勾选落点在文末**）
+cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**（顺序/并发/是否执行 + 完整任务字段；**S3/S4 ✅ 核销** · S2/S5/S6 ☐ 可选/中长期 · 文末唯一勾选）
 
 ---
 
@@ -24,10 +24,11 @@ cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**�
 
 ### 还在做（活跃落地 · 可有 ☐）
 
+next-landing-sequence-2026-07-27.md: **下一轮落地序（协调）**（**W0/W1/W3 ✅** · W2 人工 V1–V5 ☐ · W4 无新痛；**不**替代各题勾选真源；**不**平行第二套阶段表）
 inspect-ensure-close-loop-2026-07-24.md: **巡检关账闭环 Ensure**（wros 末尾 inspect 死循环根治 · **E0–E6 ✅**（自动化金样+打包）· **wros 人工 V1–V5 ☐** · host 勾选表 · closeout · 有界关账 · 自动 rework · UI 反误导；**本问题唯一勾选落点**）
 clarify-phase-vibe-check-subset.md: **澄清相 · 能力边界真源**（vibe-check 轻量子集 · 三入口/Brief 认领≠开跑 · 非 vibe-check/guided 全量 · ⊆ PRODUCT ①）
-chat-20260725-0402.md: **澄清相实施计划**（t1–t5 关账 ✅ · t6 inspect pending · 成功标准见文末；证据 [`.cco-out/progress/CLOSEOUT.md`](../.cco-out/progress/CLOSEOUT.md)）
-subjective-desire-cco-subset-landing-2026-07-22.md: **主观渴望 · 对本仓有用子集落地**（从构思抽出 · **D0–D2 ☐** · 计划五节/缺槽追问/Brief≠confirm · 无人生 Pack；澄清相指针见头注）
+chat-20260725-0402.md: **澄清相实施计划**（t1–t6 ✅ · inspect PASS · W0 冒烟绿 · **桌面 GUI 30s 目视 residual** · 成功标准见文末；证据 CLOSEOUT · VERDICT · clarify/claim smoke）
+subjective-desire-cco-subset-landing-2026-07-22.md: **主观渴望 · 对本仓有用子集落地**（**D0 ✅ · D1/D2 主路径由澄清吸收 ✅** · 残余 D1-2/D2-3 可选 · 无人生 Pack · **禁止 D3**；W1 对账 §0.4）
 guided-plan-memory-decision-2026-07-21.md: **引导/记忆/对抗工程草稿**（G0–G4 ☐ 全量未 ship；§5.6.1 可复用 pilotdeck 薄表；文首后置；**不**开第二套波次）
 
 ### C4 + 活跃交互 / 总账

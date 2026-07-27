@@ -29,6 +29,16 @@ export const PLAN_TEMPLATES = {
 
 为一款面向目标市场的产品，产出可上线的落地页（或等价静态页），让访客在 30 秒内看懂价值并愿意留下线索。
 
+## 非目标
+
+- 完整后台、会员体系、支付闭环（除非你改写本段）
+- 微服务 / 中台 / 为「以后百万访问」上的重架构
+
+## 会失去什么
+
+- 本轮不做多语全站与复杂增长实验；先一语一页可上线
+- 不做完整转化漏斗后台，线索以表单/外链为主
+
 ## 范围
 
 ### 做
@@ -39,8 +49,7 @@ export const PLAN_TEMPLATES = {
 
 ### 不做
 
-- 完整后台、会员体系、支付闭环（除非你改写本段）
-- 微服务 / 中台 / 为「以后百万访问」上的重架构
+- 同「非目标」；此处可再列本轮边界细节
 
 ## 建议技术（默认 · 可改）
 
@@ -50,7 +59,7 @@ export const PLAN_TEMPLATES = {
 - **图标**：开源线标（Lucide 等），禁止 emoji 当按钮图标
 - **为什么**：出海个人/增长页要快上线、可改文案；复杂栈拖慢交付
 
-## 成功标准（怎样算做完）
+## 验收
 
 - [ ] 主标题 + 副标题说清「给谁 · 解决什么 · 凭什么信」
 - [ ] 至少 3 个利益点 / 场景，避免纯功能罗列
@@ -59,6 +68,11 @@ export const PLAN_TEMPLATES = {
 - [ ] 移动端首屏可读；关键按钮可点；空态/加载有说明
 - [ ] 合规：隐私政策入口、Cookie/地区提示（按目标市场勾选）
 
+## 风险
+
+- 文案空心 / 无证据 → 访客不信；先补 1–2 条可核验证据
+- 表单无反馈 → 线索丢失；必须有成功/失败人话
+
 ## 建议步骤（拆分时可调整）
 
 1. 定受众与一句话卖点
@@ -66,7 +80,7 @@ export const PLAN_TEMPLATES = {
 3. 文案成稿（含 SEO 元信息）
 4. 页面实现（按「建议技术」；静态或项目内既有栈）
 5. 表单与追踪事件（可标可选）
-6. 自检清单对照「成功标准」
+6. 自检清单对照「验收」
 
 ## 约束与备注
 
@@ -79,7 +93,7 @@ export const PLAN_TEMPLATES = {
     id: "req-outline",
     title: "通用需求大纲",
     short: "通用需求大纲",
-    hint: "背景 · 目标 · 范围 · 验收 · 风险",
+    hint: "目标 · 非目标 · 会失去什么 · 验收 · 风险",
     markdown: `# 通用需求大纲
 
 > 模板：可改 · 保存后点「拆成步骤」进入拆分台核对
@@ -92,15 +106,20 @@ export const PLAN_TEMPLATES = {
 
 - 业务目标：________
 - 用户能完成的结果：________
+- 首批给谁用：________
 
-## 范围
+## 非目标
 
-### 做
+这轮**明确不做**（可改；写清比空着好）：
 
 - …
+- …
 
-### 不做
+## 会失去什么
 
+若只做本轮范围，暂缓或放弃的：
+
+- …
 - …
 
 ## 用户与场景
@@ -109,28 +128,25 @@ export const PLAN_TEMPLATES = {
 |------|------|----------|
 |      |      |          |
 
-## 成功标准（怎样算做完）
+## 验收
+
+怎样算做完（可观察、可勾选）：
 
 - [ ] …
 - [ ] …
 - [ ] …
 
-## 依赖与约束
-
-- 依赖系统 / 数据 / 人：________
-- 时间或资源上限：________
-
-## 风险与开放问题
+## 风险
 
 - 风险：________
-- 待确认：________
+- 待确认 / 未决：________
 
 ## 建议拆法（给人看，非强制 DAG）
 
-1. 对齐目标与范围
+1. 对齐目标与非目标
 2. 设计 / 方案要点
 3. 实现主路径
-4. 验收对照成功标准
+4. 对照「验收」自检
 5. （可选）文档与交接
 `,
   },
@@ -155,14 +171,13 @@ export function planTemplateChatEmptyHtml() {
     .join("");
   return `
       <div class="chat-empty muted">
-        <p class="chat-empty-coach"><strong>在下方输入你的目标，点发送</strong> — AI 会先写成计划，再拆成可并行的步骤。</p>
-        <p class="chat-hint">点示例填入输入框，改完再发送：</p>
+        <p class="chat-empty-coach">懒得打字？点一个例子，填进下面再改两句就行。</p>
         <div class="chat-example-chips">
+          <button type="button" class="chat-example-chip" data-chat-example="做一个提醒浇水的小工具，自己先用，先不做社区">浇水提醒小工具</button>
           <button type="button" class="chat-example-chip" data-chat-example="把产品官网改成双语落地页，含表单与 SEO 要点">出海落地页</button>
-          <button type="button" class="chat-example-chip" data-chat-example="优化登录与注册体验，写清范围和验收">优化登录体验</button>
-          <button type="button" class="chat-example-chip" data-chat-example="为当前功能补一份用户能看懂的需求大纲与验收">写清需求大纲</button>
+          <button type="button" class="chat-example-chip" data-chat-example="优化登录与注册体验，写清范围和怎样算做完">优化登录体验</button>
         </div>
-        <p class="chat-hint chat-hint-tpl">或从模板开始：</p>
+        <p class="chat-hint chat-hint-tpl">想用完整模板起笔：</p>
         <div class="chat-example-chips chat-tpl-chips">${tplBtns}</div>
       </div>`;
 }

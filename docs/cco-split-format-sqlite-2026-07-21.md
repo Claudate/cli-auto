@@ -127,6 +127,7 @@
 | 2026-07-22 | soft-sqlite 归档；并入残余债 S2–S6（唯一勾选落点） |
 | 2026-07-22 | C1 文档合并：删过时 dual-write 差距控诉；链短规则 + archive；角色=存储真源 |
 | 2026-07-24 | §1.1 增 `verify_cmd` 字段说明；双层验收落地勾选史见 archive human-status-verify-dual H0–H3（已 ✅ 归档） |
+| 2026-07-27 | §5：**S3/S4 核销 ✅**（代码证据）；S2/S5/S6 仍 ☐ · next-landing W3 |
 
 ---
 
@@ -137,10 +138,14 @@
 
 | ID | 任务 | 完成定义 | 状态 |
 |----|------|----------|------|
-| **S2** | 桌面/API 读 SQLite 列表 job/tasks（可选） | 查询比扫盘快；失败回落 JSON | ☐ |
-| **S3** | 僵尸 planning 心跳/PID 收尸写 SQLite status | 无永久 planning | ☐ |
-| **S4** | 默认 critic LLM 关（配置） | 少一轮 Claude | ☐ |
-| **S5** | 规划两段式 / 轻量 API（中长期） | 不必等完整 CLI JSON | ☐ |
-| **S6** | 可选：runs/task_state 进 SQLite | 与 plan_jobs 同库 | ☐ |
+| **S2** | 桌面/API 读 SQLite 列表 job/tasks（可选） | 查询比扫盘快；失败回落 JSON | ☐ 有列表痛再做 |
+| **S3** | 僵尸 planning 心跳/PID 收尸写 status | 无永久 planning | ✅ 2026-07-27 核销 |
+| **S4** | 默认 critic LLM 关（配置） | 少一轮 Claude | ✅ 2026-07-27 核销 |
+| **S5** | 规划两段式 / 轻量 API（中长期） | 不必等完整 CLI JSON | ☐ 本序默认不做 |
+| **S6** | 可选：runs/task_state 进 SQLite | 与 plan_jobs 同库 | ☐ 本序默认不做 |
 
-说明：C1–C7 已落地 `cco_split_*` SoT + 杀僵尸 pid；上表为 soft 波次遗留的**可选/中长期**债（S3 与 C6 部分重叠、S4 与 config `planner_critic_enabled=false` 可能已满足时可对照实现再勾，**勿**在 archive 或其它文再开第二份表）。
+**S3 证据（与 C6 重叠 · 产品语义已满）**：`src/plan/planner/job.rs` — `supersede_planning_jobs` 杀 pid + `Cancelled`；`try_reap_zombie_planning` 心跳/硬超时/进程消失 → `plan_failed`；`kill_planner_pid`（含 `__critic__`）；false-reap 抢救。状态写 plan job（job.json SoT）；拆分图仍 `cco_split_*`。
+
+**S4 证据**：`Config.default.planner_critic_enabled` 默认 `false`（`default_post_feature_off` · 示例 config 行）；`plan/planner`：**fast/heuristic 永不跑 LLM critic**（设置开也跳过）；仅 ai + 显式开/env 才第二跳。
+
+说明：C1–C7 已落地 `cco_split_*` SoT + 杀僵尸 pid；S2/S5/S6 仍为可选/中长期（**勿**在 archive 再开第二份表）。
