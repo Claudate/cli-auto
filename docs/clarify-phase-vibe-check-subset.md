@@ -4,8 +4,9 @@
 > 角色：**能力边界真源**（说清做什么 / 不做什么；不排期、不勾选）  
 > 实施计划：[`chat-20260725-0402.md`](./chat-20260725-0402.md)  
 > 产品主路径：[`../PRODUCT.md`](../PRODUCT.md) 五步 · ① 生成计划  
-> 邻文：[`subjective-desire-cco-subset-landing-2026-07-22.md`](./subjective-desire-cco-subset-landing-2026-07-22.md)（D0–D2 · 黄条不拦）  
-> 契约：`src/domain/chat/clarify.rs`（三入口 · 五槽 · 缺槽纯函数）
+> 邻文：[`subjective-desire-cco-subset-landing-2026-07-22.md`](./subjective-desire-cco-subset-landing-2026-07-22.md)（**D0 ✅ · D1/D2 主路径吸收澄清** · 黄条不拦）  
+> 契约：`src/domain/chat/clarify.rs`（三入口 · 五槽 · 缺槽纯函数）  
+> 出货：[`chat-20260725-0402.md`](./chat-20260725-0402.md) t1–t6 ✅ · W0 冒烟绿 · GUI 目视 residual
 
 [PROTOCOL]: 本文只定边界。禁止写成 vibe-check / guided / 人生 OS 全量实现说明；禁止旁路 `confirm_start`；禁止第二套 Planner。勾选与排期认计划文件，不认本文。
 

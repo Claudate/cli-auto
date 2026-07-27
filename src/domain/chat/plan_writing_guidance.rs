@@ -235,6 +235,71 @@ mod tests {
         );
     }
 
+    /// Clarify-phase strategy lives in chat-plan-writing.md (t2 prompt true source).
+    #[test]
+    fn embedded_chat_covers_clarify_strategy() {
+        let g = chat_plan_writing_guidance();
+        // Three on-ramps
+        assert!(g.contains("想清楚再说"), "think_first label");
+        assert!(g.contains("从想法到计划"), "idea_to_plan default");
+        assert!(
+            g.contains("已想清，直接写计划") || g.contains("plan_only") || g.contains("直接写计划"),
+            "plan_only label"
+        );
+        // Follow-up: ≤5 + A/B/C + 你定 → 假设
+        assert!(
+            g.contains("≤5") || g.contains("<=5") || g.contains("不超过 5") || g.contains("至多 5"),
+            "max 5 questions"
+        );
+        assert!(g.contains("A/B/C") || g.contains("A. ") || g.contains("A．"), "A/B/C options");
+        assert!(
+            g.contains("你定") || g.contains("直接出计划"),
+            "skip phrase"
+        );
+        assert!(g.contains("假设"), "must write assumptions on skip");
+        // Brief fields
+        for needle in ["问题", "给谁", "不做", "验收", "V1"] {
+            assert!(g.contains(needle), "Brief field missing: {needle}");
+        }
+        assert!(
+            g.contains("得") && g.contains("失") || g.contains("得 / 失") || g.contains("会失去什么"),
+            "gain/loss"
+        );
+        assert!(g.contains("未决"), "open items");
+        // Evidence light tags only
+        assert!(g.contains("用户原话"), "evidence: user quote");
+        assert!(g.contains("自用痛点"), "evidence: self pain");
+        assert!(g.contains("竞品缺口"), "evidence: competitor gap");
+        // Plan min chapters + V1 gate
+        assert!(
+            g.contains("非目标") || g.contains("不做"),
+            "non-goals chapter"
+        );
+        assert!(g.contains("会失去什么") || g.contains("得 / 失"), "loss chapter");
+        assert!(g.contains("风险"), "risks chapter");
+        assert!(
+            g.contains("V2") || g.contains("Later"),
+            "V2/Later fold section"
+        );
+        assert!(
+            g.contains("默认") && (g.contains("V1") || g.contains("任务大纲")),
+            "V1 default for task outline"
+        );
+        // Guardrails
+        assert!(
+            g.contains("VERDICT") || g.contains("run_id"),
+            "forbid internal ids as first line"
+        );
+        assert!(
+            g.contains("confirm_start") || g.contains("spawn"),
+            "forbid spawn/confirm in chat path"
+        );
+        assert!(
+            !g.contains("Crazy 8") || g.contains("不做") || g.contains("不整包"),
+            "boundary mention ok if negative"
+        );
+    }
+
     #[test]
     fn ui_copy_covers_product_ui_strings() {
         let g = ui_copy_systems_guidance();

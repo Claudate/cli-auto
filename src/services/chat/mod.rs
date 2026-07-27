@@ -23,6 +23,7 @@
 //! note: C3 多会话：list/new/delete/rename + 可选 title；默认 session_id=default 仍兼容
 //! note: C3 流式 partial：chat_stream_partial 读 stdout 增量；失败降级整段 reply（不 panic）
 //! note: chat_send 入口 clear_chat_stream_work，防新一轮 poll 把上一条整段当流式刷出
+//! note: Clarify 相：session.clarify 承载入口/槽位/假设；纯规则在 domain/chat/clarify；禁 confirm_start
 
 mod attachment;
 mod cli_call;
@@ -55,6 +56,8 @@ pub use types::{
 // `extract_plan_fence` is part of the public pure API (used by tests and callers via re-export).
 #[allow(unused_imports)] // re-export surface; used outside this module
 pub use crate::domain::chat::{
-    extract_plan_fence, extract_title_from_md, normalize_plan_markdown, sanitize_plan_title,
-    structure_plan_markdown,
+    apply_skip_with_assumptions, detect_missing_slots, extract_plan_fence, extract_title_from_md,
+    normalize_plan_markdown, sanitize_plan_title, set_slot_fill, structure_plan_markdown,
+    ClarifyEntry, ClarifyPhase, ClarifySlotId, ClarifyState, MissingSlotsReport, SlotFillKind,
+    REQUIRED_SLOTS,
 };

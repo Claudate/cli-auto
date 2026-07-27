@@ -21,6 +21,7 @@ pub(crate) fn empty_session(project: &Path, session_id: &str) -> ChatSession {
         draft_plan: None,
         updated_at: None,
         title: None,
+        clarify: None,
     }
 }
 

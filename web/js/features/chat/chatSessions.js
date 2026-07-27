@@ -15,8 +15,13 @@ import {
   applyChatDraftFromSession,
 } from "./chatState.js";
 import { chatEsc, chatFormatStreamBody } from "./chatFormat.js";
+import { resetClarifyState, hydrateClarifyFromSession } from "./chatClarify.js";
 
 export function chatWaitLabel() {
+  // t3: prefer clarify loading copy while in clarify phase
+  if (state.chatClarify?.uiStatus === "loading") {
+    return "正在整理你的想法…";
+  }
   const started = state.chatWaitStartedAt || 0;
   if (!started) return "AI 正在思考…";
   const sec = Math.max(0, Math.floor((Date.now() - started) / 1000));
@@ -373,6 +378,8 @@ export async function switchChatSession(sessionId) {
   state.chatDraftPlan = null;
   state.chatFake = false;
   state.chatEnvNote = null;
+  // t3: reset clarify until restore/load hydrates
+  resetClarifyState();
   // Prefer cache for instant paint
   restoreChatSession(state.selectedPath, sid);
   host.renderChatPage();
@@ -402,10 +409,17 @@ export async function newChatSession() {
       messages: Array.isArray(sess?.messages) ? sess.messages : [],
       draft_plan: sess?.draft_plan || null,
       title: sess?.title || null,
+      clarify: sess?.clarify || null,
     };
     state.chatDraftPlan = null;
     state.chatFake = false;
     state.chatEnvNote = null;
+    // t3: fresh session → default entry 从想法到计划
+    if (sess?.clarify) {
+      hydrateClarifyFromSession(sess);
+    } else {
+      resetClarifyState();
+    }
     state.chatProjectPath = state.selectedPath;
     stashChatSession(state.selectedPath, sid);
     toast(`已新建会话`);
@@ -557,6 +571,19 @@ export async function loadChatSession(opts) {
           state.chatDraftPlan = null;
         }
       }
+    } else if (sess?.clarify) {
+      // Refresh clarify from disk only when disk is richer / equal — never wipe local picks
+      const diskSlots = Array.isArray(sess.clarify.slots) ? sess.clarify.slots : [];
+      const memSlots = Array.isArray(state.chatClarify?.slots)
+        ? state.chatClarify.slots
+        : [];
+      const diskFilled = diskSlots.filter((s) => String(s?.value || "").trim())
+        .length;
+      const memFilled = memSlots.filter((s) => String(s?.value || "").trim())
+        .length;
+      if (diskFilled >= memFilled) {
+        hydrateClarifyFromSession(sess);
+      }
     }
     state.chatProjectPath = path;
     stashChatSession(path);
@@ -567,6 +594,7 @@ export async function loadChatSession(opts) {
       if (!restoreChatSession(path)) {
         state.chatSession = { session_id: "default", messages: [], draft_plan: null };
         state.chatFake = false;
+        resetClarifyState();
       }
     }
     state.chatProjectPath = path;

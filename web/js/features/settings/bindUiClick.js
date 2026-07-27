@@ -32,6 +32,64 @@ export function attachDocumentClick(deps) {
         return;
       }
 
+      // Clarify A/B/C / skip / entry — also handle here so text-node clicks
+      // (no Element.closest on target) still work via parentElement climb.
+      {
+        let ct = e.target;
+        if (ct && typeof ct.closest !== "function") {
+          ct = ct.parentElement || ct.parentNode || null;
+        }
+        if (ct && typeof ct.closest === "function") {
+          const clarifyOpt = ct.closest("[data-clarify-option]");
+          if (clarifyOpt) {
+            e.preventDefault();
+            e.stopPropagation();
+            const key = clarifyOpt.getAttribute("data-clarify-option");
+            const slot = clarifyOpt.getAttribute("data-clarify-slot");
+            if (typeof g("pickClarifyOption") === "function") {
+              if (slot && typeof g("ensureClarifyState") === "function") {
+                try {
+                  const st = g("ensureClarifyState")();
+                  if (st && slot) {
+                    // best-effort: set index via exported helpers if present
+                    void st;
+                  }
+                } catch (_) {}
+              }
+              call("pickClarifyOption", key);
+            } else if (window.ccoChat?.pickClarifyOption) {
+              window.ccoChat.pickClarifyOption(key);
+            }
+            return;
+          }
+          const clarifySkip = ct.closest("[data-clarify-skip]");
+          if (clarifySkip) {
+            e.preventDefault();
+            e.stopPropagation();
+            const note =
+              clarifySkip.getAttribute("data-clarify-skip") || "跳过，先出草稿";
+            if (typeof g("skipClarify") === "function") {
+              call("skipClarify", note);
+            } else if (window.ccoChat?.skipClarify) {
+              window.ccoChat.skipClarify(note);
+            }
+            return;
+          }
+          const clarifyEntry = ct.closest("[data-clarify-entry]");
+          if (clarifyEntry) {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = clarifyEntry.getAttribute("data-clarify-entry");
+            if (typeof g("selectClarifyEntry") === "function") {
+              call("selectClarifyEntry", id);
+            } else if (window.ccoChat?.selectClarifyEntry) {
+              window.ccoChat.selectClarifyEntry(id);
+            }
+            return;
+          }
+        }
+      }
+
       const exampleChip = e.target?.closest?.(
         ".chat-example-chip[data-chat-example]"
       );

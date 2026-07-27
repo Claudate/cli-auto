@@ -31,6 +31,28 @@ import {
   stopChatWaitTicker,
 } from "./chatSessions.js";
 import { renderChatPage, renderChatMessages } from "./chatRender.js";
+import {
+  installClarifyUi,
+  selectClarifyEntry,
+  pickClarifyOption,
+  skipClarify,
+  setClarifyUiStatus,
+  simulateClarifyStatus,
+  getClarifyCopySnapshot,
+  ensureClarifyState,
+  resetClarifyState,
+  hydrateClarifyFromSession,
+  claimBriefToPlan,
+  rechatFromBrief,
+  buildBriefFromClarify,
+  buildPlanMarkdownFromBrief,
+  detectHollowGaps,
+  fillClarifySlotsForTest,
+  forceHollowForTest,
+  shouldShowBrief,
+  CLARIFY_COPY,
+  DEFAULT_CLARIFY_ENTRY,
+} from "./chatClarify.js";
 
 // Re-export surfaces so installChat `...chatActions` stays stable.
 export {
@@ -42,6 +64,29 @@ export {
   renderChatReadyBar,
   renderChatPage,
 } from "./chatRender.js";
+
+// t3+t4 clarify / Brief / claim surface
+export {
+  selectClarifyEntry,
+  pickClarifyOption,
+  skipClarify,
+  setClarifyUiStatus,
+  simulateClarifyStatus,
+  getClarifyCopySnapshot,
+  ensureClarifyState,
+  resetClarifyState,
+  hydrateClarifyFromSession,
+  claimBriefToPlan,
+  rechatFromBrief,
+  buildBriefFromClarify,
+  buildPlanMarkdownFromBrief,
+  detectHollowGaps,
+  fillClarifySlotsForTest,
+  forceHollowForTest,
+  shouldShowBrief,
+  CLARIFY_COPY,
+  DEFAULT_CLARIFY_ENTRY,
+};
 
 export {
   normalizeChatDraft,
@@ -65,6 +110,9 @@ export async function openChatPage() {
   // Restore immediately so history is never blank while disk loads.
   restoreChatSession(state.selectedPath);
   applyPlanRailVisibility();
+  // t3: install clarify click/styles once; ensure default entry
+  installClarifyUi();
+  ensureClarifyState();
   // P2-2: clear stale last_summary until load
   state.chatLastSummary = null;
   renderChatPage();
@@ -135,7 +183,7 @@ export function handleLastSummaryAction(action) {
     state.chatLastSummary = null;
     const bar = document.querySelector(".chat-last-summary");
     if (bar) bar.remove();
-    toast("已忽略上次摘要");
+    toast("好的，这次从新的想法开始");
     return;
   }
   if (action === "reuse") {
@@ -143,7 +191,7 @@ export function handleLastSummaryAction(action) {
     if (!text) return;
     const input = $("#chat-input");
     if (input) {
-      const seed = `承接上次：${text}\n\n接下来我想：`;
+      const seed = `接着上次：${text}\n\n接下来我想：`;
       input.value = seed;
       input.focus();
     }
@@ -171,6 +219,17 @@ export async function sendChatMessage() {
   state.chatProjectPath = projectPath;
   state.chatBusy = true;
   state.chatWaitStartedAt = Date.now();
+  // t3: mark clarify loading while send is in flight (人话载)
+  try {
+    ensureClarifyState();
+    if (
+      state.chatClarify &&
+      (state.chatClarify.phase === "not_started" ||
+        state.chatClarify.phase === "clarifying")
+    ) {
+      setClarifyUiStatus("loading");
+    }
+  } catch (_) {}
   // New stream generation: drop any leftover painted text; ignore late polls
   // from a previous turn and refuse previous-turn `.done` stdout until live growth.
   state.chatStreamGen = (state.chatStreamGen || 0) + 1;
@@ -294,6 +353,10 @@ export async function sendChatMessage() {
         role: "system",
         content: `发送失败：${e?.message || e}`,
       });
+      // t3: product error copy for clarify phase
+      try {
+        setClarifyUiStatus("error");
+      } catch (_) {}
       stashChatSession(projectPath);
     }
     toast(String(e?.message || e));
@@ -304,6 +367,12 @@ export async function sendChatMessage() {
       state.chatStreamText = "";
       state.chatStreamBytes = 0;
       state.chatStreamSeenLive = false;
+      // Clear loading status unless already error
+      try {
+        if (state.chatClarify?.uiStatus === "loading") {
+          setClarifyUiStatus("idle");
+        }
+      } catch (_) {}
       // Bump gen so in-flight poll promises cannot re-paint into the next idle frame.
       state.chatStreamGen = (state.chatStreamGen || 0) + 1;
       stopChatWaitTicker();

@@ -365,10 +365,12 @@ fn session_get_heals_stale_draft_path() {
     "markdown": "# 仓库 Markdown 清理\n\n## 目标\n删误放\n",
     "saved": true
   }},
-  "updated_at": "2026-07-22T08:00:00+00:00"
+  "updated_at": "{updated_at}"
 }}"##,
         proj = project.display(),
-        plan = plan_rel
+        plan = plan_rel,
+        // Must be within DEFAULT_CHAT_RETENTION_HOURS (48h) or cleanup wipes the fixture.
+        updated_at = chrono::Utc::now().to_rfc3339()
     );
     std::fs::write(chat.join("default.json"), sess_json).unwrap();
 
@@ -485,4 +487,121 @@ fn chat_stream_partial_reads_growing_stdout() {
     std::fs::write(task_dir.join(".done"), "0").unwrap();
     let done = chat_stream_partial(&project, None).unwrap();
     assert!(done.done);
+}
+
+/// Clarify meta on session: entry + slots survive save/load; legacy JSON without clarify still loads.
+#[test]
+fn session_clarify_meta_roundtrip_and_legacy_compat() {
+    use crate::domain::chat::{
+        apply_skip_with_assumptions, detect_missing_slots, set_slot_fill, ClarifyEntry,
+        ClarifyPhase, ClarifySlotId, ClarifyState, SlotFillKind,
+    };
+    use super::session::save_session;
+    use super::types::{ChatMessage, ChatSession};
+
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("proj");
+    std::fs::create_dir_all(&project).unwrap();
+
+    // Legacy disk JSON (no clarify field) must deserialize cleanly.
+    let legacy_path = session_path(&project, "legacy");
+    std::fs::create_dir_all(legacy_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &legacy_path,
+        r#"{"session_id":"legacy","project":"p","messages":[],"updated_at":"2026-07-20T00:00:00Z"}"#,
+    )
+    .unwrap();
+    let legacy = chat_session_get(&project, Some("legacy")).unwrap();
+    assert!(legacy.clarify.is_none(), "legacy sessions keep clarify=None");
+
+    // Fresh empty session: no clarify until set.
+    let empty = chat_session_get(&project, Some("default")).unwrap();
+    assert!(empty.clarify.is_none());
+
+    // Persist a clarify state through save_session / get.
+    let mut clarify = ClarifyState::new(ClarifyEntry::IdeaToPlan);
+    assert!(set_slot_fill(
+        &mut clarify,
+        ClarifySlotId::TargetAudience,
+        "出海运营",
+        SlotFillKind::Explicit
+    ));
+    apply_skip_with_assumptions(&mut clarify, Some("你定"));
+    assert_eq!(clarify.phase, ClarifyPhase::SkippedToPlan);
+    let report = detect_missing_slots(&clarify);
+    assert!(report.may_proceed_with_assumptions);
+    assert!(report.missing_required.is_empty());
+
+    let mut sess = ChatSession {
+        session_id: "s-clarify".into(),
+        project: project.display().to_string(),
+        messages: vec![ChatMessage {
+            role: "user".into(),
+            content: "想做一个提醒浇水的小工具".into(),
+            at: None,
+            attachments: vec![],
+        }],
+        draft_plan: None,
+        updated_at: None,
+        title: Some("浇水工具".into()),
+        clarify: Some(clarify.clone()),
+    };
+    save_session(&project, &sess).unwrap();
+
+    let loaded = chat_session_get(&project, Some("s-clarify")).unwrap();
+    let c = loaded.clarify.as_ref().expect("clarify meta persisted");
+    assert_eq!(c.entry, ClarifyEntry::IdeaToPlan);
+    assert_eq!(c.phase, ClarifyPhase::SkippedToPlan);
+    assert!(c.skip_requested);
+    assert_eq!(
+        c.slot(ClarifySlotId::TargetAudience)
+            .map(|s| s.value.as_str()),
+        Some("出海运营")
+    );
+    assert_eq!(
+        c.slot(ClarifySlotId::TargetAudience).map(|s| s.kind),
+        Some(SlotFillKind::Explicit)
+    );
+    // Assumed slots labeled, not forged as explicit facts
+    for id in [
+        ClarifySlotId::PainMoment,
+        ClarifySlotId::ObservableOutcome,
+        ClarifySlotId::NonGoals,
+        ClarifySlotId::DoneWhen,
+    ] {
+        let fill = c.slot(id).expect("assumed fill");
+        assert_eq!(fill.kind, SlotFillKind::Assumed);
+        assert!(fill.value.contains("假设"), "got {}", fill.value);
+    }
+    // Entry enum wire keys stable
+    let entry_json = serde_json::to_string(&c.entry).unwrap();
+    assert_eq!(entry_json, "\"idea_to_plan\"");
+    let entry_back: ClarifyEntry = serde_json::from_str(&entry_json).unwrap();
+    assert_eq!(entry_back, ClarifyEntry::IdeaToPlan);
+
+    // Three-entry labels parse consistently with meta.
+    for (label, want) in [
+        ("想清楚再说", ClarifyEntry::ThinkFirst),
+        ("从想法到计划", ClarifyEntry::IdeaToPlan),
+        ("已想清，直接写计划", ClarifyEntry::PlanOnly),
+    ] {
+        assert_eq!(ClarifyEntry::parse(label), Some(want));
+    }
+
+    // Overwrite entry to PlanOnly and round-trip again.
+    sess = loaded;
+    if let Some(ref mut cl) = sess.clarify {
+        cl.entry = ClarifyEntry::PlanOnly;
+        cl.phase = ClarifyPhase::ClaimedToPlan;
+    }
+    save_session(&project, &sess).unwrap();
+    let loaded2 = chat_session_get(&project, Some("s-clarify")).unwrap();
+    assert_eq!(
+        loaded2.clarify.as_ref().map(|c| c.entry),
+        Some(ClarifyEntry::PlanOnly)
+    );
+    assert_eq!(
+        loaded2.clarify.as_ref().map(|c| c.phase),
+        Some(ClarifyPhase::ClaimedToPlan)
+    );
 }

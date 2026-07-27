@@ -26,6 +26,14 @@ import {
   renderChatSessionSelect,
   chatWaitLabel,
 } from "./chatSessions.js";
+import {
+  installClarifyUi,
+  renderClarifyPanelHtml,
+  renderClarifyInlineIfNeeded,
+  ensureClarifyState,
+  ensureClaimDraftMessageVisible,
+  renderHollowBarHtml,
+} from "./chatClarify.js";
 
 export function fillChatExample(text) {
   const input = $("#chat-input");
@@ -53,17 +61,28 @@ export function renderLastSummaryBanner(text) {
   const bar = document.createElement("div");
   bar.className = "chat-last-summary";
   bar.setAttribute("role", "status");
+  // Human resume strip — no internal run ids as first words; sit below clarify card.
   bar.innerHTML =
-    `<span class="chat-last-summary-text">上次：${chatEsc(short)}</span>` +
+    `<span class="chat-last-summary-text">要接着上次的想法吗？${chatEsc(short)}</span>` +
     `<span class="chat-last-summary-actions">` +
-    `<button type="button" class="linkish" data-last-summary="reuse" title="把上次摘要填入输入框">沿用</button>` +
-    `<button type="button" class="linkish muted" data-last-summary="ignore" title="本会话不再提示">忽略</button>` +
+    `<button type="button" class="linkish" data-last-summary="reuse" title="把上次内容填进输入框">接着上次</button>` +
+    `<button type="button" class="linkish muted" data-last-summary="ignore" title="先开新的，不再提示">开新的</button>` +
     `</span>`;
   const empty = list.querySelector(".chat-empty");
   if (empty) {
-    empty.insertBefore(bar, empty.firstChild);
+    // Prefer after clarify panel so the main coach card stays first visual
+    const clarify = empty.querySelector(".chat-clarify");
+    const secondary = empty.querySelector(".chat-empty-secondary");
+    if (clarify && clarify.parentNode === empty) {
+      if (clarify.nextSibling) empty.insertBefore(bar, clarify.nextSibling);
+      else empty.appendChild(bar);
+    } else if (secondary) {
+      empty.insertBefore(bar, secondary);
+    } else {
+      empty.appendChild(bar);
+    }
   } else {
-    list.insertBefore(bar, list.firstChild);
+    list.appendChild(bar);
   }
 }
 
@@ -71,26 +90,57 @@ export function renderChatMessages() {
   const list = $("#chat-messages");
   if (!list) return;
   ensureChatState();
+  ensureClarifyState();
+  installClarifyUi();
+  // t4: after claim + reload, draft_plan may exist without a ```plan bubble
+  try {
+    ensureClaimDraftMessageVisible();
+  } catch (_) {}
   const msgs = state.chatSession.messages || [];
-  if (!msgs.length && !state.chatBusy) {
-    // T2: empty state + 模板入口委托 ccoTemplates / planTemplateChatEmptyHtml（不在此堆功能）
+  // Re-read after ensureClaimDraftMessageVisible may have injected a plan bubble
+  const msgsNow = state.chatSession.messages || [];
+  if (!msgsNow.length && !state.chatBusy) {
+    // t3: clarify phase leads empty state
+    const clarifyHtml = renderClarifyPanelHtml({ mode: "empty" });
+    const claimed =
+      state.chatClarify?.phase === "claimed_to_plan" ||
+      !!state.chatSession?.draft_plan?.markdown;
+    // After claim: do NOT show “再问清楚 / 示例模板” coach — that fights the success CTA
+    let secondary = "";
+    if (!claimed) {
+      const legacyEmpty =
+        typeof planTemplateChatEmptyHtml === "function"
+          ? planTemplateChatEmptyHtml()
+          : `<div class="chat-empty muted"><p>用自然语言说明你要做什么，保存后再点「拆成步骤」。</p></div>`;
+      secondary =
+        `<div class="chat-empty-secondary">` +
+        (legacyEmpty.includes('class="chat-empty')
+          ? legacyEmpty.replace(
+              /<div class="chat-empty[^"]*">/,
+              '<div class="chat-empty-legacy">'
+            )
+          : legacyEmpty) +
+        `</div>`;
+    }
     list.innerHTML =
-      typeof planTemplateChatEmptyHtml === "function"
-        ? planTemplateChatEmptyHtml()
-        : `<div class="chat-empty muted"><p>用自然语言说明你要做什么，保存后再点「拆成步骤」。</p></div>`;
-    // P2-2: last_summary one-liner (async filled by openChat / load memory)
-    const ignored =
-      state.selectedPath &&
-      localStorage.getItem(`cco.ignoreLastSummary:${state.selectedPath}`) === "1";
-    if (!ignored && state.chatLastSummary) {
-      renderLastSummaryBanner(state.chatLastSummary);
+      `<div class="chat-empty muted">` + clarifyHtml + secondary + `</div>`;
+    if (!claimed) {
+      const ignored =
+        state.selectedPath &&
+        localStorage.getItem(`cco.ignoreLastSummary:${state.selectedPath}`) ===
+          "1";
+      if (!ignored && state.chatLastSummary) {
+        renderLastSummaryBanner(state.chatLastSummary);
+      }
     }
     return;
   }
   // Every assistant ```plan card stays actionable until saved+alreadySplit
   // (or stream partials, which force activePlan:false). Earlier "last assistant
   // only" froze unexecuted drafts after any later AI turn / preview reply.
-  let html = msgs
+  // t3: inline clarify strip when still in clarify flow with messages present
+  const clarifyInline = renderClarifyInlineIfNeeded();
+  let html = (clarifyInline || "") + msgs
     .map((m) => {
       const role = m.role === "assistant" ? "assistant" : m.role === "system" ? "system" : "user";
       const label = role === "assistant" ? "AI" : role === "system" ? "系统" : "我";
@@ -131,6 +181,11 @@ export function renderChatMessages() {
   // Stream partials render as markdown (same path as final bubbles), not raw source.
   if (state.chatBusy) {
     const stream = String(state.chatStreamText || "").trim();
+    // t3: when clarify uiStatus=loading, prefer product loading copy
+    const clarifyLoading =
+      state.chatClarify?.uiStatus === "loading"
+        ? "正在整理你的想法…"
+        : null;
     if (stream) {
       html += `<div class="chat-msg chat-msg-assistant chat-msg-pending" aria-live="polite">
       <div class="chat-msg-role">AI</div>
@@ -143,12 +198,39 @@ export function renderChatMessages() {
       <div class="chat-msg-role">AI</div>
       <div class="chat-msg-body chat-msg-body-pending chat-msg-body-wait-only">
         <span class="chat-pending-dots" aria-hidden="true"></span>
-        ${chatEsc(chatWaitLabel())}
+        ${chatEsc(clarifyLoading || chatWaitLabel())}
       </div>
     </div>`;
     }
   }
   list.innerHTML = html;
+  // t4: hollow yellow bar near plan card — warn only; never disables 仅保存/拆成步骤
+  try {
+    const draftMd = state.chatSession?.draft_plan?.markdown || "";
+    const hollowHtml = renderHollowBarHtml(state.chatClarify, draftMd);
+    if (hollowHtml) {
+      const card = list.querySelector(".chat-plan-card");
+      if (card) {
+        // Insert after the first plan card so assign CTAs stay above / beside warn
+        const wrap = document.createElement("div");
+        wrap.innerHTML = hollowHtml;
+        const bar = wrap.firstElementChild;
+        if (bar) {
+          // Prefer after card actions (still inside message flow)
+          card.insertAdjacentElement("afterend", bar);
+        }
+      } else if (
+        state.chatClarify?.phase === "claimed_to_plan" ||
+        state.chatSession?.draft_plan
+      ) {
+        // No card yet but draft/claimed — append bar so warn still visible
+        const wrap = document.createElement("div");
+        wrap.innerHTML = hollowHtml;
+        const bar = wrap.firstElementChild;
+        if (bar) list.appendChild(bar);
+      }
+    }
+  } catch (_) {}
   list.scrollTop = list.scrollHeight;
 }
 

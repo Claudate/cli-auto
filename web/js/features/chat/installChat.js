@@ -17,6 +17,7 @@ import * as chatActions from "./chatActions.js";
 import * as planRail from "./planRail.js";
 import * as planFull from "./planFull.js";
 import * as chatApi from "./chatApi.js";
+import * as chatClarify from "./chatClarify.js";
 import { createChatViewModel } from "./ChatViewModel.js";
 
 /** Wire host bag once (idempotent). */
@@ -32,7 +33,12 @@ export function installChatHost() {
     ...chatActions,
     ...planRail,
     ...planFull,
+    ...chatClarify,
   });
+  // t3: bind clarify click once at host install
+  try {
+    chatClarify.installClarifyUi();
+  } catch (_) {}
   return host;
 }
 
@@ -96,6 +102,26 @@ export function createChatDesk(opts = {}) {
     fillChatExample: chatActions.fillChatExample,
     handleLastSummaryAction: chatActions.handleLastSummaryAction,
     loadChatLastSummary: chatActions.loadChatLastSummary,
+    // t3+t4 clarify phase (入口/卡片/Brief/认领/黄条)
+    selectClarifyEntry: chatClarify.selectClarifyEntry,
+    pickClarifyOption: chatClarify.pickClarifyOption,
+    skipClarify: chatClarify.skipClarify,
+    setClarifyUiStatus: chatClarify.setClarifyUiStatus,
+    simulateClarifyStatus: chatClarify.simulateClarifyStatus,
+    getClarifyCopySnapshot: chatClarify.getClarifyCopySnapshot,
+    ensureClarifyState: chatClarify.ensureClarifyState,
+    resetClarifyState: chatClarify.resetClarifyState,
+    hydrateClarifyFromSession: chatClarify.hydrateClarifyFromSession,
+    claimBriefToPlan: chatClarify.claimBriefToPlan,
+    rechatFromBrief: chatClarify.rechatFromBrief,
+    buildBriefFromClarify: chatClarify.buildBriefFromClarify,
+    buildPlanMarkdownFromBrief: chatClarify.buildPlanMarkdownFromBrief,
+    detectHollowGaps: chatClarify.detectHollowGaps,
+    fillClarifySlotsForTest: chatClarify.fillClarifySlotsForTest,
+    forceHollowForTest: chatClarify.forceHollowForTest,
+    shouldShowBrief: chatClarify.shouldShowBrief,
+    renderHollowBarHtml: chatClarify.renderHollowBarHtml,
+    CLARIFY_COPY: chatClarify.CLARIFY_COPY,
     toggleChatPlanExpand: chatFormat.toggleChatPlanExpand,
     adoptChatPlanFromCard: chatFormat.adoptChatPlanFromCard,
     dismissChatEnvBar: chatActions.dismissChatEnvBar,
@@ -158,6 +184,17 @@ export function createChatDesk(opts = {}) {
     });
   };
   desk.savePlan = (args) => chatApi.savePlan(args);
+
+  // Classic / bindUiClick g("pickClarifyOption") looks up window[name].
+  // Mirror clarify actions so capture handlers outside ccoChat still work.
+  if (typeof window !== "undefined") {
+    window.pickClarifyOption = chatClarify.pickClarifyOption;
+    window.skipClarify = chatClarify.skipClarify;
+    window.selectClarifyEntry = chatClarify.selectClarifyEntry;
+    window.claimBriefToPlan = chatClarify.claimBriefToPlan;
+    window.ensureClarifyState = chatClarify.ensureClarifyState;
+    window.installClarifyUi = chatClarify.installClarifyUi;
+  }
 
   return desk;
 }

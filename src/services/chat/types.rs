@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::chat::ClarifyState;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatAttachment {
     /// Project-relative path (e.g. .cco/chat/attachments/default/uuid.png)
@@ -45,6 +47,10 @@ pub struct ChatSession {
     /// C3: optional human label for multi-session switcher.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// Clarify-phase meta (entry · slots · assumptions). Coexists with messages/draft;
+    /// absent on legacy sessions → None (not a second Planner).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clarify: Option<ClarifyState>,
 }
 
 /// C3: lightweight row for multi-session list (no full messages).

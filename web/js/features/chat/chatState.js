@@ -77,6 +77,22 @@ export function ensureChatState() {
   if (state.chatStreamGen == null) state.chatStreamGen = 0;
   if (state.chatStreamBytes == null) state.chatStreamBytes = 0;
   if (state.chatStreamSeenLive == null) state.chatStreamSeenLive = false;
+  // t3 clarify phase (presentation state; wire shape mirrors domain/chat/clarify)
+  if (!state.chatClarify || typeof state.chatClarify !== "object") {
+    state.chatClarify = {
+      schema_version: 1,
+      entry: "idea_to_plan",
+      phase: "not_started",
+      slots: [],
+      optional: [],
+      assumptions: [],
+      skip_requested: false,
+      uiStatus: "idle",
+      errorText: null,
+      questionIndex: 0,
+      selectedOption: null,
+    };
+  }
 }
 
 /** G0: short list title from markdown H1 (cut at ## / max 80 chars). */
@@ -123,6 +139,18 @@ export function stashChatSession(path, sessionId) {
     busy: !!state.chatBusy,
     waitStartedAt: state.chatWaitStartedAt || 0,
     title: state.chatSession?.title || null,
+    // t3: clarify presentation snapshot
+    clarify: state.chatClarify
+      ? {
+          ...state.chatClarify,
+          slots: Array.isArray(state.chatClarify.slots)
+            ? state.chatClarify.slots.map((s) => ({ ...s }))
+            : [],
+          assumptions: Array.isArray(state.chatClarify.assumptions)
+            ? state.chatClarify.assumptions.map((a) => ({ ...a }))
+            : [],
+        }
+      : null,
   };
   // Legacy single-key (project only) for older page-hop paths still reading it.
   state.chatSessions[p] = state.chatSessions[key];
@@ -150,6 +178,7 @@ export function restoreChatSession(path, sessionId) {
     messages: Array.isArray(c.messages) ? c.messages.slice() : [],
     draft_plan: c.draft_plan ? { ...c.draft_plan } : null,
     title: c.title || null,
+    clarify: c.clarify ? { ...c.clarify } : state.chatSession?.clarify || null,
   };
   // Only restore path when draft is actually saved; unsaved fence must not revive
   // a stale draftPath from an older cache entry.
@@ -158,6 +187,18 @@ export function restoreChatSession(path, sessionId) {
     d?.saved && d?.path ? d.path : c.draftPath && d?.saved ? c.draftPath : null;
   state.chatFake = !!c.fake;
   state.chatEnvNote = c.envNote || null;
+  // t3: restore clarify UI snapshot
+  if (c.clarify && typeof c.clarify === "object") {
+    state.chatClarify = {
+      ...c.clarify,
+      slots: Array.isArray(c.clarify.slots)
+        ? c.clarify.slots.map((s) => ({ ...s }))
+        : [],
+      assumptions: Array.isArray(c.clarify.assumptions)
+        ? c.clarify.assumptions.map((a) => ({ ...a }))
+        : [],
+    };
+  }
   // Do not restore busy across project/session switches; only same-session page hops.
   if (
     state.chatBusy &&
@@ -186,6 +227,7 @@ export function applyChatDraftFromSession(sess) {
     messages: Array.isArray(sess.messages) ? sess.messages : [],
     draft_plan: d,
     title: sess.title || null,
+    clarify: sess.clarify || null,
   };
   // Server draft is source of truth for plan file identity.
   // Unsaved draft (new fence after prior save) MUST clear chatDraftPlan so the
@@ -194,6 +236,49 @@ export function applyChatDraftFromSession(sess) {
     state.chatDraftPlan = d.path;
   } else {
     state.chatDraftPlan = null;
+  }
+  // t3: hydrate clarify from session meta when present —
+  // never clobber a richer in-memory fill with empty/stale disk meta
+  // (local option picks often land before session.clarify is persisted).
+  if (sess.clarify && typeof sess.clarify === "object") {
+    const diskSlots = Array.isArray(sess.clarify.slots) ? sess.clarify.slots : [];
+    const memSlots = Array.isArray(state.chatClarify?.slots)
+      ? state.chatClarify.slots
+      : [];
+    const diskFilled = diskSlots.filter((s) => String(s?.value || "").trim()).length;
+    const memFilled = memSlots.filter((s) => String(s?.value || "").trim()).length;
+    const diskPhase = String(sess.clarify.phase || "not_started");
+    const memPhase = String(state.chatClarify?.phase || "not_started");
+    const memAhead =
+      memFilled > diskFilled ||
+      (memFilled > 0 && diskFilled === 0) ||
+      (memPhase === "clarifying" &&
+        (diskPhase === "not_started" || diskPhase === "claimed_to_plan") &&
+        memFilled >= diskFilled);
+    if (memAhead) {
+      // Keep local picks; only refresh uiStatus defaults
+      if (state.chatClarify) {
+        if (state.chatClarify.uiStatus == null) state.chatClarify.uiStatus = "idle";
+      }
+    } else {
+      state.chatClarify = {
+        schema_version: sess.clarify.schema_version || 1,
+        entry: sess.clarify.entry || "idea_to_plan",
+        phase: sess.clarify.phase || "not_started",
+        slots: diskSlots.map((s) => ({ ...s })),
+        optional: Array.isArray(sess.clarify.optional)
+          ? sess.clarify.optional.map((o) => ({ ...o }))
+          : [],
+        assumptions: Array.isArray(sess.clarify.assumptions)
+          ? sess.clarify.assumptions.map((a) => ({ ...a }))
+          : [],
+        skip_requested: !!sess.clarify.skip_requested,
+        uiStatus: state.chatClarify?.uiStatus || "idle",
+        errorText: state.chatClarify?.errorText || null,
+        questionIndex: state.chatClarify?.questionIndex || 0,
+        selectedOption: state.chatClarify?.selectedOption || null,
+      };
+    }
   }
 }
 

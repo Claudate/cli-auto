@@ -8,12 +8,14 @@
 //! | normalize/structure_plan_markdown · acceptance_quality (P1-4) · parse_acceptance_checklist / build_verification (P2-1) | Claude CLI spawn / stream poll |
 //! | truncate_chars · sanitize_session_id | chat_stream_partial disk read |
 //! | extract_assistant_text · stream_result_summary | TTL cleanup · path resolve |
+//! | **clarify** 槽位/三入口/缺槽检测（纯） | session.clarify meta 读写 |
 //!
-//! [INPUT]: strings only (assistant text · md · session id tokens)
+//! [INPUT]: strings only (assistant text · md · session id tokens) · clarify fill state
 //! [OUTPUT]: pure transforms; **no** path join / fs / provider
 //! [POS]: Domain Chat 上下文；只服务「生成计划」步，**禁止** confirm/start_run
 //! [PROTOCOL]: 变更时更新此头部与 domain/CLAUDE.md
 
+mod clarify;
 mod fence;
 mod id;
 mod normalize;
@@ -22,6 +24,12 @@ mod stream_parse;
 mod text;
 mod title;
 
+pub use clarify::{
+    apply_skip_with_assumptions, detect_missing_slots, has_assumed_fills, set_slot_fill,
+    ClarifyAssumption, ClarifyEntry, ClarifyOptionalFill, ClarifyPhase, ClarifySlotFill,
+    ClarifySlotId, ClarifyState, MissingSlotsReport, SlotFillKind, CLARIFY_SCHEMA_VERSION,
+    REQUIRED_SLOTS,
+};
 pub use fence::extract_plan_fence;
 pub use plan_writing_guidance::{
     backend_architecture_guidance, chat_plan_writing_guidance, planner_greenfield_stack_blurb,
@@ -279,5 +287,15 @@ mod tests {
         assert_eq!(sanitize_session_id("s-20260720-120000"), "s-20260720-120000");
         assert_eq!(sanitize_session_id("../evil"), "___evil");
         assert_eq!(sanitize_session_id(""), "default");
+    }
+
+    #[test]
+    fn clarify_contract_reachable() {
+        let empty = ClarifyState::default();
+        let report = detect_missing_slots(&empty);
+        assert!(report.missing_required.len() >= 1);
+        assert_eq!(ClarifyEntry::default(), ClarifyEntry::IdeaToPlan);
+        assert_eq!(REQUIRED_SLOTS.len(), 5);
+        assert_eq!(ClarifyEntry::parse("从想法到计划"), Some(ClarifyEntry::IdeaToPlan));
     }
 }
