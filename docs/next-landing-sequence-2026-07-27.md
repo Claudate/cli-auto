@@ -9,11 +9,12 @@
 > | 巡检关账 Ensure | [`inspect-ensure-close-loop-2026-07-24.md`](./inspect-ensure-close-loop-2026-07-24.md) §5–§6 |
 > | 拆分 SQLite 残余 | [`cco-split-format-sqlite-2026-07-21.md`](./cco-split-format-sqlite-2026-07-21.md) §5 S2–S6 |
 > | 主观渴望子集 | [`subjective-desire-cco-subset-landing-2026-07-22.md`](./subjective-desire-cco-subset-landing-2026-07-22.md) §3 |
+> | 会话语义压缩（**旁轨**） | [`context-digest-compress-landing-2026-07-27.md`](./context-digest-compress-landing-2026-07-27.md) §5 · **不**插入 W0–W4 主序 |
 > | 产品方向 | [`../PRODUCT.md`](../PRODUCT.md)（**不**当勾选） |
 > | 架构 | [`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)（A0–A5 ✅ · **不**重开） |
 >
 > 历史总账 [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) D5 池：**不排期则不碰**；本序出池项须写明对应池 ID 或显式用户疼痛。  
-> 状态：**W0 ✅（commit+冒烟+打包嵌入+`clarify-split-visual-smoke`；手指 30s 可选体验）· W1 ✅ · W2 自动化代理 §6.1 ✅ / 真人 V1–V5 ☐ · W3 S3/S4 ✅ · S2/S5/S6 不做 · W4 无新痛** · 勾选在各真源；本文只改本状态行与 §9。
+> 状态：**W0 ✅（commit+冒烟+打包嵌入+`clarify-split-visual-smoke`；手指 30s 可选体验）· W1 ✅ · W2 自动化代理 §6.1 ✅ / 真人 V1–V5 ☐ · W3 S3/S4 ✅ · S2/S5/S6 不做 · W4 无新痛** · **旁轨** session-digest C0–C2 可并行文档派工 · 勾选在各真源；本文只改本状态行与 §9。
 
 [PROTOCOL]: 禁止在本文复制各真源的任务级 ☐ 表；禁止平行「N0–N4 实现勾选」替代上表；禁止旁路 `confirm_start`；禁止把 Claude Code 源码仓能力搬进 cco；落地后同步 `docs/CLAUDE.md` 活跃索引。
 
