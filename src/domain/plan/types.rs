@@ -65,7 +65,8 @@ pub const IMPLEMENT_USABILITY_SYSTEM_PROMPT: &str = "CCO role=implement-usabilit
 2. Defaults must match the main scenario; if unsure, prefer the safer side that needs user confirmation, and say so in the UI.\n\
 3. Action copy ≠ status copy (button \"mark watered\" vs status \"watered today / in N days\").\n\
 4. Self-check the main path: create → primary action → refresh still correct; plus one isolation check (only one object changes).\n\
-5. Do not weaken behavior or plant fake data just to pass acceptance.";
+5. Do not weaken behavior or plant fake data just to pass acceptance.\n\
+6. Missing assets: search/download from a citable stock library (Unsplash/Pexels/Pixabay) or generate and save under the plan path, then update references. Do not pass \"real-feel product/hero photos\" with only geometric SVG illustrations, and do not rewrite the success criterion to \"no placehold host\" alone.";
 
 
 /// Fixed id for host-injected Ensure closeout task (E1).

@@ -661,9 +661,10 @@ pub(super) fn planner_system_prompt_with_memory(
 - **计划是唯一勾选真源**：拆分与巡检都对照计划 § 阶段 / S* / V*，不另造第二清单。
 - 每个工作包 prompt 写清：**plan_ref**、改哪些路径、不做哪些、完成标志、验收可否降级（默认否）。
 - 落地/回归任务须要求 worker 在 progress 写 `plan_ref → 证据`；**禁止**静默把成功标准改弱。
-- 若有检验任务：prompt 要求 `GATE.json` + `VERDICT.md`（Result: PASS|FAIL）+ `ISSUES.md`（severity=blocking|map|residual|out-of-scope、plan_ref、fix_wp）。手点/录像/未 commit=**residual 且 GATE pass**；真功能缺口=blocking + fix_wp，由 rework 补齐。
+- **缺资源默认补齐**（真图/素材）：搜索图库或生成落盘并改路径；禁止仅用几何 SVG 顶「真实感」或把标准改成「非 placehold」。
+- 若有检验任务：prompt 要求 `GATE.json` + `VERDICT.md`（Result: PASS|FAIL）+ `ISSUES.md`（severity=blocking|map|residual|out-of-scope、plan_ref、fix_wp）。手点/录像/未 commit/未引用脚手架 CSS=**residual 且 GATE pass**；真功能缺口与**计划意图静默降级**=blocking + fix_wp，由 rework 补齐。
 - **禁止**存在 blocking/map 时写 PASS；map（L1/L2 不同构）默认 blocking。
-- 回补由后续 rework 波做；检验员默认不改业务代码。
+- 回补优先用户可见缺口；检验员默认不改业务代码。
 
 ## 用户计划文档（Markdown）
 {source}

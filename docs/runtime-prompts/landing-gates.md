@@ -14,6 +14,7 @@
 | G5 | FAIL（若存在 index） | 首页无 `<h1` | 缺主标题 |
 | G6 | WARN | canonical / og:url 含 example.com | SEO/分享假链 |
 | G7 | FAIL | 用户可见源码含占位图服务或占位文件名 | `placehold.co` / `via.placeholder` / `dummyimage` / `placeholder.png` 等；**应用**图库、生成图或品牌实图。仅显式演示可 `SKIP_G7=1` |
+| G8 | WARN；有「真实感商品图」意图或 `STRICT=1` 时 FAIL | 电商/真实感语境下商品主图仅为 `/images/products/*.svg`（≥3 且无 jpg/png/webp） | 几何 SVG 不得顶 packshot；缺图应搜图落盘。`SKIP_G8=1` 仅显式演示 |
 
 ## 排除路径（不扫或降噪）
 
@@ -38,9 +39,10 @@ STRICT=1 ./scripts/check-landing-gates.sh   # WARN 也失败
 - [ ] `./scripts/check-landing-gates.sh <站点根>` 无 FAIL
 - [ ] 人 30 秒：看懂给谁、主按钮唯一可信、点完去哪
 
-仅本地演示时：在计划 **不做/备注** 写明「演示可用 example.com / 临时占位图」，并 `SKIP_G1=1` / `SKIP_G7=1` 显式跳过（不推荐默认）。
+仅本地演示时：在计划 **不做/备注** 写明「演示可用 example.com / 临时占位图」，并 `SKIP_G1=1` / `SKIP_G7=1` / `SKIP_G8=1` 显式跳过（不推荐默认）。
 
-### 图片期望（与 G7 配套 · 写入计划/拆分）
+### 图片期望（与 G7 / G8 配套 · 写入计划/拆分）
 
-- **允许**：Unsplash / Pexels / Pixabay 等可溯源 URL；项目内 `images/` 下载或 AI 生成文件；用户品牌图；有意义的 SVG 插画。  
-- **禁止**：占位图 CDN、灰块「Image」、无 `alt` 的装饰大图冒充产品图。
+- **允许**：Unsplash / Pexels / Pixabay 等可溯源 URL；项目内 `images/` 下载或 AI 生成文件；用户品牌图。  
+- **SVG 插画**：允许用于图标、能力卡、装饰；**当计划成功标准写「真实感商品图 / 场景摄影 / packshot」时，商品主图与 Hero 主视觉不得仅以几何 SVG 插画交差**（缺图 → 搜图落盘）。G8 在电商标记或计划意图下对「商品位全是 `.svg`、无照片扩展名」告警/失败。  
+- **禁止**：占位图 CDN、灰块「Image」、无 `alt` 的装饰大图冒充产品图、把「无 placehold host」当作「真实感」的完整验收。

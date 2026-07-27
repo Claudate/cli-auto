@@ -1190,6 +1190,7 @@ fn work_order_template_from_spec(text: &str) -> Vec<(String, String)> {
              每完成一项必须在 `.cco-out/progress/SUMMARY.md` 追加：\n\
              `plan_ref → 证据路径或命令`（禁止只写「完成了」）。\n\
              **禁止**把计划成功标准改写成更弱定义而不记 ISSUES（静默降级默认 **blocking**）。\n\
+             **缺资源默认补齐**：缺真图/素材时 → 搜索可溯源图库（Unsplash/Pexels/Pixabay）或生成后**下载落盘**并改引用路径；禁止仅用几何 SVG 顶「真实感商品/场景图」、禁止改验收定义过关。\n\
              范围外需求：写入 progress「拒做 + 归属非目标」。\n\
              遵守文档边界；不要扩大范围。"
                 .into(),
@@ -1203,13 +1204,14 @@ fn work_order_template_from_spec(text: &str) -> Vec<(String, String)> {
              3. 写入 `.cco-out/inspect/VERDICT.md`：首行 `Result: PASS` 或 `Result: FAIL`。\n\
              4. 写入 `.cco-out/inspect/ISSUES.md`：每条含\n\
                 id / severity=blocking|map|residual|out-of-scope / plan_ref / path / symptom / fix_wp\n\
-                · 手点/录像/未 commit = **residual**（不得 blocking；仅 residual 时 GATE pass）\n\
-                · 真功能缺口 = blocking + 可执行 fix_wp，交给 rework 补齐\n\
+                · 手点/录像/未 commit/未引用脚手架 CSS = **residual**（不得 blocking；仅 residual 时 GATE pass）\n\
+                · 真功能缺口 / **计划意图静默降级**（例：真实感图→仅插画 SVG）= **blocking** + 可执行 fix_wp（缺图写「搜图落盘改路径」）\n\
              5. **禁止**存在未处理 blocking/map 时写 PASS；仅 residual 时必须 GATE pass。\n\
-             6. residual（手点/录像/未 commit/可选）可 PASS 附录；map 默认 blocking。\n\
+             6. residual（手点/录像/未 commit/死 CSS/可选）可 PASS 附录；map 默认 blocking。\n\
              7. 验收被静默降级 → DEGRADED + severity=blocking（除非计划写明允许）。\n\
              8. 默认不改业务代码；只写 `.cco-out/inspect/**`。真缺口由 rework 波补齐，不甩给用户。\n\
              9. **禁止**回写台账/勾选/commit（关账由 host `sys-closeout` 或落地波负责）。\n\
+             10. 用户可见类勾选禁止仅用字符串扫描/HTTP 200 结案；rework 优先用户可见缺口，卫生项不得顶替。\n\
              跑仓库已有测试/检查（若有）。"
                 .into(),
         ),

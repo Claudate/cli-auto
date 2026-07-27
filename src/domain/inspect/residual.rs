@@ -3,7 +3,7 @@
 //! [INPUT]: ParsedIssue rows from ISSUES
 //! [OUTPUT]: demote handwalk · promote real usability · effective blocking counts
 //! [POS]: domain/inspect — pure; no fs / git
-//! [PROTOCOL]: 否定句不得升 blocking；样本变更同步单测（含 test/9 R3）
+//! [PROTOCOL]: 否定句不得升 blocking；意图静默降级升 blocking；样本变更同步单测（含 test/9 R1/R3）
 
 use super::types::{IssueSeverity, ParsedIssue};
 
@@ -79,6 +79,38 @@ const USABILITY_BLOCKING_TOKENS: &[&str] = &[
     "smoke ok:false",
     "smoke main-path ok:false",
     "功能 smoke 失败",
+];
+
+/// Plan-intent silent degradation — always host-blocking (not residual polish).
+///
+/// Agents often label “true-photo plan → illustrative SVG only” as residual and
+/// PASS. Product rule: weakening a required success criterion without user accept
+/// is blocking; rework must restore intent (e.g. search/download real images),
+/// not clear unused scaffold CSS.
+const INTENT_DEGRADATION_BLOCKING_TOKENS: &[&str] = &[
+    "not photo stock",
+    "illustrative svg",
+    "illustrative svgs",
+    "illustrative only",
+    "geometry svg",
+    "geometric svg",
+    "静默降级",
+    "意图降级",
+    "验收降级",
+    "更弱定义",
+    "改弱定义",
+    "改弱验收",
+    "削弱验收",
+    "silent degrad",
+    "acceptance degrad",
+    "degraded acceptance",
+    "intent degrad",
+    "插画顶真图",
+    "插画冒充",
+    "svg 冒充",
+    "svg冒充",
+    "非照片顶真实感",
+    "非真实感商品图",
 ];
 
 fn issue_haystack(issue: &ParsedIssue) -> String {
@@ -183,15 +215,23 @@ fn usability_token_hits(hay: &str, tokens: &[&str]) -> bool {
     false
 }
 
-/// True when ISSUE describes unusable product / anti-common-sense behavior.
+/// True when ISSUE describes unusable product / anti-common-sense behavior,
+/// **or** silent degradation of a plan success criterion (intent downgrade).
 ///
 /// Host keeps or promotes these to blocking; they must never be residual-only PASS.
-/// Negated mentions (`does not … wrong state` / `不影响主路径`) do **not** count.
+/// Negated usability mentions (`does not … wrong state` / `不影响主路径`) do **not**
+/// count. Intent-degradation phrases are matched as whole tokens (include their
+/// own “not …” wording, e.g. `not photo stock`).
 pub fn is_usability_blocking_issue(issue: &ParsedIssue) -> bool {
     if issue.severity == IssueSeverity::OutOfScope {
         return false;
     }
-    usability_token_hits(&issue_haystack(issue), USABILITY_BLOCKING_TOKENS)
+    let hay = issue_haystack(issue);
+    if usability_token_hits(&hay, USABILITY_BLOCKING_TOKENS) {
+        return true;
+    }
+    // Full-phrase intent tokens — no local-negation window (phrase may start with "not ").
+    hay_hits(&hay, INTENT_DEGRADATION_BLOCKING_TOKENS)
 }
 
 /// True when this ISSUE is residual-class evidence polish, even if agent wrote blocking.
@@ -441,8 +481,30 @@ mod tests {
         assert_eq!(effective_blocking_count(&rows), 1);
     }
 
+    /// Regression (test/9 R1): plan asked for real-feel product photos; agent filed
+    /// “illustrative SVG / not photo stock” as residual PASS — host must promote.
     #[test]
-    fn t5_full_issues_body_residual_only_after_demote() {
+    fn intent_degrade_illustrative_svg_promotes_to_blocking() {
+        let r1 = issue(
+            "R1",
+            IssueSeverity::Residual,
+            "public/images/products/**, public/images/hero/**",
+            "Product and hero art are on-disk illustrative SVGs (not photo stock). Still local, non-placeholder, and alt-bearing per plan.",
+            "Optional later photo-stock swap; not required for V1 gate.",
+            "### R1\nseverity: residual\npath: public/images/**\nphenomenon: illustrative SVGs (not photo stock)\nfix_wp: Optional later photo-stock swap",
+        );
+        assert!(
+            is_usability_blocking_issue(&r1),
+            "illustrative SVG / not photo stock is plan-intent degradation"
+        );
+        let mut rows = vec![r1];
+        demote_residual_evidence_issues(&mut rows);
+        assert_eq!(rows[0].severity, IssueSeverity::Blocking);
+        assert_eq!(effective_blocking_count(&rows), 1);
+    }
+
+    #[test]
+    fn t5_full_issues_body_r1_intent_blocks_r3_stays_residual() {
         use crate::domain::inspect::parse_issues_text;
         let text = r#"# Inspect ISSUES · t5
 
@@ -473,16 +535,15 @@ repro: Grep `shell-placeholder` — defined in CSS, not referenced by current pa
             parsed.iter().map(|i| &i.id).collect::<Vec<_>>()
         );
         demote_residual_evidence_issues(&mut parsed);
-        assert_eq!(effective_blocking_count(&parsed), 0);
-        assert!(
-            parsed
-                .iter()
-                .all(|i| !i.severity.is_blocking_for_gate()),
-            "all rows residual after demote; got {:?}",
-            parsed
-                .iter()
-                .map(|i| (i.id.as_str(), i.severity.as_str()))
-                .collect::<Vec<_>>()
-        );
+        // R1 intent degradation → blocking; R2 hygiene + R3 dead CSS stay residual.
+        assert_eq!(effective_blocking_count(&parsed), 1);
+        let r1 = parsed.iter().find(|i| i.id == "R1").expect("R1");
+        assert_eq!(r1.severity, IssueSeverity::Blocking);
+        let r2 = parsed.iter().find(|i| i.id == "R2").expect("R2");
+        assert_eq!(r2.severity, IssueSeverity::Residual);
+        let r3 = parsed.iter().find(|i| i.id == "R3").expect("R3");
+        assert_eq!(r3.severity, IssueSeverity::Residual);
+        let (blocked, n) = gate_counts_after_residual_demote(&parsed, Some(0), false);
+        assert!(blocked && n == 1, "intent gap must block gate; n={n}");
     }
 }

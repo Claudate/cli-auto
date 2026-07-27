@@ -106,13 +106,14 @@ export function inspectStripParts(loop) {
     bits.push(`需优先处理 ${loop.blocking_count} 项`);
   }
   if (loop.residual_count > 0) {
-    bits.push(`残留 ${loop.residual_count}`);
+    // Residual ≠ user-accepted; keep “未修” so PASS + residual is not read as all-clear.
+    bits.push(`还有 ${loop.residual_count} 项未修（不挡通过）`);
   }
   if (loop.rework_round > 0) {
     bits.push(`回补第 ${loop.rework_round}/${loop.rework_max || 2} 轮`);
   }
   if (loop.accepted_residual) {
-    bits.push("已接受遗漏");
+    bits.push("你已选择先这样结束");
   }
   if (loop.auto_rework_run_id) {
     bits.push("已自动发起回补");
@@ -149,12 +150,22 @@ export function honestInspectCopy(loop) {
 
   if (cmp === "pass") {
     const residual = Number(loop?.residual_count) || 0;
+    const accepted = !!loop?.accepted_residual;
+    if (residual > 0 && accepted) {
+      return {
+        hidden: false,
+        text: `${PLAN_COMPARE_COPY.pass}。你已选择先这样结束；仍记下 ${residual} 项未修残留（不等于已修好）。`,
+      };
+    }
+    if (residual > 0) {
+      return {
+        hidden: false,
+        text: `${PLAN_COMPARE_COPY.pass}，但仍有 ${residual} 项未修残留（不挡通过，也≠你已认可）。可回补，或点「先这样结束」明确接受。`,
+      };
+    }
     return {
       hidden: false,
-      text:
-        residual > 0
-          ? `${PLAN_COMPARE_COPY.pass}，仍有 ${residual} 条非阻塞残留（可接受遗漏或回补）。`
-          : `${PLAN_COMPARE_COPY.pass}。`,
+      text: `${PLAN_COMPARE_COPY.pass}。`,
     };
   }
 

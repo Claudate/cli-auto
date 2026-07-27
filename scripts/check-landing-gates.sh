@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# [INPUT]: 可选站点根路径；环境 STRICT=1 · SCAN_DIST=1 · SCAN_MD=1 · SKIP_G1=1 · SKIP_G7=1
-# [OUTPUT]: 落地页假资产 / 占位图 / 页脚主 CTA 等门禁；默认 WARN 不失败，STRICT 升级
+# [INPUT]: 可选站点根路径；环境 STRICT=1 · SCAN_DIST=1 · SCAN_MD=1 · SKIP_G1=1 · SKIP_G7=1 · SKIP_G8=1
+# [OUTPUT]: 落地页假资产 / 占位图 / 页脚主 CTA / 电商真图意图 等门禁；默认 WARN 不失败，STRICT 升级
 # [POS]: scripts/ 与 docs/runtime-prompts/landing-gates.md
 # [PROTOCOL]: 变更时更新 docs/runtime-prompts/landing-gates.md 与 scripts/CLAUDE.md
 # 兼容 macOS bash 3.2（不用 mapfile）
@@ -30,6 +30,7 @@ SCAN_DIST="${SCAN_DIST:-0}"
 SCAN_MD="${SCAN_MD:-0}"
 SKIP_G1="${SKIP_G1:-0}"
 SKIP_G7="${SKIP_G7:-0}"
+SKIP_G8="${SKIP_G8:-0}"
 
 WARN=0
 FAIL=0
@@ -100,6 +101,58 @@ if [[ "$SKIP_G7" != "1" && "$FILE_COUNT" -gt 0 ]]; then
   fi
 else
   note "G7 skipped (SKIP_G7=1 or no files)"
+fi
+
+# --- G8: ecommerce / real-feel product art not SVG-only ---
+# Product main images that are only local .svg while the storefront looks like
+# ecommerce (or plan text asks for real-feel photos) → WARN, or FAIL when plan
+# intent is explicit. SKIP_G8=1 only for explicit demos.
+if [[ "$SKIP_G8" != "1" && "$FILE_COUNT" -gt 0 ]]; then
+  # Count product image path literals in sources (common public/ paths).
+  svg_prod="$(printf '%s\n' "$FILE_LIST" | tr '\n' '\0' | xargs -0 grep -oE -h \
+    '[\"'\''][^\"'\'']*/images/products/[^\"'\'']+\.svg[\"'\'']' 2>/dev/null \
+    | sort -u | wc -l | tr -d ' ' || true)"
+  photo_prod="$(printf '%s\n' "$FILE_LIST" | tr '\n' '\0' | xargs -0 grep -oE -h \
+    '[\"'\''][^\"'\'']*/images/products/[^\"'\'']+\.(jpe?g|png|webp)[\"'\'']' 2>/dev/null \
+    | sort -u | wc -l | tr -d ' ' || true)"
+  svg_prod="${svg_prod:-0}"
+  photo_prod="${photo_prod:-0}"
+
+  ecom=0
+  if printf '%s\n' "$FILE_LIST" | tr '\n' '\0' | xargs -0 grep -l -E -i \
+    'Add to cart|加入购物车|priceUSD|product-card|pet-food|ecommerce|/cart' 2>/dev/null \
+    | head -n 1 | grep -q .; then
+    ecom=1
+  fi
+
+  # Plan / README intent: real-feel product photos (Chinese + EN cues).
+  intent=0
+  if find "$TARGET" -type f \( -name '*.md' -o -name '*.mdx' \) \
+    \( -path '*/plans/*' -o -name 'README*' -o -name '*plan*' \) 2>/dev/null \
+    | head -n 40 | tr '\n' '\0' | xargs -0 grep -l -E \
+    '真实感商品|真实感.*图|商品=真实|photo stock|real-feel product|packshot|图库或生成落盘' \
+    2>/dev/null | head -n 1 | grep -q .; then
+    intent=1
+  fi
+  # Also scan scanned source comments / plan strings embedded in TS data.
+  if [[ "$intent" -eq 0 ]] && printf '%s\n' "$FILE_LIST" | tr '\n' '\0' | xargs -0 grep -l -E \
+    '真实感商品|真实感.*图|photo stock|real-feel product|packshot' 2>/dev/null \
+    | head -n 1 | grep -q .; then
+    intent=1
+  fi
+
+  if [[ "$svg_prod" -ge 3 && "$photo_prod" -eq 0 && ( "$ecom" -eq 1 || "$intent" -eq 1 ) ]]; then
+    msg="G8 product images under /images/products/ are SVG-only (${svg_prod} unique .svg refs, 0 photo). For ecommerce / real-feel product art, download stock or generated jpg/png/webp — do not pass with geometry SVG alone (SKIP_G8=1 only for explicit demos)."
+    if [[ "$intent" -eq 1 || "$STRICT" == "1" ]]; then
+      fail "$msg"
+    else
+      warn "$msg"
+    fi
+  else
+    note "G8 ok: product-image check (svg_prod=$svg_prod photo_prod=$photo_prod ecom=$ecom intent=$intent)"
+  fi
+else
+  note "G8 skipped (SKIP_G8=1 or no files)"
 fi
 
 # --- G5: h1 on index-like files (or hero child when index only composes) ---

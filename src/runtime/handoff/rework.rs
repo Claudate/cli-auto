@@ -138,11 +138,13 @@ pub fn build_rework_plan(
          {issues_body}\n\
          ## 任务\n\
          1. 按每条 fix_wp / plan_ref 修改代码或允许的文档路径。\n\
-         2. map / docs-closeout 类仅改 GEB/文档指针、台账勾选、README 进度、acceptance 索引（CLAUDE.md、docs/**、.cco-out/progress/**）。\n\
-         3. 每完成一条在 `.cco-out/progress/SUMMARY.md` 追加：`plan_ref → 证据`。\n\
-         4. 写 `.cco-out/rework/ROUND-{round}.md`：改了什么、对应 ISSUE id。\n\
-         5. 文档/台账修复完成后：按需 `git add` 相关 md 与 progress，并 `git commit`（信息含 ISSUE id 与 plan_ref）。\n\
-         6. 不要扩大范围；非目标不实现；禁止无证据勾 ✅。\n\n\
+         2. **优先用户可见 / 主路径 / 计划意图缺口**；未引用脚手架 CSS、未 commit 等卫生项不得单独占满本轮若仍有用户可见 blocking。\n\
+         3. 缺真图/素材：搜索可溯源图库或生成后落盘，并改引用路径；禁止只改定义或只扫字符串交差。\n\
+         4. map / docs-closeout 类仅改 GEB/文档指针、台账勾选、README 进度、acceptance 索引（CLAUDE.md、docs/**、.cco-out/progress/**）。\n\
+         5. 每完成一条在 `.cco-out/progress/SUMMARY.md` 追加：`plan_ref → 证据`（须含业务路径或预览证据，禁止只写 ledger md）。\n\
+         6. 写 `.cco-out/rework/ROUND-{round}.md`：改了什么、对应 ISSUE id、用户可见证据。\n\
+         7. 文档/台账修复完成后：按需 `git add` 相关 md 与 progress，并 `git commit`（信息含 ISSUE id 与 plan_ref）。\n\
+         8. 不要扩大范围；非目标不实现；禁止无证据勾 ✅。\n\n\
          全部完成后最后一行：CCO_DONE ok\n"
     );
 
@@ -156,7 +158,9 @@ pub fn build_rework_plan(
          3. 写入 `.cco-out/inspect/ISSUES.md`：每条含 severity=blocking|map|residual|out-of-scope、plan_ref、path、symptom、fix_wp。\n\
          4. **禁止**在存在未处理 blocking/map 时写 PASS。\n\
          5. residual 可附录；不得伪装成「没问题」。\n\
-         6. 默认不改业务代码；只写 `.cco-out/inspect/**`。\n\n\
+         6. 默认不改业务代码；只写 `.cco-out/inspect/**`。\n\
+         7. 复验必须对照 **plan_ref 用户可见意图**（预览/资源路径），禁止只扫「某字符串已删除」结案。\n\
+         8. 计划意图静默降级仍在 → blocking（例：真实感图仍仅为插画 SVG）。\n\n\
          最后一行：CCO_DONE ok\n"
     );
 

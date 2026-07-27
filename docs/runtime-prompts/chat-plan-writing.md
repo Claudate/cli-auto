@@ -118,7 +118,7 @@ Brief 末提示主 CTA 心智：**认领并写成计划**（认领 ≠ 开跑）
 - **后端细则**：`backend-architecture.md`（注入）  
 - **布局/变体**：`ui-layout-systems.md`  
 - **色 / 字 / 动效**：`ui-color-systems` · `ui-typography-systems` · `ui-motion-effects`  
-- **图**：禁止占位图（placehold 等）；图库 / 生成落盘 / 品牌图 + alt；区块填法见配方 §3  
+- **图**：**意图 + 代理**——① 关键位真实感（商品/Hero/作品：图库可溯源 / 生成落盘 / 品牌图）② 且无 placehold 类 host + alt；禁止只写「无占位」而默许简笔 SVG 顶真图；区块填法见配方 §3  
 - **文案**：`ui-copy-systems.md`（营销 H1/CTA + App 微文案）  
 - **门禁**：`scripts/check-landing-gates.sh` + `landing-gates.md`（含 G7 图）
 
@@ -131,7 +131,7 @@ Brief 末提示主 CTA 心智：**认领并写成计划**（认领 ≠ 开跑）
 - **视觉顺序**：类型 → 变体 → 色=字 kit → 动效 → 真图（勿先堆特效）。
 - **marketing**：Hero→证据→能力≤3→底 CTA→Footer；底带≠footer。
 - **中文**：标题 balance/断句；正文行高 ~1.6–1.8。
-- **真实资产**：无 example.com / 假邮箱；顶栏唯一主名；无占位图。
+- **真实资产**：无 example.com / 假邮箱；顶栏唯一主名；关键图真实感 + 无占位 host（缺图写清「搜图落盘」而非改弱验收）。
 
 ### 计划正文结构（收口 ```plan 时尽量齐）
 
@@ -149,7 +149,7 @@ Brief 末提示主 CTA 心智：**认领并写成计划**（认领 ≠ 开跑）
 7. 用户与场景（主受众 1 个）  
 8. **建议技术**（配方 id + 深度 + 类型 + 变体 + 色字 + **主 CTA 动词/语气** + 动效 + 图 + 后端 + 部署 + 为什么）  
 9. 成功标准（可勾选）  
-   - 配方/类型一致；变体≥2 维；色字 token；无占位图  
+   - 配方/类型一致；变体≥2 维；色字 token；关键图真实感（图库/生成/品牌）且无占位 host  
    - 界面文案：主 CTA 人话且一致；空/错/载/成功有下一步；无 Lorem/内部 ID 第一句  
    - 动效不挡 CTA、reduced-motion；有后端则深度匹配  
    - 站点：`check-landing-gates.sh` 无 FAIL；30 秒走查  
