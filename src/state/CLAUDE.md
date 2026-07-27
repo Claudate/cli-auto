@@ -2,7 +2,7 @@
 > L2 | 父级: /src/CLAUDE.md
 
 成员清单
-mod.rs: RunState/RunStatus/TaskState · **RouteSource**（explicit/soft_fill/tag_routing/force/failover/**cost_auto**/**cost_escalate**）· **sqlite** · **cco_split_store** · **project_memory** · **project_ui**
+mod.rs: RunState/RunStatus/TaskState · **RouteSource**（explicit/soft_fill/tag_routing/force/failover/**cost_auto**/**cost_escalate**/**cost_budget**）· **sqlite** · **cco_split_store** · **project_memory** · **project_ui**
 sqlite.rs: **cco.db** — plan_jobs/plan_tasks + cco_split_* + project_last_summary/project_pins + **project_ui_prefs** · **split_graph_quality / latest_job_id_for_plan_path**（多步 AI ≫ confirmed direct 1 步）
 cco_split_store.rs: **拆分 SoT** — cco_split_jobs/tasks 全字段读写
 project_memory.rs: **P2-2 项目轻记忆** — last_summary + pins(≤3)

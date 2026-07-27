@@ -6,6 +6,7 @@
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/CLAUDE.md
 
 pub mod acceptance;
+pub mod browser_mcp;
 pub mod handoff;
 pub mod log_events;
 pub mod provider;

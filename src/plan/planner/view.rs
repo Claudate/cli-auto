@@ -163,7 +163,7 @@ fn task_view(t: &TaskIR) -> PlanTaskView {
         Some(s) => (s.paths.as_slice(), s.readonly.as_slice(), !s.paths.is_empty()),
         None => (&[][..], &[][..], false),
     };
-    let risk = crate::domain::plan::classify_task_risk_wire(
+    let risk = crate::domain::plan::classify_task_risk_wire_with_tags(
         &t.id,
         super::task_edit::role_wire(t.role).as_deref(),
         paths,
@@ -171,6 +171,7 @@ fn task_view(t: &TaskIR) -> PlanTaskView {
         has_write,
         verify.as_deref(),
         kind.as_deref(),
+        &t.tags,
     );
     PlanTaskView {
         id: t.id.clone(),
@@ -220,7 +221,18 @@ fn task_view_from_cco(t: &crate::plan::CcoSplitTask) -> PlanTaskView {
         })
     };
     let kind = Some(t.kind.as_str().to_string());
-    let risk = crate::domain::plan::classify_task_risk_wire(
+    let cco_tags: Vec<String> = t
+        .meta_json
+        .as_ref()
+        .and_then(|m| m.get("tags"))
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let risk = crate::domain::plan::classify_task_risk_wire_with_tags(
         &t.task_id,
         t.role.as_deref(),
         t.scope_paths.as_slice(),
@@ -228,6 +240,7 @@ fn task_view_from_cco(t: &crate::plan::CcoSplitTask) -> PlanTaskView {
         !t.scope_paths.is_empty(),
         t.verify_cmd.as_deref(),
         kind.as_deref(),
+        &cco_tags,
     );
     PlanTaskView {
         id: t.task_id.clone(),

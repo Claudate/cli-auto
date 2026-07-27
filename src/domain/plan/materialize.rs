@@ -64,6 +64,9 @@ pub fn materialize_selected_tasks(mut ir: PlanIR) -> Result<PlanIR> {
 /// - inject `IMPLEMENT_USABILITY_SYSTEM_PROMPT` (idempotent)
 /// - cco-split `do` often has no role — still gets the usability floor
 ///
+/// Tags contain `browser`:
+/// - inject `BROWSER_SYSTEM_PROMPT` (idempotent). Runtime still gates MCP on config.
+///
 /// Scout / Closeout / system-post: no implement usability segment.
 /// Call sites: [`load_plan`], [`materialize_selected_tasks`].
 pub fn materialize_role_defaults(plan: &mut PlanIR) {
@@ -71,10 +74,17 @@ pub fn materialize_role_defaults(plan: &mut PlanIR) {
     for task in &mut plan.tasks {
         if task.role == Some(TaskRole::Inspect) {
             materialize_inspect_task(task);
+            // inspect may still carry browser tag for page evidence
+            if super::risk::task_has_browser_tag(&task.tags) {
+                inject_browser_system_prompt(&mut task.provider_opts);
+            }
             continue;
         }
         if should_inject_implement_usability(task) {
             inject_implement_usability_system_prompt(&mut task.provider_opts);
+        }
+        if super::risk::task_has_browser_tag(&task.tags) {
+            inject_browser_system_prompt(&mut task.provider_opts);
         }
     }
 }
@@ -276,6 +286,25 @@ pub(crate) fn inject_implement_usability_system_prompt(opts: &mut serde_json::Va
     opts["append_system_prompt"] = serde_json::json!(merged);
 }
 
+/// Inject browser MCP discipline (idempotent). Gated at runtime by config.enabled.
+pub(crate) fn inject_browser_system_prompt(opts: &mut serde_json::Value) {
+    use super::types::{BROWSER_SYSTEM_PROMPT, BROWSER_SYSTEM_PROMPT_MARKER};
+    let existing = opts
+        .get("append_system_prompt")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if existing.contains(BROWSER_SYSTEM_PROMPT_MARKER) {
+        return;
+    }
+    let merged = if existing.trim().is_empty() {
+        BROWSER_SYSTEM_PROMPT.to_string()
+    } else {
+        format!("{existing}\n\n{BROWSER_SYSTEM_PROMPT}")
+    };
+    opts["append_system_prompt"] = serde_json::json!(merged);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -456,6 +485,26 @@ mod tests {
             sys.matches(IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER).count(),
             1,
             "usability marker duplicated: {sys}"
+        );
+    }
+
+    #[test]
+    fn browser_tag_injects_browser_prompt_idempotent() {
+        use super::super::types::BROWSER_SYSTEM_PROMPT_MARKER;
+        let mut t = task("ui", Some(TaskRole::Implement), &[]);
+        t.tags = vec!["browser".into(), "ui-verify".into()];
+        let mut ir = plan(vec![t]);
+        materialize_role_defaults(&mut ir);
+        materialize_role_defaults(&mut ir);
+        let sys = sys_of(ir.tasks.iter().find(|x| x.id == "ui").unwrap());
+        assert!(
+            sys.contains(BROWSER_SYSTEM_PROMPT_MARKER),
+            "missing browser prompt: {sys}"
+        );
+        assert_eq!(
+            sys.matches(BROWSER_SYSTEM_PROMPT_MARKER).count(),
+            1,
+            "browser marker duplicated: {sys}"
         );
     }
 }

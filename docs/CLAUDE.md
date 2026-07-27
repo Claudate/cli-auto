@@ -25,7 +25,7 @@ browser-automation-cco.md: **浏览器自动化契约**（网页验收/抓取回
 
 ### 还在做（活跃落地 · 可有 ☐）
 
-cost-aware-cli-router-2026-07-27.md: **费用感知 CLI 优选**（**P0/P1 ✅** · P2 预算降档/粘滞 ☐ · P3 intent ☐；role→tier→最便宜可用 · 失败升档 · 显式 route 不动）
+cost-aware-cli-router-2026-07-27.md: **费用感知 CLI 优选**（**P0/P1/P2 ✅** · P3 intent ☐；role→tier→最便宜 · 失败升档 · 预算收紧/同波粘滞 · 显式 route 不动）
 next-landing-sequence-2026-07-27.md: **下一轮落地序（协调）**（**W0/W1/W3 ✅** · W2 自动化代理 ✅ / **真人 V1–V5 ☐** · W0 GUI 目视 residual · W4 无新痛；**不**替代各题勾选真源）
 inspect-ensure-close-loop-2026-07-24.md: **巡检关账闭环 Ensure**（**E0–E6 ✅** · §6.1 自动化代理 ✅ · **wros 真人 V1–V5 ☐** · closeout · 有界关账 · 自动 rework · UI 反误导；**本问题唯一勾选落点**）
 clarify-phase-vibe-check-subset.md: **澄清相 · 能力边界真源**（vibe-check 轻量子集 · 三入口/Brief 认领≠开跑 · 非 vibe-check/guided 全量 · ⊆ PRODUCT ①）

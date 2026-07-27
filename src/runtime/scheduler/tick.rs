@@ -18,9 +18,12 @@ use super::super::handoff;
 use super::super::provider::{TaskStatus, WorkerHandle, WorkerPort, WorkerStatus};
 use super::types::{stdout_len, ProgressWatch};
 use super::Scheduler;
+use crate::domain::worker::{
+    may_budget_downgrade, role_default_tier, suggest_budget_downgrade,
+};
 use crate::graph::ready_tasks;
 use crate::plan::OnFailure;
-use crate::state::{RunState, RunStatus};
+use crate::state::{RouteSource, RunState, RunStatus};
 
 impl Scheduler {
     /// Reload disk stop signal; kill workers; freeze live tasks. Returns Some(status) to exit.
@@ -381,6 +384,9 @@ impl Scheduler {
                 break;
             };
             let id = ready.remove(idx);
+            // P2: before spawn, optionally downgrade still-auto routes under budget ceiling.
+            self.maybe_budget_downgrade_task(&id);
+
             let task = self
                 .plan
                 .task(&id)
@@ -580,5 +586,95 @@ impl Scheduler {
             }
         }
         false
+    }
+
+    /// P2: if run spend crossed budget thresholds, shrink auto routes before spawn.
+    ///
+    /// Only touches soft_fill / cost_auto (and unset). Never explicit / tag / force /
+    /// escalate / failover. Updates plan + TaskState + plan.resolved.json.
+    fn maybe_budget_downgrade_task(&mut self, id: &str) {
+        let Some(cap) = self.run_max_budget_usd else {
+            return;
+        };
+        let spent = self.state.total_cost_usd();
+        let src_wire = self
+            .state
+            .tasks
+            .get(id)
+            .and_then(|ts| ts.route_source)
+            .map(|s| match s {
+                RouteSource::Explicit => "explicit",
+                RouteSource::SoftFill => "soft_fill",
+                RouteSource::TagRouting => "tag_routing",
+                RouteSource::Force => "force",
+                RouteSource::Failover => "failover",
+                RouteSource::CostAuto => "cost_auto",
+                RouteSource::CostEscalate => "cost_escalate",
+                RouteSource::CostBudget => "cost_budget",
+            });
+        // Allow re-tightening cost_budget when spend climbs further (mid → cheap).
+        let src_for_policy = match src_wire {
+            Some("cost_budget") => Some("cost_auto"),
+            other => other,
+        };
+        if !may_budget_downgrade(src_for_policy) {
+            return;
+        }
+        let (current, role) = match self.plan.task(id) {
+            Some(t) => (t.provider.clone(), t.role),
+            None => return,
+        };
+        let available: Vec<String> = self
+            .registry
+            .list()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect();
+        let Some(pick) = suggest_budget_downgrade(
+            &current,
+            role_default_tier(role),
+            spent,
+            Some(cap),
+            &available,
+            &[],
+        ) else {
+            return;
+        };
+        let previous = current;
+        if let Some(t) = self.plan.tasks.iter_mut().find(|t| t.id == id) {
+            t.provider = pick.provider.clone();
+        }
+        if let Some(ts) = self.state.tasks.get_mut(id) {
+            ts.provider = pick.provider.clone();
+            ts.route_source = Some(RouteSource::CostBudget);
+            ts.route_previous = Some(previous.clone());
+            ts.route_note = Some(format!(
+                "预算收紧·spend≈{spent:.2}/{cap:.2}→{}",
+                pick.tier.as_str()
+            ));
+        }
+        let resolved = self.state.run_dir.join("plan.resolved.json");
+        if let Ok(text) = serde_json::to_string_pretty(&self.plan) {
+            let _ = std::fs::write(&resolved, text);
+        }
+        let _ = self.state.event(
+            "cost_budget",
+            serde_json::json!({
+                "task_id": id,
+                "from": previous,
+                "to": pick.provider,
+                "spent": spent,
+                "cap": cap,
+                "tier": pick.tier.as_str(),
+            }),
+        );
+        info!(
+            task = %id,
+            from = %previous,
+            to = %pick.provider,
+            spent,
+            cap,
+            "budget tier downgrade before spawn"
+        );
     }
 }

@@ -17,7 +17,9 @@ use crate::domain::plan::{
     assign_closeout_owners, build_host_checklist, format_checklist_for_prompt, inject_closeout_task,
     SYS_CLOSEOUT_ID,
 };
-use crate::domain::worker::{apply_cost_aware_routing, CostRouteReport, RouteFillReport};
+use crate::domain::worker::{
+    apply_cost_aware_routing_with_opts, CostRouteOpts, CostRouteReport, RouteFillReport,
+};
 use crate::plan::{load_plan, materialize_selected_tasks, PlanIR};
 use crate::state::{self, RunState};
 
@@ -99,12 +101,23 @@ pub fn materialize_run_with_route_opts(
     // Soft-fill permission_mode so unattended workers can Edit/Bash (default bypass).
     apply_permission_mode(&mut ir, config, None);
 
-    // P0: role→tier→cheapest available on still-default (after soft/tag, before validate).
+    // P0+P2: role→tier→cheapest (+ sticky wave + budget ceiling at open-run spent=0).
     let cost_report = if opts.skip_cost_route || !config.default.cost_route_enabled {
         CostRouteReport::default()
     } else {
         let available = list_cost_route_available(config);
-        apply_cost_aware_routing(&mut ir, &available, &[], true)
+        apply_cost_aware_routing_with_opts(
+            &mut ir,
+            &available,
+            &[],
+            CostRouteOpts {
+                enabled: true,
+                spent_usd: 0.0,
+                budget_cap_usd: config.default.run_max_budget_usd,
+                sticky: true,
+            },
+            crate::domain::worker::default_cost_catalog(),
+        )
     };
 
     ir.validate()

@@ -1,0 +1,39 @@
+# Optional webpage verify task (docs/browser-automation-cco.md).
+# Requires: config.browser.enabled = true + Chrome + Kitewright/Playwright MCP.
+# Confirm screen: leave optional unchecked unless you want browser evidence.
+schema: cco-plan/v1
+name: browser-ui-verify-demo
+defaults:
+  provider: claude
+  mode: print
+  worktree: false
+tasks:
+  - id: note
+    title: 写一页说明
+    prompt: |
+      在项目根创建 DEMO_BROWSER.md，内容写「本计划演示可选网页验收」。
+      最后一行：CCO_DONE ok
+    scope:
+      paths: ["DEMO_BROWSER.md"]
+    outputs:
+      - DEMO_BROWSER.md
+  - id: ui-shot
+    title: 预览并截图验收（可选）
+    optional: true
+    include: false
+    depends_on: [note]
+    tags: [browser, ui-verify]
+    role: implement
+    prompt: |
+      使用浏览器工具做本机预览验收（若有 CCO_PREVIEW_URL 优先）。
+      1. 打开预览 URL（或任务未给 URL 且无预览时：在 report.md 写明无法验收，不要假装 PASS）。
+      2. 等待主内容可见后截图 → 写入 $CCO_BROWSER_OUT/shot.png（或 .cco-out/browser/ui-shot/shot.png）。
+      3. 写简短 report.md：标题、主 CTA 是否可见、明显破损。
+      最后一行：CCO_DONE ok
+    acceptance: 预览页可打开；shot.png 与 report.md 落在 .cco-out/browser/ui-shot/
+    scope:
+      paths:
+        - .cco-out/browser/**
+        - .cco-out/browser/ui-shot/**
+    outputs:
+      - .cco-out/browser/ui-shot/report.md

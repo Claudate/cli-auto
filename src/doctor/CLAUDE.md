@@ -2,7 +2,7 @@
 > L2 | 父级: /src/CLAUDE.md
 
 成员清单
-mod.rs: run_doctor · DoctorReport/CheckLine（**help_url** 官网下载）· print_report（CLI/桌面共用门禁；缺 CLI 附 docs 链接）
+mod.rs: run_doctor · DoctorReport/CheckLine（**help_url** 官网下载）· **browser_automation** 行（`browser_mcp::doctor_browser_line` · 默认关提示 · 启用未就绪不挡整体）· print_report
 
 法则: 成员完整·一行一文件·父级链接·技术词前置
 

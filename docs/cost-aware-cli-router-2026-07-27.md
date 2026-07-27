@@ -1,6 +1,6 @@
 # 费用感知 CLI 优选（Cost-aware Worker Router）
 
-> **状态：P0/P1 ✅ · 本文件 = 本能力勾选真源**  
+> **状态：P0/P1/P2 ✅ · 本文件 = 本能力勾选真源**  
 > 日期：2026-07-27  
 > 范围：task 级 `provider` 自动优选（**不**做 HTTP model gateway）  
 > 非目标：LiteLLM/Portkey 整站代理 · 静默覆盖显式 route · 自研 ML 分类器（P3 后置）  
@@ -27,7 +27,7 @@ role/tags → tier → 池内最便宜可用 → soft 填 default 任务
 |------|------|------|
 | **P0** | 静态 tier 目录 + role→tier + 可用∩未熔断∩单价最低；`route_source=cost_auto`；人话 rationale | ✅ |
 | **P1** | cheap/mid 失败 → 升一档重试（`cost_escalate`）；Verify=既有 acceptance/inspect | ✅ |
-| **P2** | run 预算阈值后续 default 降档；同 wave 粘滞 | ☐ |
+| **P2** | run 预算阈值降档（≥70% mid / ≥90% cheap）· 同 group/同档 wave 粘滞 · `route_source=cost_budget` | ✅ |
 | **P3** | 可选 intent 分类器；禁止默认甩外部 SaaS 代理 | ☐ |
 
 ---
@@ -79,7 +79,20 @@ cost_escalate_enabled = true       # P1；依赖 cost 路径或任意失败升�
 |----------------|------|-------------------------|
 | `cost_auto` | P0 费用优选 | `{产品} · 费用优选` |
 | `cost_escalate` | P1 失败升档 | `{产品} · 失败后升档，先前 {prev}` |
+| `cost_budget` | P2 预算收紧 | `{产品} · 预算收紧，先前 {prev}` |
 | 既有 | explicit / soft_fill / tag_routing / force / failover | 不变 |
+
+### P2 预算阈值（相对 `run_max_budget_usd`）
+
+| spend / cap | 新开 auto 任务最高档 |
+|-------------|---------------------|
+| &lt; 0.70 | 不限（role 默认） |
+| ≥ 0.70 | Mid |
+| ≥ 0.90 | Cheap |
+
+- 无 `run_max_budget_usd` → 不夹紧、不中途降档。  
+- 中途降档只动 `soft_fill` / `cost_auto`（及已 `cost_budget` 可再收）；explicit / tag / force / escalate **不动**。  
+- 粘滞：同 `group` 可跟显式；无 group 时同 wave **仅**跟本 pass 的 auto 选、且 **同 tier 带**。
 
 ---
 
@@ -87,10 +100,10 @@ cost_escalate_enabled = true       # P1；依赖 cost 路径或任意失败升�
 
 | 层 | 位置 |
 |----|------|
-| Domain | `src/domain/worker/cost_route.rs` · escalate 辅助 |
+| Domain | `cost_route.rs` · `cost_budget.rs`（P2 ceiling / sticky / downgrade） |
 | App | `materialize` 应用优选 · `provenance` stamp/label |
-| Runtime | `patrol.resolve_failover` 优先升档目标 |
-| Config | `cost_route_enabled` / `cost_escalate_enabled` |
+| Runtime | `patrol` 升档 · `tick.maybe_budget_downgrade_task` 开跑前降档 |
+| Config | `cost_route_enabled` / `cost_escalate_enabled` · 预算用既有 `run_max_budget_usd` |
 
 ---
 

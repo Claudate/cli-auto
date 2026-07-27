@@ -4,7 +4,7 @@
 成员清单
 mod.rs: **A1-4** ProviderRegistry · bin 解析 · **worker_path_env / apply_worker_process_env**（GUI/.app PATH 补 Homebrew）· re-export `ports::WorkerPort` DTO；`WorkerProvider` 别名；**P2-7** opt-in `sdk`；**shell_print** 循环注册 codex/gemini/qwen/kimi/deepseek(=**CodeWhale** `codewhale exec --auto`)/copilot/codebuddy；re-export **exit_status**
 exit_status.rs: 共享 exit→TaskStatus/WorkerStatus（`-1`/SIGKILL=Stopped · prefer `.done=130`）
-claude/: Claude CLI print/bg · spawn（默认 **bypassPermissions** + allow 旗）· poll_bg · parse_result（WorkerPort；scope via append-system-prompt；**permission_denials>0 不得 Done**）
+claude/: Claude CLI print/bg · spawn（默认 **bypassPermissions** + allow 旗 · **可选 `--mcp-config`/`--strict-mcp-config`** 自 provider_opts · browser_mcp）· poll_bg · parse_result（WorkerPort；scope via append-system-prompt；**permission_denials>0 不得 Done**）
 shell_print/: **多 CLI 共享 print 骨架** — scope 前缀 · stream_child · ShellPrintProvider · profiles（含 install_hint；**禁止** spawn 时 npm install）
 codex.rs: 薄封装 → ShellPrintProvider + CODEX profile（`codex exec` · 兼容 re-export scope helpers）
 fake.rs: 测试/演示 provider（CCO_DONE / hang / FAIL_ONCE / with_name 别名）

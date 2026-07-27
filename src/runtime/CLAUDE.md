@@ -12,7 +12,7 @@ scheduler/: **A1-3 多文件编排**（经 **A1-4 WorkerPort + domain/worker 策
   · gates.rs: outputs · inspect VERDICT **经 handoff facade + domain inspect_gate_fail_reason**（无正文解析）· handoff_task_end
   · active.rs: --only/--from → domain::run::resolve_active_ids
   · types.rs: ProgressWatch · StallAction · mirror_run
-  · 行为：并行上限 · 预算 · acceptance · **sys-post-git-push 先巡检 PASS** · 卡死巡检/重试 · H4 failover · **P1 cost escalate（先升档再 walk failover_order）** · **每轮 reload disk：Aborted/Paused → 杀 worker、冻 pending** · Stopped 不进 failed、run 终态 Aborted
+  · 行为：并行上限 · 预算 · acceptance · **sys-post-git-push 先巡检 PASS** · 卡死巡检/重试 · H4 failover · **P1 cost escalate（先升档再 walk failover_order）** · **P2 spawn 前 budget downgrade（soft/cost_auto）** · **每轮 reload disk：Aborted/Paused → 杀 worker、冻 pending** · Stopped 不进 failed、run 终态 Aborted
 handoff/: **A1-5 多文件适配器**（单文件 ≤600；实现 `ports::HandoffStore`）
   · mod.rs: facade re-export（稳定 `crate::runtime::handoff::*`）
   · model.rs: Handoff/BoardRow/Fragment · load/save · render_md
@@ -27,6 +27,7 @@ log_events.rs: worker stdout/stderr → LogEvent · compact_text_tail/floor_char
 provider/: **A1-4** WorkerPort（claude + **shell_print** 多 CLI：codex/gemini/qwen/kimi/deepseek/copilot/codebuddy + fake）· **P2-7** `sdk`（默认关）· ProviderRegistry · DTO re-export；`WorkerProvider` 别名
 worktree.rs: git worktree 隔离创建/清理 · on_fail 映射 domain IsolationOnFail（混跑 FailClosed）
 acceptance.rs: 任务后软验收命令（仅 `is_runnable_verify` 为真时 `sh -c`；人话跳过写 `skipped_not_shell`，≠ PASS）
+browser_mcp.rs: **W1 浏览器 MCP** — tags∋`browser` 且 `config.browser.enabled` → 写 `mcp-browser.json` · env `CCO_PREVIEW_URL`/`CCO_BROWSER_OUT` · Claude `--mcp-config`；默认引擎 kitewright（见 `docs/browser-automation-cco.md`）
 
 ## 硬规则（继承 L1）
 

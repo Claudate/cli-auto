@@ -54,6 +54,7 @@ pub fn provider_product_label(provider: &str) -> String {
 /// | failover | `{产品} · 故障切换前为 {先前产品}` |
 /// | cost_auto | `{产品} · 费用优选` |
 /// | cost_escalate | `{产品} · 失败后升档，先前 {prev}` |
+/// | cost_budget | `{产品} · 预算收紧，先前 {prev}` |
 pub fn compose_route_label(
     provider: &str,
     source: Option<RouteSource>,
@@ -80,6 +81,13 @@ pub fn compose_route_label(
                 .map(provider_product_label)
                 .unwrap_or_else(|| "先前通道".into());
             format!("{product} · 失败后升档，先前 {prev}")
+        }
+        Some(RouteSource::CostBudget) => {
+            let prev = previous
+                .filter(|s| !s.trim().is_empty())
+                .map(provider_product_label)
+                .unwrap_or_else(|| "先前通道".into());
+            format!("{product} · 预算收紧，先前 {prev}")
         }
     }
 }
@@ -192,6 +200,20 @@ pub fn stamp_cost_escalate(
 ) {
     if let Some(ts) = state.tasks.get_mut(task_id) {
         ts.route_source = Some(RouteSource::CostEscalate);
+        ts.route_previous = Some(previous_provider.to_string());
+        ts.route_note = note.map(|s| s.to_string());
+    }
+}
+
+/// P2: mid-run budget ceiling forced a cheaper provider.
+pub fn stamp_cost_budget(
+    state: &mut RunState,
+    task_id: &str,
+    previous_provider: &str,
+    note: Option<&str>,
+) {
+    if let Some(ts) = state.tasks.get_mut(task_id) {
+        ts.route_source = Some(RouteSource::CostBudget);
         ts.route_previous = Some(previous_provider.to_string());
         ts.route_note = note.map(|s| s.to_string());
     }
@@ -415,6 +437,18 @@ mod tests {
         assert!(label.contains("升档"), "{label}");
         assert!(label.contains("Codex"), "{label}");
         assert!(label.contains("Claude"), "{label}");
+    }
+
+    #[test]
+    fn route_label_cost_budget() {
+        let label = compose_route_label(
+            "codex",
+            Some(RouteSource::CostBudget),
+            Some("claude"),
+        );
+        assert!(label.contains("预算收紧"), "{label}");
+        assert!(label.contains("Claude"), "{label}");
+        assert!(label.contains("Codex"), "{label}");
     }
 
     #[test]

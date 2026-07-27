@@ -76,6 +76,8 @@ pub struct Scheduler {
     pub failover_order: Vec<String>,
     /// P1: prefer higher-cost tier before walking [`failover_order`].
     pub cost_escalate_enabled: bool,
+    /// Browser MCP for tagged tasks (default off). See `docs/browser-automation-cco.md`.
+    pub browser: crate::config::BrowserConfig,
 }
 
 impl Scheduler {

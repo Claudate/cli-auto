@@ -96,6 +96,7 @@ pub fn prepare_scheduler(
         fallback_extra_attempts: config.default.fallback_extra_attempts,
         failover_order: config.default.failover_order.clone(),
         cost_escalate_enabled: config.default.cost_escalate_enabled,
+        browser: config.browser.clone(),
     })
 }
 

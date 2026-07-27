@@ -224,6 +224,20 @@ impl ClaudeProvider {
         // 子进程挂在 CCO.app 身份下，home 扫描会触发 macOS TCC 授权弹窗。
         let sys = Self::build_append_system_prompt(work_dir, task_scope, opts);
         cmd.arg("--append-system-prompt").arg(sys);
+        // Browser / extra MCP: task-level file from runtime/browser_mcp (W1).
+        // Works with --bare: explicit --mcp-config is still honored.
+        if let Some(mcp) = Self::opt_str(opts, crate::runtime::browser_mcp::OPT_MCP_CONFIG) {
+            if !mcp.trim().is_empty() {
+                cmd.arg("--mcp-config").arg(mcp.trim());
+                let strict = opts
+                    .get(crate::runtime::browser_mcp::OPT_MCP_STRICT)
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
+                if strict {
+                    cmd.arg("--strict-mcp-config");
+                }
+            }
+        }
         for a in &self.extra_args {
             cmd.arg(a);
         }

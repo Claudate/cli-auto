@@ -342,6 +342,7 @@ pub fn start_run_from_plan_with_route(
     let fallback_extra_attempts = config.default.fallback_extra_attempts;
     let failover_order = config.default.failover_order.clone();
     let cost_escalate_enabled = config.default.cost_escalate_enabled;
+    let browser_cfg = config.browser.clone();
     let config_for_ensure = config.clone();
 
     std::thread::spawn(move || {
@@ -385,6 +386,7 @@ pub fn start_run_from_plan_with_route(
                 fallback_extra_attempts,
                 failover_order,
                 cost_escalate_enabled,
+                browser: browser_cfg,
             };
             match sched.run().await {
                 Ok(status) => {
@@ -544,6 +546,7 @@ fn spawn_resume(config: Config, run_id: &str, only_task: Option<String>) -> Resu
     let fallback_extra_attempts = config.default.fallback_extra_attempts;
     let failover_order = config.default.failover_order.clone();
     let cost_escalate_enabled = config.default.cost_escalate_enabled;
+    let browser_cfg = config.browser.clone();
     let config_for_ensure = config.clone();
 
     std::thread::spawn(move || {
@@ -574,6 +577,7 @@ fn spawn_resume(config: Config, run_id: &str, only_task: Option<String>) -> Resu
                 fallback_extra_attempts,
                 failover_order,
                 cost_escalate_enabled,
+                browser: browser_cfg,
             };
             let status = sched.run().await;
             if let Ok(st) = RunState::load(&runs_dir.join(&rid)) {

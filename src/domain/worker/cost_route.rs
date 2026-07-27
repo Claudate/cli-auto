@@ -132,6 +132,11 @@ fn entry_for<'a>(
     catalog.iter().find(|e| e.id == n)
 }
 
+/// Tier of a catalog entry (pub for P2 budget/sticky helpers).
+pub fn entry_tier(catalog: &[ProviderCostEntry], name: &str) -> Option<CostTier> {
+    entry_for(catalog, name).map(|e| e.tier)
+}
+
 /// Cheapest available provider in `tier`, then higher tiers if the pool is empty.
 ///
 /// `available` = registered (ideally preflight-ok) names. `unhealthy` = open circuit.
@@ -162,6 +167,8 @@ pub fn select_in_tier(
             requested_tier: tier,
             cost_rank: best.cost_rank,
             borrowed_up: best.tier > tier,
+            sticky: false,
+            budget_clamped: false,
         });
     }
     None
@@ -176,6 +183,10 @@ pub struct CostPick {
     pub cost_rank: u32,
     /// True when no engine in requested tier was available.
     pub borrowed_up: bool,
+    /// P2: reused a cohort peer's CLI.
+    pub sticky: bool,
+    /// P2: tier was lowered by run budget ceiling.
+    pub budget_clamped: bool,
 }
 
 impl CostPick {
@@ -186,16 +197,23 @@ impl CostPick {
             CostTier::Mid => "中等费用",
             CostTier::Flagship => "高能力",
         };
-        if self.borrowed_up {
-            format!(
-                "费用优选·{}档无人可用，上借到{}（{}）",
+        let mut parts: Vec<String> = Vec::new();
+        if self.sticky {
+            parts.push(format!("同波沿用（{}）", band));
+        } else if self.borrowed_up {
+            parts.push(format!(
+                "{}档无人可用，上借到{}（{}）",
                 self.requested_tier.as_str(),
                 self.tier.as_str(),
                 band
-            )
+            ));
         } else {
-            format!("费用优选·{}（{}）", self.tier.as_str(), band)
+            parts.push(format!("{}（{}）", self.tier.as_str(), band));
         }
+        if self.budget_clamped {
+            parts.push("预算收紧".into());
+        }
+        format!("费用优选·{}", parts.join("·"))
     }
 }
 
@@ -251,6 +269,29 @@ impl CostRouteReport {
     }
 }
 
+/// Open-run / materialize options for cost routing (P0 + P2).
+#[derive(Debug, Clone)]
+pub struct CostRouteOpts {
+    pub enabled: bool,
+    /// Run spend so far (0 at first materialize).
+    pub spent_usd: f64,
+    /// `run_max_budget_usd` when set.
+    pub budget_cap_usd: Option<f64>,
+    /// P2: same group / wave reuses prior pick (default true).
+    pub sticky: bool,
+}
+
+impl Default for CostRouteOpts {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            spent_usd: 0.0,
+            budget_cap_usd: None,
+            sticky: true,
+        }
+    }
+}
+
 /// Rewrite still-default task providers by role→tier→cheapest available.
 ///
 /// No-op when `enabled` is false. Does not touch explicit / tag-kept engines.
@@ -260,11 +301,14 @@ pub fn apply_cost_aware_routing(
     unhealthy: &[String],
     enabled: bool,
 ) -> CostRouteReport {
-    apply_cost_aware_routing_with_catalog(
+    apply_cost_aware_routing_with_opts(
         plan,
         available,
         unhealthy,
-        enabled,
+        CostRouteOpts {
+            enabled,
+            ..CostRouteOpts::default()
+        },
         default_cost_catalog(),
     )
 }
@@ -276,51 +320,101 @@ pub fn apply_cost_aware_routing_with_catalog(
     enabled: bool,
     catalog: &[ProviderCostEntry],
 ) -> CostRouteReport {
+    apply_cost_aware_routing_with_opts(
+        plan,
+        available,
+        unhealthy,
+        CostRouteOpts {
+            enabled,
+            ..CostRouteOpts::default()
+        },
+        catalog,
+    )
+}
+
+/// Full P0+P2 pass: wave order · sticky cohort · budget tier ceiling.
+pub fn apply_cost_aware_routing_with_opts(
+    plan: &mut PlanIR,
+    available: &[String],
+    unhealthy: &[String],
+    opts: CostRouteOpts,
+    catalog: &[ProviderCostEntry],
+) -> CostRouteReport {
+    use super::cost_budget::{
+        budget_tier_ceiling, clamp_tier, route_pass_order, select_with_sticky, sticky_provider,
+    };
+
     let mut report = CostRouteReport::default();
-    if !enabled {
+    if !opts.enabled {
         return report;
     }
+    let ceiling = budget_tier_ceiling(opts.spent_usd, opts.budget_cap_usd);
     let default = plan.default_provider.clone();
-    for t in &mut plan.tasks {
+    let order = route_pass_order(plan);
+    let mut committed: Vec<(String, String)> = Vec::new();
+    // Only engines chosen by this auto pass (wave sticky ignores bare explicit seeds).
+    let mut auto_committed: Vec<(String, String)> = Vec::new();
+
+    // Seed committed with already-explicit engines so **group** sticky can follow them.
+    for t in &plan.tasks {
         if !is_still_default_route(&t.provider, &default) {
+            committed.push((t.id.clone(), t.provider.clone()));
+        }
+    }
+
+    for id in order {
+        let Some(idx) = plan.tasks.iter().position(|t| t.id == id) else {
+            continue;
+        };
+        // Snapshot fields we need without holding a long mut borrow across helpers.
+        let (provider, role, tags) = {
+            let t = &plan.tasks[idx];
+            (t.provider.clone(), t.role, t.tags.clone())
+        };
+        if !is_still_default_route(&provider, &default) {
             continue;
         }
-        // Honor tag-implied concrete engine already applied (provider may equal
-        // default only by coincidence after soft-fill of a non-tag task).
-        // Tag routing runs earlier; if tags imply a provider and task already
-        // carries it *and* it differs from what cost would pick, keep when the
-        // provider is not the bare default fill — detected via tags.
-        if let Some(implied) = crate::domain::plan::tag_implied_provider(&t.tags) {
-            if t.provider.eq_ignore_ascii_case(implied) {
-                // Tag already chose; do not cost-override.
+        if let Some(implied) = crate::domain::plan::tag_implied_provider(&tags) {
+            if provider.eq_ignore_ascii_case(implied) {
+                committed.push((id.clone(), provider));
                 continue;
             }
         }
-        let tier = role_default_tier(t.role);
-        let Some(pick) = select_in_tier(tier, available, unhealthy, catalog) else {
-            report.skipped_ids.push(t.id.clone());
+        let role_tier = role_default_tier(role);
+        let requested = clamp_tier(role_tier, ceiling);
+        let sticky = if opts.sticky {
+            sticky_provider(plan, &id, &committed, &auto_committed)
+        } else {
+            None
+        };
+        let Some(mut pick) = select_with_sticky(
+            role_tier,
+            ceiling,
+            sticky.as_deref(),
+            available,
+            unhealthy,
+            catalog,
+        ) else {
+            report.skipped_ids.push(id);
             continue;
         };
-        let from = t.provider.clone();
-        if from.eq_ignore_ascii_case(&pick.provider) {
-            // Same engine as soft-fill — still record so UI can say 费用优选.
-            report.changed.push(CostRouteChange {
-                task_id: t.id.clone(),
-                from: from.clone(),
-                to: pick.provider.clone(),
-                tier: pick.tier,
-                rationale: pick.rationale_zh(),
-            });
-            continue;
+        pick.budget_clamped = ceiling.is_some() && role_tier > requested;
+        let from = provider;
+        let to = pick.provider.clone();
+        let tier = pick.tier;
+        let rationale = pick.rationale_zh();
+        if !from.eq_ignore_ascii_case(&to) {
+            plan.tasks[idx].provider = to.clone();
         }
-        t.provider = pick.provider.clone();
         report.changed.push(CostRouteChange {
-            task_id: t.id.clone(),
+            task_id: id.clone(),
             from,
-            to: pick.provider.clone(),
-            tier: pick.tier,
-            rationale: pick.rationale_zh(),
+            to: to.clone(),
+            tier,
+            rationale,
         });
+        committed.push((id.clone(), to.clone()));
+        auto_committed.push((id, to));
     }
     report
 }

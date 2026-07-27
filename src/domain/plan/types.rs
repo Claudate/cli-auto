@@ -88,6 +88,17 @@ pub const CLOSEOUT_DEFAULT_WRITE_SCOPE: &[&str] = &[
 pub const CLOSEOUT_DEFAULT_FORBID: &[&str] =
     &["**/src/**", "src/**", "src-tauri/**", "web/js/**", "web/css/**", "crates/**"];
 
+/// Marker injected when task tags include `browser` (idempotent).
+/// Host only injects when `config.browser.enabled` (see browser-automation-cco.md).
+pub const BROWSER_SYSTEM_PROMPT_MARKER: &str = "CCO browser-tools:";
+/// Discipline for optional browser MCP steps (screenshot / scrape / form smoke).
+pub const BROWSER_SYSTEM_PROMPT: &str = "CCO browser-tools: optional browser MCP is available for this task.\n\
+1. Prefer URL from env `CCO_PREVIEW_URL` when set; otherwise only URLs named in the task prompt.\n\
+2. Write evidence under env `CCO_BROWSER_OUT` (or `.cco-out/browser/<task_id>/`): `shot.png`, `report.md` / `raw.md` / `smoke.md`. Required outputs must exist on disk.\n\
+3. Flow: open → wait for main content → screenshot/extract → human conclusion (title, primary CTA, breakage). Missing preview is not PASS — say so in the report.\n\
+4. Scrape: record source URL; business writes only in scope.paths; keep a short raw excerpt under the evidence dir.\n\
+5. Do not browse unrelated sites, invent screenshots, or bypass cco confirm; browser is a worker tool, not a planner.";
+
 /// Collaboration role for multi-CLI plans (P1-1 + Ensure closeout).
 ///
 /// Serialized as snake_case: `scout` | `implement` | `integrate` | `inspect` | `closeout`.

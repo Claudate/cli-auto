@@ -103,18 +103,38 @@ impl Scheduler {
             );
         }
 
+        // P1-5: host injects latest handoff summary as prompt prefix (once, scheduler-side).
+        let mut task_for_start = task.clone();
+        task_for_start.prompt =
+            handoff::with_handoff_prefix(&task.prompt, task, &self.state.run_dir);
+
+        // Browser MCP (optional): tag `browser` + config.browser.enabled → mcp-config + env.
+        let preview_url = crate::services::preview_status(&self.state.project_root)
+            .ok()
+            .and_then(|s| s.url);
+        let mut env_extra = crate::runtime::browser_mcp::prepare_task_browser(
+            &self.browser,
+            &mut task_for_start,
+            &self.state.project_root,
+            &task_dir,
+            preview_url.as_deref(),
+        )
+        .unwrap_or_else(|e| {
+            warn!(task = %task.id, err = %e, "browser mcp prepare failed");
+            vec![]
+        });
+        // Keep any future host env first; browser pairs appended.
         let ctx = StartCtx {
             run_id: self.state.run_id.clone(),
             project_root: self.state.project_root.clone(),
             work_dir: work_dir.clone(),
             task_dir,
-            env_extra: vec![],
+            env_extra: {
+                let mut v = vec![];
+                v.append(&mut env_extra);
+                v
+            },
         };
-
-        // P1-5: host injects latest handoff summary as prompt prefix (once, scheduler-side).
-        let mut task_for_start = task.clone();
-        task_for_start.prompt =
-            handoff::with_handoff_prefix(&task.prompt, task, &self.state.run_dir);
 
         let handle = provider.start(&task_for_start, &ctx).await?;
         Ok((provider, handle, work_dir))

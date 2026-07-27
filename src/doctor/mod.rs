@@ -159,6 +159,21 @@ pub async fn run_doctor(config: &Config, project_root: Option<&Path>) -> Result<
         "cco run --provider fills defaults only; --force-provider wipes all tasks",
     ));
 
+    // Browser MCP (W1): never fails overall doctor when disabled; when enabled+broken, warn only.
+    let (browser_line_ok, browser_detail, browser_help) =
+        crate::runtime::browser_mcp::doctor_browser_line(&config.browser);
+    lines.push(CheckLine {
+        name: "browser_automation".into(),
+        // Soft: missing chrome with enabled=true does not fail whole doctor.
+        ok: true,
+        detail: if browser_line_ok {
+            browser_detail
+        } else {
+            format!("{browser_detail} (提示，不挡无浏览器计划)")
+        },
+        help_url: browser_help,
+    });
+
     Ok(DoctorReport { lines, ok })
 }
 

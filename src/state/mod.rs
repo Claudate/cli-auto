@@ -58,6 +58,8 @@ pub enum RouteSource {
     CostAuto,
     /// P1 failure cascade: switched to a higher-cost tier.
     CostEscalate,
+    /// P2: mid-run budget threshold forced a cheaper tier.
+    CostBudget,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -455,6 +457,7 @@ mod tests {
             (RouteSource::Failover, "failover"),
             (RouteSource::CostAuto, "cost_auto"),
             (RouteSource::CostEscalate, "cost_escalate"),
+            (RouteSource::CostBudget, "cost_budget"),
         ];
         for (src, wire) in cases {
             let s = serde_json::to_string(&src).unwrap();

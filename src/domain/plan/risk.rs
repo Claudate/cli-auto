@@ -59,9 +59,23 @@ impl RiskClass {
     }
 }
 
+/// Tag `browser` (case-insensitive) — worker may get browser MCP when config enables it.
+pub fn task_has_browser_tag(tags: &[String]) -> bool {
+    tags.iter()
+        .any(|t| t.trim().eq_ignore_ascii_case("browser"))
+}
+
+/// Tag `scrape` — outbound fetch intent for desk risk chip.
+pub fn task_has_scrape_tag(tags: &[String]) -> bool {
+    tags.iter()
+        .any(|t| t.trim().eq_ignore_ascii_case("scrape"))
+}
+
 /// Derive risk from task identity + fields (pure).
 ///
 /// Precedence: External > Exec > role/scope Read|WriteLocal.
+///
+/// `tags`: optional task tags (`browser` / `scrape` → external when scrape).
 pub fn classify_task_risk(
     id: &str,
     role: Option<TaskRole>,
@@ -70,8 +84,25 @@ pub fn classify_task_risk(
     verify_cmd: Option<&str>,
     kind: Option<&str>,
 ) -> RiskClass {
+    classify_task_risk_with_tags(id, role, scope_paths, scope_readonly_only, verify_cmd, kind, &[])
+}
+
+/// Same as [`classify_task_risk`] with tags (scrape → External).
+pub fn classify_task_risk_with_tags(
+    id: &str,
+    role: Option<TaskRole>,
+    scope_paths: &[String],
+    scope_readonly_only: bool,
+    verify_cmd: Option<&str>,
+    kind: Option<&str>,
+    tags: &[String],
+) -> RiskClass {
     let id = id.trim();
     if id == SYS_POST_GIT_PUSH_ID || id == SYS_POST_OPEN_PR_ID {
+        return RiskClass::External;
+    }
+    // Outbound scrape / browser fetch of external pages.
+    if task_has_scrape_tag(tags) {
         return RiskClass::External;
     }
     // Host shell after Done — show exec even on otherwise-local tasks.
@@ -80,6 +111,10 @@ pub fn classify_task_risk(
         .filter(|s| !s.is_empty())
         .is_some_and(is_runnable_verify)
     {
+        return RiskClass::Exec;
+    }
+    // Local browser verify/smoke without scrape: treat like exec (drives Chrome).
+    if task_has_browser_tag(tags) {
         return RiskClass::Exec;
     }
     if id == SYS_POST_INSPECT_ID
@@ -127,8 +162,30 @@ pub fn classify_task_risk_wire(
     verify_cmd: Option<&str>,
     kind: Option<&str>,
 ) -> RiskClass {
+    classify_task_risk_wire_with_tags(
+        id,
+        role_wire,
+        scope_paths,
+        scope_readonly,
+        has_writable_scope,
+        verify_cmd,
+        kind,
+        &[],
+    )
+}
+
+/// Wire helper with tags (cco-split / PlanIR task tags).
+pub fn classify_task_risk_wire_with_tags(
+    id: &str,
+    role_wire: Option<&str>,
+    scope_paths: &[String],
+    scope_readonly: &[String],
+    has_writable_scope: bool,
+    verify_cmd: Option<&str>,
+    kind: Option<&str>,
+    tags: &[String],
+) -> RiskClass {
     let role = role_wire.and_then(TaskRole::parse);
-    // Treat as read-oriented only when there is no writable scope.
     let scope_readonly_only = !has_writable_scope;
     let paths = if has_writable_scope {
         scope_paths
@@ -137,7 +194,15 @@ pub fn classify_task_risk_wire(
     } else {
         &[][..]
     };
-    classify_task_risk(id, role, paths, scope_readonly_only, verify_cmd, kind)
+    classify_task_risk_with_tags(
+        id,
+        role,
+        paths,
+        scope_readonly_only,
+        verify_cmd,
+        kind,
+        tags,
+    )
 }
 
 #[cfg(test)]
@@ -205,5 +270,37 @@ mod tests {
     fn labels_are_human() {
         assert_eq!(RiskClass::External.label_zh(), "会外发");
         assert_eq!(RiskClass::WriteLocal.hint_zh().contains("本地"), true);
+    }
+
+    #[test]
+    fn scrape_tag_is_external() {
+        assert_eq!(
+            classify_task_risk_with_tags(
+                "scrape-1",
+                Some(TaskRole::Implement),
+                &["content/**".into()],
+                false,
+                None,
+                Some("do"),
+                &["browser".into(), "scrape".into()],
+            ),
+            RiskClass::External
+        );
+    }
+
+    #[test]
+    fn browser_ui_verify_is_exec() {
+        assert_eq!(
+            classify_task_risk_with_tags(
+                "ui-1",
+                Some(TaskRole::Implement),
+                &[".cco-out/browser/**".into()],
+                false,
+                None,
+                Some("do"),
+                &["browser".into(), "ui-verify".into()],
+            ),
+            RiskClass::Exec
+        );
     }
 }
