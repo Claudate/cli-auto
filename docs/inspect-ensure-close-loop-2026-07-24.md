@@ -1,6 +1,6 @@
 # 巡检关账闭环（Ensure）根治计划
 
-> **状态：实现已落 · E0–E5 ✅ · E6 金样/打包 ✅ · 自动化代理表 ✅ · wros 真人 V1–V5 ☐**（2026-07-27：金样+closeout/classify 单测+`ensure-v3-cta-smoke`；**禁止**仅靠单元测关 §6；next-landing W2）  
+> **状态：实现已落 · E0–E5 ✅ · E6 金样/打包 ✅ · 自动化代理表 ✅ · wros 真人 V1–V5 ☐**（2026-07-27 再：Scheduler 字段修复后 `ensure_close_loop` 4 绿 · closeout/classify 再绿 · `ensure-v3-cta-smoke` 5/5 · **仍禁止**仅靠代理关 §6 真人行）  
 > 日期：2026-07-24  
 > 触发：wros `chat-20260724-0629` 多轮卡在末尾 inspect（功能已绿 · 台账/地图未关 · 误点「再跑一次」空转）  
 > 角色：**契约变更 + host 闭环**——把「终端步骤」从「只读开 ISSUES」升级为「对照计划 → 有界关账 → 再验 → 可自动回补直至终结」  
@@ -503,13 +503,13 @@ ISSUES 标 drift / 人话：「实现与计划不一致，请改计划或接受�
 
 ### 6.1 自动化代理证据（结构环 · **非** §6 关账）
 
-| 代理 | 覆盖意图 | 命令 / 落点 | 2026-07-27 |
+| 代理 | 覆盖意图 | 命令 / 落点 | 2026-07-27 再 |
 |------|----------|-------------|------------|
-| closeout 注入 + inspect 等关账 | V1 结构（非端到端 PASS 叙事） | `cargo test --test ensure_close_loop materialize_injects…` · lib `closeout::` | ✅ 4+6 绿 |
+| closeout 注入 + inspect 等关账 | V1 结构（非端到端 PASS 叙事） | `cargo test --test ensure_close_loop` **4/4** · lib `closeout::` **6** | ✅ |
 | docs-only FAIL → auto rework | V2 主机环 | `docs_only_fail_auto_rework_starts_new_run` | ✅ |
-| 失败卡主 CTA=回补 | V3 UI 源码 | `node scripts/ensure-v3-cta-smoke.mjs` · `logBoardCard.js` E4 | ✅ |
-| 业务 blocking + docs_only 不停自动 | V4 策略 | `business_blocking_docs_only_does_not_auto_rework` · `auto_rework_off_skips` | ✅ |
-| 无证据不勾 / 分类不降级业务 | V5 纪律片段 | lib `closeout` prompt「有证据才勾」· `classify` wros B6/M1 + mixed business | ✅ 单测 |
+| 失败卡主 CTA=回补 | V3 UI 源码 | `node scripts/ensure-v3-cta-smoke.mjs` **5/5** · `logBoardCard.js` E4 | ✅ |
+| 业务 blocking + docs_only 不停自动 | V4 策略 | `business_blocking_docs_only…` · `auto_rework_off_skips` | ✅ |
+| 无证据不勾 / 分类不降级业务 | V5 纪律片段 | lib `closeout` · `classify` wros B6/M1 + usability promote | ✅ |
 | classify 真样本 | 根因 B 类 | `domain::inspect::classify` wros 原文 | ✅ |
 
 **真人仍须：** 带台账成功标准的真实/夹具项目走完 V1–V5 并填上表 ☐→✅ + run_id。

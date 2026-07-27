@@ -13,7 +13,7 @@
 > | 架构 | [`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)（A0–A5 ✅ · **不**重开） |
 >
 > 历史总账 [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) D5 池：**不排期则不碰**；本序出池项须写明对应池 ID 或显式用户疼痛。  
-> 状态：**W0 ✅（commit+冒烟；GUI 30s 目视 residual）· W1 ✅ · W2 自动化代理 §6.1 ✅ / 真人 V1–V5 ☐ · W3 S3/S4 ✅ · S2/S5/S6 不做 · W4 无新痛** · 勾选在各真源；本文只改本状态行与 §9。
+> 状态：**W0 ✅（commit+冒烟+打包嵌入+`clarify-split-visual-smoke`；手指 30s 可选体验）· W1 ✅ · W2 自动化代理 §6.1 ✅ / 真人 V1–V5 ☐ · W3 S3/S4 ✅ · S2/S5/S6 不做 · W4 无新痛** · 勾选在各真源；本文只改本状态行与 §9。
 
 [PROTOCOL]: 禁止在本文复制各真源的任务级 ☐ 表；禁止平行「N0–N4 实现勾选」替代上表；禁止旁路 `confirm_start`；禁止把 Claude Code 源码仓能力搬进 cco；落地后同步 `docs/CLAUDE.md` 活跃索引。
 
@@ -37,7 +37,7 @@ W4  非开发主路径打磨（仅疼痛）         ← 无新阶段表 · 随 W
 
 | 缺口（口语） | 事实 | 还缺什么 |
 |--------------|------|----------|
-| **澄清相** | t1–t5 实现在工作树；t6 inspect **PASS**；CLOSEOUT residual=GUI 目视 | **commit + 桌面 30s 目视**；关 residual |
+| **澄清相** | t1–t6 ✅ · 冒烟+claim 边界绿 · **打包嵌入+visual-smoke 关 residual** | 可选：打开 `dist/CCO.app` 亲手点三入口（体验，非开项） |
 | **巡检关账** | E0–E6 ✅（金样 + package）；`auto_closeout`/`auto_rework` 已接线 | **wros 类真实计划 V1–V5 人工** |
 | **拆分 SQLite** | C1–C7 ✅ SoT；S2–S6 文末 ☐ | **S4 可能已默认 false → 核销**；S3 与 C6 部分重叠 → 审计；S2 可选；S5/S6 中长期 |
 | **主观渴望 D0–D2** | 文内仍 ☐；澄清相已覆盖：三入口、缺槽追问、Brief 认领≠开跑、黄条不拦 | **对账勾选 + 计划模板五节（D0-1）若仍缺则补**；D1/D2 主路径以澄清为准 |
@@ -227,3 +227,4 @@ Day 2–3   W3          S4/S3 核销；S2 仅当列表痛
 | 2026-07-27 | 初版：W0 澄清出货 · W1 渴望对账 · W2 Ensure 人工 · W3 S 核销 · W4 疼痛打磨；勾选回既有真源 |
 | 2026-07-27 | **执行**：W0 测绿+冒烟+关逻辑 residual（GUI 目视仍 open）· W1 对账+模板五节 · W3 S3/S4 核销 · W2 人工 V1–V5 仍 ☐ |
 | 2026-07-27 | **W2 代理加厚**：`ensure-v3-cta-smoke` + inspect §6.1 证据表；再跑 ensure/closeout/classify 绿；**仍不关**真人 V1–V5 / 澄清 GUI 目视 |
+| 2026-07-27 | **W0 residual 关**：`package-app` + 包内扫码 + `clarify-split-visual-smoke` 12/12；手指 30s 改可选体验。**W2**：ensure 金样修 Scheduler 字段后再绿；§6 真人 V1–V5 仍 ☐ |
