@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
 use tracing::info;
 
 use crate::config::BrowserConfig;
-use crate::domain::plan::task_has_browser_tag;
+use crate::domain::plan::{task_has_browser_tag, task_has_ui_verify_tag};
 use crate::plan::TaskIR;
 
 /// Relative path written under task_dir for Claude `--mcp-config`.
@@ -106,9 +106,36 @@ pub fn browser_env_pairs(
     env
 }
 
+/// Soft-fail ui-verify when preview is required but missing (honest, not silent PASS).
+///
+/// Returns human error when the task should **not** spawn a worker.
+pub fn preview_required_missing(
+    cfg: &BrowserConfig,
+    task: &TaskIR,
+    preview_url: Option<&str>,
+) -> Option<String> {
+    if !cfg.is_enabled() || !cfg.require_preview {
+        return None;
+    }
+    if !task_has_browser_tag(&task.tags) || !task_has_ui_verify_tag(&task.tags) {
+        return None;
+    }
+    let has = preview_url.map(str::trim).filter(|s| !s.is_empty()).is_some();
+    if has {
+        return None;
+    }
+    Some(
+        "网页验收需要本机预览地址（CCO_PREVIEW_URL），当前没有可用预览。\
+请先启动预览，或在任务说明里写明 URL；不要假装验收通过。\
+（config.browser.require_preview=true；可关 require_preview 仅靠 prompt 自报）"
+            .into(),
+    )
+}
+
 /// Apply browser MCP into task provider_opts + collect env (scheduler start).
 ///
 /// No-op when disabled or task lacks `browser` tag.
+/// Errors when ui-verify + require_preview and no preview URL (soft-fail at start).
 pub fn prepare_task_browser(
     cfg: &BrowserConfig,
     task: &mut TaskIR,
@@ -116,6 +143,9 @@ pub fn prepare_task_browser(
     task_dir: &Path,
     preview_url: Option<&str>,
 ) -> Result<Vec<(String, String)>> {
+    if let Some(msg) = preview_required_missing(cfg, task, preview_url) {
+        anyhow::bail!("{msg}");
+    }
     if !should_inject_browser_mcp(cfg, task) {
         return Ok(vec![]);
     }
@@ -425,6 +455,42 @@ mod tests {
         assert!(raw.contains("cco-browser"));
         assert!(raw.contains("@kitewright/mcp"));
     }
+    #[test]
+    fn preview_required_blocks_ui_verify() {
+        let mut cfg = BrowserConfig {
+            enabled: true,
+            require_preview: true,
+            ..BrowserConfig::default()
+        };
+        let mut task = TaskIR {
+            id: "ui".into(),
+            title: "shot".into(),
+            depends_on: vec![],
+            group: None,
+            provider: "claude".into(),
+            mode: "print".into(),
+            prompt: "p".into(),
+            verify_cmd: None,
+            acceptance: None,
+            timeout_secs: None,
+            worktree: None,
+            provider_opts: serde_json::json!({}),
+            optional: true,
+            include: true,
+            role: None,
+            scope: None,
+            outputs: vec![],
+            tags: vec!["browser".into(), "ui-verify".into()],
+        };
+        assert!(preview_required_missing(&cfg, &task, None).is_some());
+        assert!(preview_required_missing(&cfg, &task, Some("http://127.0.0.1:5173/")).is_none());
+        cfg.require_preview = false;
+        assert!(preview_required_missing(&cfg, &task, None).is_none());
+        task.tags = vec!["browser".into(), "ui-smoke".into()];
+        cfg.require_preview = true;
+        assert!(preview_required_missing(&cfg, &task, None).is_none());
+    }
+
 
 
     #[test]

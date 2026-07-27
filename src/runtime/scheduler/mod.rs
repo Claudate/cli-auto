@@ -78,6 +78,8 @@ pub struct Scheduler {
     pub cost_escalate_enabled: bool,
     /// Browser MCP for tagged tasks (default off). See `docs/browser-automation-cco.md`.
     pub browser: crate::config::BrowserConfig,
+    /// Providers that failed preflight this run (skip in cost escalate / budget picks).
+    pub provider_unhealthy: Vec<String>,
 }
 
 impl Scheduler {

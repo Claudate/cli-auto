@@ -130,7 +130,7 @@ pub async fn run(
     }
 
     // ── Open-run (app only; no hand-rolled new_run_id / mark_confirmed) ──
-    let (run_id, run_state, ir) = if let Some(job_id) = plan_job_id {
+    let (run_id, run_state, ir, route_line) = if let Some(job_id) = plan_job_id {
         let patches = split_uc::ConfirmPatches {
             provider,
             force_provider,
@@ -140,26 +140,29 @@ pub async fn run(
             effort: Some(config.default.effort.clone()),
         };
         // Sole Mode B open-run (optional drop + soft defaults + materialize + mark).
-        let (run_id, st, ir, _fill) =
+        let (run_id, st, ir, route_line) =
             split_uc::confirm_materialize(config, &job_id, patches)?;
-        (run_id, st, ir)
+        (run_id, st, ir, route_line)
     } else {
         let (ir, report) = parse_only
             .take()
             .expect("ParseOnly path always loads IR before confirm");
         // Documented ParseOnly — not Mode B; still drops optional && !include (A0-R4).
         // Use **returned** IR for the scheduler (D-T3-1). Stamp route_source from report.
-        let (run_id, st, ir) = run_uc::materialize_run_with_route(
+        let (run_id, st, ir, cost_line) = run_uc::materialize_run_with_route(
             config,
             project.clone(),
             &ir,
             report.as_ref(),
         )?;
-        (run_id, st, ir)
+        (run_id, st, ir, cost_line)
     };
 
     println!("run_id: {run_id}");
     println!("run_dir: {}", run_state.run_dir.display());
+    if let Some(line) = route_line {
+        println!("{line}");
+    }
 
     let mirror = if mirror_state || config.default.mirror_state {
         let m = project.join(".cco").join("runs");

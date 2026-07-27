@@ -1,7 +1,7 @@
 //! Desktop/CLI settings subset of Config.
 //!
 //! [INPUT]: Config · SettingsUpdate
-//! [OUTPUT]: get_settings · set_settings · SettingsView（H4 failover · 系统收尾 post_inspect/post_git_push/post_open_pr · planner_critic_enabled）
+//! [OUTPUT]: get_settings · set_settings · SettingsView（H4 failover · 费用优选 cost_* · 系统收尾 · planner_critic · browser）
 //! [POS]: services 子模块
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/services/CLAUDE.md
 
@@ -46,6 +46,18 @@ pub struct SettingsView {
     pub permission_mode: String,
     /// 设置页只读说明：无人 worker 必须可写，否则任务会假完成。
     pub permission_mode_note: String,
+    /// 网页自动化总开关（`config.browser.enabled`；也可 env `CCO_BROWSER_ENABLED`）。
+    pub browser_enabled: bool,
+    /// 设置页只读说明：截图/冒烟/抓取；默认关。
+    pub browser_note: String,
+    /// P0：still-default 任务按 role→tier 选更便宜 CLI。
+    pub cost_route_enabled: bool,
+    /// P1：失败后先升档再走 failover_order。
+    pub cost_escalate_enabled: bool,
+    /// P3：标题/正文/标签启发式微调档位（默认关）。
+    pub cost_intent_enabled: bool,
+    /// 设置页只读：费用优选说明。
+    pub cost_route_note: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -68,6 +80,11 @@ pub struct SettingsUpdate {
     pub effort: Option<String>,
     /// bypassPermissions | dontAsk | acceptEdits | default（及常见别名）
     pub permission_mode: Option<String>,
+    /// 网页自动化总开关 → `config.browser.enabled`
+    pub browser_enabled: Option<bool>,
+    pub cost_route_enabled: Option<bool>,
+    pub cost_escalate_enabled: Option<bool>,
+    pub cost_intent_enabled: Option<bool>,
 }
 
 fn failover_order_note(order: &[String]) -> String {
@@ -105,7 +122,43 @@ pub fn get_settings(config: &Config) -> SettingsView {
         effort: config.default.effort.clone(),
         permission_mode: config.default.permission_mode.clone(),
         permission_mode_note: permission_mode_note(&config.default.permission_mode),
+        browser_enabled: config.browser.is_enabled(),
+        browser_note: if config.browser.is_enabled() {
+            format!(
+                "已开：引擎 {} · 产物 {} · 需本机 Chrome + MCP。任务须 tags 含 browser。",
+                config.browser.effective_engine(),
+                config.browser.out_dir
+            )
+        } else {
+            "默认关。开启后，带 browser 标签的步骤可截图/冒烟/抓取（需 Chrome）。详见 docs/browser-automation-cco.md。"
+                .into()
+        },
+        cost_route_enabled: config.default.cost_route_enabled,
+        cost_escalate_enabled: config.default.cost_escalate_enabled,
+        cost_intent_enabled: config.default.cost_intent_enabled,
+        cost_route_note: cost_route_note(
+            config.default.cost_route_enabled,
+            config.default.cost_escalate_enabled,
+            config.default.cost_intent_enabled,
+        ),
     }
+}
+
+fn cost_route_note(route: bool, escalate: bool, intent: bool) -> String {
+    let mut bits = Vec::new();
+    if route {
+        bits.push("自动选更便宜通道");
+    } else {
+        bits.push("已关自动选通道");
+    }
+    if escalate {
+        bits.push("失败可升档");
+    }
+    if intent {
+        bits.push("意图微调已开");
+    }
+    bits.push("你指定的通道不动");
+    bits.join(" · ")
 }
 
 fn permission_mode_note(mode: &str) -> String {
@@ -192,6 +245,18 @@ pub fn set_settings(config: &mut Config, update: SettingsUpdate) -> Result<()> {
             config.default.permission_mode = n;
         }
     }
+    if let Some(v) = update.browser_enabled {
+        config.browser.enabled = v;
+    }
+    if let Some(v) = update.cost_route_enabled {
+        config.default.cost_route_enabled = v;
+    }
+    if let Some(v) = update.cost_escalate_enabled {
+        config.default.cost_escalate_enabled = v;
+    }
+    if let Some(v) = update.cost_intent_enabled {
+        config.default.cost_intent_enabled = v;
+    }
     config.save()?;
     Ok(())
 }
@@ -240,11 +305,95 @@ mod tests {
                 planner_critic_enabled: None,
                 effort: None,
                 permission_mode: Some("dontAsk".into()),
+                browser_enabled: None,
+                cost_route_enabled: None,
+                cost_escalate_enabled: None,
+                cost_intent_enabled: Some(true),
             },
         )
         .unwrap();
         assert_eq!(cfg.default.permission_mode, "dontAsk");
+        assert!(cfg.default.cost_intent_enabled);
+    }
+
+    #[test]
+    fn cost_route_defaults_and_settable() {
+        let mut cfg = Config::default();
+        let v = get_settings(&cfg);
+        assert!(v.cost_route_enabled);
+        assert!(v.cost_escalate_enabled);
+        assert!(!v.cost_intent_enabled);
+        assert!(v.cost_route_note.contains("便宜"));
+        set_settings(
+            &mut cfg,
+            SettingsUpdate {
+                poll_interval_secs: None,
+                default_provider: None,
+                default_mode: None,
+                max_parallel: None,
+                retry_max: None,
+                stall_secs: None,
+                failover_enabled: None,
+                fallback_extra_attempts: None,
+                failover_order: None,
+                post_inspect_enabled: None,
+                post_git_push_enabled: None,
+                post_open_pr_enabled: None,
+                planner_critic_enabled: None,
+                effort: None,
+                permission_mode: None,
+                browser_enabled: None,
+                cost_route_enabled: Some(false),
+                cost_escalate_enabled: Some(false),
+                cost_intent_enabled: Some(true),
+            },
+        )
+        .unwrap();
+        assert!(!cfg.default.cost_route_enabled);
+        assert!(!cfg.default.cost_escalate_enabled);
+        assert!(cfg.default.cost_intent_enabled);
         let v2 = get_settings(&cfg);
-        assert!(v2.permission_mode_note.contains("假完成") || v2.permission_mode_note.contains("拒绝"));
+        assert!(!v2.cost_route_enabled);
+        assert!(!v2.cost_escalate_enabled);
+        assert!(v2.cost_intent_enabled);
+        assert!(
+            v2.cost_route_note.contains("已关") || v2.cost_route_note.contains("意图"),
+            "note={}",
+            v2.cost_route_note
+        );
+    }
+
+    #[test]
+    fn browser_enabled_roundtrip() {
+        let mut cfg = Config::default();
+        assert!(!get_settings(&cfg).browser_enabled);
+        set_settings(
+            &mut cfg,
+            SettingsUpdate {
+                poll_interval_secs: None,
+                default_provider: None,
+                default_mode: None,
+                max_parallel: None,
+                retry_max: None,
+                stall_secs: None,
+                failover_enabled: None,
+                fallback_extra_attempts: None,
+                failover_order: None,
+                post_inspect_enabled: None,
+                post_git_push_enabled: None,
+                post_open_pr_enabled: None,
+                planner_critic_enabled: None,
+                effort: None,
+                permission_mode: None,
+                browser_enabled: Some(true),
+                cost_route_enabled: None,
+                cost_escalate_enabled: None,
+                cost_intent_enabled: None,
+            },
+        )
+        .unwrap();
+        assert!(cfg.browser.enabled);
+        assert!(get_settings(&cfg).browser_enabled);
+        assert!(get_settings(&cfg).browser_note.contains("已开") || get_settings(&cfg).browser_note.contains("引擎"));
     }
 }

@@ -155,6 +155,26 @@ impl PlanIR {
                 );
             }
         }
+
+        // ── 2b. scrape (+ browser) must declare writable scope for fill-back ──
+        // Soft-ish hard error only when browser+scrape (outbound write-back).
+        use super::risk::{task_has_browser_tag, task_has_scrape_tag};
+        for t in &self.tasks {
+            if !task_has_scrape_tag(&t.tags) || !task_has_browser_tag(&t.tags) {
+                continue;
+            }
+            let paths = t
+                .scope
+                .as_ref()
+                .map(|s| s.paths.as_slice())
+                .unwrap_or(&[]);
+            if paths.is_empty() {
+                bail!(
+                    "task {}: browser+scrape 须填写 scope.paths（抓取结果写入的白名单路径）；见 docs/browser-automation-cco.md",
+                    t.id
+                );
+            }
+        }
         // Same-wave = neither task is a transitive ancestor of the other.
         let ancestors = transitive_ancestors(&self.tasks);
         for i in 0..implements.len() {

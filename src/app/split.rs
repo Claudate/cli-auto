@@ -112,7 +112,7 @@ pub fn confirm_materialize(
     let route_report = override_report.as_ref().or(Some(&soft_report));
     // CLI --provider / --force-provider is last write → skip cost auto on those tasks' path.
     let skip_cost = patches.provider.is_some() || patches.force_provider.is_some();
-    let (run_id, st, ir) = crate::app::run::materialize_run_with_route_opts(
+    let (run_id, st, ir, cost_line) = crate::app::run::materialize_run_with_route_opts(
         config,
         job.project.clone(),
         &ir,
@@ -122,7 +122,8 @@ pub fn confirm_materialize(
         },
     )?;
     mark_confirmed(config, job_id, &run_id, &ir)?;
-    Ok((run_id, st, ir, fill_msg))
+    // Prefer explicit fill summary; else cost-route desk one-liner.
+    Ok((run_id, st, ir, fill_msg.or(cost_line)))
 }
 
 /// Start a Mode B plan job (parse | fake | ai).
@@ -346,7 +347,7 @@ mod tests {
         // Soft job defaults (fake) then materialize with report.
         let report =
             crate::domain::worker::apply_worker_defaults(&mut ir, "fake", "print");
-        let (_run_id, st, _out) = crate::app::run::materialize_run_with_route(
+        let (_run_id, st, _out, _) = crate::app::run::materialize_run_with_route(
             &cfg,
             project,
             &ir,

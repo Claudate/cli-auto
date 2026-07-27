@@ -507,5 +507,34 @@ mod tests {
             "browser marker duplicated: {sys}"
         );
     }
-}
 
+    #[test]
+    fn scrape_without_scope_fails_validate() {
+        let mut t = task("sc1", Some(TaskRole::Implement), &[]);
+        t.tags = vec!["browser".into(), "scrape".into()];
+        t.scope = Some(TaskScope {
+            paths: vec![],
+            readonly: vec![],
+            forbid: vec![],
+        });
+        let ir = plan(vec![t]);
+        let err = ir.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("scrape") || err.contains("scope"),
+            "unexpected: {err}"
+        );
+    }
+
+    #[test]
+    fn scrape_with_scope_validates() {
+        let mut t = task("sc1", Some(TaskRole::Implement), &[]);
+        t.tags = vec!["browser".into(), "scrape".into()];
+        t.scope = Some(TaskScope {
+            paths: vec!["content/**".into()],
+            readonly: vec![],
+            forbid: vec![],
+        });
+        let ir = plan(vec![t]);
+        ir.validate().expect("scrape with scope ok");
+    }
+}

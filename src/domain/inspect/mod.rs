@@ -18,12 +18,16 @@ mod classify;
 mod gate;
 mod gate_doc;
 mod parse;
+mod residual;
 mod types;
 
 pub use classify::{
-    all_blocking_are_docs_closeout, classify_kind, demote_residual_evidence_issues,
-    effective_blocking_count, gate_counts_after_residual_demote, is_docs_closeout_issue,
-    is_residual_evidence_gap, is_usability_blocking_issue, GapKind, DOCS_CLOSEOUT_PATH_HINTS,
+    all_blocking_are_docs_closeout, classify_kind, is_docs_closeout_issue, GapKind,
+    DOCS_CLOSEOUT_PATH_HINTS,
+};
+pub use residual::{
+    demote_residual_evidence_issues, effective_blocking_count, gate_counts_after_residual_demote,
+    is_residual_evidence_gap, is_usability_blocking_issue,
 };
 pub use gate::{
     can_start_rework, count_blocking_issues, count_residual_issues, gate_candidate_paths,

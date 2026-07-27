@@ -71,6 +71,18 @@ pub fn task_has_scrape_tag(tags: &[String]) -> bool {
         .any(|t| t.trim().eq_ignore_ascii_case("scrape"))
 }
 
+/// Tag `ui-verify` — screenshot / page verify (needs local preview when require_preview).
+pub fn task_has_ui_verify_tag(tags: &[String]) -> bool {
+    tags.iter()
+        .any(|t| t.trim().eq_ignore_ascii_case("ui-verify"))
+}
+
+/// Tag `ui-smoke` — form / main-path smoke.
+pub fn task_has_ui_smoke_tag(tags: &[String]) -> bool {
+    tags.iter()
+        .any(|t| t.trim().eq_ignore_ascii_case("ui-smoke"))
+}
+
 /// Derive risk from task identity + fields (pure).
 ///
 /// Precedence: External > Exec > role/scope Read|WriteLocal.
@@ -302,5 +314,12 @@ mod tests {
             ),
             RiskClass::Exec
         );
+    }
+
+    #[test]
+    fn ui_verify_and_smoke_tag_helpers() {
+        assert!(task_has_ui_verify_tag(&["ui-verify".into()]));
+        assert!(task_has_ui_smoke_tag(&["UI-SMOKE".into()]));
+        assert!(!task_has_ui_verify_tag(&["browser".into()]));
     }
 }

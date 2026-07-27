@@ -48,17 +48,20 @@ pub fn materialize_run(
     project: PathBuf,
     ir: &PlanIR,
 ) -> Result<(String, RunState, PlanIR)> {
-    materialize_run_with_route(config, project, ir, None)
+    let (id, st, ir, _) = materialize_run_with_route(config, project, ir, None)?;
+    Ok((id, st, ir))
 }
 
 /// Same as [`materialize_run`] but applies an optional last-write fill report for
 /// P1-2 `route_source` provenance before the first `run.json` save.
+///
+/// Fourth value: optional cost-route desk/CLI one-liner when P0 rewrote tasks.
 pub fn materialize_run_with_route(
     config: &Config,
     project: PathBuf,
     ir: &PlanIR,
     route_report: Option<&RouteFillReport>,
-) -> Result<(String, RunState, PlanIR)> {
+) -> Result<(String, RunState, PlanIR, Option<String>)> {
     materialize_run_with_route_opts(
         config,
         project,
@@ -76,13 +79,15 @@ pub struct MaterializeRouteOpts {
 }
 
 /// Materialize with explicit cost-route control.
+///
+/// Returns `(run_id, state, ir, cost_summary)` — cost_summary is human one-liner or None.
 pub fn materialize_run_with_route_opts(
     config: &Config,
     project: PathBuf,
     ir: &PlanIR,
     route_report: Option<&RouteFillReport>,
     opts: MaterializeRouteOpts,
-) -> Result<(String, RunState, PlanIR)> {
+) -> Result<(String, RunState, PlanIR, Option<String>)> {
     if !project.is_dir() {
         bail!("项目路径不是目录: {}", project.display());
     }
@@ -135,9 +140,10 @@ pub fn materialize_run_with_route_opts(
     }
     stamp_route_inferred(&mut run_state, &ir);
     // Cost auto last among open-run stamps (overrides soft_fill on rewritten ids).
+    let cost_summary = cost_report.summary_line();
     if !cost_report.changed.is_empty() {
         stamp_cost_route(&mut run_state, &cost_report);
-        if let Some(line) = cost_report.summary_line() {
+        if let Some(ref line) = cost_summary {
             let _ = run_state.event(
                 "cost_route",
                 serde_json::json!({
@@ -155,7 +161,7 @@ pub fn materialize_run_with_route_opts(
     if let Ok(body) = serde_json::to_string_pretty(&checklist) {
         let _ = std::fs::write(&checklist_path, body);
     }
-    Ok((run_id, run_state, ir))
+    Ok((run_id, run_state, ir, cost_summary))
 }
 
 /// Apply Claude reasoning effort onto task `provider_opts`.
@@ -439,7 +445,7 @@ mod tests {
         // Make must explicit codex, leave others on default fake.
         ir.tasks[0].provider = "codex".into();
         let report = apply_route_fill(&mut ir, "fake", RouteFillMode::Soft).unwrap();
-        let (_run_id, st, _out) =
+        let (_run_id, st, _out, _) =
             materialize_run_with_route(&cfg, project, &ir, Some(&report)).unwrap();
         assert_eq!(st.tasks["must"].route_source, Some(RouteSource::Explicit));
         assert_eq!(

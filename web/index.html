@@ -879,6 +879,13 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                     </span>
                     <input id="s-planner-critic" type="checkbox" />
                   </label>
+                  <label class="settings-row" title="开启后，带 browser 标签的步骤可截图/冒烟/抓取（需本机 Chrome + MCP）">
+                    <span class="settings-row-text">
+                      <span class="settings-label">网页自动化</span>
+                      <span class="field-hint" id="s-browser-note">默认关 · 截图验收 / 表单冒烟</span>
+                    </span>
+                    <input id="s-browser-enabled" type="checkbox" />
+                  </label>
                 </section>
 
                 <!-- shell-chrome A2：拆分台「调整…」退出第一屏后，能力从这里进 -->
@@ -919,6 +926,27 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                       <span class="field-hint" id="s-failover-order-note">默认与备用通道切换</span>
                     </span>
                     <input id="s-failover-enabled" type="checkbox" checked />
+                  </label>
+                  <label class="settings-row" title="未指定通道时，按角色自动选更便宜的可用 CLI">
+                    <span class="settings-row-text">
+                      <span class="settings-label">自动选更便宜通道</span>
+                      <span class="field-hint" id="s-cost-route-note">你指定的通道不动</span>
+                    </span>
+                    <input id="s-cost-route-enabled" type="checkbox" checked />
+                  </label>
+                  <label class="settings-row" title="失败重试用尽后，先换更强通道再走备用顺序">
+                    <span class="settings-row-text">
+                      <span class="settings-label">失败后升档</span>
+                      <span class="field-hint">默认开 · 需上面「自动选」或混跑</span>
+                    </span>
+                    <input id="s-cost-escalate-enabled" type="checkbox" checked />
+                  </label>
+                  <label class="settings-row" title="按标题/说明关键词微调档位（默认关）">
+                    <span class="settings-row-text">
+                      <span class="settings-label">按意图微调档位</span>
+                      <span class="field-hint">默认关 · 错别字更便宜、架构更强</span>
+                    </span>
+                    <input id="s-cost-intent-enabled" type="checkbox" />
                   </label>
                 </section>
 

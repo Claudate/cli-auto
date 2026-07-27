@@ -209,6 +209,18 @@ export async function loadSettings() {
       $("#s-failover-enabled").checked = s.failover_enabled !== false;
     }
     // keep short static #s-failover-order-note; long DTO stays for CLI/docs
+    if ($("#s-cost-route-enabled")) {
+      $("#s-cost-route-enabled").checked = s.cost_route_enabled !== false;
+    }
+    if ($("#s-cost-escalate-enabled")) {
+      $("#s-cost-escalate-enabled").checked = s.cost_escalate_enabled !== false;
+    }
+    if ($("#s-cost-intent-enabled")) {
+      $("#s-cost-intent-enabled").checked = !!s.cost_intent_enabled;
+    }
+    if ($("#s-cost-route-note") && s.cost_route_note) {
+      $("#s-cost-route-note").textContent = String(s.cost_route_note);
+    }
     if ($("#s-post-inspect")) {
       $("#s-post-inspect").checked = !!s.post_inspect_enabled;
     }
@@ -220,6 +232,12 @@ export async function loadSettings() {
     }
     if ($("#s-planner-critic")) {
       $("#s-planner-critic").checked = !!s.planner_critic_enabled;
+    }
+    if ($("#s-browser-enabled")) {
+      $("#s-browser-enabled").checked = !!s.browser_enabled;
+    }
+    if ($("#s-browser-note") && s.browser_note) {
+      $("#s-browser-note").textContent = String(s.browser_note);
     }
     // UI keeps short static copy under #s-post-tasks-note; do not paste long DTO note.
     if ($("#s-flow-fun") && typeof window.flowFunEnabled === "function") {
@@ -413,6 +431,14 @@ export async function saveSettings() {
   const plannerCriticEnabled = plannerCriticEl
     ? !!plannerCriticEl.checked
     : undefined;
+  const browserEl = $("#s-browser-enabled");
+  const browserEnabled = browserEl ? !!browserEl.checked : undefined;
+  const costRouteEl = $("#s-cost-route-enabled");
+  const costRouteEnabled = costRouteEl ? !!costRouteEl.checked : undefined;
+  const costEscEl = $("#s-cost-escalate-enabled");
+  const costEscalateEnabled = costEscEl ? !!costEscEl.checked : undefined;
+  const costIntentEl = $("#s-cost-intent-enabled");
+  const costIntentEnabled = costIntentEl ? !!costIntentEl.checked : undefined;
   const fontVal = parseInt($("#s-log-font")?.value, 10) || 14;
   const status = $("#s-save-status");
   if (!pollVal || pollVal < 1 || pollVal > 60) {
@@ -481,6 +507,18 @@ export async function saveSettings() {
     if (plannerCriticEnabled !== undefined) {
       update.planner_critic_enabled = plannerCriticEnabled;
     }
+    if (browserEnabled !== undefined) {
+      update.browser_enabled = browserEnabled;
+    }
+    if (costRouteEnabled !== undefined) {
+      update.cost_route_enabled = costRouteEnabled;
+    }
+    if (costEscalateEnabled !== undefined) {
+      update.cost_escalate_enabled = costEscalateEnabled;
+    }
+    if (costIntentEnabled !== undefined) {
+      update.cost_intent_enabled = costIntentEnabled;
+    }
     const updated = await settingsApi.setSettings(update);
     if (typeof window.applyLogFontSize === "function") {
       window.applyLogFontSize(fontVal);
@@ -531,6 +569,30 @@ export async function saveSettings() {
       typeof updated.planner_critic_enabled === "boolean"
     ) {
       $("#s-planner-critic").checked = updated.planner_critic_enabled;
+    }
+    if ($("#s-browser-enabled") && typeof updated.browser_enabled === "boolean") {
+      $("#s-browser-enabled").checked = updated.browser_enabled;
+    }
+    if ($("#s-cost-route-enabled") && typeof updated.cost_route_enabled === "boolean") {
+      $("#s-cost-route-enabled").checked = updated.cost_route_enabled;
+    }
+    if (
+      $("#s-cost-escalate-enabled") &&
+      typeof updated.cost_escalate_enabled === "boolean"
+    ) {
+      $("#s-cost-escalate-enabled").checked = updated.cost_escalate_enabled;
+    }
+    if (
+      $("#s-cost-intent-enabled") &&
+      typeof updated.cost_intent_enabled === "boolean"
+    ) {
+      $("#s-cost-intent-enabled").checked = updated.cost_intent_enabled;
+    }
+    if ($("#s-cost-route-note") && updated?.cost_route_note) {
+      $("#s-cost-route-note").textContent = String(updated.cost_route_note);
+    }
+    if ($("#s-browser-note") && updated?.browser_note) {
+      $("#s-browser-note").textContent = String(updated.browser_note);
     }
     if (
       $("#s-post-git-push") &&

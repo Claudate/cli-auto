@@ -97,6 +97,7 @@ pub fn prepare_scheduler(
         failover_order: config.default.failover_order.clone(),
         cost_escalate_enabled: config.default.cost_escalate_enabled,
         browser: config.browser.clone(),
+        provider_unhealthy: Vec::new(),
     })
 }
 

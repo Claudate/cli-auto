@@ -316,7 +316,7 @@ pub fn start_run_from_plan_with_route(
     route_report: Option<&crate::domain::worker::RouteFillReport>,
 ) -> Result<String> {
     // Single materialize path (Ensure closeout + checklist + optional drop + route stamp).
-    let (run_id, run_state, ir) =
+    let (run_id, run_state, ir, _cost_line) =
         crate::app::run::materialize_run_with_route(&config, project, ir, route_report)?;
     let run_dir = run_state.run_dir.clone();
 
@@ -387,6 +387,7 @@ pub fn start_run_from_plan_with_route(
                 failover_order,
                 cost_escalate_enabled,
                 browser: browser_cfg,
+                provider_unhealthy: Vec::new(),
             };
             match sched.run().await {
                 Ok(status) => {
@@ -578,6 +579,7 @@ fn spawn_resume(config: Config, run_id: &str, only_task: Option<String>) -> Resu
                 failover_order,
                 cost_escalate_enabled,
                 browser: browser_cfg,
+                provider_unhealthy: Vec::new(),
             };
             let status = sched.run().await;
             if let Ok(st) = RunState::load(&runs_dir.join(&rid)) {
