@@ -110,6 +110,7 @@
 | **repo digest** | host 只读浅览（顶层 + 计划点名路径是否存在）；注入 split user_prompt；失败空串；**不**占任务图、**不** spawn worker |
 | **风险 chip** | 任务卡展示 `RiskClass`：只读 / 改本地 / 跑命令 / 会外发（domain 纯函数派生）；**不是** `permission_mode` 字符串 |
 | **确认条** | 默认强调「会改本地 · 默认不推远端」；已勾选 push/PR 时 CTA 可标「含外发」；仍唯一 `confirm_start` |
+| **执行观察 CCO_STEP** | implement 类 handoff 要求 `CCO_STEP todo/start/done`；run 卡从 log_tail 解析小勾选；**观察层**，不进 depends_on / SQLite 新图 |
 
 防卡死靠超时 / 取消 / 僵尸收尸，**不用假拆当分母**。
 

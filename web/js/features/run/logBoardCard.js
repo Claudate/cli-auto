@@ -23,6 +23,52 @@ const isLiveStatus = host.isLiveStatus;
 const callG = host.callG;
 
 /**
+ * Parse observation-only CCO_STEP markers from worker log text.
+ * Returns HTML checklist (max 7) or empty string. Not a scheduler graph.
+ */
+export function formatCcoStepProgress(logText) {
+  const text = String(logText || "");
+  if (!text.includes("CCO_STEP")) return "";
+  /** @type {Map<string, "todo"|"start"|"done">} */
+  const map = new Map();
+  const order = [];
+  const re = /CCO_STEP\s+(todo|start|done)\s*:\s*(.+)/gi;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const kind = String(m[1] || "").toLowerCase();
+    const label = String(m[2] || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 48);
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (!map.has(key)) order.push(key);
+    const prev = map.get(key);
+    if (kind === "done" || prev === "done") map.set(key, "done");
+    else if (kind === "start" || prev === "start") map.set(key, "start");
+    else map.set(key, "todo");
+  }
+  if (!order.length) return "";
+  const items = order.slice(0, 7).map((key) => {
+    const st = map.get(key) || "todo";
+    const label = key.length > 40 ? key.slice(0, 38) + "…" : key;
+    const mark = st === "done" ? "✓" : st === "start" ? "→" : "·";
+    const cls =
+      st === "done"
+        ? "is-done"
+        : st === "start"
+          ? "is-start"
+          : "is-todo";
+    return `<li class="cco-step-item ${cls}"><span class="cco-step-mark">${mark}</span> ${esc(
+      label
+    )}</li>`;
+  });
+  return `<ul class="cco-step-list" title="本步内部进度（观察）">${items.join(
+    ""
+  )}</ul>`;
+}
+
+/**
  * H3 / R2 stall strip — human first; threshold as secondary detail.
  */
 export function stallStripText(t) {
@@ -286,9 +332,12 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
           .slice(0, 5)
           .map((l) => esc(l))
           .join("<br/>");
-        return body
+        // Observation-only: parse CCO_STEP markers from log_tail (not a second DAG).
+        const stepHtml = formatCcoStepProgress(t.log_tail || t.logTail || "");
+        const humanBlock = body
           ? `<div class="cli-window-human muted" data-human="${esc(t.task_id)}">${body}</div>`
           : "";
+        return humanBlock + stepHtml;
       })()}
       <div class="cli-window-body log-console term-mode" data-log="${esc(t.task_id)}" ${
         expanded ? "" : "hidden"

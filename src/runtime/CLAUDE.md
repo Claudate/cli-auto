@@ -19,7 +19,7 @@ handoff/: **A1-5 多文件适配器**（单文件 ≤600；实现 `ports::Handof
   · paths.rs: resolve_output_path · missing_outputs · write_task_diff
   · inspect_io.rs: read_inspect_verdict/issues · collect · system_push_inspect_gate（调 domain 纯规则）
   · lifecycle.rs: write_shell · on_task_start/end · on_run_end
-  · prefix.rs: build_prompt_prefix · with_handoff_prefix（**H3** integrate/inspect 拼验纪律 3 条 · 无自动 merge）
+  · prefix.rs: build_prompt_prefix · with_handoff_prefix（**H3** integrate/inspect 拼验纪律 3 条 · 无自动 merge · **CCO_STEP** implement 中步观察标记）
   · rework.rs: build_rework_plan（prompt 补 commit）· accept_residual · inspect_loop_view（**auto_rework_run_id / ensure_phase / docs_closeout_only**）· count_rework_rounds
   · store.rs: FsHandoffStore
   · tests.rs: 单元测（原 monolith 迁入）

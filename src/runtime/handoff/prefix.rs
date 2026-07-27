@@ -56,6 +56,14 @@ pub fn build_prompt_prefix(task: &TaskIR, run_dir: &Path) -> String {
     body.push_str(&format!("全局账本: {ledger}\n"));
     body.push_str(&format!("你的 outputs: {outputs}\n"));
     body.push_str("完成后最后一行: CCO_DONE ok\n");
+    // Observation-only mid-step progress (desktop parses these lines; not a second DAG).
+    if wants_step_progress(task) {
+        body.push_str("\n## 进度标记（观察用 · 必遵守）\n");
+        body.push_str("1. 开工先列 3–7 条短清单（来自【自测】/怎样算做完），每条一行：`CCO_STEP todo: 简述`\n");
+        body.push_str("2. 同一时刻只推进一条：开始时 `CCO_STEP start: 简述`，完成时 `CCO_STEP done: 简述`\n");
+        body.push_str("3. 标记写在 stdout 普通文本行即可；不要为此改业务代码结构\n");
+        body.push_str("4. 全部小步完成后仍以最后一行 `CCO_DONE ok` 收尾\n");
+    }
     // H3-2: shallow discipline for integrate/inspect (no auto git merge).
     if matches!(
         task.role,
@@ -145,6 +153,22 @@ pub fn build_prompt_prefix(task: &TaskIR, run_dir: &Path) -> String {
     body
 }
 
+/// Implement / Integrate / role-unset business tasks get mid-step CCO_STEP markers.
+/// Scout / Inspect / Closeout / system post skip (different job shape).
+fn wants_step_progress(task: &TaskIR) -> bool {
+    if task.id.starts_with("sys-post-") || task.id == "sys-closeout" {
+        return false;
+    }
+    match task.role {
+        Some(crate::plan::TaskRole::Scout)
+        | Some(crate::plan::TaskRole::Inspect)
+        | Some(crate::plan::TaskRole::Closeout) => false,
+        Some(crate::plan::TaskRole::Implement)
+        | Some(crate::plan::TaskRole::Integrate)
+        | None => true,
+    }
+}
+
 /// Prepend handoff summary to the business prompt. Idempotent if already wrapped.
 ///
 /// On missing/corrupt handoff: still inject identity shell (never panics).
@@ -157,5 +181,49 @@ pub fn with_handoff_prefix(prompt: &str, task: &TaskIR, run_dir: &Path) -> Strin
         prefix
     } else {
         format!("{prefix}\n{prompt}")
+    }
+}
+
+#[cfg(test)]
+mod step_progress_tests {
+    use super::*;
+    use crate::plan::{TaskIR, TaskRole};
+
+    fn bare(id: &str, role: Option<TaskRole>) -> TaskIR {
+        TaskIR {
+            id: id.into(),
+            title: id.into(),
+            depends_on: vec![],
+            group: None,
+            provider: "fake".into(),
+            mode: "print".into(),
+            prompt: "x".into(),
+            verify_cmd: None,
+            acceptance: None,
+            timeout_secs: None,
+            worktree: None,
+            provider_opts: serde_json::json!({}),
+            optional: false,
+            include: true,
+            role,
+            scope: None,
+            outputs: vec![],
+            tags: vec![],
+        }
+    }
+
+    #[test]
+    fn implement_gets_cco_step_contract() {
+        let t = bare("t1", Some(TaskRole::Implement));
+        let p = build_prompt_prefix(&t, Path::new("/tmp/no-run"));
+        assert!(p.contains("CCO_STEP"), "{p}");
+        assert!(p.contains("CCO_DONE ok"));
+    }
+
+    #[test]
+    fn inspect_skips_cco_step_contract() {
+        let t = bare("sys-post-inspect", Some(TaskRole::Inspect));
+        let p = build_prompt_prefix(&t, Path::new("/tmp/no-run"));
+        assert!(!p.contains("CCO_STEP todo"), "{p}");
     }
 }

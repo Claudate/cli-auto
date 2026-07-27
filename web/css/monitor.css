@@ -1075,6 +1075,35 @@ button, .linkish, .icon-btn, .filter-chip, .project-item, .plan-item, .task-chip
   border-bottom: 1px solid var(--border);
 }
 
+/* Observation-only CCO_STEP checklist (not a second scheduler graph) */
+.cco-step-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem 0.65rem 0.45rem;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted, #6b7280);
+}
+.cco-step-item {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+.cco-step-item.is-done {
+  color: var(--ok, #1b7a3d);
+}
+.cco-step-item.is-start {
+  color: var(--text, #1a1a1a);
+  font-weight: 600;
+}
+.cco-step-mark {
+  flex-shrink: 0;
+  width: 0.9rem;
+  text-align: center;
+  font-weight: 700;
+}
+
 /* C3: finished run → report mode (collapse KPI wall, grow result desk) */
 #result-card.is-result .task-dash-kpis .kpi-card {
   display: none;
