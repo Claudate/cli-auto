@@ -48,6 +48,10 @@ pub struct SettingsView {
     pub permission_mode_note: String,
     /// 网页自动化总开关（`config.browser.enabled`；也可 env `CCO_BROWSER_ENABLED`）。
     pub browser_enabled: bool,
+    /// `kitewright` | `playwright_mcp`
+    pub browser_engine: String,
+    /// ui-verify 无本机预览时是否启动失败（`config.browser.require_preview`）。
+    pub browser_require_preview: bool,
     /// 设置页只读说明：截图/冒烟/抓取；默认关。
     pub browser_note: String,
     /// P0：still-default 任务按 role→tier 选更便宜 CLI。
@@ -82,6 +86,10 @@ pub struct SettingsUpdate {
     pub permission_mode: Option<String>,
     /// 网页自动化总开关 → `config.browser.enabled`
     pub browser_enabled: Option<bool>,
+    /// `kitewright` | `playwright_mcp`（及别名）
+    pub browser_engine: Option<String>,
+    /// ui-verify 是否要求本机预览 URL
+    pub browser_require_preview: Option<bool>,
     pub cost_route_enabled: Option<bool>,
     pub cost_escalate_enabled: Option<bool>,
     pub cost_intent_enabled: Option<bool>,
@@ -123,10 +131,17 @@ pub fn get_settings(config: &Config) -> SettingsView {
         permission_mode: config.default.permission_mode.clone(),
         permission_mode_note: permission_mode_note(&config.default.permission_mode),
         browser_enabled: config.browser.is_enabled(),
+        browser_engine: config.browser.effective_engine(),
+        browser_require_preview: config.browser.require_preview,
         browser_note: if config.browser.is_enabled() {
             format!(
-                "已开：引擎 {} · 产物 {} · 需本机 Chrome + MCP。任务须 tags 含 browser。",
+                "已开：引擎 {} · 预览门闩 {} · 产物 {} · 需 Chrome + MCP；步骤 tags 含 browser。Claude 可注入 MCP；其他通道请在本机 CLI 自行配置。",
                 config.browser.effective_engine(),
+                if config.browser.require_preview {
+                    "开"
+                } else {
+                    "关"
+                },
                 config.browser.out_dir
             )
         } else {
@@ -248,6 +263,12 @@ pub fn set_settings(config: &mut Config, update: SettingsUpdate) -> Result<()> {
     if let Some(v) = update.browser_enabled {
         config.browser.enabled = v;
     }
+    if let Some(e) = update.browser_engine {
+        config.browser.apply_engine(&e);
+    }
+    if let Some(v) = update.browser_require_preview {
+        config.browser.require_preview = v;
+    }
     if let Some(v) = update.cost_route_enabled {
         config.default.cost_route_enabled = v;
     }
@@ -306,6 +327,8 @@ mod tests {
                 effort: None,
                 permission_mode: Some("dontAsk".into()),
                 browser_enabled: None,
+                browser_engine: None,
+                browser_require_preview: None,
                 cost_route_enabled: None,
                 cost_escalate_enabled: None,
                 cost_intent_enabled: Some(true),
@@ -343,6 +366,8 @@ mod tests {
                 effort: None,
                 permission_mode: None,
                 browser_enabled: None,
+                browser_engine: None,
+                browser_require_preview: None,
                 cost_route_enabled: Some(false),
                 cost_escalate_enabled: Some(false),
                 cost_intent_enabled: Some(true),
@@ -386,6 +411,8 @@ mod tests {
                 effort: None,
                 permission_mode: None,
                 browser_enabled: Some(true),
+                browser_engine: None,
+                browser_require_preview: None,
                 cost_route_enabled: None,
                 cost_escalate_enabled: None,
                 cost_intent_enabled: None,
@@ -395,5 +422,43 @@ mod tests {
         assert!(cfg.browser.enabled);
         assert!(get_settings(&cfg).browser_enabled);
         assert!(get_settings(&cfg).browser_note.contains("已开") || get_settings(&cfg).browser_note.contains("引擎"));
+    }
+
+    #[test]
+    fn browser_engine_and_require_preview_settable() {
+        let mut cfg = Config::default();
+        set_settings(
+            &mut cfg,
+            SettingsUpdate {
+                poll_interval_secs: None,
+                default_provider: None,
+                default_mode: None,
+                max_parallel: None,
+                retry_max: None,
+                stall_secs: None,
+                failover_enabled: None,
+                fallback_extra_attempts: None,
+                failover_order: None,
+                post_inspect_enabled: None,
+                post_git_push_enabled: None,
+                post_open_pr_enabled: None,
+                planner_critic_enabled: None,
+                effort: None,
+                permission_mode: None,
+                browser_enabled: Some(true),
+                browser_engine: Some("playwright".into()),
+                browser_require_preview: Some(false),
+                cost_route_enabled: None,
+                cost_escalate_enabled: None,
+                cost_intent_enabled: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(cfg.browser.engine, "playwright_mcp");
+        assert!(!cfg.browser.require_preview);
+        assert!(cfg.browser.args.iter().any(|a| a.contains("playwright")));
+        let v = get_settings(&cfg);
+        assert!(v.browser_engine.contains("playwright"));
+        assert!(!v.browser_require_preview);
     }
 }

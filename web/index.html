@@ -886,6 +886,23 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                     </span>
                     <input id="s-browser-enabled" type="checkbox" />
                   </label>
+                  <label class="settings-row" title="默认 Kitewright（轻量 CDP）；Playwright MCP 更成熟">
+                    <span class="settings-row-text">
+                      <span class="settings-label">网页引擎</span>
+                      <span class="field-hint">仅在开启网页自动化后生效</span>
+                    </span>
+                    <select id="s-browser-engine" class="settings-select">
+                      <option value="kitewright">Kitewright（默认）</option>
+                      <option value="playwright_mcp">Playwright MCP</option>
+                    </select>
+                  </label>
+                  <label class="settings-row" title="截图验收步骤：没有本机预览地址时直接失败，避免假装通过">
+                    <span class="settings-row-text">
+                      <span class="settings-label">验收须有预览</span>
+                      <span class="field-hint">ui-verify 无预览则失败</span>
+                    </span>
+                    <input id="s-browser-require-preview" type="checkbox" checked />
+                  </label>
                 </section>
 
                 <!-- shell-chrome A2：拆分台「调整…」退出第一屏后，能力从这里进 -->

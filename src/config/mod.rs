@@ -91,6 +91,44 @@ impl BrowserConfig {
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| self.engine.clone())
     }
+
+    /// Normalize UI/config engine token → `kitewright` | `playwright_mcp`.
+    pub fn normalize_engine(raw: &str) -> Option<String> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "kitewright" | "kite" | "chromiumoxide" => Some("kitewright".into()),
+            "playwright" | "playwright_mcp" | "playwright-mcp" | "pw" => {
+                Some("playwright_mcp".into())
+            }
+            _ => None,
+        }
+    }
+
+    /// Apply engine choice and keep `command`/`args` aligned with defaults when
+    /// still on the previous engine's stock launcher.
+    pub fn apply_engine(&mut self, engine: &str) {
+        let Some(norm) = Self::normalize_engine(engine) else {
+            return;
+        };
+        self.engine = norm.clone();
+        match norm.as_str() {
+            "playwright_mcp" => {
+                let on_kite_stock = self.command == "npx"
+                    && self.args.iter().any(|a| a.contains("kitewright"));
+                if on_kite_stock || self.args.is_empty() {
+                    self.command = "npx".into();
+                    self.args = vec!["-y".into(), "@playwright/mcp".into()];
+                }
+            }
+            _ => {
+                let on_pw_stock = self.command == "npx"
+                    && self.args.iter().any(|a| a.contains("playwright"));
+                if on_pw_stock || self.args.is_empty() {
+                    self.command = "npx".into();
+                    self.args = vec!["-y".into(), "@kitewright/mcp".into()];
+                }
+            }
+        }
+    }
 }
 
 /// A project the user has explicitly allowed / pinned for the app.

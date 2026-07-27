@@ -98,15 +98,18 @@ Inspect：可读 `.cco-out/browser/**` 作证据；**仍不改业务源码**。
 | **W2** | scrape 模板 · risk 会外发 · scope 强制 | ✅（risk tag + 文档；模板随 prompts） |
 | **W3** | ui-smoke 示例 · live `browser_evidence` · 结果台「网页验收证据」缩略/摘录 | ✅ |
 | **W3+** | 设置页「网页自动化」开关 · ui-verify 无预览 soft-fail · scrape 缺 scope validate | ✅ |
+| **W3++** | 设置引擎/预览门闩 · 结果台点图放大/打开文件 · 非 Claude soft env 提示 | ✅ |
 
-### W3+ 行为细则
+### W3+ / W3++ 行为细则
 
 | 项 | 行为 |
 |----|------|
-| 设置 | 高级 → **网页自动化** 勾选 ↔ `config.browser.enabled`（保存写盘） |
+| 设置 | 高级 → **网页自动化** · **网页引擎**（kitewright / playwright_mcp）· **验收须有预览** |
 | ui-verify 无预览 | `enabled` 且 `require_preview` 且 tags 含 `browser`+`ui-verify` 且无 `CCO_PREVIEW_URL` → **任务启动失败**（人话错误，不 spawn worker） |
 | scrape 缺 scope | tags 含 `browser`+`scrape` 且 `scope.paths` 空 → **plan validate 失败**（须写写入白名单） |
 | ui-smoke | 不强制 preview 门闩（可关 require_preview 后仅靠 prompt） |
+| 结果台 | 截图可点放大；「打开文件」走 `open_path` |
+| 非 Claude | 仍写 env + browser 纪律 prompt；**不**注入 `--mcp-config`（需本机 CLI 自配 MCP 或改用 claude） |
 
 ---
 

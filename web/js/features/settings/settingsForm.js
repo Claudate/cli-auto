@@ -236,6 +236,15 @@ export async function loadSettings() {
     if ($("#s-browser-enabled")) {
       $("#s-browser-enabled").checked = !!s.browser_enabled;
     }
+    if ($("#s-browser-engine") && s.browser_engine) {
+      const eng = String(s.browser_engine).toLowerCase();
+      $("#s-browser-engine").value =
+        eng.includes("playwright") ? "playwright_mcp" : "kitewright";
+    }
+    if ($("#s-browser-require-preview")) {
+      $("#s-browser-require-preview").checked =
+        s.browser_require_preview !== false;
+    }
     if ($("#s-browser-note") && s.browser_note) {
       $("#s-browser-note").textContent = String(s.browser_note);
     }
@@ -433,6 +442,14 @@ export async function saveSettings() {
     : undefined;
   const browserEl = $("#s-browser-enabled");
   const browserEnabled = browserEl ? !!browserEl.checked : undefined;
+  const browserEngineEl = $("#s-browser-engine");
+  const browserEngine = browserEngineEl
+    ? String(browserEngineEl.value || "").trim()
+    : undefined;
+  const browserReqPrevEl = $("#s-browser-require-preview");
+  const browserRequirePreview = browserReqPrevEl
+    ? !!browserReqPrevEl.checked
+    : undefined;
   const costRouteEl = $("#s-cost-route-enabled");
   const costRouteEnabled = costRouteEl ? !!costRouteEl.checked : undefined;
   const costEscEl = $("#s-cost-escalate-enabled");
@@ -510,6 +527,12 @@ export async function saveSettings() {
     if (browserEnabled !== undefined) {
       update.browser_enabled = browserEnabled;
     }
+    if (browserEngine === "kitewright" || browserEngine === "playwright_mcp") {
+      update.browser_engine = browserEngine;
+    }
+    if (browserRequirePreview !== undefined) {
+      update.browser_require_preview = browserRequirePreview;
+    }
     if (costRouteEnabled !== undefined) {
       update.cost_route_enabled = costRouteEnabled;
     }
@@ -572,6 +595,17 @@ export async function saveSettings() {
     }
     if ($("#s-browser-enabled") && typeof updated.browser_enabled === "boolean") {
       $("#s-browser-enabled").checked = updated.browser_enabled;
+    }
+    if ($("#s-browser-engine") && updated?.browser_engine) {
+      const eng = String(updated.browser_engine).toLowerCase();
+      $("#s-browser-engine").value =
+        eng.includes("playwright") ? "playwright_mcp" : "kitewright";
+    }
+    if (
+      $("#s-browser-require-preview") &&
+      typeof updated.browser_require_preview === "boolean"
+    ) {
+      $("#s-browser-require-preview").checked = updated.browser_require_preview;
     }
     if ($("#s-cost-route-enabled") && typeof updated.cost_route_enabled === "boolean") {
       $("#s-cost-route-enabled").checked = updated.cost_route_enabled;

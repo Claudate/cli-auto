@@ -132,10 +132,31 @@ pub fn preview_required_missing(
     )
 }
 
+/// Providers that receive host-injected `--mcp-config` (Claude print path).
+pub fn provider_supports_host_mcp(provider: &str) -> bool {
+    matches!(
+        provider.trim().to_ascii_lowercase().as_str(),
+        "claude" | "fake"
+    )
+}
+
+/// When browser is enabled for a non-Claude worker: inject env + prompt only
+/// (no `--mcp-config`). Caller should still prepare out dir.
+pub fn non_claude_browser_hint(provider: &str) -> String {
+    format!(
+        "CCO browser note: provider `{provider}` does not get host MCP inject \
+(Claude-only). Env CCO_PREVIEW_URL / CCO_BROWSER_OUT are set; configure browser \
+MCP on this CLI yourself, or route this step to claude. Evidence still under \
+CCO_BROWSER_OUT."
+    )
+}
+
 /// Apply browser MCP into task provider_opts + collect env (scheduler start).
 ///
-/// No-op when disabled or task lacks `browser` tag.
-/// Errors when ui-verify + require_preview and no preview URL (soft-fail at start).
+/// - Claude/fake + browser tag + enabled → mcp-config + env + system prompt.
+/// - Other providers + browser tag + enabled → env + system prompt + honest note
+///   (no `--mcp-config`; shell CLIs have no host MCP inject path).
+/// - Errors when ui-verify + require_preview and no preview URL.
 pub fn prepare_task_browser(
     cfg: &BrowserConfig,
     task: &mut TaskIR,
@@ -146,30 +167,53 @@ pub fn prepare_task_browser(
     if let Some(msg) = preview_required_missing(cfg, task, preview_url) {
         anyhow::bail!("{msg}");
     }
-    if !should_inject_browser_mcp(cfg, task) {
+    if !cfg.is_enabled() || !task_has_browser_tag(&task.tags) {
         return Ok(vec![]);
     }
-    let mcp_path = write_mcp_config(cfg, task_dir)?;
-    if let Some(obj) = task.provider_opts.as_object_mut() {
-        obj.insert(
-            OPT_MCP_CONFIG.into(),
-            serde_json::json!(mcp_path.to_string_lossy()),
-        );
-        obj.insert(OPT_MCP_STRICT.into(), serde_json::json!(cfg.strict_mcp));
-    } else {
-        task.provider_opts = serde_json::json!({
-            OPT_MCP_CONFIG: mcp_path.to_string_lossy(),
-            OPT_MCP_STRICT: cfg.strict_mcp,
-        });
-    }
-    // Ensure browser system prompt if materialize ran without tags (defensive).
+
+    let env = browser_env_pairs(cfg, project_root, &task.id, preview_url);
     inject_browser_opts_prompt(&mut task.provider_opts);
-    Ok(browser_env_pairs(
-        cfg,
-        project_root,
-        &task.id,
-        preview_url,
-    ))
+
+    if provider_supports_host_mcp(&task.provider) {
+        let mcp_path = write_mcp_config(cfg, task_dir)?;
+        if let Some(obj) = task.provider_opts.as_object_mut() {
+            obj.insert(
+                OPT_MCP_CONFIG.into(),
+                serde_json::json!(mcp_path.to_string_lossy()),
+            );
+            obj.insert(OPT_MCP_STRICT.into(), serde_json::json!(cfg.strict_mcp));
+        } else {
+            task.provider_opts = serde_json::json!({
+                OPT_MCP_CONFIG: mcp_path.to_string_lossy(),
+                OPT_MCP_STRICT: cfg.strict_mcp,
+            });
+            inject_browser_opts_prompt(&mut task.provider_opts);
+        }
+    } else {
+        // Soft support: do not fail the run; surface capability gap in system prompt.
+        let hint = non_claude_browser_hint(&task.provider);
+        let existing = task
+            .provider_opts
+            .get("append_system_prompt")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if !existing.contains("does not get host MCP inject") {
+            let merged = if existing.trim().is_empty() {
+                hint
+            } else {
+                format!("{existing}\n\n{hint}")
+            };
+            task.provider_opts["append_system_prompt"] = serde_json::json!(merged);
+        }
+        info!(
+            task = %task.id,
+            provider = %task.provider,
+            "browser enabled for non-Claude provider: env only, no mcp-config"
+        );
+    }
+
+    Ok(env)
 }
 
 fn inject_browser_opts_prompt(opts: &mut serde_json::Value) {
@@ -518,5 +562,61 @@ mod tests {
     fn base64_roundtrip_len() {
         let s = encode_base64_std(b"hi");
         assert_eq!(s, "aGk=");
+    }
+
+    #[test]
+    fn non_claude_gets_env_without_mcp_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path();
+        let task_dir = project.join("tasks/sc1");
+        std::fs::create_dir_all(&task_dir).unwrap();
+        let cfg = BrowserConfig {
+            enabled: true,
+            require_preview: false,
+            ..BrowserConfig::default()
+        };
+        let mut task = TaskIR {
+            id: "sc1".into(),
+            title: "s".into(),
+            depends_on: vec![],
+            group: None,
+            provider: "codex".into(),
+            mode: "print".into(),
+            prompt: "p".into(),
+            verify_cmd: None,
+            acceptance: None,
+            timeout_secs: None,
+            worktree: None,
+            provider_opts: serde_json::json!({}),
+            optional: true,
+            include: true,
+            role: None,
+            scope: None,
+            outputs: vec![],
+            tags: vec!["browser".into(), "ui-smoke".into()],
+        };
+        let env = prepare_task_browser(
+            &cfg,
+            &mut task,
+            project,
+            &task_dir,
+            Some("http://127.0.0.1:5173/"),
+        )
+        .unwrap();
+        assert!(env.iter().any(|(k, _)| k == "CCO_BROWSER_OUT"));
+        assert!(task.provider_opts.get("mcp_config").is_none());
+        let sys = task
+            .provider_opts
+            .get("append_system_prompt")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert!(sys.contains("does not get host MCP inject"), "{sys}");
+    }
+
+    #[test]
+    fn provider_supports_host_mcp_claude_only() {
+        assert!(provider_supports_host_mcp("claude"));
+        assert!(provider_supports_host_mcp("fake"));
+        assert!(!provider_supports_host_mcp("codex"));
     }
 }

@@ -273,8 +273,12 @@ export function bindResultView(vm, bridge = {}) {
     // P2-1: plan checklist vs inspect side-by-side (live.verification DTO)
     renderVerificationPanel(live?.verification);
 
-    // W3: browser evidence (shots / smoke / report) — DTO only, no strategy
-    renderBrowserEvidence(live, { $ });
+    // W3: browser evidence (shots / smoke / report) — DTO only; zoom / open via gateway
+    const openPath =
+      typeof g("ccoGateway")?.openPath === "function"
+        ? (p) => g("ccoGateway").openPath(p)
+        : undefined;
+    renderBrowserEvidence(live, { $, openPath });
 
     // 回补/再写/先这样结束/顶栏结束 均不露出；结束本轮用 #btn-log-end-plan
     const btnBack = $("btn-ws-back-chat");
@@ -402,7 +406,13 @@ export function bindResultView(vm, bridge = {}) {
     renderInspectLoopStrip,
     renderInspectAndResult,
     renderVerificationPanel,
-    renderBrowserEvidence: (live) => renderBrowserEvidence(live, { $ }),
+    renderBrowserEvidence: (live) => {
+      const openPath =
+        typeof g("ccoGateway")?.openPath === "function"
+          ? (p) => g("ccoGateway").openPath(p)
+          : undefined;
+      return renderBrowserEvidence(live, { $, openPath });
+    },
     startRework: () => vm.startRework(),
     acceptResidual: () => vm.acceptResidual(),
     finishRound: () => vm.finishRound(),
