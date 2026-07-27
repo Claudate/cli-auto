@@ -7,6 +7,7 @@ smoke.sh: doctor + fake provider 最小冒烟（CCO_STATE_ROOT 隔离）
 check-arch.sh: **架构硬规则门禁**（文件行数 · GIANTS 哨兵 · LEGACY_THICK state.js · gateway/invoke · domain 不依赖 tauri）；默认 warn；`STRICT=1` 可失败
 check-landing-gates.sh: **落地页/营销站门禁**（example.com · 占位邮箱 · **G7 占位图服务/文件名** · 页脚主 CTA · CTA 刷屏 · h1）；说明 `docs/runtime-prompts/landing-gates.md`；默认 FAIL 硬失败、WARN 不失败；`STRICT=1` WARN 也失败；`SKIP_G1=1`/`SKIP_G7=1` 仅显式演示
 clarify-click-smoke.mjs: **澄清相静态冒烟**（opt-text 点击修复 · eventElement · 五槽 pick→brief_ready）；`node scripts/clarify-click-smoke.mjs`；不进默认 CI
+chat-quiz-parse-smoke.mjs: **AI 编号题点选解析**（`**1. 题？**` 加粗标题 · hard-break · 可多选 D 项 · plain 回归）；`node scripts/chat-quiz-parse-smoke.mjs`；不进默认 CI
 claim-boundary-check.mjs: **认领边界**（claim 只 draft/save_plan · 禁 confirm_start/start_run · 黄条不拦 claim · 与 assign 分轨）；W0 出货保留；不进默认 CI
 ensure-v3-cta-smoke.mjs: **Ensure V3 代理冒烟**（失败卡主 CTA=回补并再巡检 · 再跑考官为 ghost）；`node scripts/ensure-v3-cta-smoke.mjs`；**不**替代 wros 人工 V1–V5
 

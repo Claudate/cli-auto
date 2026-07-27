@@ -11,8 +11,10 @@ use anyhow::{bail, Result};
 
 use super::system_ids::is_system_post_task;
 use super::types::{
-    PlanIR, TaskIR, TaskRole, INSPECT_DEFAULT_ALLOWED_TOOLS, INSPECT_DEFAULT_WRITE_SCOPE,
-    INSPECT_SYSTEM_PROMPT, INSPECT_SYSTEM_PROMPT_MARKER, INSPECT_STRIP_TOOLS,
+    PlanIR, TaskIR, TaskRole, IMPLEMENT_USABILITY_SYSTEM_PROMPT,
+    IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER, INSPECT_DEFAULT_ALLOWED_TOOLS,
+    INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_SYSTEM_PROMPT, INSPECT_SYSTEM_PROMPT_MARKER,
+    INSPECT_STRIP_TOOLS,
 };
 use super::optional::normalize_optional_title;
 
@@ -46,9 +48,9 @@ pub fn materialize_selected_tasks(mut ir: PlanIR) -> Result<PlanIR> {
     Ok(ir)
 }
 
-/// Apply per-role default opts / scope after adapter parse (P2-1).
+/// Apply per-role default opts / scope after adapter parse (P2-1 + usability floor).
 ///
-/// Currently only `role: inspect`:
+/// `role: inspect`:
 /// - strip business-mutation tools (`Edit` / `MultiEdit` / `NotebookEdit`) unless
 ///   `provider_opts.allow_business_write: true`
 /// - if `allowed_tools` empty/missing after strip → `INSPECT_DEFAULT_ALLOWED_TOOLS`
@@ -58,14 +60,34 @@ pub fn materialize_selected_tasks(mut ir: PlanIR) -> Result<PlanIR> {
 /// - **empty `depends_on` → wire to business DAG leaves** so terminal inspect
 ///   never races implement/scout (LLM/split often leave inspect with `[]`)
 ///
-/// Non-inspect roles and plans without `role` are untouched (legacy back-compat).
+/// Business landers (`Implement` / `Integrate` / **role unset**):
+/// - inject `IMPLEMENT_USABILITY_SYSTEM_PROMPT` (idempotent)
+/// - cco-split `do` often has no role — still gets the usability floor
+///
+/// Scout / Closeout / system-post: no implement usability segment.
 /// Call sites: [`load_plan`], [`materialize_selected_tasks`].
 pub fn materialize_role_defaults(plan: &mut PlanIR) {
     wire_empty_inspect_depends_on(plan);
     for task in &mut plan.tasks {
         if task.role == Some(TaskRole::Inspect) {
             materialize_inspect_task(task);
+            continue;
         }
+        if should_inject_implement_usability(task) {
+            inject_implement_usability_system_prompt(&mut task.provider_opts);
+        }
+    }
+}
+
+/// Business landers that ship product behavior (not scout/inspect/closeout/system-post).
+pub(crate) fn should_inject_implement_usability(task: &TaskIR) -> bool {
+    if is_system_post_task(&task.id) {
+        return false;
+    }
+    match task.role {
+        Some(TaskRole::Inspect) | Some(TaskRole::Closeout) | Some(TaskRole::Scout) => false,
+        // Implement, Integrate, or role-unset (common for cco-split `do`).
+        Some(TaskRole::Implement) | Some(TaskRole::Integrate) | None => true,
     }
 }
 
@@ -236,6 +258,24 @@ pub(crate) fn inject_inspect_system_prompt(opts: &mut serde_json::Value, allow_b
     opts["append_system_prompt"] = serde_json::json!(merged);
 }
 
+/// Inject implement usability floor into `append_system_prompt` (idempotent).
+pub(crate) fn inject_implement_usability_system_prompt(opts: &mut serde_json::Value) {
+    let existing = opts
+        .get("append_system_prompt")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if existing.contains(IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER) {
+        return;
+    }
+    let merged = if existing.trim().is_empty() {
+        IMPLEMENT_USABILITY_SYSTEM_PROMPT.to_string()
+    } else {
+        format!("{existing}\n\n{IMPLEMENT_USABILITY_SYSTEM_PROMPT}")
+    };
+    opts["append_system_prompt"] = serde_json::json!(merged);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,6 +393,70 @@ mod tests {
         }
         assert!(!insp.depends_on.iter().any(|d| d == "t1-inventory"));
         assert!(!insp.depends_on.iter().any(|d| d == "t3-archive-b"));
+    }
+
+    fn sys_of(task: &TaskIR) -> String {
+        task.provider_opts
+            .get("append_system_prompt")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    }
+
+    #[test]
+    fn implement_and_role_unset_get_usability_floor() {
+        let mut ir = plan(vec![
+            task("t-impl", Some(TaskRole::Implement), &[]),
+            task("t-do", None, &[]),
+            task("t-int", Some(TaskRole::Integrate), &[]),
+            task("t-scout", Some(TaskRole::Scout), &[]),
+            task("t-insp", Some(TaskRole::Inspect), &[]),
+        ]);
+        materialize_role_defaults(&mut ir);
+
+        for id in ["t-impl", "t-do", "t-int"] {
+            let t = ir.tasks.iter().find(|x| x.id == id).unwrap();
+            let sys = sys_of(t);
+            assert!(
+                sys.contains(IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER),
+                "{id} missing usability floor: {sys}"
+            );
+            assert!(
+                !sys.contains(INSPECT_SYSTEM_PROMPT_MARKER),
+                "{id} must not get inspect prompt"
+            );
+        }
+
+        let scout = ir.tasks.iter().find(|x| x.id == "t-scout").unwrap();
+        assert!(
+            !sys_of(scout).contains(IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER),
+            "scout must not get implement usability"
+        );
+
+        let insp = ir.tasks.iter().find(|x| x.id == "t-insp").unwrap();
+        let insp_sys = sys_of(insp);
+        assert!(insp_sys.contains(INSPECT_SYSTEM_PROMPT_MARKER));
+        assert!(
+            insp_sys.contains("Usability floor"),
+            "inspect prompt should carry usability severity floor"
+        );
+        assert!(
+            !insp_sys.contains(IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER),
+            "inspect must not get implement-usability marker"
+        );
+    }
+
+    #[test]
+    fn implement_usability_inject_is_idempotent() {
+        let mut ir = plan(vec![task("t1", Some(TaskRole::Implement), &[])]);
+        materialize_role_defaults(&mut ir);
+        materialize_role_defaults(&mut ir);
+        let sys = sys_of(ir.tasks.iter().find(|t| t.id == "t1").unwrap());
+        assert_eq!(
+            sys.matches(IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER).count(),
+            1,
+            "usability marker duplicated: {sys}"
+        );
     }
 }
 

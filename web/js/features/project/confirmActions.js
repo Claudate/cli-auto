@@ -226,20 +226,33 @@ export async function replanFromConfirm() {
   state.returnPhaseAfterConfirm = null;
   // analyzePlanFromPicker sets phase=planning and replaces planJob.
 
+  let revisionPreview = "";
+  try {
+    const el = $("split-revision-notes");
+    revisionPreview = el && String(el.value || "").trim();
+  } catch (_) {
+    revisionPreview = "";
+  }
   toast(
-    modeHint
-      ? `按当前计划重新规划（保留人工修改 · 上次：${modeHint}）…`
-      : preserveFrom
-        ? "按当前计划重新规划（保留人工修改）…"
-        : "按当前计划重新规划…"
+    revisionPreview
+      ? `按反馈重新规划：${revisionPreview.slice(0, 40)}${
+          revisionPreview.length > 40 ? "…" : ""
+        }`
+      : modeHint
+        ? `按当前计划重新规划（保留人工修改 · 上次：${modeHint}）…`
+        : preserveFrom
+          ? "按当前计划重新规划（保留人工修改）…"
+          : "按当前计划重新规划…"
   );
   // Same entry as「开始拆分」— keeps chooser options (并发 / 通道)
   // Pass explicit path so replan cannot pick up a stale selectedPlan.
+  // revision_notes is read again inside analyzePlanFromPicker → startPlanJob.
   if (typeof host.analyzePlanFromPicker === "function") {
     await host.analyzePlanFromPicker(state.selectedPlan);
   } else {
     host.openPlanChooser(true);
   }
+  // Clear on successful start only (jobPoll); keep text if analyze failed.
 }
 
 /**

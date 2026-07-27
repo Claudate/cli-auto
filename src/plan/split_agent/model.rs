@@ -100,6 +100,7 @@ fn call_messages_http(req: &SplitRequest) -> Result<String> {
         req.max_parallel,
         &plan_md,
         req.grain_hint.as_deref(),
+        req.revision_notes.as_deref(),
     );
     let body = json!({
         "model": model,
@@ -191,6 +192,7 @@ fn call_claude_cli_print(config: &Config, req: &SplitRequest) -> Result<String> 
         req.max_parallel,
         &plan_md,
         req.grain_hint.as_deref(),
+        req.revision_notes.as_deref(),
     );
     // CLI print: single user-ish prompt with system rules inlined (no separate system role).
     let prompt = format!("{}\n\n{}", system_prompt(), user);
@@ -312,6 +314,7 @@ mod tests {
             created_at: "t0".into(),
             updated_at: "t0".into(),
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         let job = agent.split(&req).unwrap();

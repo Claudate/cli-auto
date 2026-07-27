@@ -99,6 +99,17 @@
 | **work_style** | 可选、可跳过的粗细/并行/话术旋钮；**不得**把主受众默认改回 `fast` |
 | 优先级 | 计划结构 > 项目 work_style > 用户 work_style > 产品默认（ai + 白话） |
 
+---
+
+## 6.1 重拆反馈 · 风险人话（展示层）
+
+| 项 | 规则 |
+|----|------|
+| **revision_notes** | 拆分台「重新规划」可带一句话反馈 → `StartPlanJobRequest.revision_notes` → ModelSplitAgent user_prompt；**可空**；**不**碰 confirm / 不开跑 |
+| **与 grain_hint** | grain = 粗细偏好；revision = 上次哪里不对；二者并列，互不替代 |
+| **风险 chip** | 任务卡展示 `RiskClass`：只读 / 改本地 / 跑命令 / 会外发（domain 纯函数派生）；**不是** `permission_mode` 字符串 |
+| **确认条** | 默认强调「会改本地 · 默认不推远端」；已勾选 push/PR 时 CTA 可标「含外发」；仍唯一 `confirm_start` |
+
 防卡死靠超时 / 取消 / 僵尸收尸，**不用假拆当分母**。
 
 ---

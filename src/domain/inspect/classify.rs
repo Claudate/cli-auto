@@ -141,11 +141,74 @@ const RESIDUAL_HYGIENE_TOKENS: &[&str] = &[
     "大量工作区",
 ];
 
+/// Usability / anti-common-sense product failures — always host-blocking.
+///
+/// Even if an agent labels these residual (or mixes them with handwalk wording),
+/// the run must not PASS. Complements implement usability floor prompts.
+const USABILITY_BLOCKING_TOKENS: &[&str] = &[
+    "主路径不可用",
+    "主路径不通",
+    "main path unusable",
+    "main-path fail",
+    "反常识",
+    "anti-common",
+    "新建即已",
+    "新建已完成",
+    "create already",
+    "一点改多",
+    "点 a 改 b",
+    "mutates other",
+    "mutates others",
+    "串对象",
+    "操作串",
+    "隔离失败",
+    "isolation fail",
+    "丢数据",
+    "数据丢失",
+    "save/load loses",
+    "刷新丢失",
+    "状态错",
+    "wrong state",
+    "smoke ok:false",
+    "smoke main-path ok:false",
+    "功能 smoke 失败",
+];
+
+fn issue_haystack(issue: &ParsedIssue) -> String {
+    format!(
+        "{} {} {} {} {}",
+        issue.id, issue.symptom, issue.fix_wp, issue.plan_ref, issue.raw
+    )
+}
+
+fn hay_hits(hay: &str, tokens: &[&str]) -> bool {
+    let hay_l = hay.to_ascii_lowercase();
+    tokens.iter().any(|tok| {
+        let t = tok.to_ascii_lowercase();
+        hay_l.contains(&t) || hay.contains(*tok)
+    })
+}
+
+/// True when ISSUE describes unusable product / anti-common-sense behavior.
+///
+/// Host keeps or promotes these to blocking; they must never be residual-only PASS.
+pub fn is_usability_blocking_issue(issue: &ParsedIssue) -> bool {
+    if issue.severity == IssueSeverity::OutOfScope {
+        return false;
+    }
+    hay_hits(&issue_haystack(issue), USABILITY_BLOCKING_TOKENS)
+}
+
 /// True when this ISSUE is residual-class evidence polish, even if agent wrote blocking.
 ///
 /// Used to demote mis-graded handwalk / uncommitted hygiene so inspect does not
 /// FAIL-pause a finished implement wave.
+///
+/// Usability failures are **never** residual evidence gaps.
 pub fn is_residual_evidence_gap(issue: &ParsedIssue) -> bool {
+    if is_usability_blocking_issue(issue) {
+        return false;
+    }
     if matches!(
         issue.severity,
         IssueSeverity::Residual | IssueSeverity::OutOfScope
@@ -156,21 +219,12 @@ pub fn is_residual_evidence_gap(issue: &ParsedIssue) -> bool {
     if issue.severity == IssueSeverity::Map {
         return false;
     }
-    let hay = format!(
-        "{} {} {} {} {}",
-        issue.id, issue.symptom, issue.fix_wp, issue.plan_ref, issue.raw
-    );
+    let hay = issue_haystack(issue);
     let hay_l = hay.to_ascii_lowercase();
-    let hit = |tokens: &[&str]| {
-        tokens.iter().any(|tok| {
-            let t = tok.to_ascii_lowercase();
-            hay_l.contains(&t) || hay.contains(*tok)
-        })
-    };
-    if hit(RESIDUAL_HANDWALK_TOKENS) {
+    if hay_hits(&hay, RESIDUAL_HANDWALK_TOKENS) {
         return true;
     }
-    if hit(RESIDUAL_HYGIENE_TOKENS) {
+    if hay_hits(&hay, RESIDUAL_HYGIENE_TOKENS) {
         // Hygiene on business src path can still be residual (commit later);
         // only demote when not a hard runtime failure signal.
         let hard = ["panic", "compile", "tsc error", "test fail", "断言失败", "红测"];
@@ -182,20 +236,39 @@ pub fn is_residual_evidence_gap(issue: &ParsedIssue) -> bool {
     false
 }
 
-/// Demote mis-graded residual evidence rows in place (host SoT for gate counts).
+/// Normalize ISSUES severities for host gate:
+/// 1. promote usability / anti-common-sense residual → blocking
+/// 2. demote mis-graded handwalk/hygiene blocking → residual
 pub fn demote_residual_evidence_issues(issues: &mut [ParsedIssue]) {
     for i in issues.iter_mut() {
+        if is_usability_blocking_issue(i)
+            && matches!(
+                i.severity,
+                IssueSeverity::Residual | IssueSeverity::Blocking | IssueSeverity::Map
+            )
+        {
+            // Map stays map (closeout path). Residual usability → blocking.
+            if i.severity == IssueSeverity::Residual {
+                i.severity = IssueSeverity::Blocking;
+            }
+            continue;
+        }
         if i.severity.is_blocking_for_gate() && is_residual_evidence_gap(i) {
             i.severity = IssueSeverity::Residual;
         }
     }
 }
 
-/// Gate-blocking count **after** residual-evidence demotion.
+/// Gate-blocking count **after** residual-evidence demotion / usability promote.
 pub fn effective_blocking_count(issues: &[ParsedIssue]) -> usize {
     issues
         .iter()
-        .filter(|i| i.severity.is_blocking_for_gate() && !is_residual_evidence_gap(i))
+        .filter(|i| {
+            if is_usability_blocking_issue(i) {
+                return i.severity != IssueSeverity::OutOfScope;
+            }
+            i.severity.is_blocking_for_gate() && !is_residual_evidence_gap(i)
+        })
         .count()
 }
 
@@ -417,5 +490,54 @@ mod tests {
         );
         assert!(!is_residual_evidence_gap(&eng));
         assert_eq!(effective_blocking_count(&[eng]), 1);
+    }
+
+    /// Anti-common-sense / unusable main path must not residual-PASS.
+    #[test]
+    fn usability_residual_promoted_to_blocking() {
+        let r1 = issue(
+            "R1",
+            IssueSeverity::Residual,
+            "js/model/plant.js",
+            "新建即已完成：添加植物默认 lastWatered=今天，反常识",
+            "改默认或表单必填上次浇水日",
+            "### R1\nseverity: residual\nsymptom: 新建即已完成 反常识",
+        );
+        assert!(is_usability_blocking_issue(&r1));
+        assert!(!is_residual_evidence_gap(&r1));
+        let mut rows = vec![r1];
+        demote_residual_evidence_issues(&mut rows);
+        assert_eq!(rows[0].severity, IssueSeverity::Blocking);
+        assert_eq!(effective_blocking_count(&rows), 1);
+        let (blocked, n) = gate_counts_after_residual_demote(&rows, Some(0), false);
+        assert!(blocked && n == 1);
+    }
+
+    #[test]
+    fn isolation_failure_counts_even_if_labeled_residual() {
+        let r = issue(
+            "R2",
+            IssueSeverity::Residual,
+            "js/app.js",
+            "一点改多对象：点 A 已浇后 B 的 lastWatered 也被改",
+            "按 id 更新单盆",
+            "severity=residual 操作串对象",
+        );
+        assert!(is_usability_blocking_issue(&r));
+        assert_eq!(effective_blocking_count(&[r]), 1);
+    }
+
+    #[test]
+    fn handwalk_still_demotes_when_not_usability() {
+        let b1 = issue(
+            "B1",
+            IssueSeverity::Blocking,
+            "docs/one/logs/**",
+            "真书 30 秒主路径手点观察未写入",
+            "optional-gui-handwalk-record",
+            "severity=blocking 手点未做",
+        );
+        assert!(is_residual_evidence_gap(&b1));
+        assert!(!is_usability_blocking_issue(&b1));
     }
 }

@@ -44,9 +44,29 @@ Host uses GATE.json first. residual does not block pass. Open blocking/map → r
 **Human products (also write):**\n\
 VERDICT.md: first structured line `Result: PASS` or `Result: FAIL` (bold ok). Host ignores bare FAIL/PASS in prose.\n\
 ISSUES.md: blocks headed `### I-1` / `### R1` / `### issue_id=R1` with line-start `severity: residual|blocking|map|out-of-scope`.\n\
-On FAIL, document issues for rework; do not silently rework business code.";
+On FAIL, document issues for rework; do not silently rework business code.\n\
+\n\
+## Usability floor (before checkbox theatre)\n\
+Judge whether the product is usable, not only whether plan checkboxes have evidence.\n\
+**blocking (must FAIL):** main path unusable; anti-common-sense defaults (e.g. create already marked done); one action mutates other objects; primary save/load loses data; smoke main-path ok:false for functional checks.\n\
+**residual only:** handwalk/video/screenshot not recorded, uncommitted hygiene, optional polish, toast timing flicker without wrong state.\n\
+Never downgrade unusable / wrong-state issues to residual to force PASS.";
 /// Tools that mutate business source — stripped for inspect unless `allow_business_write`.
 pub(crate) const INSPECT_STRIP_TOOLS: &[&str] = &["Edit", "MultiEdit", "NotebookEdit"];
+
+/// Marker injected into implement / default-do worker `append_system_prompt` (idempotent).
+pub const IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER: &str = "CCO role=implement-usability:";
+/// Platform floor for product work: ship usable software, not a demo shell.
+///
+/// Injected for Implement / Integrate / role-unset business tasks (cco-split `do`
+/// often has no role). Scout / Inspect / Closeout are excluded.
+pub const IMPLEMENT_USABILITY_SYSTEM_PROMPT: &str = "CCO role=implement-usability: deliver usable software, not a demo shell.\n\
+1. Each user action updates only its target object (click A must not rewrite B).\n\
+2. Defaults must match the main scenario; if unsure, prefer the safer side that needs user confirmation, and say so in the UI.\n\
+3. Action copy ≠ status copy (button \"mark watered\" vs status \"watered today / in N days\").\n\
+4. Self-check the main path: create → primary action → refresh still correct; plus one isolation check (only one object changes).\n\
+5. Do not weaken behavior or plant fake data just to pass acceptance.";
+
 
 /// Fixed id for host-injected Ensure closeout task (E1).
 pub const SYS_CLOSEOUT_ID: &str = "sys-closeout";

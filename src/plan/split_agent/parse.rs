@@ -385,6 +385,7 @@ mod tests {
             created_at: "t0".into(),
             updated_at: "t0".into(),
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         }
     }

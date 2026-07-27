@@ -109,10 +109,11 @@ fn make_inspect_task(ir: &PlanIR, depends_on: &[String]) -> TaskIR {
   - 每条必须含：`severity=blocking|map|residual|out-of-scope`、plan_ref、path、symptom、fix_wp
 
 ## 严重度（写错会卡死整轮 · 必须遵守）
-- **blocking**：功能/验收未落地、红测、编译失败、主路径不可用 → `result=fail` + blocking≥1
+- **blocking**：功能/验收未落地、红测、编译失败、**主路径不可用**、**反常识默认**（如新建即已完成）、**一点改多对象**、主存读丢数据、功能 smoke `ok:false` → `result=fail` + blocking≥1
 - **map**：台账/索引/L1 不同构 → map≥1（默认挡关账，走 closeout/回补）
-- **residual（不挡 PASS）**：真书手点/30s 录像/截图未做、工作区未 commit、gitignore 卫生、可选 polish
+- **residual（不挡 PASS）**：真书手点/30s 录像/截图未做、工作区未 commit、gitignore 卫生、可选 polish、toast 时序闪一下但状态正确
 - **禁止**把 residual 写成 blocking；仅 residual 时 **GATE result=pass**、blocking=0、residual=N
+- **禁止**把「不可用 / 状态错」降成 residual 刷 PASS（先判能不能用，再对勾选）
 
 ## 硬规则
 1. **业务源码只读**；禁止为「刷绿」改应用代码
@@ -120,6 +121,7 @@ fn make_inspect_task(ir: &PlanIR, depends_on: &[String]) -> TaskIR {
 3. 真阻塞遗漏 → VERDICT=FAIL + ISSUES；**可修的 blocking 写清 fix_wp**，交给回补波补齐（不是甩给用户）
 4. 仅 residual → **必须 PASS**（附录 ISSUES），禁止 FAIL 卡轮
 5. 本任务由 cco 设置「拆分后附加：任务巡检」注入；用户可在确认屏取消勾选
+6. 先做可用检查（主路径 / 隔离 / 反常识默认），再对照计划勾选；计划没写也不等于反常识可过
 
 计划名：{name}
 "#,

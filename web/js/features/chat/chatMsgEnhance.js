@@ -4,6 +4,9 @@
  * [POS]: features/chat/chatMsgEnhance.js — 不进 chatFormat 厚文件
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
+ * 解析须容忍模型常见 markdown：`**1. 标题？**`、硬换行尾空格、`---` 分隔。
+ * 回归：`node scripts/chat-quiz-parse-smoke.mjs`（真实会话 shape）。
+ *
  * 不做：改 Mode B / confirm；不在 JS 写业务策略；不堆进 chatFormat/chatClarify。
  */
 
@@ -148,18 +151,64 @@ export function ensureChatMsgEnhanceStyles() {
 // ─── Quiz parse ──────────────────────────────────────────────────────────────
 
 /**
+ * Light markdown unwrap so quiz markers survive model formatting.
+ * Real sessions often emit `**1. 标题？**` + MD hard-break trailing spaces —
+ * without this, the numbered A/B/C detector never fires and the bubble
+ * stays plain text (looks like “点选没做”).
+ */
+function normalizeQuizSource(text) {
+  let s = String(text || "").replace(/\r\n/g, "\n");
+  // **1. 标题（可多选）**  →  1. 标题（可多选）
+  s = s.replace(
+    /(^|\n)[ \t]*\*\*[ \t]*(\d{1,2})[ \t]*[.、．)][ \t]*([^*\n]+?)[ \t]*\*\*/g,
+    (_, p, n, title) => `${p}${n}. ${String(title).trim()}`
+  );
+  // **1.** 标题  →  1. 标题
+  s = s.replace(
+    /(^|\n)[ \t]*\*\*[ \t]*(\d{1,2})[ \t]*[.、．)][ \t]*\*\*[ \t]*/g,
+    (_, p, n) => `${p}${n}. `
+  );
+  // **A.** / *A.* option keys
+  s = s.replace(
+    /(^|\n)[ \t]*\*{1,2}[ \t]*([A-Da-d])[ \t]*[.、．)][ \t]*\*{1,2}[ \t]*/g,
+    (_, p, k) => `${p}${k}. `
+  );
+  // Drop MD hard-break double spaces at EOL
+  s = s.replace(/[ \t]{2,}$/gm, "");
+  // Drop horizontal rules that only separate quiz blocks
+  s = s.replace(/(^|\n)\s*-{3,}\s*(?=\n|$)/g, "$1");
+  return s.trim();
+}
+
+/** Strip simple emphasis for human-facing quiz labels (panel is plain text). */
+function stripMdLight(s) {
+  return String(s || "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .trim();
+}
+
+/**
  * Detect numbered questions with A/B/C(…) options in assistant prose.
+ * Tolerates markdown bold on titles (`**1. …**`) and hard-break spacing.
  * @returns {{ lead: string, questions: Array<{n:string,title:string,multi:boolean,options:Array<{key:string,text:string}>}> } | null}
  */
 export function parseAssistantQuiz(text) {
-  const raw = String(text || "").replace(/\r\n/g, "\n").trim();
+  const raw = normalizeQuizSource(text);
   if (!raw) return null;
-  // Split on "1." / "1、" / "1)" at line start
-  const re = /(?:^|\n)\s*(\d{1,2})\s*[.、．)]\s+/g;
+  // Split on "1." / "1、" / "1)" at line start (after normalize)
+  // Also allow a lone bold residue that normalize missed: optional ** wrappers.
+  const re = /(?:^|\n)[ \t]*(?:\*\*[ \t]*)?(\d{1,2})[ \t]*[.、．)][ \t]*(?:\*\*[ \t]*)?/g;
   const hits = [];
   let m;
   while ((m = re.exec(raw)) !== null) {
-    hits.push({ n: m[1], index: m.index + (m[0].startsWith("\n") ? 1 : 0), full: m[0] });
+    hits.push({
+      n: m[1],
+      index: m.index + (m[0].startsWith("\n") ? 1 : 0),
+      full: m[0],
+    });
   }
   if (hits.length < 2) return null;
 
@@ -167,30 +216,41 @@ export function parseAssistantQuiz(text) {
   for (let i = 0; i < hits.length; i++) {
     const start = hits[i].index;
     const end = i + 1 < hits.length ? hits[i + 1].index : raw.length;
-    // body after the "N. " marker
-    const marker = raw.slice(start).match(/^\s*\d{1,2}\s*[.、．)]\s*/);
+    // body after the "N. " marker (same tolerant shape as re)
+    const marker = raw
+      .slice(start)
+      .match(/^[ \t]*(?:\*\*[ \t]*)?\d{1,2}[ \t]*[.、．)][ \t]*(?:\*\*[ \t]*)?/);
     const bodyStart = start + (marker ? marker[0].length : 0);
     const block = raw.slice(bodyStart, end).trim();
     if (!block) continue;
 
-    const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
+    const lines = block
+      .split("\n")
+      .map((l) => l.replace(/[ \t]+$/g, "").trim())
+      .filter(Boolean);
     if (!lines.length) continue;
 
-    const title = lines[0].replace(/\s*（可多选）\s*$/, "").trim();
+    const titleRaw = stripMdLight(lines[0]);
     const multi =
-      /可多选/.test(lines[0]) ||
-      /可多选/.test(block.slice(0, 80)) ||
-      lines.filter((l) => /^[A-Da-d]\s*[.、．)]\s+/.test(l)).length >= 4;
+      /可多选/.test(titleRaw) ||
+      /可多选/.test(block.slice(0, 100)) ||
+      lines.filter((l) =>
+        /^(?:\*{1,2}[ \t]*)?[A-Da-d][ \t]*[.、．)]/.test(l)
+      ).length >= 4;
+    const title = titleRaw.replace(/\s*[（(]可多选[）)]\s*$/u, "").trim();
 
     const options = [];
     for (const line of lines.slice(1)) {
-      const om = line.match(/^([A-Da-d])\s*[.、．)]\s+(.+)$/);
+      const om = line.match(
+        /^(?:\*{1,2}[ \t]*)?([A-Da-d])[ \t]*[.、．)][ \t]*(?:\*{1,2}[ \t]*)?(.+)$/
+      );
       if (om) {
-        options.push({ key: om[1].toUpperCase(), text: om[2].trim() });
+        const optText = stripMdLight(om[2]);
+        if (optText) options.push({ key: om[1].toUpperCase(), text: optText });
         continue;
       }
       // stop at "其他" freestyle line — keep as non-option note, ignore
-      if (/^其他/.test(line)) break;
+      if (/^其他/.test(stripMdLight(line))) break;
     }
     if (options.length < 2) continue;
     questions.push({ n: String(hits[i].n), title, multi, options });
@@ -199,7 +259,12 @@ export function parseAssistantQuiz(text) {
   if (questions.length < 2) return null;
 
   const firstHit = hits[0].index;
-  const lead = raw.slice(0, firstHit).trim();
+  const lead = stripMdLight(
+    raw
+      .slice(0, firstHit)
+      .replace(/(^|\n)\s*-{3,}\s*/g, "$1")
+      .trim()
+  );
   return { lead, questions };
 }
 

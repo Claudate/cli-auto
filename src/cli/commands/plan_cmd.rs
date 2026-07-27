@@ -51,6 +51,7 @@ pub fn run(
             max_parallel: None,
             preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             // config.default.effort already set from --effort above
             effort: Some(config.default.effort.clone()),
         },

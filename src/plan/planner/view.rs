@@ -73,6 +73,12 @@ pub struct PlanTaskView {
     pub optional: bool,
     /// Whether this task will run (optional defaults false until checked).
     pub include: bool,
+    /// Human risk class: read | write_local | exec | external (desk chip; not permission_mode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk_class: Option<String>,
+    /// Short ZH label for risk chip (只读/改本地/跑命令/会外发).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk_label: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -152,6 +158,20 @@ fn task_view(t: &TaskIR) -> PlanTaskView {
     } else {
         Some("do".into())
     };
+    let verify = t.effective_verify_cmd().map(|s| s.to_string());
+    let (paths, readonly, has_write) = match t.scope.as_ref() {
+        Some(s) => (s.paths.as_slice(), s.readonly.as_slice(), !s.paths.is_empty()),
+        None => (&[][..], &[][..], false),
+    };
+    let risk = crate::domain::plan::classify_task_risk_wire(
+        &t.id,
+        super::task_edit::role_wire(t.role).as_deref(),
+        paths,
+        readonly,
+        has_write,
+        verify.as_deref(),
+        kind.as_deref(),
+    );
     PlanTaskView {
         id: t.id.clone(),
         title: t.title.clone(),
@@ -168,12 +188,14 @@ fn task_view(t: &TaskIR) -> PlanTaskView {
             .as_ref()
             .filter(|s| !crate::domain::plan::is_runnable_verify(s))
             .cloned(),
-        verify_cmd: t.effective_verify_cmd().map(|s| s.to_string()),
+        verify_cmd: verify,
         wave: None,
         ord: None,
         kind,
         optional: t.optional,
         include: if t.optional { t.include } else { true },
+        risk_class: Some(risk.as_str().into()),
+        risk_label: Some(risk.label_zh().into()),
     }
 }
 
@@ -197,6 +219,16 @@ fn task_view_from_cco(t: &crate::plan::CcoSplitTask) -> PlanTaskView {
             forbid: vec![],
         })
     };
+    let kind = Some(t.kind.as_str().to_string());
+    let risk = crate::domain::plan::classify_task_risk_wire(
+        &t.task_id,
+        t.role.as_deref(),
+        t.scope_paths.as_slice(),
+        &[],
+        !t.scope_paths.is_empty(),
+        t.verify_cmd.as_deref(),
+        kind.as_deref(),
+    );
     PlanTaskView {
         id: t.task_id.clone(),
         title: t.title.clone(),
@@ -225,9 +257,11 @@ fn task_view_from_cco(t: &crate::plan::CcoSplitTask) -> PlanTaskView {
         verify_cmd: t.verify_cmd.clone(),
         wave: Some(t.wave),
         ord: Some(t.ord),
-        kind: Some(t.kind.as_str().to_string()),
+        kind,
         optional: t.optional,
         include: if t.optional { t.enabled } else { true },
+        risk_class: Some(risk.as_str().into()),
+        risk_label: Some(risk.label_zh().into()),
     }
 }
 

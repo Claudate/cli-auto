@@ -273,6 +273,31 @@ function taskCardHtml(t, byId, opts = {}) {
       ? g("statusLabel")(liveSt)
       : liveSt
     : "";
+  // Backend risk_class / risk_label (read|write_local|exec|external); fallback local.
+  const riskClass = String(t.risk_class || t.riskClass || "").toLowerCase();
+  const riskLabel =
+    t.risk_label ||
+    t.riskLabel ||
+    (riskClass === "external"
+      ? "会外发"
+      : riskClass === "exec"
+        ? "跑命令"
+        : riskClass === "read"
+          ? "只读"
+          : riskClass === "write_local"
+            ? "改本地"
+            : "");
+  const riskHtml = riskLabel
+    ? `<span class="risk-badge risk-${esc(riskClass || "write_local")}" title="${esc(
+        riskClass === "external"
+          ? "会推送或发到远端"
+          : riskClass === "exec"
+            ? "会在本机跑检查命令"
+            : riskClass === "read"
+              ? "只读，不改业务文件"
+              : "会改本地代码或文件"
+      )}">${esc(riskLabel)}</span>`
+    : "";
   const checkHtml = isOpt
     ? `<label class="wave-task-check" title="${
         role.kind === "sys"
@@ -290,6 +315,7 @@ function taskCardHtml(t, byId, opts = {}) {
     `<button type="button" class="wave-task" data-id="${esc(id)}">` +
     `<div class="split-card-top">` +
     `<span class="split-role split-role-${role.kind}">${role.label}</span>` +
+    riskHtml +
     (isOpt
       ? role.kind === "sys"
         ? `<span class="opt-badge opt-badge-sys">系统</span>`

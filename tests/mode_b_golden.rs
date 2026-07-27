@@ -84,6 +84,7 @@ async fn golden_prose_md_plan_confirm_exec() {
             max_parallel: Some(2),
             preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         },
     )
@@ -144,6 +145,7 @@ async fn golden_serial_prompts_plan_confirm_exec() {
             max_parallel: Some(2),
             preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         },
     )
@@ -202,6 +204,7 @@ async fn golden_cco_v1_plan_confirm_exec() {
             max_parallel: Some(1),
             preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         },
     )

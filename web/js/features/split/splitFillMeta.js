@@ -107,6 +107,27 @@ export function fillSplitMeta(job, ctx = {}) {
     optHint = bits.length ? ` · ${bits.join(" · ")}` : "";
   }
 
+  const externalOn = tasks.some((t) => {
+    const rc = String(t.risk_class || t.riskClass || "").toLowerCase();
+    if (rc === "external" && t.include !== false) return true;
+    const id = String(t.id || "");
+    return (
+      (id.includes("git-push") || id.includes("open-pr")) && t.include !== false
+    );
+  });
+  const hasExternal = tasks.some((t) => {
+    const rc = String(t.risk_class || t.riskClass || "").toLowerCase();
+    const id = String(t.id || "");
+    return (
+      rc === "external" || id.includes("git-push") || id.includes("open-pr")
+    );
+  });
+  const riskHint = externalOn
+    ? "含已勾选的外发步骤（推送/开 PR）"
+    : hasExternal
+      ? "默认不外发 · 推送/开 PR 需勾选"
+      : "会改本地 · 默认不推远端";
+
   const confirmHint = runLocked
     ? "运行中（只读）"
     : paused
@@ -114,7 +135,7 @@ export function fillSplitMeta(job, ctx = {}) {
       : bizOpt.length > 0
         ? "业务可选默认不跑 · 请勾选后再点「执行规划」"
         : sysOpt.length > 0
-          ? "系统收尾默认已勾选 · 可取消后执行规划"
+          ? "系统收尾可勾选 · 外发默认关"
           : reused
             ? "可编辑未执行步骤后再点「执行规划」"
             : "核对后点「执行规划」";
@@ -127,8 +148,18 @@ export function fillSplitMeta(job, ctx = {}) {
   const metaEl = $("confirm-meta") || $("#confirm-meta");
   if (metaEl) {
     const sourceBit = sourceLabel ? `${sourceLabel} · ` : "";
-    metaEl.textContent = `共 ${nSteps} 步 · ${sourceBit}${scheduleHint}${optHint} · ${confirmHint}`;
+    metaEl.textContent = `共 ${nSteps} 步 · ${sourceBit}${scheduleHint}${optHint} · ${riskHint} · ${confirmHint}`;
   }
+  // Confirm CTA title: business vs external (still one confirm_start).
+  try {
+    const btn = $("btn-confirm-start");
+    if (btn && !runLocked) {
+      btn.title = externalOn
+        ? "开始执行（含已勾选的推送/开 PR 等外发）"
+        : "开始执行业务步骤（默认不推远端；外发看勾选）";
+      btn.textContent = externalOn ? "执行规划（含外发）" : "执行规划";
+    }
+  } catch (_) {}
   // W3-1: when local / smart-missed, offer one-click smart re-split (sets plan_mode=ai).
   paintSmartResplitHint(sourceLabel, { runLocked });
 

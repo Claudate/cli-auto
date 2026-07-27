@@ -65,6 +65,7 @@ mod tests {
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -108,6 +109,7 @@ mod tests {
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -173,6 +175,7 @@ mod tests {
                 max_parallel: Some(3),
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -215,6 +218,7 @@ mod tests {
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -262,6 +266,7 @@ mod tests {
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -309,6 +314,7 @@ mod tests {
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -356,6 +362,7 @@ mod tests {
                 max_parallel: Some(4),
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -396,6 +403,7 @@ mod tests {
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -433,6 +441,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         zombie.save(&cfg).unwrap();
@@ -494,6 +503,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         zombie.save(&cfg).unwrap();
@@ -662,6 +672,7 @@ mod tests {
                 max_parallel: Some(4),
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -784,6 +795,7 @@ t1
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         std::fs::create_dir_all(job_dir(&cfg, &job.job_id)).unwrap();
@@ -1214,6 +1226,7 @@ t1
                 max_parallel: Some(5),
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -1288,6 +1301,7 @@ t1
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -1332,6 +1346,7 @@ t1
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -1399,6 +1414,7 @@ t1
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -1475,6 +1491,7 @@ t1
                 max_parallel: None,
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -1530,6 +1547,7 @@ t1
                 max_parallel: None,
                 preserve_from_job_id: Some(view.job_id.clone()),
                 grain_hint: None,
+                revision_notes: None,
                 effort: None,
             },
         )

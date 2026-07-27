@@ -14,6 +14,7 @@ mod closeout;
 mod materialize;
 mod merge_check;
 mod optional;
+mod risk;
 mod routing;
 mod soften;
 mod system_ids;
@@ -42,6 +43,7 @@ pub use merge_check::{
 pub use optional::{
     looks_like_work_task_id, normalize_optional_title, title_is_meta_heading, title_looks_optional,
 };
+pub use risk::{classify_task_risk, classify_task_risk_wire, RiskClass};
 pub use routing::{apply_tag_routing, tag_implied_provider};
 pub use soften::soften_plan_for_accept;
 pub use system_ids::{
@@ -51,6 +53,7 @@ pub use system_ids::{
 pub use types::{
     parse_role_input, OnFailure, PlanIR, TaskIR, TaskRole, TaskScope, CLOSEOUT_DEFAULT_FORBID,
     CLOSEOUT_DEFAULT_WRITE_SCOPE, CLOSEOUT_SYSTEM_PROMPT, CLOSEOUT_SYSTEM_PROMPT_MARKER,
+    IMPLEMENT_USABILITY_SYSTEM_PROMPT, IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER,
     INSPECT_DEFAULT_ALLOWED_TOOLS, INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_SYSTEM_PROMPT,
     INSPECT_SYSTEM_PROMPT_MARKER, MAX_PROMPT_CHARS, MAX_TASKS, MAX_TIMEOUT_SECS,
     PLANNER_MAX_BUDGET_USD, PLANNER_MAX_TASKS, SYS_CLOSEOUT_ID,

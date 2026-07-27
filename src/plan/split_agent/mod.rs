@@ -46,6 +46,7 @@ pub fn build_split_agent_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
         created_at: job.created_at.to_rfc3339(),
         updated_at: now.clone(),
         grain_hint: job.grain_hint.clone(),
+        revision_notes: job.revision_notes.clone(),
         effort: job.effort.clone(),
     };
 
@@ -55,6 +56,16 @@ pub fn build_split_agent_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
                 config,
                 &job.job_id,
                 &format!("ModelSplitAgent grain: {}", g.trim()),
+            );
+        }
+    }
+    if let Some(ref n) = job.revision_notes {
+        if !n.trim().is_empty() {
+            let preview: String = n.trim().chars().take(80).collect();
+            append_log(
+                config,
+                &job.job_id,
+                &format!("ModelSplitAgent revision_notes: {preview}"),
             );
         }
     }
@@ -169,6 +180,7 @@ mod tests {
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -225,6 +237,7 @@ mod tests {
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
             },
         )
@@ -280,6 +293,7 @@ mod tests {
                 max_parallel: Some(4),
                 preserve_from_job_id: None,
                 grain_hint: None,
+                revision_notes: None,
                 effort: None,
             },
         )

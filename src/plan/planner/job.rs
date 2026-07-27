@@ -96,6 +96,9 @@ pub struct PlanJob {
     /// W4: grain line forwarded to ModelSplitAgent (empty = omit).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grain_hint: Option<String>,
+    /// Free-text replan feedback for ModelSplitAgent (empty = omit). Not an open-run gate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision_notes: Option<String>,
     /// Per-split reasoning depth (`low`…`max`|`ultracode`); omit → config default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effort: Option<String>,
@@ -118,6 +121,9 @@ pub struct StartPlanJobRequest {
     /// W4: optional grain line for ModelSplitAgent user prompt (偏粗/偏细); never forces fast.
     #[serde(default)]
     pub grain_hint: Option<String>,
+    /// Optional free-text “why re-split / what to change” for ModelSplitAgent.
+    #[serde(default)]
+    pub revision_notes: Option<String>,
     /// Optional per-split reasoning depth (`low`…`max`|`ultracode`); else config default.
     #[serde(default)]
     pub effort: Option<String>,
@@ -235,6 +241,21 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         .as_ref()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
+    // Cap so a pasted essay cannot blow the split prompt.
+    let revision_notes = req
+        .revision_notes
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            const MAX: usize = 2000;
+            if s.chars().count() > MAX {
+                let truncated: String = s.chars().take(MAX).collect();
+                format!("{truncated}…")
+            } else {
+                s
+            }
+        });
     let effort = req
         .effort
         .as_ref()
@@ -266,6 +287,7 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         critic_llm_cost_usd: None,
         critic_llm_ms: None,
         grain_hint,
+        revision_notes,
         effort,
     };
     std::fs::create_dir_all(job_dir(config, &job_id))?;
@@ -1806,6 +1828,7 @@ mod reap_pid_scan_tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         zombie.save(&cfg).unwrap();
@@ -1874,6 +1897,7 @@ mod reap_pid_scan_tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         job.save(&cfg).unwrap();
@@ -1982,6 +2006,7 @@ mod reap_pid_scan_tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         failed.save(&cfg).unwrap();

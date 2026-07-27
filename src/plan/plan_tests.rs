@@ -970,14 +970,18 @@ tasks:
                 .any(|v| v.as_str() == Some("Edit")),
             "implement keeps Edit"
         );
+        let feat_sys = feat
+            .provider_opts
+            .get("append_system_prompt")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         assert!(
-            feat
-                .provider_opts
-                .get("append_system_prompt")
-                .and_then(|v| v.as_str())
-                .map(|s| !s.contains(INSPECT_SYSTEM_PROMPT_MARKER))
-                .unwrap_or(true),
+            !feat_sys.contains(INSPECT_SYSTEM_PROMPT_MARKER),
             "implement must not get inspect system prompt"
+        );
+        assert!(
+            feat_sys.contains(IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER),
+            "implement must get usability floor: {feat_sys}"
         );
     }
 
@@ -1115,7 +1119,7 @@ tasks:
         );
     }
 
-    /// P2-1: missing role / non-inspect roles are not rewritten.
+    /// P2-1: missing role / non-inspect keep Edit tools; business landers get usability floor.
     #[test]
     fn p2_1_non_inspect_untouched() {
         let mut plan = base_plan(
@@ -1141,7 +1145,19 @@ tasks:
         for t in &plan.tasks {
             let tools = t.provider_opts["allowed_tools"].as_array().unwrap();
             assert!(tools.iter().any(|v| v.as_str() == Some("Edit")));
-            assert!(t.provider_opts.get("append_system_prompt").is_none());
+            let sys = t
+                .provider_opts
+                .get("append_system_prompt")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            assert!(
+                !sys.contains(INSPECT_SYSTEM_PROMPT_MARKER),
+                "non-inspect must not get inspect prompt: {sys}"
+            );
+            assert!(
+                sys.contains(IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER),
+                "business lander must get usability floor: {sys}"
+            );
         }
     }
 

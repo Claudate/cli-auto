@@ -225,9 +225,20 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                     <option value="ultracode">ultracode · 多 Agent</option>
                   </select>
                 </label>
-                <!-- shell-chrome A2：第一屏仅「重新规划」+「执行规划」；调整… hidden 保 handler -->
-                <button class="btn ghost sm" id="btn-replan" type="button" title="按当前计划再拆一次；尽量保留你的修改">重新规划</button>
-                <button class="btn primary" id="btn-confirm-start" type="button" title="核对后开始执行（走确认开跑）">执行规划</button>
+                <label class="split-revision-wrap" title="重新规划时带给拆分：上次哪里不对（可空）">
+                  <span class="chat-effort-label muted">重拆意见</span>
+                  <input
+                    type="text"
+                    id="split-revision-notes"
+                    class="split-revision-input"
+                    maxlength="500"
+                    placeholder="可选：哪里不对？例如合并两步、别抢同一文件"
+                    aria-label="重新规划时的反馈"
+                  />
+                </label>
+                <!-- shell-chrome A2：第一屏「重新规划」+「执行规划」；重拆意见可空 -->
+                <button class="btn ghost sm" id="btn-replan" type="button" title="按当前计划再拆一次；可填重拆意见；尽量保留你的修改">重新规划</button>
+                <button class="btn primary" id="btn-confirm-start" type="button" title="核对后开始执行（业务可跑；推送/开 PR 等外发仍看勾选）">执行规划</button>
                 <details class="split-more-actions" id="split-more-actions" hidden>
                   <summary class="btn ghost sm">调整…</summary>
                   <div class="split-more-menu" role="menu">

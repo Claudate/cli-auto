@@ -84,6 +84,7 @@ async fn a0_confirm_start_is_mode_b_run_entry() {
             max_parallel: Some(1),
             preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         },
     )
@@ -247,6 +248,7 @@ tasks:
             max_parallel: Some(1),
             preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         },
     )
@@ -333,6 +335,7 @@ tasks:
             max_parallel: Some(1),
             preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         },
     )

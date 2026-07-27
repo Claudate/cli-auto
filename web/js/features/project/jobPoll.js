@@ -179,6 +179,9 @@ export async function analyzePlanFromPicker(planPathArg) {
   } catch (_) {
     grainHint = "";
   }
+  const revEl0 = $("#split-revision-notes");
+  const revisionNotes =
+    (revEl0 && String(revEl0.value || "").trim()) || null;
 
   const doc = await host.ensureDoctor(true);
   if (doc && !doc.ok && provider !== "fake" && planMode !== "fake") {
@@ -274,13 +277,14 @@ export async function analyzePlanFromPicker(planPathArg) {
         max_parallel: maxParallel,
         // P2-2: re-apply confirm-screen edits from previous job (by title).
         preserve_from_job_id: preserveFrom || null,
-        // W4: grain line for ModelSplitAgent (omit when empty).
+        // W4 grain + optional revision_notes (never opens a run).
         grain_hint: grainHint || null,
-        // Per-split reasoning depth (ultracode = xhigh + multi-agent hint).
+        revision_notes: revisionNotes,
         effort: effort || null,
       },
     });
     state.planJob = view;
+    if (revEl0) revEl0.value = "";
     // Tauri/serde 字段兼容
     state.planJobId = view.job_id || view.jobId || null;
     // Job is source of truth after start — top bar + selectedPlan follow job path.

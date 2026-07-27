@@ -2072,6 +2072,48 @@
 .split-role-check { background: #F3EAFB; color: #6b3fa0; }
 .split-role-sys { background: #EEF1F5; color: #4a5560; }
 
+/* Human risk chips (read / write_local / exec / external) — not permission_mode */
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 1.15rem;
+  padding: 0 0.32rem;
+  border-radius: 4px;
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+.risk-read { background: #EEF6F0; color: #2d6a45; }
+.risk-write_local { background: #FFF6E8; color: #9a5b00; }
+.risk-exec { background: #F3EEFC; color: #5b3d9a; }
+.risk-external { background: #FFECEC; color: #b42318; }
+
+.split-revision-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 18rem;
+  flex: 1 1 12rem;
+}
+.split-revision-input {
+  flex: 1 1 auto;
+  min-width: 8rem;
+  max-width: 16rem;
+  height: 1.7rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  background: var(--surface, #fff);
+  color: var(--text, #1a1a1a);
+}
+.split-revision-input::placeholder {
+  color: var(--muted, #8b939c);
+  font-size: 0.72rem;
+}
+
 .split-detail {
   min-width: 0;
 }

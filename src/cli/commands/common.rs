@@ -41,6 +41,7 @@ pub(crate) fn plan_then_load_ir(
             max_parallel,
             preserve_from_job_id: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         },
     )?;

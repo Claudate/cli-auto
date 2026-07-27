@@ -636,6 +636,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         upsert_plan_job(&cfg, &job).unwrap();
@@ -748,6 +749,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         let newer = PlanJob {
@@ -777,6 +779,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         let other = PlanJob {
@@ -806,6 +809,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         upsert_plan_job(&cfg, &older).unwrap();
@@ -845,6 +849,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         let residual = PlanJob {
@@ -874,6 +879,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         upsert_plan_job(&cfg, &confirmed).unwrap();
@@ -914,6 +920,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         let ai8 = PlanJob {
@@ -943,6 +950,7 @@ mod tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            revision_notes: None,
             effort: None,
         };
         upsert_plan_job(&cfg, &direct1).unwrap();
