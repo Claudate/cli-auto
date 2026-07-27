@@ -50,6 +50,9 @@ fn test_config(tmp: &std::path::Path) -> Config {
     config.default.default_provider = "fake".into();
     config.default.worktree = false;
     config.default.poll_interval_secs = 1;
+    // Mode B goldens pin fake workers; disable cost-auto rewrite.
+    config.default.cost_route_enabled = false;
+    config.default.cost_escalate_enabled = false;
     std::fs::create_dir_all(config.runs_dir()).unwrap();
     config
 }

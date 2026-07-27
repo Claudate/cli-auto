@@ -101,6 +101,8 @@ tasks:
     .unwrap();
 
     let mut config = Config::default();
+    config.default.cost_route_enabled = false;
+    config.default.cost_escalate_enabled = false;
     config.state_root = tmp.path().join("state");
     config.default.default_provider = "fake".into();
     config.default.auto_closeout = true;
@@ -194,6 +196,8 @@ tasks:
     .unwrap();
 
     let mut config = Config::default();
+    config.default.cost_route_enabled = false;
+    config.default.cost_escalate_enabled = false;
     config.state_root = tmp.path().join("state");
     config.default.default_provider = "fake".into();
     config.default.auto_rework = true;
@@ -284,6 +288,8 @@ tasks:
     .unwrap();
 
     let mut config = Config::default();
+    config.default.cost_route_enabled = false;
+    config.default.cost_escalate_enabled = false;
     config.state_root = tmp.path().join("state");
     config.default.default_provider = "fake".into();
     config.default.auto_rework = true;
@@ -353,6 +359,8 @@ tasks:
     .unwrap();
 
     let mut config = Config::default();
+    config.default.cost_route_enabled = false;
+    config.default.cost_escalate_enabled = false;
     config.state_root = tmp.path().join("state");
     config.default.default_provider = "fake".into();
     config.default.auto_rework = false;
