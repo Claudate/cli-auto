@@ -539,15 +539,17 @@ export function attachDocumentClick(deps) {
         return;
       }
 
-      const el = el?.closest?.(
+      // Must not redeclare `el` (same function scope) — that SyntaxError killed main.js
+      // and left the shell stuck on「就绪中…」with no icons / no project list.
+      const actionEl = el?.closest?.(
         "button[id], [id].linkish, [id].icon-btn, [id].filter-chip, #brand-home, #split-plan-chip, [data-action]"
       );
-      if (!el) return;
+      if (!actionEl) return;
 
-      if (el.closest?.("#log-view-mode") && el.dataset?.mode) {
+      if (actionEl.closest?.("#log-view-mode") && actionEl.dataset?.mode) {
         const st = state();
         if (!st) return;
-        st.logViewMode = el.dataset.mode || "term";
+        st.logViewMode = actionEl.dataset.mode || "term";
         localStorage.setItem("cco.logViewMode", st.logViewMode);
         $$("#log-view-mode button").forEach((b) =>
           b.classList.toggle("active", b.dataset.mode === st.logViewMode)
@@ -564,10 +566,10 @@ export function attachDocumentClick(deps) {
         }
         return;
       }
-      if (el.closest?.("#log-event-filter") && el.dataset?.evFilter) {
+      if (actionEl.closest?.("#log-event-filter") && actionEl.dataset?.evFilter) {
         const st = state();
         if (!st) return;
-        st.logEventFilter = el.dataset.evFilter || "all";
+        st.logEventFilter = actionEl.dataset.evFilter || "all";
         localStorage.setItem("cco.logEventFilter", st.logEventFilter);
         $$("#log-event-filter [data-ev-filter]").forEach((b) =>
           b.classList.toggle(
@@ -582,17 +584,17 @@ export function attachDocumentClick(deps) {
         if (tasks.length) call("renderCliBoard", tasks);
         return;
       }
-      if (el.closest?.("#log-font-group") && el.dataset?.size) {
-        call("applyLogFontSize", Number(el.dataset.size));
+      if (actionEl.closest?.("#log-font-group") && actionEl.dataset?.size) {
+        call("applyLogFontSize", Number(actionEl.dataset.size));
         return;
       }
 
-      const action = el.dataset?.action || el.id;
+      const action = actionEl.dataset?.action || actionEl.id;
       if (!action) return;
       const fn = UI_ACTIONS[action];
       if (!fn) return;
 
-      if (el.disabled || el.getAttribute("aria-disabled") === "true") return;
+      if (actionEl.disabled || actionEl.getAttribute("aria-disabled") === "true") return;
 
       e.preventDefault();
       Promise.resolve()
