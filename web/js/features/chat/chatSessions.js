@@ -572,7 +572,7 @@ export async function loadChatSession(opts) {
         }
       }
     } else if (sess?.clarify) {
-      // Refresh clarify from disk only when disk is richer / equal — never wipe local picks
+      // Refresh clarify from disk only when disk is richer — never wipe local picks
       const diskSlots = Array.isArray(sess.clarify.slots) ? sess.clarify.slots : [];
       const memSlots = Array.isArray(state.chatClarify?.slots)
         ? state.chatClarify.slots
@@ -581,7 +581,10 @@ export async function loadChatSession(opts) {
         .length;
       const memFilled = memSlots.filter((s) => String(s?.value || "").trim())
         .length;
-      if (diskFilled >= memFilled) {
+      const recentlyTouched =
+        state.chatClarify?._touchAt &&
+        Date.now() - Number(state.chatClarify._touchAt) < 8000;
+      if (!recentlyTouched && diskFilled > memFilled) {
         hydrateClarifyFromSession(sess);
       }
     }

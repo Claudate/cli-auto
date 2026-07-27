@@ -40,6 +40,19 @@ check(
   /const t = eventElement\(e\)/.test(src) || /eventElement\(e\)/.test(src)
 );
 
+// 3b) skip CTA must land a draft (not toast-only Brief)
+check(
+  "skipClarify auto-claims plan draft",
+  /export async function skipClarify/.test(src) &&
+    /skipClarify[\s\S]*claimBriefToPlan/.test(src)
+);
+
+// 3c) paint hook so repaint does not depend only on host bag
+check(
+  "setClarifyPaint paint hook exists",
+  /export function setClarifyPaint/.test(src) && /_clarifyPaint/.test(src)
+);
+
 // 4) Pure pick logic: reimplement minimal advance
 const SLOTS = [
   "target_audience",

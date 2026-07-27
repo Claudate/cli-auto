@@ -17,6 +17,30 @@
  *   toast: (msg: string) => void,
  * }} deps
  */
+/** Text-node clicks have no .closest — climb to Element first. */
+function eventTargetEl(e) {
+  let t = e?.target;
+  if (!t) return null;
+  if (typeof t.closest === "function") return t;
+  if (t.parentElement && typeof t.parentElement.closest === "function") {
+    return t.parentElement;
+  }
+  if (typeof Node !== "undefined" && t.nodeType === Node.TEXT_NODE) {
+    return t.parentElement || null;
+  }
+  return null;
+}
+
+function runClarify(name, ...args) {
+  if (typeof window !== "undefined" && window.ccoChat?.[name]) {
+    return window.ccoChat[name](...args);
+  }
+  const fn =
+    typeof window !== "undefined" ? window[name] : undefined;
+  if (typeof fn === "function") return fn(...args);
+  return undefined;
+}
+
 export function attachDocumentClick(deps) {
   const { UI_ACTIONS, call, g, state, $, $$, toast } = deps;
 
@@ -32,80 +56,164 @@ export function attachDocumentClick(deps) {
         return;
       }
 
-      // Clarify A/B/C / skip / entry — also handle here so text-node clicks
-      // (no Element.closest on target) still work via parentElement climb.
-      {
-        let ct = e.target;
-        if (ct && typeof ct.closest !== "function") {
-          ct = ct.parentElement || ct.parentNode || null;
-        }
-        if (ct && typeof ct.closest === "function") {
-          const clarifyOpt = ct.closest("[data-clarify-option]");
-          if (clarifyOpt) {
-            e.preventDefault();
-            e.stopPropagation();
-            const key = clarifyOpt.getAttribute("data-clarify-option");
-            const slot = clarifyOpt.getAttribute("data-clarify-slot");
-            if (typeof g("pickClarifyOption") === "function") {
-              if (slot && typeof g("ensureClarifyState") === "function") {
-                try {
-                  const st = g("ensureClarifyState")();
-                  if (st && slot) {
-                    // best-effort: set index via exported helpers if present
-                    void st;
-                  }
-                } catch (_) {}
+      // Always resolve to Element — option/example label text is often a Text node.
+      const ct = eventTargetEl(e);
+
+      // Clarify A/B/C / skip / entry / claim (ccoChat first; classic window mirror fallback)
+      if (ct && typeof ct.closest === "function") {
+        const clarifyOpt = ct.closest("[data-clarify-option]");
+        if (clarifyOpt) {
+          e.preventDefault();
+          e.stopPropagation();
+          const key = clarifyOpt.getAttribute("data-clarify-option");
+          const slot = clarifyOpt.getAttribute("data-clarify-slot");
+          if (slot && typeof g("ensureClarifyState") === "function") {
+            try {
+              const st = g("ensureClarifyState")();
+              if (st && Array.isArray(st.slots) === false) st.slots = [];
+              // Align questionIndex to clicked slot so pick uses the right bank row.
+              if (st && slot) {
+                st._touchAt = Date.now();
               }
-              call("pickClarifyOption", key);
-            } else if (window.ccoChat?.pickClarifyOption) {
-              window.ccoChat.pickClarifyOption(key);
-            }
-            return;
+            } catch (_) {}
           }
-          const clarifySkip = ct.closest("[data-clarify-skip]");
-          if (clarifySkip) {
-            e.preventDefault();
-            e.stopPropagation();
-            const note =
-              clarifySkip.getAttribute("data-clarify-skip") || "跳过，先出草稿";
-            if (typeof g("skipClarify") === "function") {
-              call("skipClarify", note);
-            } else if (window.ccoChat?.skipClarify) {
-              window.ccoChat.skipClarify(note);
-            }
-            return;
-          }
-          const clarifyEntry = ct.closest("[data-clarify-entry]");
-          if (clarifyEntry) {
-            e.preventDefault();
-            e.stopPropagation();
-            const id = clarifyEntry.getAttribute("data-clarify-entry");
-            if (typeof g("selectClarifyEntry") === "function") {
-              call("selectClarifyEntry", id);
-            } else if (window.ccoChat?.selectClarifyEntry) {
-              window.ccoChat.selectClarifyEntry(id);
-            }
-            return;
-          }
+          // Pass slot so pickClarifyOption does not depend on questionIndex alone
+          runClarify("pickClarifyOption", key, slot);
+          return;
+        }
+        const clarifySkip = ct.closest("[data-clarify-skip]");
+        if (clarifySkip) {
+          e.preventDefault();
+          e.stopPropagation();
+          const note =
+            clarifySkip.getAttribute("data-clarify-skip") || "跳过，先出草稿";
+          runClarify("skipClarify", note);
+          return;
+        }
+        const clarifyEntry = ct.closest("[data-clarify-entry]");
+        if (clarifyEntry) {
+          e.preventDefault();
+          e.stopPropagation();
+          const id = clarifyEntry.getAttribute("data-clarify-entry");
+          runClarify("selectClarifyEntry", id);
+          return;
+        }
+        const clarifyClaim = ct.closest("[data-clarify-claim]");
+        if (clarifyClaim) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!clarifyClaim.disabled) runClarify("claimBriefToPlan");
+          return;
+        }
+        const clarifyRechat = ct.closest("[data-clarify-rechat]");
+        if (clarifyRechat) {
+          e.preventDefault();
+          e.stopPropagation();
+          runClarify("rechatFromBrief");
+          return;
         }
       }
 
-      const exampleChip = e.target?.closest?.(
+      const exampleChip = ct?.closest?.(
         ".chat-example-chip[data-chat-example]"
       );
       if (exampleChip) {
         e.preventDefault();
+        const text =
+          exampleChip.getAttribute("data-chat-example") ||
+          exampleChip.dataset?.chatExample ||
+          exampleChip.textContent ||
+          "";
         if (typeof g("fillChatExample") === "function") {
-          call(
-            "fillChatExample",
-            exampleChip.dataset.chatExample || exampleChip.textContent
-          );
+          call("fillChatExample", text);
+        } else if (window.ccoChat?.fillChatExample) {
+          window.ccoChat.fillChatExample(text);
+        }
+        return;
+      }
+
+      // Remaining closest lookups must use Element `ct` (text-node safe).
+      const el = ct && typeof ct.closest === "function" ? ct : null;
+
+      // Assistant quiz A/B/C + history fold (chatMsgEnhance)
+      const quizOpt = el?.closest?.("[data-chat-quiz-opt]");
+      if (quizOpt) {
+        e.preventDefault();
+        e.stopPropagation();
+        const msgKey = quizOpt.getAttribute("data-quiz-msg");
+        const qn = quizOpt.getAttribute("data-quiz-q");
+        const key = quizOpt.getAttribute("data-quiz-key");
+        const multi = quizOpt.getAttribute("data-quiz-multi") === "1";
+        if (window.ccoChat?.pickChatQuizOption) {
+          window.ccoChat.pickChatQuizOption(msgKey, qn, key, multi);
+        } else if (typeof g("pickChatQuizOption") === "function") {
+          call("pickChatQuizOption", msgKey, qn, key, multi);
+        }
+        return;
+      }
+      const quizFill = el?.closest?.("[data-chat-quiz-fill]");
+      if (quizFill) {
+        e.preventDefault();
+        e.stopPropagation();
+        const msgKey = quizFill.getAttribute("data-chat-quiz-fill");
+        if (window.ccoChat?.fillChatQuizDraft) {
+          window.ccoChat.fillChatQuizDraft(msgKey);
+        } else if (typeof g("fillChatQuizDraft") === "function") {
+          call("fillChatQuizDraft", msgKey);
+        }
+        return;
+      }
+      const quizSend = el?.closest?.("[data-chat-quiz-send]");
+      if (quizSend) {
+        e.preventDefault();
+        e.stopPropagation();
+        const msgKey = quizSend.getAttribute("data-chat-quiz-send");
+        if (window.ccoChat?.sendChatQuizDraft) {
+          window.ccoChat.sendChatQuizDraft(msgKey);
+        } else if (typeof g("sendChatQuizDraft") === "function") {
+          call("sendChatQuizDraft", msgKey);
+        }
+        return;
+      }
+      const unfoldBtn = el?.closest?.("[data-chat-msg-unfold]");
+      if (unfoldBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const msgKey = unfoldBtn.getAttribute("data-chat-msg-unfold");
+        if (window.ccoChat?.unfoldChatMessage) {
+          window.ccoChat.unfoldChatMessage(msgKey);
+        } else if (typeof g("unfoldChatMessage") === "function") {
+          call("unfoldChatMessage", msgKey);
+        }
+        return;
+      }
+      const foldBtn = el?.closest?.("[data-chat-msg-fold]");
+      if (foldBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const msgKey = foldBtn.getAttribute("data-chat-msg-fold");
+        if (window.ccoChat?.foldChatMessage) {
+          window.ccoChat.foldChatMessage(msgKey);
+        } else if (typeof g("foldChatMessage") === "function") {
+          call("foldChatMessage", msgKey);
+        }
+        return;
+      }
+      const bodyMore = el?.closest?.("[data-chat-body-more]");
+      if (bodyMore) {
+        e.preventDefault();
+        e.stopPropagation();
+        const msgKey = bodyMore.getAttribute("data-chat-body-more");
+        if (window.ccoChat?.expandChatMsgBody) {
+          window.ccoChat.expandChatMsgBody(msgKey);
+        } else if (typeof g("expandChatMsgBody") === "function") {
+          call("expandChatMsgBody", msgKey);
         }
         return;
       }
 
       // P2-2: last_summary 沿用 / 忽略
-      const lastSumBtn = e.target?.closest?.("[data-last-summary]");
+      const lastSumBtn = el?.closest?.("[data-last-summary]");
       if (lastSumBtn) {
         e.preventDefault();
         const act = lastSumBtn.getAttribute("data-last-summary");
@@ -118,7 +226,7 @@ export function attachDocumentClick(deps) {
       }
 
       // P2-2: pin delete in settings
-      const pinDel = e.target?.closest?.("[data-pin-delete]");
+      const pinDel = el?.closest?.("[data-pin-delete]");
       if (pinDel) {
         e.preventDefault();
         const key = pinDel.getAttribute("data-pin-delete");
@@ -130,7 +238,7 @@ export function attachDocumentClick(deps) {
         return;
       }
 
-      const pinAdd = e.target?.closest?.("#btn-pin-add");
+      const pinAdd = el?.closest?.("#btn-pin-add");
       if (pinAdd) {
         e.preventDefault();
         if (typeof g("addProjectPin") === "function") {
@@ -141,7 +249,7 @@ export function attachDocumentClick(deps) {
         return;
       }
 
-      const tplBtn = e.target?.closest?.("[data-plan-template]");
+      const tplBtn = el?.closest?.("[data-plan-template]");
       if (tplBtn) {
         e.preventDefault();
         const tid = tplBtn.getAttribute("data-plan-template");
@@ -149,13 +257,17 @@ export function attachDocumentClick(deps) {
           Promise.resolve(call("applyPlanTemplate", tid)).catch((err) =>
             toast(String(err?.message || err))
           );
+        } else if (window.ccoTemplates?.applyPlanTemplate) {
+          Promise.resolve(window.ccoTemplates.applyPlanTemplate(tid)).catch(
+            (err) => toast(String(err?.message || err))
+          );
         } else {
           toast("模板不可用");
         }
         return;
       }
 
-      const attRm = e.target?.closest?.("[data-att-remove]");
+      const attRm = el?.closest?.("[data-att-remove]");
       if (attRm) {
         e.preventDefault();
         e.stopPropagation();
@@ -166,7 +278,7 @@ export function attachDocumentClick(deps) {
         return;
       }
 
-      const zoomImg = e.target?.closest?.(".chat-img-zoomable[data-img-src]");
+      const zoomImg = el?.closest?.(".chat-img-zoomable[data-img-src]");
       if (zoomImg) {
         e.preventDefault();
         if (typeof g("openImageLightbox") === "function") {
@@ -179,13 +291,13 @@ export function attachDocumentClick(deps) {
         return;
       }
 
-      const planExpand = e.target?.closest?.(".btn-chat-plan-expand");
+      const planExpand = el?.closest?.(".btn-chat-plan-expand");
       if (planExpand) {
         e.preventDefault();
         call("toggleChatPlanExpand", planExpand);
         return;
       }
-      const planAdopt = e.target?.closest?.(".btn-chat-plan-adopt");
+      const planAdopt = el?.closest?.(".btn-chat-plan-adopt");
       if (planAdopt) {
         e.preventDefault();
         Promise.resolve(call("adoptChatPlanFromCard", planAdopt)).catch((err) =>
@@ -193,7 +305,7 @@ export function attachDocumentClick(deps) {
         );
         return;
       }
-      const planAssign = e.target?.closest?.(".btn-chat-plan-assign");
+      const planAssign = el?.closest?.(".btn-chat-plan-assign");
       if (planAssign) {
         e.preventDefault();
         // B2: save if needed then direct-assign (no start_run)
@@ -206,7 +318,7 @@ export function attachDocumentClick(deps) {
         ).catch((err) => toast(String(err?.message || err)));
         return;
       }
-      const planDirect = e.target?.closest?.(".btn-chat-plan-direct");
+      const planDirect = el?.closest?.(".btn-chat-plan-direct");
       if (planDirect) {
         e.preventDefault();
         // 直接执行：整份计划单任务；仍经 Mode B confirm（禁止 start_run）
@@ -219,7 +331,7 @@ export function attachDocumentClick(deps) {
       }
 
       // Plan-card「查看拆分结果」— same restore path as plansMgmt / planRail
-      const planViewSplit = e.target?.closest?.(".btn-chat-plan-view-split");
+      const planViewSplit = el?.closest?.(".btn-chat-plan-view-split");
       if (planViewSplit) {
         e.preventDefault();
         e.stopPropagation();
@@ -252,7 +364,7 @@ export function attachDocumentClick(deps) {
       }
 
       // shell-chrome C1：rail「查看拆分结果」— 勿当选中整行
-      const railView = e.target?.closest?.("[data-plan-rail-view]");
+      const railView = el?.closest?.("[data-plan-rail-view]");
       if (railView) {
         e.preventDefault();
         e.stopPropagation();
@@ -269,7 +381,7 @@ export function attachDocumentClick(deps) {
         return;
       }
 
-      const railItem = e.target?.closest?.(".plan-rail-item[data-plan-rail]");
+      const railItem = el?.closest?.(".plan-rail-item[data-plan-rail]");
       if (railItem) {
         e.preventDefault();
         const p = railItem.dataset.planRail;
@@ -283,7 +395,7 @@ export function attachDocumentClick(deps) {
         return;
       }
 
-      const mgmtItem = e.target?.closest?.(".plans-mgmt-item[data-plans-mgmt]");
+      const mgmtItem = el?.closest?.(".plans-mgmt-item[data-plans-mgmt]");
       if (mgmtItem) {
         e.preventDefault();
         const p = mgmtItem.dataset.plansMgmt;
@@ -296,10 +408,10 @@ export function attachDocumentClick(deps) {
       }
 
       // shell-chrome B1：移除按钮由 shellUi 绑定，勿当选中
-      if (e.target?.closest?.(".project-item-remove")) {
+      if (el?.closest?.(".project-item-remove")) {
         return;
       }
-      const proj = e.target?.closest?.(".project-item[data-path]");
+      const proj = el?.closest?.(".project-item[data-path]");
       if (proj) {
         e.preventDefault();
         Promise.resolve(call("selectProject", proj.dataset.path)).catch((err) =>
@@ -307,7 +419,7 @@ export function attachDocumentClick(deps) {
         );
         return;
       }
-      const planItem = e.target?.closest?.(".plan-item[data-plan]");
+      const planItem = el?.closest?.(".plan-item[data-plan]");
       if (planItem) {
         e.preventDefault();
         Promise.resolve(call("selectPlan", planItem.dataset.plan))
@@ -321,7 +433,7 @@ export function attachDocumentClick(deps) {
         return;
       }
       // Ensure E4: inspect fail primary CTA → start_rework (not re-run examiner).
-      const reworkBtn = e.target?.closest?.("[data-rework]");
+      const reworkBtn = el?.closest?.("[data-rework]");
       if (reworkBtn?.dataset?.rework) {
         e.preventDefault();
         e.stopPropagation();
@@ -335,7 +447,7 @@ export function attachDocumentClick(deps) {
         toast("结果台未就绪，请稍后重试");
         return;
       }
-      const rerunBtn = e.target?.closest?.("[data-rerun]");
+      const rerunBtn = el?.closest?.("[data-rerun]");
       if (rerunBtn?.dataset?.rerun) {
         e.preventDefault();
         e.stopPropagation();
@@ -353,7 +465,7 @@ export function attachDocumentClick(deps) {
         toast("执行台未就绪，请稍后重试");
         return;
       }
-      const taskChip = e.target?.closest?.(
+      const taskChip = el?.closest?.(
         ".task-tile[data-task], .task-chip[data-task]"
       );
       if (taskChip) {
@@ -380,7 +492,7 @@ export function attachDocumentClick(deps) {
         return;
       }
 
-      const closeBtn = e.target?.closest?.("[data-close]");
+      const closeBtn = el?.closest?.("[data-close]");
       if (closeBtn?.dataset?.close) {
         e.preventDefault();
         e.stopPropagation();
@@ -389,7 +501,7 @@ export function attachDocumentClick(deps) {
         call("renderCliBoard", st?.live?.tasks || []);
         return;
       }
-      const copyBtn = e.target?.closest?.("[data-copy]");
+      const copyBtn = el?.closest?.("[data-copy]");
       if (copyBtn?.dataset?.copy) {
         e.preventDefault();
         e.stopPropagation();
@@ -406,7 +518,7 @@ export function attachDocumentClick(deps) {
           .catch(() => toast("复制失败"));
         return;
       }
-      const stopBtn = e.target?.closest?.("[data-stop]");
+      const stopBtn = el?.closest?.("[data-stop]");
       if (stopBtn?.dataset?.stop) {
         e.preventDefault();
         e.stopPropagation();
@@ -417,7 +529,7 @@ export function attachDocumentClick(deps) {
         );
         return;
       }
-      const extBtn = e.target?.closest?.("[data-extterm]");
+      const extBtn = el?.closest?.("[data-extterm]");
       if (extBtn?.dataset?.extterm) {
         e.preventDefault();
         e.stopPropagation();
@@ -427,7 +539,7 @@ export function attachDocumentClick(deps) {
         return;
       }
 
-      const el = e.target?.closest?.(
+      const el = el?.closest?.(
         "button[id], [id].linkish, [id].icon-btn, [id].filter-chip, #brand-home, #split-plan-chip, [data-action]"
       );
       if (!el) return;

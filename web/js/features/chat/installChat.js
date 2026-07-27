@@ -18,6 +18,7 @@ import * as planRail from "./planRail.js";
 import * as planFull from "./planFull.js";
 import * as chatApi from "./chatApi.js";
 import * as chatClarify from "./chatClarify.js";
+import * as chatMsgEnhance from "./chatMsgEnhance.js";
 import { createChatViewModel } from "./ChatViewModel.js";
 
 /** Wire host bag once (idempotent). */
@@ -34,10 +35,26 @@ export function installChatHost() {
     ...planRail,
     ...planFull,
     ...chatClarify,
+    ...chatMsgEnhance,
   });
   // t3: bind clarify click once at host install
   try {
     chatClarify.installClarifyUi();
+  } catch (_) {}
+  // Direct paint hook — skip/pick must not rely only on host-bag order
+  // (missing renderChatMessages made skip look like toast-only).
+  try {
+    if (typeof chatClarify.setClarifyPaint === "function") {
+      chatClarify.setClarifyPaint(() => {
+        if (typeof chatActions.renderChatMessages === "function") {
+          chatActions.renderChatMessages();
+          return;
+        }
+        if (typeof host.renderChatMessages === "function") {
+          host.renderChatMessages();
+        }
+      });
+    }
   } catch (_) {}
   return host;
 }
@@ -122,6 +139,13 @@ export function createChatDesk(opts = {}) {
     shouldShowBrief: chatClarify.shouldShowBrief,
     renderHollowBarHtml: chatClarify.renderHollowBarHtml,
     CLARIFY_COPY: chatClarify.CLARIFY_COPY,
+    // 可点选 A/B/C + 历史折叠
+    pickChatQuizOption: chatMsgEnhance.pickChatQuizOption,
+    fillChatQuizDraft: chatMsgEnhance.fillChatQuizDraft,
+    sendChatQuizDraft: chatMsgEnhance.sendChatQuizDraft,
+    unfoldChatMessage: chatMsgEnhance.unfoldChatMessage,
+    foldChatMessage: chatMsgEnhance.foldChatMessage,
+    expandChatMsgBody: chatMsgEnhance.expandChatMsgBody,
     toggleChatPlanExpand: chatFormat.toggleChatPlanExpand,
     adoptChatPlanFromCard: chatFormat.adoptChatPlanFromCard,
     dismissChatEnvBar: chatActions.dismissChatEnvBar,
@@ -185,15 +209,24 @@ export function createChatDesk(opts = {}) {
   };
   desk.savePlan = (args) => chatApi.savePlan(args);
 
-  // Classic / bindUiClick g("pickClarifyOption") looks up window[name].
-  // Mirror clarify actions so capture handlers outside ccoChat still work.
+  // Classic / bindUiClick g("name") looks up window[name] — mirror so both
+  // capture (chatClarify) and bubble (bindUiClick) paths resolve without ccoChat.
   if (typeof window !== "undefined") {
     window.pickClarifyOption = chatClarify.pickClarifyOption;
     window.skipClarify = chatClarify.skipClarify;
     window.selectClarifyEntry = chatClarify.selectClarifyEntry;
     window.claimBriefToPlan = chatClarify.claimBriefToPlan;
+    window.rechatFromBrief = chatClarify.rechatFromBrief;
     window.ensureClarifyState = chatClarify.ensureClarifyState;
     window.installClarifyUi = chatClarify.installClarifyUi;
+    window.fillChatExample = chatActions.fillChatExample;
+    window.handleLastSummaryAction = chatActions.handleLastSummaryAction;
+    window.pickChatQuizOption = chatMsgEnhance.pickChatQuizOption;
+    window.fillChatQuizDraft = chatMsgEnhance.fillChatQuizDraft;
+    window.sendChatQuizDraft = chatMsgEnhance.sendChatQuizDraft;
+    window.unfoldChatMessage = chatMsgEnhance.unfoldChatMessage;
+    window.foldChatMessage = chatMsgEnhance.foldChatMessage;
+    window.expandChatMsgBody = chatMsgEnhance.expandChatMsgBody;
   }
 
   return desk;

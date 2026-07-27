@@ -151,6 +151,16 @@ export function stashChatSession(path, sessionId) {
             : [],
         }
       : null,
+    // quiz picks + fold prefs (session-local UI)
+    quizDraft: state.chatQuizDraft
+      ? JSON.parse(JSON.stringify(state.chatQuizDraft))
+      : null,
+    msgFold: state.chatMsgFold
+      ? { ...state.chatMsgFold }
+      : null,
+    msgBodyOpen: state.chatMsgBodyOpen
+      ? { ...state.chatMsgBodyOpen }
+      : null,
   };
   // Legacy single-key (project only) for older page-hop paths still reading it.
   state.chatSessions[p] = state.chatSessions[key];
@@ -198,6 +208,15 @@ export function restoreChatSession(path, sessionId) {
         ? c.clarify.assumptions.map((a) => ({ ...a }))
         : [],
     };
+  }
+  if (c.quizDraft && typeof c.quizDraft === "object") {
+    state.chatQuizDraft = JSON.parse(JSON.stringify(c.quizDraft));
+  }
+  if (c.msgFold && typeof c.msgFold === "object") {
+    state.chatMsgFold = { ...c.msgFold };
+  }
+  if (c.msgBodyOpen && typeof c.msgBodyOpen === "object") {
+    state.chatMsgBodyOpen = { ...c.msgBodyOpen };
   }
   // Do not restore busy across project/session switches; only same-session page hops.
   if (
@@ -249,18 +268,25 @@ export function applyChatDraftFromSession(sess) {
     const memFilled = memSlots.filter((s) => String(s?.value || "").trim()).length;
     const diskPhase = String(sess.clarify.phase || "not_started");
     const memPhase = String(state.chatClarify?.phase || "not_started");
+    const recentlyTouched =
+      state.chatClarify?._touchAt &&
+      Date.now() - Number(state.chatClarify._touchAt) < 8000;
     const memAhead =
+      recentlyTouched ||
       memFilled > diskFilled ||
       (memFilled > 0 && diskFilled === 0) ||
       (memPhase === "clarifying" &&
         (diskPhase === "not_started" || diskPhase === "claimed_to_plan") &&
-        memFilled >= diskFilled);
+        memFilled >= diskFilled) ||
+      (memPhase === "brief_ready" && diskPhase !== "brief_ready" && memFilled > 0) ||
+      (memPhase === "skipped_to_plan" && diskPhase === "not_started");
     if (memAhead) {
       // Keep local picks; only refresh uiStatus defaults
       if (state.chatClarify) {
         if (state.chatClarify.uiStatus == null) state.chatClarify.uiStatus = "idle";
       }
     } else {
+      const prevTouch = state.chatClarify?._touchAt;
       state.chatClarify = {
         schema_version: sess.clarify.schema_version || 1,
         entry: sess.clarify.entry || "idea_to_plan",
@@ -277,8 +303,14 @@ export function applyChatDraftFromSession(sess) {
         errorText: state.chatClarify?.errorText || null,
         questionIndex: state.chatClarify?.questionIndex || 0,
         selectedOption: state.chatClarify?.selectedOption || null,
+        _touchAt: prevTouch || null,
       };
     }
+  } else if (
+    state.chatClarify?._touchAt &&
+    Date.now() - Number(state.chatClarify._touchAt) < 8000
+  ) {
+    // Disk has no clarify yet — never wipe a just-clicked local state
   }
 }
 

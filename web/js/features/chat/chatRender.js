@@ -34,6 +34,15 @@ import {
   ensureClaimDraftMessageVisible,
   renderHollowBarHtml,
 } from "./chatClarify.js";
+import {
+  enhanceAssistantBody,
+  shouldFoldMessage,
+  shouldClampBody,
+  wrapClampedBody,
+  renderFoldBarHtml,
+  renderFoldAgainBtn,
+  ensureChatMsgEnhanceStyles,
+} from "./chatMsgEnhance.js";
 
 export function fillChatExample(text) {
   const input = $("#chat-input");
@@ -139,11 +148,14 @@ export function renderChatMessages() {
   // (or stream partials, which force activePlan:false). Earlier "last assistant
   // only" froze unexecuted drafts after any later AI turn / preview reply.
   // t3: inline clarify strip when still in clarify flow with messages present
+  ensureChatMsgEnhanceStyles();
   const clarifyInline = renderClarifyInlineIfNeeded();
-  let html = (clarifyInline || "") + msgs
-    .map((m) => {
+  const total = msgsNow.length;
+  let html = (clarifyInline || "") + msgsNow
+    .map((m, idx) => {
       const role = m.role === "assistant" ? "assistant" : m.role === "system" ? "system" : "user";
       const label = role === "assistant" ? "AI" : role === "system" ? "系统" : "我";
+      const content = m.content || "";
       const atts = Array.isArray(m.attachments) ? m.attachments : [];
       const attHtml = atts.length
         ? `<div class="chat-msg-atts">${atts
@@ -171,10 +183,45 @@ export function renderChatMessages() {
             .join("")}</div>`
         : "";
       const activePlan = role === "assistant";
-      return `<div class="chat-msg chat-msg-${role}">
-        <div class="chat-msg-role">${label}</div>
-        <div class="chat-msg-body md-body">${chatFormatBody(m.content || "", { activePlan })}${attHtml}</div>
-      </div>`;
+      // Assistant numbered A/B/C → clickable quiz; else normal md
+      let bodyInner;
+      let usedQuiz = false;
+      if (role === "assistant") {
+        const enh = enhanceAssistantBody(content, idx, (t) =>
+          chatFormatBody(t, { activePlan })
+        );
+        bodyInner = enh.html;
+        usedQuiz = !!enh.usedQuiz;
+      } else {
+        bodyInner = chatFormatBody(content, { activePlan: false });
+      }
+      // Long non-quiz bodies: clamp with 展开全部
+      if (shouldClampBody(content, idx, { usedQuiz })) {
+        bodyInner = wrapClampedBody(bodyInner, idx, true);
+      }
+      // Older turns: whole bubble collapsed to one-line bar (self-expand)
+      const forceOpen = usedQuiz && total - 1 - idx < 2;
+      if (shouldFoldMessage(idx, total, content, { forceOpen })) {
+        return (
+          `<div class="chat-msg chat-msg-${role} is-folded" data-msg-idx="${idx}">` +
+          renderFoldBarHtml(label, content, idx) +
+          `</div>`
+        );
+      }
+      // 「收起」：非最近两条，或用户曾手动展开过
+      const foldKey = `m${idx}`;
+      const showFoldAgain =
+        total > 2 &&
+        (total - 1 - idx >= 2 ||
+          (state.chatMsgFold && state.chatMsgFold[foldKey] === false));
+      const foldAgain = showFoldAgain ? renderFoldAgainBtn(idx) : "";
+      return (
+        `<div class="chat-msg chat-msg-${role}" data-msg-idx="${idx}">` +
+        `<div class="chat-msg-role">${label}</div>` +
+        foldAgain +
+        `<div class="chat-msg-body md-body">${bodyInner}${attHtml}</div>` +
+        `</div>`
+      );
     })
     .join("");
   // Waiting bubble: user already sent; UI stays responsive while CLI runs.

@@ -1347,65 +1347,99 @@ export function shouldShowBrief(c) {
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
+/** @type {null | (() => void)} */
+let _clarifyPaint = null;
+
+/**
+ * installChatHost registers the real renderChatMessages here so skip/pick
+ * never depend solely on host-bag spread order (empty bag → toast-only bug).
+ * @param {(() => void) | null} fn
+ */
+export function setClarifyPaint(fn) {
+  _clarifyPaint = typeof fn === "function" ? fn : null;
+}
+
 function repaint() {
-  // host bag is filled by installChatHost after all modules load (no import cycle).
-  try {
-    if (typeof host.renderChatPage === "function") {
-      host.renderChatPage();
-      return;
+  // Prefer messages-only paint; fall through on throw so skip never looks dead.
+  const tryCall = (fn) => {
+    if (typeof fn !== "function") return false;
+    try {
+      fn();
+      return true;
+    } catch (err) {
+      console.warn("clarify repaint step failed", err);
+      return false;
     }
-  } catch (_) {}
-  try {
-    if (typeof host.renderChatMessages === "function") {
-      host.renderChatMessages();
-      return;
-    }
-  } catch (_) {}
+  };
+  if (tryCall(_clarifyPaint)) return;
+  if (tryCall(host.renderChatMessages)) return;
+  if (tryCall(host.renderChatPage)) return;
   try {
     const desk =
       typeof window !== "undefined" ? window.ccoChat || null : null;
-    if (desk && typeof desk.renderChatPage === "function") {
-      desk.renderChatPage();
+    if (desk && tryCall(desk.renderChatMessages?.bind(desk))) return;
+    if (desk && tryCall(desk.renderChatPage?.bind(desk))) return;
+  } catch (_) {}
+  // Last resort: classic globals (try both)
+  try {
+    if (typeof window !== "undefined" && typeof window.renderChatMessages === "function") {
+      window.renderChatMessages();
       return;
     }
-    if (desk && typeof desk.renderChatMessages === "function") {
-      desk.renderChatMessages();
+  } catch (_) {}
+  try {
+    if (typeof window !== "undefined" && typeof window.renderChatPage === "function") {
+      window.renderChatPage();
     }
   } catch (_) {}
 }
 
 export function selectClarifyEntry(entryId) {
+  ensureChatState();
   ensureClarifyState();
   const c = state.chatClarify;
   const next = normalizeEntry(entryId);
-  // Re-tap same grill entry while already clarifying → no-op
+  // Re-tap same grill entry while already clarifying → still repaint so UI feels alive
   if (
     c.entry === next &&
     next !== "plan_only" &&
     (c.phase === "clarifying" || c.phase === "brief_ready")
   ) {
+    c._touchAt = Date.now();
+    repaint();
     return;
   }
   c.entry = next;
   c.uiStatus = "idle";
   c.errorText = null;
   c.selectedOption = null;
+  c._touchAt = Date.now();
 
   if (next === "plan_only") {
-    // Escape hatch: skip grilling; still force min chapters later (t4/plan).
+    // Escape hatch: skip grilling → same one-click draft as skip CTA.
     applySkipWithAssumptionsLocal(c, "直接写计划");
-    toast("已选直接写计划（跳过盘问）");
-  } else {
-    // Grill paths: enter clarifying. Returning from skip drops assumed placeholders.
-    if (c.phase === "skipped_to_plan") {
-      c.skip_requested = false;
-      c.slots = (c.slots || []).filter((s) => s.kind === "explicit");
-      c.assumptions = [];
-    }
-    if (c.phase !== "claimed_to_plan") {
-      c.phase = "clarifying";
-      c.skip_requested = false;
-    }
+    mirrorClarifyToSession(c);
+    try {
+      if (typeof stashChatSession === "function") stashChatSession(state.selectedPath);
+    } catch (_) {}
+    repaint();
+    void claimBriefToPlan().catch((err) => {
+      console.warn("plan_only auto-claim failed", err);
+      toast("已选直接写计划，请点「写成计划」");
+      repaint();
+    });
+    return;
+  }
+
+  // Grill paths: enter clarifying. Returning from skip drops assumed placeholders.
+  if (c.phase === "skipped_to_plan") {
+    c.skip_requested = false;
+    c.slots = (c.slots || []).filter((s) => s.kind === "explicit");
+    c.assumptions = [];
+  }
+  if (c.phase !== "claimed_to_plan") {
+    c.phase = "clarifying";
+    c.skip_requested = false;
   }
 
   mirrorClarifyToSession(c);
@@ -1415,10 +1449,19 @@ export function selectClarifyEntry(entryId) {
   repaint();
 }
 
-export function pickClarifyOption(optionKey) {
+/**
+ * @param {string} optionKey A|B|C
+ * @param {string} [slotId] data-clarify-slot from the clicked button (preferred)
+ */
+export function pickClarifyOption(optionKey, slotId) {
   try {
+    ensureChatState();
     ensureClarifyState();
     const c = state.chatClarify;
+    if (!c || typeof c !== "object") {
+      toast("澄清状态未就绪，请再点一次");
+      return;
+    }
     // Empty-state card may still show while phase is not_started — promote first.
     if (c.phase === "not_started") c.phase = "clarifying";
     // Allow picks during brief_ready (re-answer) / clarifying / not_started.
@@ -1437,12 +1480,30 @@ export function pickClarifyOption(optionKey) {
     const key = String(optionKey || "").trim().toUpperCase();
     if (!key) return;
 
-    let q = currentQuestion(c);
+    // Prefer the slot stamped on the button — avoids stale questionIndex races.
+    let q = null;
+    const preferSlot = slotId && String(slotId).trim();
+    if (preferSlot) {
+      q = CLARIFY_SLOT_QUESTIONS.find((x) => x.id === preferSlot) || null;
+      if (q) {
+        c.questionIndex = Math.max(
+          0,
+          CLARIFY_SLOT_QUESTIONS.findIndex((x) => x.id === q.id)
+        );
+      }
+    }
+    if (!q) q = currentQuestion(c);
     if (!q) {
       // All filled → brief-ready marker (t4 will show Brief)
       c.phase = "brief_ready";
       c.selectedOption = null;
+      c._touchAt = Date.now();
       mirrorClarifyToSession(c);
+      try {
+        if (typeof stashChatSession === "function") {
+          stashChatSession(state.selectedPath);
+        }
+      } catch (_) {}
       repaint();
       return;
     }
@@ -1468,16 +1529,15 @@ export function pickClarifyOption(optionKey) {
     }
     if (!opt) {
       console.warn("pickClarifyOption: unknown option", optionKey, q?.id);
+      toast("这个选项没对上，请再点一次");
       return;
     }
 
     c.selectedOption = key;
-    const ok = setSlotFillLocal(c, q.id, opt.text, "explicit");
-    if (!ok) {
-      // same value re-click — still advance
-    }
+    setSlotFillLocal(c, q.id, opt.text, "explicit");
     c.uiStatus = "idle";
     c.errorText = null;
+    c._touchAt = Date.now();
     // Advance to next missing
     const missing = missingRequiredSlots(c);
     if (!missing.length) {
@@ -1519,23 +1579,41 @@ function mirrorClarifyToSession(c) {
 
 /**
  * User skip:「跳过，先出草稿 / 其余你帮我选」
+ * Product CTA promises a draft in one click — fill assumptions then claim.
+ * (Stopping at Brief alone felt like toast-only / no reaction.)
  * @param {string} [note]
+ * @returns {Promise<void>}
  */
-export function skipClarify(note) {
+export async function skipClarify(note) {
+  ensureChatState();
   ensureClarifyState();
   const c = state.chatClarify;
   if (c.phase === "claimed_to_plan") {
     toast("计划草稿已写好。可点「拆成步骤」，或「再改一改」");
     return;
   }
+  if (c._claimBusy) return;
   const n = note && String(note).trim() ? String(note).trim() : CLARIFY_COPY.skipCta;
   applySkipWithAssumptionsLocal(c, n);
+  c._touchAt = Date.now();
   mirrorClarifyToSession(c);
   try {
     if (typeof stashChatSession === "function") stashChatSession(state.selectedPath);
   } catch (_) {}
-  toast("已跳过，按常见假设先整理");
+  // Paint Brief/status immediately so UI never freezes on toast alone.
   repaint();
+  try {
+    const result = await claimBriefToPlan();
+    // claimBriefToPlan already toasts success + injects plan card.
+    if (result && result.ok === false && result.error === "not_ready") {
+      toast("已按常见假设整理好，请点「写成计划」");
+      repaint();
+    }
+  } catch (err) {
+    console.warn("skipClarify auto-claim failed", err);
+    toast("已按常见假设整理好，请点「写成计划」");
+    repaint();
+  }
 }
 
 /** Set UI status for loading / error simulation & real send wiring. */
@@ -2214,12 +2292,34 @@ function eventElement(e) {
 
 export function ensureClarifyClickBinding() {
   if (typeof document === "undefined") return;
-  // Always (re)bind once per page; allow re-entry after HMR / package reload
+  // Idempotent: one capture listener for the whole app lifetime
   if (_clarifyClickBound) return;
   _clarifyClickBound = true;
 
   const onClarifyClick = (e) => {
-    const t = eventElement(e);
+    // Prefer composedPath so shadow/text-node clicks still resolve to the button
+    let t = null;
+    try {
+      const path = typeof e.composedPath === "function" ? e.composedPath() : null;
+      if (Array.isArray(path)) {
+        t = path.find(
+          (n) =>
+            n &&
+            typeof n.closest === "function" &&
+            (n.hasAttribute?.("data-clarify-option") ||
+              n.hasAttribute?.("data-clarify-entry") ||
+              n.hasAttribute?.("data-clarify-skip") ||
+              n.hasAttribute?.("data-clarify-claim") ||
+              n.hasAttribute?.("data-clarify-assign") ||
+              n.hasAttribute?.("data-clarify-rechat") ||
+              n.hasAttribute?.("data-clarify-retry") ||
+              n.classList?.contains?.("chat-clarify") ||
+              n.classList?.contains?.("chat-clarify-option") ||
+              n.classList?.contains?.("chat-clarify-entry"))
+        ) || path.find((n) => n && typeof n.closest === "function");
+      }
+    } catch (_) {}
+    if (!t) t = eventElement(e);
     if (!t) return;
 
     // Only handle inside clarify UI (avoid fighting other capture handlers)
@@ -2252,9 +2352,11 @@ export function ensureClarifyClickBinding() {
           if (c.phase === "not_started" || c.phase === "brief_ready") {
             c.phase = "clarifying";
           }
+          c._touchAt = Date.now();
         } catch (_) {}
       }
-      pickClarifyOption(key);
+      // Pass slot so pick does not depend on questionIndex alone
+      pickClarifyOption(key, slot);
       return;
     }
     const skipBtn = t.closest("[data-clarify-skip]");

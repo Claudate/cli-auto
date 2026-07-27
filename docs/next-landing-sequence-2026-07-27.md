@@ -13,7 +13,7 @@
 > | 架构 | [`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)（A0–A5 ✅ · **不**重开） |
 >
 > 历史总账 [`gap-and-landing-plan-2026-07-18.md`](./gap-and-landing-plan-2026-07-18.md) D5 池：**不排期则不碰**；本序出池项须写明对应池 ID 或显式用户疼痛。  
-> 状态：**W0 ✅（commit+冒烟；GUI 目视 residual）· W1 ✅ · W2 自动化绿 / 人工 V1–V5 ☐ · W3 S3/S4 ✅ · S2/S5/S6 不做 · W4 无新痛** · 勾选在各真源；本文只改本状态行与 §9。
+> 状态：**W0 ✅（commit+冒烟；GUI 30s 目视 residual）· W1 ✅ · W2 自动化代理 §6.1 ✅ / 真人 V1–V5 ☐ · W3 S3/S4 ✅ · S2/S5/S6 不做 · W4 无新痛** · 勾选在各真源；本文只改本状态行与 §9。
 
 [PROTOCOL]: 禁止在本文复制各真源的任务级 ☐ 表；禁止平行「N0–N4 实现勾选」替代上表；禁止旁路 `confirm_start`；禁止把 Claude Code 源码仓能力搬进 cco；落地后同步 `docs/CLAUDE.md` 活跃索引。
 
@@ -226,3 +226,4 @@ Day 2–3   W3          S4/S3 核销；S2 仅当列表痛
 |------|------|
 | 2026-07-27 | 初版：W0 澄清出货 · W1 渴望对账 · W2 Ensure 人工 · W3 S 核销 · W4 疼痛打磨；勾选回既有真源 |
 | 2026-07-27 | **执行**：W0 测绿+冒烟+关逻辑 residual（GUI 目视仍 open）· W1 对账+模板五节 · W3 S3/S4 核销 · W2 人工 V1–V5 仍 ☐ |
+| 2026-07-27 | **W2 代理加厚**：`ensure-v3-cta-smoke` + inspect §6.1 证据表；再跑 ensure/closeout/classify 绿；**仍不关**真人 V1–V5 / 澄清 GUI 目视 |

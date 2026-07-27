@@ -24,8 +24,8 @@ cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**�
 
 ### 还在做（活跃落地 · 可有 ☐）
 
-next-landing-sequence-2026-07-27.md: **下一轮落地序（协调）**（**W0/W1/W3 ✅** · W2 人工 V1–V5 ☐ · W4 无新痛；**不**替代各题勾选真源；**不**平行第二套阶段表）
-inspect-ensure-close-loop-2026-07-24.md: **巡检关账闭环 Ensure**（wros 末尾 inspect 死循环根治 · **E0–E6 ✅**（自动化金样+打包）· **wros 人工 V1–V5 ☐** · host 勾选表 · closeout · 有界关账 · 自动 rework · UI 反误导；**本问题唯一勾选落点**）
+next-landing-sequence-2026-07-27.md: **下一轮落地序（协调）**（**W0/W1/W3 ✅** · W2 自动化代理 ✅ / **真人 V1–V5 ☐** · W0 GUI 目视 residual · W4 无新痛；**不**替代各题勾选真源）
+inspect-ensure-close-loop-2026-07-24.md: **巡检关账闭环 Ensure**（**E0–E6 ✅** · §6.1 自动化代理 ✅ · **wros 真人 V1–V5 ☐** · closeout · 有界关账 · 自动 rework · UI 反误导；**本问题唯一勾选落点**）
 clarify-phase-vibe-check-subset.md: **澄清相 · 能力边界真源**（vibe-check 轻量子集 · 三入口/Brief 认领≠开跑 · 非 vibe-check/guided 全量 · ⊆ PRODUCT ①）
 chat-20260725-0402.md: **澄清相实施计划**（t1–t6 ✅ · inspect PASS · W0 冒烟绿 · **桌面 GUI 30s 目视 residual** · 成功标准见文末；证据 CLOSEOUT · VERDICT · clarify/claim smoke）
 subjective-desire-cco-subset-landing-2026-07-22.md: **主观渴望 · 对本仓有用子集落地**（**D0 ✅ · D1/D2 主路径由澄清吸收 ✅** · 残余 D1-2/D2-3 可选 · 无人生 Pack · **禁止 D3**；W1 对账 §0.4）
