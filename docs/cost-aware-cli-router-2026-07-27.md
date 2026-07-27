@@ -117,6 +117,7 @@ cost_escalate_enabled = true       # P1；失败后升档
 | Config | `cost_route_enabled` / `cost_escalate_enabled` / **`cost_intent_enabled`** · `run_max_budget_usd` |
 | Settings UI | 卡住与重试组：三开关 + `cost_route_note`（经 `SettingsView`） |
 | CLI 开跑 | `confirm_materialize` / materialize 第四返回值 → 打印费用摘要一行 |
+| 拆分确认屏 | `PlanJobView.cost_route_summary` banner + 任务 `cost_route_hint` chip（dry-run，不改 SoT） |
 | Runtime | `provider_unhealthy`：preflight 失败 / start 失败 → 本 run 升档与预算降档跳过 |
 
 ---

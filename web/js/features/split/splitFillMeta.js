@@ -189,6 +189,9 @@ export function fillSplitMeta(job, ctx = {}) {
   // P1-4: plan acceptance stub/missing — yellow bar; never disables confirm.
   paintAcceptanceBanner(job, { runLocked });
 
+  // Cost-route dry-run banner (Rust DTO; no JS policy).
+  paintCostRouteBanner(job, { runLocked });
+
   const applyFlowModeBadge = g("applyFlowModeBadge");
   if (typeof applyFlowModeBadge === "function") {
     applyFlowModeBadge(
@@ -206,6 +209,43 @@ export function fillSplitMeta(job, ctx = {}) {
     editing,
     planJobId,
   });
+}
+
+/**
+ * Cost-auto preview banner from job.cost_route_summary (confirm desk only).
+ * Hidden when off / no rewrite / run locked.
+ */
+function paintCostRouteBanner(job, { runLocked } = {}) {
+  let bar = $("split-cost-route-banner") || $("#split-cost-route-banner");
+  if (!bar) {
+    const head = document.querySelector("#plan-phase-confirm .split-head-main");
+    if (head) {
+      bar = document.createElement("div");
+      bar.id = "split-cost-route-banner";
+      bar.className = "split-cost-route-banner";
+      bar.setAttribute("role", "status");
+      const after =
+        $("split-acceptance-banner") ||
+        $("split-optional-banner") ||
+        head.querySelector("#split-acceptance-banner");
+      if (after && after.parentNode === head) {
+        after.insertAdjacentElement("afterend", bar);
+      } else {
+        head.appendChild(bar);
+      }
+    }
+  }
+  if (!bar) return;
+  const line = String(
+    job?.cost_route_summary || job?.costRouteSummary || ""
+  ).trim();
+  if (line && !runLocked) {
+    bar.hidden = false;
+    bar.textContent = line.startsWith("费用") ? line : `费用优选：${line}`;
+  } else {
+    bar.hidden = true;
+    bar.textContent = "";
+  }
 }
 
 /**

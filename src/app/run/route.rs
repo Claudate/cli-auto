@@ -8,7 +8,8 @@
 
 use crate::config::Config;
 use crate::domain::worker::{
-    apply_route_fill, catalog_provider_ids, filter_auto_available, RouteFillMode, RouteFillReport,
+    apply_cost_aware_routing_with_opts, apply_route_fill, catalog_provider_ids,
+    filter_auto_available, CostRouteOpts, CostRouteReport, RouteFillMode, RouteFillReport,
 };
 use crate::plan::PlanIR;
 use crate::runtime::provider::resolve_bin_on_disk;
@@ -66,4 +67,80 @@ pub fn list_cost_route_available(config: &Config) -> Vec<String> {
         names.push(def.to_ascii_lowercase());
     }
     filter_auto_available(names)
+}
+
+/// Dry-run cost routing on a **clone** of the plan (confirm desk preview).
+///
+/// Does not mutate the caller's IR. Empty report when cost route is off.
+pub fn preview_cost_route(config: &Config, ir: &PlanIR) -> CostRouteReport {
+    if !config.default.cost_route_enabled {
+        return CostRouteReport::default();
+    }
+    let mut clone = ir.clone();
+    let available = list_cost_route_available(config);
+    apply_cost_aware_routing_with_opts(
+        &mut clone,
+        &available,
+        &[],
+        CostRouteOpts {
+            enabled: true,
+            spent_usd: 0.0,
+            budget_cap_usd: config.default.run_max_budget_usd,
+            sticky: true,
+            intent: config.default.cost_intent_enabled,
+        },
+        crate::domain::worker::default_cost_catalog(),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::plan::{OnFailure, TaskIR, TaskRole};
+    use std::path::PathBuf;
+
+    fn sample_ir() -> PlanIR {
+        PlanIR {
+            schema: "cco-plan/v1".into(),
+            name: "preview".into(),
+            adapter: "cco-plan/v1".into(),
+            source_path: PathBuf::from("p.cco.yaml"),
+            max_parallel: 2,
+            on_failure: OnFailure::Pause,
+            retry_max: 0,
+            default_provider: "claude".into(),
+            default_mode: "print".into(),
+            worktree: true,
+            require_inspect: false,
+            tasks: vec![TaskIR {
+                id: "impl".into(),
+                title: "实现".into(),
+                depends_on: vec![],
+                group: None,
+                provider: "claude".into(),
+                mode: "print".into(),
+                prompt: "do work".into(),
+                verify_cmd: None,
+                acceptance: None,
+                timeout_secs: None,
+                worktree: None,
+                provider_opts: serde_json::json!({}),
+                optional: false,
+                include: true,
+                role: Some(TaskRole::Implement),
+                scope: None,
+                outputs: vec![],
+                tags: vec![],
+            }],
+        }
+    }
+
+    #[test]
+    fn preview_off_when_disabled() {
+        let mut cfg = Config::default();
+        cfg.default.cost_route_enabled = false;
+        let r = preview_cost_route(&cfg, &sample_ir());
+        assert!(r.changed.is_empty());
+        assert!(r.summary_line().is_none());
+    }
 }

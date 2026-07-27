@@ -298,6 +298,12 @@ function taskCardHtml(t, byId, opts = {}) {
               : "会改本地代码或文件"
       )}">${esc(riskLabel)}</span>`
     : "";
+  const costHint = String(t.cost_route_hint || t.costRouteHint || "").trim();
+  const costHtml = costHint
+    ? `<span class="cost-route-chip" title="开跑时费用优选（未改你指定的通道）">${esc(
+        costHint
+      )}</span>`
+    : "";
   const checkHtml = isOpt
     ? `<label class="wave-task-check" title="${
         role.kind === "sys"
@@ -316,6 +322,7 @@ function taskCardHtml(t, byId, opts = {}) {
     `<div class="split-card-top">` +
     `<span class="split-role split-role-${role.kind}">${role.label}</span>` +
     riskHtml +
+    costHtml +
     (isOpt
       ? role.kind === "sys"
         ? `<span class="opt-badge opt-badge-sys">系统</span>`

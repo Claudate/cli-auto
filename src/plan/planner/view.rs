@@ -79,6 +79,9 @@ pub struct PlanTaskView {
     /// Short ZH label for risk chip (只读/改本地/跑命令/会外发).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub risk_label: Option<String>,
+    /// Confirm desk: cost-auto would rewrite this still-default task (preview only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_route_hint: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -129,6 +132,9 @@ pub struct PlanJobView {
     /// H3: how to verify after parallel/integrate (human; no MERGE.md default).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub merge_check: Option<String>,
+    /// Confirm desk banner: cost-route dry-run one-liner (None when off / no rewrite).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_route_summary: Option<String>,
     pub layers: Vec<Vec<String>>,
     pub tasks: Vec<PlanTaskView>,
     pub planner_log_tail: String,
@@ -197,6 +203,7 @@ fn task_view(t: &TaskIR) -> PlanTaskView {
         include: if t.optional { t.include } else { true },
         risk_class: Some(risk.as_str().into()),
         risk_label: Some(risk.label_zh().into()),
+        cost_route_hint: None,
     }
 }
 
@@ -275,6 +282,7 @@ fn task_view_from_cco(t: &crate::plan::CcoSplitTask) -> PlanTaskView {
         include: if t.optional { t.enabled } else { true },
         risk_class: Some(risk.as_str().into()),
         risk_label: Some(risk.label_zh().into()),
+        cost_route_hint: None,
     }
 }
 
@@ -357,6 +365,8 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
             critic_notes.push(tip.to_string());
         }
     }
+    // Cost-route desk preview (dry-run; does not mutate proposed SoT).
+    let (cost_route_summary, tasks) = annotate_cost_route_preview(config, job, tasks);
     Ok(PlanJobView {
         job_id: job.job_id.clone(),
         status: job.status.as_str().to_string(),
@@ -384,6 +394,7 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
         acceptance_is_stub,
         acceptance_hint,
         merge_check,
+        cost_route_summary,
         layers,
         tasks,
         planner_log_tail,
@@ -391,6 +402,35 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
         created_at: job.created_at.to_rfc3339(),
         updated_at: job.updated_at.to_rfc3339(),
     })
+}
+
+/// Attach cost-auto preview hints for the confirm desk (banner + per-task chip).
+fn annotate_cost_route_preview(
+    config: &Config,
+    job: &PlanJob,
+    mut tasks: Vec<PlanTaskView>,
+) -> (Option<String>, Vec<PlanTaskView>) {
+    if !config.default.cost_route_enabled {
+        return (None, tasks);
+    }
+    if !matches!(job.status, PlanJobStatus::Planned | PlanJobStatus::Confirmed) {
+        return (None, tasks);
+    }
+    let Ok(ir) = load_proposed(config, &job.job_id) else {
+        return (None, tasks);
+    };
+    let report = crate::app::run::preview_cost_route(config, &ir);
+    if report.changed.is_empty() {
+        return (None, tasks);
+    }
+    for c in &report.changed {
+        if let Some(tv) = tasks.iter_mut().find(|t| t.id == c.task_id) {
+            // Prefer product label over raw id when known.
+            let product = crate::app::run::provider_product_label(&c.to);
+            tv.cost_route_hint = Some(format!("开跑将用 {product}"));
+        }
+    }
+    (report.summary_line(), tasks)
 }
 
 pub fn load_proposed(config: &Config, job_id: &str) -> Result<PlanIR> {

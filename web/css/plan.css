@@ -819,6 +819,37 @@
 .split-acceptance-banner[hidden] {
   display: none !important;
 }
+/* Cost-route dry-run banner (confirm desk; DTO only) */
+.split-cost-route-banner {
+  margin: 0.4rem 0 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent, #0071e3) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent, #0071e3) 10%, transparent);
+  color: var(--text, inherit);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  flex-shrink: 0;
+}
+.split-cost-route-banner[hidden] {
+  display: none !important;
+}
+.cost-route-chip {
+  display: inline-block;
+  margin-left: 0.25rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--accent, #0071e3);
+  background: color-mix(in srgb, var(--accent, #0071e3) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #0071e3) 28%, var(--border));
+  white-space: nowrap;
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
 /* W3-1: local-source desk — secondary CTA to force smart re-split */
 .split-smart-resplit {
   margin: 0.25rem 0 0.35rem;

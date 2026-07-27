@@ -55,7 +55,7 @@ pub use provenance::{
     compose_route_label, provider_product_label, stamp_cost_budget, stamp_cost_escalate,
     stamp_cost_route, stamp_failover, stamp_route_fill, stamp_route_inferred,
 };
-pub use route::{apply_provider_override, list_cost_route_available};
+pub use route::{apply_provider_override, list_cost_route_available, preview_cost_route};
 pub use status_line::{from_job_view, from_run_state, from_run_state_with_titles, resolve};
 
 use std::path::{Path, PathBuf};
