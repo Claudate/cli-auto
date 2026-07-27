@@ -99,8 +99,9 @@ Inspect：可读 `.cco-out/browser/**` 作证据；**仍不改业务源码**。
 | **W3** | ui-smoke 示例 · live `browser_evidence` · 结果台「网页验收证据」缩略/摘录 | ✅ |
 | **W3+** | 设置页「网页自动化」开关 · ui-verify 无预览 soft-fail · scrape 缺 scope validate | ✅ |
 | **W3++** | 设置引擎/预览门闩 · 结果台点图放大/打开文件 · 非 Claude soft env 提示 | ✅ |
+| **W3+++** | materialize 默认强制证据 outputs（ui-verify shot+report · smoke · raw） | ✅ |
 
-### W3+ / W3++ 行为细则
+### W3+ / W3++ / W3+++ 行为细则
 
 | 项 | 行为 |
 |----|------|
@@ -110,6 +111,17 @@ Inspect：可读 `.cco-out/browser/**` 作证据；**仍不改业务源码**。
 | ui-smoke | 不强制 preview 门闩（可关 require_preview 后仅靠 prompt） |
 | 结果台 | 截图可点放大；「打开文件」走 `open_path` |
 | 非 Claude | 仍写 env + browser 纪律 prompt；**不**注入 `--mcp-config`（需本机 CLI 自配 MCP 或改用 claude） |
+| 默认 outputs | `materialize_role_defaults`：ui-verify→`shot.png`+`report.md`；ui-smoke→`smoke.md`；scrape→`raw.md`；并补 scope 证据 glob。缺文件则 outputs 门禁 Failed |
+
+### 仍后置（非阻塞）
+
+| 项 | 说明 |
+|----|------|
+| Inspect GATE 专用「必须有 shot」字段 | 现靠 outputs 门禁 + 人话；不必第二套 GATE 方言 |
+| 拆分默认塞 optional 浏览器步 | 仍靠 prompts；不自动塞每条 UI 计划 |
+| 非 Claude 真 MCP 注入 | shell CLI 无统一 host `--mcp-config` |
+| 真 Chrome CI e2e | 单测不启浏览器 |
+| 设置自由改 command/args | 现引擎二选一即可 |
 
 ---
 

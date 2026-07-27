@@ -78,6 +78,7 @@ pub fn materialize_role_defaults(plan: &mut PlanIR) {
             if super::risk::task_has_browser_tag(&task.tags) {
                 inject_browser_system_prompt(&mut task.provider_opts);
             }
+            ensure_browser_evidence_outputs(task);
             continue;
         }
         if should_inject_implement_usability(task) {
@@ -85,6 +86,51 @@ pub fn materialize_role_defaults(plan: &mut PlanIR) {
         }
         if super::risk::task_has_browser_tag(&task.tags) {
             inject_browser_system_prompt(&mut task.provider_opts);
+        }
+        ensure_browser_evidence_outputs(task);
+    }
+}
+
+/// Default outputs for browser evidence so Done cannot claim success without files.
+///
+/// - `ui-verify` → shot.png + report.md under `.cco-out/browser/<id>/`
+/// - `ui-smoke` → smoke.md (+ shot.png optional, not forced)
+/// - `scrape` → raw.md (business write paths stay in author scope)
+///
+/// Does not remove author-declared outputs; only fills missing defaults.
+pub(crate) fn ensure_browser_evidence_outputs(task: &mut TaskIR) {
+    use super::risk::{
+        task_has_browser_tag, task_has_scrape_tag, task_has_ui_smoke_tag, task_has_ui_verify_tag,
+    };
+    if !task_has_browser_tag(&task.tags) {
+        return;
+    }
+    let base = format!(".cco-out/browser/{}", task.id);
+    let mut required: Vec<String> = Vec::new();
+    if task_has_ui_verify_tag(&task.tags) {
+        required.push(format!("{base}/shot.png"));
+        required.push(format!("{base}/report.md"));
+    }
+    if task_has_ui_smoke_tag(&task.tags) {
+        required.push(format!("{base}/smoke.md"));
+    }
+    if task_has_scrape_tag(&task.tags) {
+        required.push(format!("{base}/raw.md"));
+    }
+    // Generic browser tag only (no specialized subtag): still require a report.
+    if required.is_empty() {
+        required.push(format!("{base}/report.md"));
+    }
+    for rel in required {
+        if !task.outputs.iter().any(|o| o == &rel) {
+            task.outputs.push(rel);
+        }
+    }
+    // Ensure evidence dir is writable in scope when scope exists or role=implement.
+    if let Some(scope) = task.scope.as_mut() {
+        let glob = format!("{base}/**");
+        if !scope.paths.iter().any(|p| p == &glob || p == ".cco-out/browser/**") {
+            scope.paths.push(glob);
         }
     }
 }
@@ -506,6 +552,70 @@ mod tests {
             1,
             "browser marker duplicated: {sys}"
         );
+    }
+
+    #[test]
+    fn ui_verify_gets_default_shot_and_report_outputs() {
+        let mut t = task("ui-shot", Some(TaskRole::Implement), &[]);
+        t.tags = vec!["browser".into(), "ui-verify".into()];
+        t.outputs.clear();
+        let mut ir = plan(vec![t]);
+        materialize_role_defaults(&mut ir);
+        let t = ir.tasks.iter().find(|x| x.id == "ui-shot").unwrap();
+        assert!(
+            t.outputs
+                .iter()
+                .any(|o| o == ".cco-out/browser/ui-shot/shot.png"),
+            "outputs={:?}",
+            t.outputs
+        );
+        assert!(
+            t.outputs
+                .iter()
+                .any(|o| o == ".cco-out/browser/ui-shot/report.md"),
+            "outputs={:?}",
+            t.outputs
+        );
+        let scope = t.scope.as_ref().unwrap();
+        assert!(
+            scope
+                .paths
+                .iter()
+                .any(|p| p.contains(".cco-out/browser/ui-shot")),
+            "scope={:?}",
+            scope.paths
+        );
+    }
+
+    #[test]
+    fn ui_smoke_and_scrape_default_outputs() {
+        let mut smoke = task("sm", Some(TaskRole::Implement), &[]);
+        smoke.tags = vec!["browser".into(), "ui-smoke".into()];
+        smoke.outputs.clear();
+        let mut scrape = task("sc", Some(TaskRole::Implement), &[]);
+        scrape.tags = vec!["browser".into(), "scrape".into()];
+        scrape.outputs.clear();
+        scrape.scope = Some(TaskScope {
+            paths: vec!["content/**".into()],
+            readonly: vec![],
+            forbid: vec![],
+        });
+        let mut ir = plan(vec![smoke, scrape]);
+        materialize_role_defaults(&mut ir);
+        let sm = ir.tasks.iter().find(|x| x.id == "sm").unwrap();
+        assert!(sm
+            .outputs
+            .iter()
+            .any(|o| o == ".cco-out/browser/sm/smoke.md"));
+        let sc = ir.tasks.iter().find(|x| x.id == "sc").unwrap();
+        assert!(sc
+            .outputs
+            .iter()
+            .any(|o| o == ".cco-out/browser/sc/raw.md"));
+        // author content/** preserved + evidence glob
+        let paths = &sc.scope.as_ref().unwrap().paths;
+        assert!(paths.iter().any(|p| p == "content/**"));
+        assert!(paths.iter().any(|p| p.contains(".cco-out/browser/sc")));
     }
 
     #[test]
