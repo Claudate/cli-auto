@@ -10,7 +10,7 @@
 > · 项目轻记忆 pin/summary：[`archive/pilotdeck-borrow-landing-2026-07-21.md`](./archive/pilotdeck-borrow-landing-2026-07-21.md) P2-2 ✅ · `src/state/project_memory.rs`  
 > · 全量引导/记忆：[`guided-plan-memory-decision-2026-07-21.md`](./guided-plan-memory-decision-2026-07-21.md) G0–G4 ☐ — **本计划不重开**  
 > · 协调序：[`next-landing-sequence-2026-07-27.md`](./next-landing-sequence-2026-07-27.md) — 本能力为 **旁轨**，不替代 W0–W4  
-> 状态：**定稿 · C0–C2 ☐ 可派工 · C3 可选 · C4 后置**
+> 状态：**C0 ✅ · C1 ✅ · C2-1/C2-2 ✅（契约内）· C2-3 可选 · C3 可选 · C4 后置**
 
 [PROTOCOL]: **勾选只认本文件 §5**。禁止平行第二套「记忆 OS」阶段表；禁止旁路 `confirm`；禁止把 free-form 摘要当硬约束真源；禁止用 gzip/zstd/文言充当模型上下文；禁止因本计划勾 ✅ guided G 波。落地后同步 `docs/CLAUDE.md` 活跃索引；改 schema 须同步 §3 与 runtime-prompt。
 
@@ -157,9 +157,9 @@ arc_one_liner: optional-string
 ## 4. 波次总览
 
 ```text
-C0  契约落地     schema 文 + 抽取 prompt + 合格示例     ☐  ~0.5 人日
-C1  Agent 工作流  skill/协议：收束必抽 · 续作先读      ☐  ~0.5–1 人日
-C2  记忆同构      与 MEMORY 原子条分工 + 写入纪律      ☐  ~0.5 人日
+C0  契约落地     schema 文 + 抽取 prompt + 合格示例     ✅
+C1  Agent 工作流  skill/协议：收束必抽 · 续作先读      ✅
+C2  记忆同构      与 MEMORY 原子条分工 + 写入纪律      ✅ 主路径（C2-3 可选）
 C3  cco 薄消费    （可选）summary/pin 或 DTO 挂一行    ☐  有痛再做
 C4  自动化钩子    （后置）会话结束 hook / 定时重抽      ☐  不排期除非痛
 ```
@@ -176,10 +176,10 @@ C4  自动化钩子    （后置）会话结束 hook / 定时重抽      ☐  �
 
 | # | 任务 | 落点 | 完成定义 | 状态 |
 |---|------|------|----------|------|
-| C0-1 | 写 `session-digest/v1` 契约（字段表 + 合格判定 + 与 plan digest/pin 边界） | `docs/contracts/session-digest.md` | 人/Agent 只读此文能填合法 YAML；链回本计划 | ☐ |
-| C0-2 | 抽取系统提示：只输出 YAML；强制 `rejected`/`dont` 追加；冲突写 `open` | `docs/runtime-prompts/session-digest-extract.md` | 提示含 §3.3 检查清单；覆盖序写入 `runtime-prompts/README` 一行 | ☐ |
-| C0-3 | 合格示例 + 不合格反例各 1 | `docs/contracts/session-digest.example.yaml`（或契约文内 fenced） | 示例含 chose/rejected/dont/source；反例点名缺 rejected | ☐ |
-| C0-4 | 本计划文首状态与 `docs/CLAUDE.md` 活跃索引 | 本文 · `docs/CLAUDE.md` | 活跃参考可点到本文；**不**写入架构 A 波 | ☐ |
+| C0-1 | 写 `session-digest/v1` 契约（字段表 + 合格判定 + 与 plan digest/pin 边界） | `docs/contracts/session-digest.md` | 人/Agent 只读此文能填合法 YAML；链回本计划 | ✅ |
+| C0-2 | 抽取系统提示：只输出 YAML；强制 `rejected`/`dont` 追加；冲突写 `open` | `docs/runtime-prompts/session-digest-extract.md` | 提示含 §3.3 检查清单；覆盖序写入 `runtime-prompts/README` 一行 | ✅ |
+| C0-3 | 合格示例 + 不合格反例各 1 | `docs/contracts/session-digest.example.yaml`（或契约文内 fenced） | 示例含 chose/rejected/dont/source；反例点名缺 rejected | ✅ |
+| C0-4 | 本计划文首状态与 `docs/CLAUDE.md` 活跃索引 | 本文 · `docs/CLAUDE.md` | 活跃参考可点到本文；**不**写入架构 A 波 | ✅ |
 
 **C0 不做**：改 Rust/JS 业务；改 `planner/digest.rs`；SQLite 新表。
 
@@ -187,9 +187,9 @@ C4  自动化钩子    （后置）会话结束 hook / 定时重抽      ☐  �
 
 | # | 任务 | 落点 | 完成定义 | 状态 |
 |---|------|------|----------|------|
-| C1-1 | 工作流说明：何时抽（波次结束 / 上下文将满 / 用户说「压缩上下文」）· 续作先读 digest 再 Read 指针 | `docs/context-digest-compress-landing-2026-07-27.md` §6 或短文 `docs/runtime-prompts/session-digest-workflow.md` | 步骤 ≤7 条；默认输出路径约定清楚 | ☐ |
-| C1-2 | 可选：仓库 skill 薄封装（读契约 + 跑抽取提示 + 写 `.cco-out/session-digest.yaml`） | `.claude/skills/` 下新 skill **或** 扩既有 skill 一节 | `/…` 可触发；**不**调 confirm；无 GUI 强依赖 | ☐ |
-| C1-3 | `.gitignore` 若需要忽略实例 digest | 根 `.gitignore` | 实例不误提交；契约/示例仍跟踪 | ☐ |
+| C1-1 | 工作流说明：何时抽（波次结束 / 上下文将满 / 用户说「压缩上下文」）· 续作先读 digest 再 Read 指针 | `docs/context-digest-compress-landing-2026-07-27.md` §6 或短文 `docs/runtime-prompts/session-digest-workflow.md` | 步骤 ≤7 条；默认输出路径约定清楚 | ✅ |
+| C1-2 | 可选：仓库 skill 薄封装（读契约 + 跑抽取提示 + 写 `.cco-out/session-digest.yaml`） | `.claude/skills/` 下新 skill **或** 扩既有 skill 一节 | `/…` 可触发；**不**调 confirm；无 GUI 强依赖 | ✅ |
+| C1-3 | `.gitignore` 若需要忽略实例 digest | 根 `.gitignore` | 实例不误提交；契约/示例仍跟踪 | ✅（已有 `.cco-out/`） |
 
 **C1 不做**：Always-on 后台自跑；桌面新主 phase。
 
@@ -197,9 +197,9 @@ C4  自动化钩子    （后置）会话结束 hook / 定时重抽      ☐  �
 
 | # | 任务 | 落点 | 完成定义 | 状态 |
 |---|------|------|----------|------|
-| C2-1 | 分工表写入契约：digest=会话状态缓存；MEMORY 原子条=跨会话铁律；pin=项目 ≤3 提示 | `docs/contracts/session-digest.md` | 三行对照表；禁止把整份 digest 糊进 MEMORY.md 正文 | ☐ |
-| C2-2 | 晋升规则：digest 中稳定 `dont`/`constraints` **显式** 才可升格为 memory 文件 | 同契约 §晋升 | 升格须带 name/description；默认不自动写 memory | ☐ |
-| C2-3 | （可选）本对话结论落一条 project memory 指针 | 用户 Claude project `memory/` | 仅当用户要跨会话记住「用 schema 压上下文」；非代码仓必须 | ☐ |
+| C2-1 | 分工表写入契约：digest=会话状态缓存；MEMORY 原子条=跨会话铁律；pin=项目 ≤3 提示 | `docs/contracts/session-digest.md` | 三行对照表；禁止把整份 digest 糊进 MEMORY.md 正文 | ✅ |
+| C2-2 | 晋升规则：digest 中稳定 `dont`/`constraints` **显式** 才可升格为 memory 文件 | 同契约 §晋升 | 升格须带 name/description；默认不自动写 memory | ✅ |
+| C2-3 | （可选）本对话结论落一条 project memory 指针 | 用户 Claude project `memory/` | 仅当用户要跨会话记住「用 schema 压上下文」；非代码仓必须 | ✅（已有 context-digest-compress.md） |
 
 ### 波次 C3 — cco 产品薄消费（可选 · 有痛再开）
 
@@ -302,6 +302,7 @@ C4  自动化钩子    （后置）会话结束 hook / 定时重抽      ☐  �
 | 日期 | 状态 |
 |------|------|
 | 2026-07-27 | 定稿发布 · C0–C2 ☐ · C3 可选 · C4 后置 |
+| 2026-07-27 | **C0–C2 主路径 ✅**（契约+示例+extract+workflow+skill+索引）；C3/C4 仍后置 |
 
 ---
 

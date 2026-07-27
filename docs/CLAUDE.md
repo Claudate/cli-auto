@@ -25,7 +25,7 @@ browser-automation-cco.md: **浏览器自动化契约**（**W0–W3+++ ✅** · 
 
 ### 还在做（活跃落地 · 可有 ☐）
 
-context-digest-compress-landing-2026-07-27.md: **会话语义压缩 Session Digest**（**C0–C2 ☐** · schema+抽取+Agent 工作流 · C3 可选薄消费 pin · **非** gzip/文言 · **不**重开 guided G · **不**改 plan digest 职责；**本能力唯一勾选**）
+context-digest-compress-landing-2026-07-27.md: **会话语义压缩 Session Digest**（**C0–C2 ✅** · 契约/示例/extract/workflow/skill · C3 可选薄消费 pin · C4 后置 · **非** gzip/文言 · **不**重开 guided G · **不**改 plan digest 职责；**本能力唯一勾选**）
 cost-aware-cli-router-2026-07-27.md: **费用感知 CLI 优选**（**P0–P3 ✅**；role→tier · 升档 · 预算/粘滞 · **intent 默认关** · 显式 route 不动）
 next-landing-sequence-2026-07-27.md: **下一轮落地序（协调）**（**W0/W1/W3 ✅** · W2 自动化代理 ✅ / **真人 V1–V5 ☐** · W0 GUI 目视 residual · W4 无新痛；**旁轨** session-digest 不替代 W0–W4；**不**替代各题勾选真源）
 inspect-ensure-close-loop-2026-07-24.md: **巡检关账闭环 Ensure**（**E0–E6 ✅** · §6.1 自动化代理 ✅ · **wros 真人 V1–V5 ☐** · closeout · 有界关账 · 自动 rework · UI 反误导；**本问题唯一勾选落点**）

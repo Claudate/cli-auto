@@ -25,6 +25,9 @@
 |------|------|
 | [`examples/marketing-landing-reference/SPEC.md`](../../examples/marketing-landing-reference/SPEC.md) | 营销站区块节奏 reference |
 | [`scripts/check-landing-gates.sh`](../../scripts/check-landing-gates.sh) | 假域名 / 页脚主 CTA 等门禁 |
+| [`session-digest-extract.md`](./session-digest-extract.md) | **不注入** · 会话 digest 抽取系统提示（人/Agent） |
+| [`session-digest-workflow.md`](./session-digest-workflow.md) | **不注入** · 读/写 digest 工作流 |
+| [`../contracts/session-digest.md`](../contracts/session-digest.md) | session-digest/v1 契约 |
 
 ## 加载顺序（先命中先用）
 

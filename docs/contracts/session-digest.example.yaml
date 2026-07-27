@@ -1,0 +1,68 @@
+# session-digest/v1 合格示例（C0）
+# 说明用 · 非某次真实私密会话全文
+schema: session-digest/v1
+updated_at: "2026-07-27T15:30:00+08:00"
+session_ref: free-main/context-digest-compress
+goal: "落地 session-digest 语义压缩：C0 契约与抽取提示可派工，续作先读 digest"
+
+constraints:
+  - id: C1
+    text: "唯一业务开跑入口是 Split 确认（confirm_start / SplitUseCase.confirm）；禁止 UI 旁路"
+    source: "CLAUDE.md#业务硬契约-10"
+  - id: C2
+    text: "optional 任务确认屏必须可勾选停住；禁止静默 auto-start 跳过 optional"
+    source: "memory/optional-tasks-user-choice"
+  - id: C3
+    text: "本能力勾选只认 docs/context-digest-compress-landing-2026-07-27.md §5"
+    source: "docs/context-digest-compress-landing-2026-07-27.md"
+
+decisions:
+  - id: D1
+    chose: "固定 schema 抽取 + 指针延迟加载"
+    rejected: "gzip/zstd 进模型上下文；文言/自由散文摘要当硬约束真源"
+    why: "比特压缩不降 token 可读性；散文易丢闸门与否决项"
+    source: "docs/context-digest-compress-landing-2026-07-27.md§0"
+  - id: D2
+    chose: "与 next-landing W0–W4 并列旁轨，不插入主序"
+    rejected: "重开 guided G0–G4 或改 planner/digest.rs 职责"
+    why: "plan digest 是计划文档模式分类；guided 全量未排期"
+    source: "docs/next-landing-sequence-2026-07-27.md"
+  - id: D3
+    chose: "抽取提示放 runtime-prompts 但标注不注入产品 LLM"
+    rejected: "写入 plan_writing_guidance 自动注入聊天/拆分"
+    why: "会话压缩是 Agent/人工作流，不是 cco 写计划 system 段"
+    source: "docs/runtime-prompts/README.md"
+
+open:
+  - id: O1
+    q: "C3 是否让 project_last_summary 吸收 digest.goal+首条 dont"
+    status: deferred
+    note: "有真实冷启动丢约束疼痛再开"
+  - id: O2
+    q: "是否做 .claude/skills 薄封装（C1-2）"
+    status: pending
+
+artifacts:
+  - path: "docs/context-digest-compress-landing-2026-07-27.md"
+    role: sot
+  - path: "docs/contracts/session-digest.md"
+    role: sot
+  - path: "docs/runtime-prompts/session-digest-extract.md"
+    role: sot
+  - path: "src/plan/planner/digest.rs"
+    role: pointer
+  - path: "src/state/project_memory.rs"
+    role: pointer
+
+dont:
+  - id: X1
+    text: "禁止用 digest 触发 confirm 或 spawn 业务 worker"
+    source: "docs/context-digest-compress-landing-2026-07-27.md§2"
+  - id: X2
+    text: "禁止静默删除 dont[]；废止必须写 superseded_by"
+    source: "docs/contracts/session-digest.md§5"
+  - id: X3
+    text: "禁止把整份 digest 糊进 MEMORY.md 正文"
+    source: "docs/context-digest-compress-landing-2026-07-27.md§5-C2"
+
+arc_one_liner: "问文言压缩 → 否 → 采纳 schema digest → 落计划 → 开 C0 契约与提示"
