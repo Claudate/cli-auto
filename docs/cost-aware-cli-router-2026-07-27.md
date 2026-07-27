@@ -3,7 +3,7 @@
 > **状态：P0–P3 ✅ · 本文件 = 本能力勾选真源**  
 > 日期：2026-07-27  
 > 范围：task 级 `provider` 自动优选（**不**做 HTTP model gateway）  
-> 非目标：LiteLLM/Portkey 整站代理 · 静默覆盖显式 route · 自研 ML 分类器（P3 后置）  
+> 非目标：LiteLLM/Portkey 整站代理 · 静默覆盖显式 route · 训练 ML 分类器 / 外部 intent SaaS（P3 仅为本地启发式）  
 > 关联：[`multi-cli-collaboration-2026-07-18.md`](./multi-cli-collaboration-2026-07-18.md) · [`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md) · soft-fill 硬规则 L1 #13
 
 [PROTOCOL]: 变更时更新此头部与 `src/domain/worker` L2；**禁止**平行第二套阶段表
@@ -115,6 +115,9 @@ cost_escalate_enabled = true       # P1；失败后升档
 | App | `materialize` 应用优选 · `provenance` stamp/label |
 | Runtime | `patrol` 升档 · `tick.maybe_budget_downgrade_task` 开跑前降档 |
 | Config | `cost_route_enabled` / `cost_escalate_enabled` / **`cost_intent_enabled`** · `run_max_budget_usd` |
+| Settings UI | 卡住与重试组：三开关 + `cost_route_note`（经 `SettingsView`） |
+| CLI 开跑 | `confirm_materialize` / materialize 第四返回值 → 打印费用摘要一行 |
+| Runtime | `provider_unhealthy`：preflight 失败 / start 失败 → 本 run 升档与预算降档跳过 |
 
 ---
 

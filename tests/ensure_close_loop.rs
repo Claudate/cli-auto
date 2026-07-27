@@ -110,7 +110,7 @@ tasks:
     std::fs::create_dir_all(config.runs_dir()).unwrap();
 
     let ir = load_plan(&project, &plan_path, Some("cco-plan/v1"), &config).unwrap();
-    let (run_id, _state, resolved) =
+    let (run_id, _state, resolved, _) =
         materialize_run_with_route(&config, project.clone(), &ir, None).unwrap();
 
     assert!(

@@ -53,7 +53,7 @@ impl Scheduler {
     /// Order: (P1) higher-cost tier escalate when `cost_escalate_enabled`, then
     /// classic [`failover_order`] walk. Skips unregistered / preflight-fail peers.
     pub(super) async fn resolve_failover_provider(
-        &self,
+        &mut self,
         current: &str,
         already_tried: &[String],
     ) -> Option<(String, FailoverKind)> {
@@ -67,12 +67,13 @@ impl Scheduler {
                 .into_iter()
                 .map(|s| s.to_string())
                 .collect();
+            let unhealthy = self.provider_unhealthy.clone();
             let mut esc_tried = tried.clone();
             loop {
                 let Some(target) = crate::domain::worker::next_escalate_target(
                     current,
                     &available,
-                    &[],
+                    &unhealthy,
                     &esc_tried,
                     crate::domain::worker::default_cost_catalog(),
                 ) else {
@@ -103,7 +104,7 @@ impl Scheduler {
 
     /// Registry get + preflight; None means skip this candidate.
     async fn preflight_failover_candidate(
-        &self,
+        &mut self,
         current: &str,
         target: &str,
     ) -> Option<String> {
@@ -115,6 +116,7 @@ impl Scheduler {
                     to = %target,
                     "failover target not registered — try next"
                 );
+                self.mark_provider_unhealthy(target);
                 return None;
             }
         };
@@ -124,9 +126,30 @@ impl Scheduler {
                 to = %target,
                 "failover preflight failed — try next"
             );
+            self.mark_provider_unhealthy(target);
             return None;
         }
         Some(target.to_string())
+    }
+
+    /// Record a provider as unhealthy for this run (preflight miss / spawn fail).
+    pub(super) fn mark_provider_unhealthy(&mut self, name: &str) {
+        let n = name.trim();
+        if n.is_empty() {
+            return;
+        }
+        if self
+            .provider_unhealthy
+            .iter()
+            .any(|p| p.eq_ignore_ascii_case(n))
+        {
+            return;
+        }
+        self.provider_unhealthy.push(n.to_ascii_lowercase());
+        let _ = self.state.event(
+            "provider_unhealthy",
+            serde_json::json!({ "provider": n }),
+        );
     }
 
     /// Attempt budget for this task: after failover, only `fallback_extra_attempts`.

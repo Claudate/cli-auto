@@ -513,6 +513,8 @@ impl Scheduler {
                 }
                 Err(e) => {
                     error!(task = %id, err = %e, "failed to start");
+                    // Provider bin missing / preflight-ish start fail → skip in later cost picks.
+                    self.mark_provider_unhealthy(&task.provider);
                     if let Some(ts) = self.state.tasks.get_mut(&id) {
                         ts.attempt = ts.attempt.saturating_add(1);
                     }
@@ -630,13 +632,14 @@ impl Scheduler {
             .into_iter()
             .map(|s| s.to_string())
             .collect();
+        let unhealthy = self.provider_unhealthy.clone();
         let Some(pick) = suggest_budget_downgrade(
             &current,
             role_default_tier(role),
             spent,
             Some(cap),
             &available,
-            &[],
+            &unhealthy,
         ) else {
             return;
         };
