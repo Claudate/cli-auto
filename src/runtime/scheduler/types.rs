@@ -20,6 +20,15 @@ pub(super) struct StallAction {
     pub reason: String,
 }
 
+/// How a mid-run peer was chosen after same-CLI retries exhaust.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum FailoverKind {
+    /// P1: higher-cost tier (cost escalate).
+    CostEscalate,
+    /// Classic H4 `failover_order` walk.
+    Order,
+}
+
 pub(super) fn stdout_len(path: &Path) -> u64 {
     std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
 }

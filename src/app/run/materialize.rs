@@ -17,11 +17,12 @@ use crate::domain::plan::{
     assign_closeout_owners, build_host_checklist, format_checklist_for_prompt, inject_closeout_task,
     SYS_CLOSEOUT_ID,
 };
-use crate::domain::worker::RouteFillReport;
+use crate::domain::worker::{apply_cost_aware_routing, CostRouteReport, RouteFillReport};
 use crate::plan::{load_plan, materialize_selected_tasks, PlanIR};
 use crate::state::{self, RunState};
 
-use super::provenance::{stamp_route_fill, stamp_route_inferred};
+use super::provenance::{stamp_cost_route, stamp_route_fill, stamp_route_inferred};
+use super::route::list_cost_route_available;
 
 /// Disk materialization of a new run (run_id + run.json + plan.resolved.json).
 ///
@@ -35,6 +36,9 @@ use super::provenance::{stamp_route_fill, stamp_route_inferred};
 ///
 /// When `route_report` is `Some`, stamps each task's `route_source` from the report
 /// (soft filled / kept explicit / force). When `None`, infers from the final IR.
+///
+/// Cost-aware routing (P0) runs **after** soft/tag fill unless
+/// `skip_cost_route` (CLI `--provider` / `--force-provider` last-write).
 ///
 /// Returns `(run_id, state, ir)` — **use the returned `ir` for `prepare_scheduler`**.
 pub fn materialize_run(
@@ -53,6 +57,30 @@ pub fn materialize_run_with_route(
     ir: &PlanIR,
     route_report: Option<&RouteFillReport>,
 ) -> Result<(String, RunState, PlanIR)> {
+    materialize_run_with_route_opts(
+        config,
+        project,
+        ir,
+        route_report,
+        MaterializeRouteOpts::default(),
+    )
+}
+
+/// Options for materialize route stamping (P0 cost auto).
+#[derive(Debug, Clone, Default)]
+pub struct MaterializeRouteOpts {
+    /// When true, skip cost-aware rewrite (CLI provider override is last write).
+    pub skip_cost_route: bool,
+}
+
+/// Materialize with explicit cost-route control.
+pub fn materialize_run_with_route_opts(
+    config: &Config,
+    project: PathBuf,
+    ir: &PlanIR,
+    route_report: Option<&RouteFillReport>,
+    opts: MaterializeRouteOpts,
+) -> Result<(String, RunState, PlanIR)> {
     if !project.is_dir() {
         bail!("项目路径不是目录: {}", project.display());
     }
@@ -70,6 +98,15 @@ pub fn materialize_run_with_route(
     apply_effort(&mut ir, config, None);
     // Soft-fill permission_mode so unattended workers can Edit/Bash (default bypass).
     apply_permission_mode(&mut ir, config, None);
+
+    // P0: role→tier→cheapest available on still-default (after soft/tag, before validate).
+    let cost_report = if opts.skip_cost_route || !config.default.cost_route_enabled {
+        CostRouteReport::default()
+    } else {
+        let available = list_cost_route_available(config);
+        apply_cost_aware_routing(&mut ir, &available, &[], true)
+    };
+
     ir.validate()
         .with_context(|| "validate after ensure closeout inject")?;
     let run_id = state::new_run_id();
@@ -83,6 +120,19 @@ pub fn materialize_run_with_route(
         stamp_route_fill(&mut run_state, &ir, report);
     }
     stamp_route_inferred(&mut run_state, &ir);
+    // Cost auto last among open-run stamps (overrides soft_fill on rewritten ids).
+    if !cost_report.changed.is_empty() {
+        stamp_cost_route(&mut run_state, &cost_report);
+        if let Some(line) = cost_report.summary_line() {
+            let _ = run_state.event(
+                "cost_route",
+                serde_json::json!({
+                    "summary": line,
+                    "changed": cost_report.changed.len(),
+                }),
+            );
+        }
+    }
     run_state.save()?;
     let resolved = run_dir.join("plan.resolved.json");
     std::fs::write(&resolved, serde_json::to_string_pretty(&ir)?)?;
@@ -364,7 +414,9 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("proj");
         std::fs::create_dir_all(project.join("docs/plans")).unwrap();
-        let cfg = test_cfg(tmp.path());
+        let mut cfg = test_cfg(tmp.path());
+        // Isolate soft-fill stamp contract from P0 cost auto.
+        cfg.default.cost_route_enabled = false;
         let mut ir = sample_ir(&project);
         // Multi-provider soft-fill needs worktree (validate gate).
         ir.worktree = true;

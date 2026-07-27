@@ -12,7 +12,7 @@ use anyhow::Result;
 use tracing::warn;
 
 use super::super::provider::WorkerHandle;
-use super::types::{stdout_len, ProgressWatch, StallAction};
+use super::types::{stdout_len, FailoverKind, ProgressWatch, StallAction};
 use super::Scheduler;
 use crate::domain::run::{budget_exceeded, effective_retry_max, stall_triggered};
 use crate::domain::worker::FailoverPolicy;
@@ -49,39 +49,84 @@ impl Scheduler {
     }
 
     /// Resolve a live fallback provider when H4 failover is armed and preflight passes.
-    /// Walks order; skips candidates that are not registered or fail preflight.
+    ///
+    /// Order: (P1) higher-cost tier escalate when `cost_escalate_enabled`, then
+    /// classic [`failover_order`] walk. Skips unregistered / preflight-fail peers.
     pub(super) async fn resolve_failover_provider(
         &self,
         current: &str,
         already_tried: &[String],
-    ) -> Option<String> {
-        let policy = self.failover_policy();
+    ) -> Option<(String, FailoverKind)> {
         let mut tried = already_tried.to_vec();
+
+        // P1 cost escalate: pick cheapest strictly-more-expensive available peer.
+        if self.cost_escalate_enabled {
+            let available: Vec<String> = self
+                .registry
+                .list()
+                .into_iter()
+                .map(|s| s.to_string())
+                .collect();
+            let mut esc_tried = tried.clone();
+            loop {
+                let Some(target) = crate::domain::worker::next_escalate_target(
+                    current,
+                    &available,
+                    &[],
+                    &esc_tried,
+                    crate::domain::worker::default_cost_catalog(),
+                ) else {
+                    break;
+                };
+                match self.preflight_failover_candidate(current, &target).await {
+                    Some(ok) => return Some((ok, FailoverKind::CostEscalate)),
+                    None => {
+                        esc_tried.push(target);
+                        continue;
+                    }
+                }
+            }
+        }
+
+        let policy = self.failover_policy();
         loop {
             let target = policy.target_for(current, &tried)?;
-            let provider = match self.registry.get(&target) {
-                Ok(p) => p,
-                Err(_) => {
-                    warn!(
-                        from = %current,
-                        to = %target,
-                        "failover target not registered — try next"
-                    );
+            match self.preflight_failover_candidate(current, &target).await {
+                Some(ok) => return Some((ok, FailoverKind::Order)),
+                None => {
                     tried.push(target);
                     continue;
                 }
-            };
-            if provider.preflight().await.is_err() {
+            }
+        }
+    }
+
+    /// Registry get + preflight; None means skip this candidate.
+    async fn preflight_failover_candidate(
+        &self,
+        current: &str,
+        target: &str,
+    ) -> Option<String> {
+        let provider = match self.registry.get(target) {
+            Ok(p) => p,
+            Err(_) => {
                 warn!(
                     from = %current,
                     to = %target,
-                    "failover preflight failed — try next"
+                    "failover target not registered — try next"
                 );
-                tried.push(target);
-                continue;
+                return None;
             }
-            return Some(target);
+        };
+        if provider.preflight().await.is_err() {
+            warn!(
+                from = %current,
+                to = %target,
+                "failover preflight failed — try next"
+            );
+            return None;
         }
+        Some(target.to_string())
     }
 
     /// Attempt budget for this task: after failover, only `fallback_extra_attempts`.

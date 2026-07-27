@@ -1,15 +1,16 @@
 //! Stamp TaskState route provenance from domain fill reports (P1-2)
 //! and compose live human `route_label` (P1-3).
 //!
-//! [INPUT]: RunState · PlanIR · RouteFillReport (optional) · provider + route_*
+//! [INPUT]: RunState · PlanIR · RouteFillReport / CostRouteReport · provider + route_*
 //! [OUTPUT]: tasks.{id}.route_source|route_previous|route_note · route_label 人话
 //! [POS]: app::run — **only** place that writes route_* onto RunState (not domain);
 //!   live DTO labels also composed here (UI must not re-map raw enum)
 //! [PROTOCOL]: last write wins; force → all Force; soft filled → SoftFill;
-//!   soft kept + tag-implied match → TagRouting else Explicit; failover elsewhere
+//!   soft kept + tag-implied match → TagRouting else Explicit; cost_auto / cost_escalate;
+//!   failover elsewhere
 
 use crate::domain::plan::tag_implied_provider;
-use crate::domain::worker::{RouteFillMode, RouteFillReport};
+use crate::domain::worker::{CostRouteReport, RouteFillMode, RouteFillReport};
 use crate::plan::PlanIR;
 use crate::state::{RouteSource, RunState};
 
@@ -51,6 +52,8 @@ pub fn provider_product_label(provider: &str) -> String {
 /// | tag_routing | `{产品} · 按标签约定` |
 /// | force | `{产品} · 强制指定` |
 /// | failover | `{产品} · 故障切换前为 {先前产品}` |
+/// | cost_auto | `{产品} · 费用优选` |
+/// | cost_escalate | `{产品} · 失败后升档，先前 {prev}` |
 pub fn compose_route_label(
     provider: &str,
     source: Option<RouteSource>,
@@ -63,12 +66,20 @@ pub fn compose_route_label(
         Some(RouteSource::SoftFill) => format!("{product} · 默认填充"),
         Some(RouteSource::TagRouting) => format!("{product} · 按标签约定"),
         Some(RouteSource::Force) => format!("{product} · 强制指定"),
+        Some(RouteSource::CostAuto) => format!("{product} · 费用优选"),
         Some(RouteSource::Failover) => {
             let prev = previous
                 .filter(|s| !s.trim().is_empty())
                 .map(provider_product_label)
                 .unwrap_or_else(|| "先前通道".into());
             format!("{product} · 故障切换前为 {prev}")
+        }
+        Some(RouteSource::CostEscalate) => {
+            let prev = previous
+                .filter(|s| !s.trim().is_empty())
+                .map(provider_product_label)
+                .unwrap_or_else(|| "先前通道".into());
+            format!("{product} · 失败后升档，先前 {prev}")
         }
     }
 }
@@ -154,6 +165,33 @@ pub fn stamp_failover(
 ) {
     if let Some(ts) = state.tasks.get_mut(task_id) {
         ts.route_source = Some(RouteSource::Failover);
+        ts.route_previous = Some(previous_provider.to_string());
+        ts.route_note = note.map(|s| s.to_string());
+    }
+}
+
+/// P0: stamp tasks rewritten by cost-aware routing (last write after soft/tag).
+pub fn stamp_cost_route(state: &mut RunState, report: &CostRouteReport) {
+    for c in &report.changed {
+        if let Some(ts) = state.tasks.get_mut(&c.task_id) {
+            ts.route_source = Some(RouteSource::CostAuto);
+            ts.route_previous = None;
+            ts.route_note = Some(c.rationale.clone());
+            // Provider on TaskState may still be pre-cost; align with plan rewrite.
+            ts.provider = c.to.clone();
+        }
+    }
+}
+
+/// P1: mid-run cost escalate (higher tier after failure).
+pub fn stamp_cost_escalate(
+    state: &mut RunState,
+    task_id: &str,
+    previous_provider: &str,
+    note: Option<&str>,
+) {
+    if let Some(ts) = state.tasks.get_mut(task_id) {
+        ts.route_source = Some(RouteSource::CostEscalate);
         ts.route_previous = Some(previous_provider.to_string());
         ts.route_note = note.map(|s| s.to_string());
     }
@@ -328,6 +366,55 @@ mod tests {
         assert!(label.contains("故障切换"), "{label}");
         assert!(label.contains("Claude"), "{label}");
         assert!(label.contains("Codex"), "{label}");
+    }
+
+    #[test]
+    fn route_label_cost_auto() {
+        let label = compose_route_label("codex", Some(RouteSource::CostAuto), None);
+        assert!(label.contains("费用优选"), "{label}");
+        assert!(label.contains("Codex"), "{label}");
+        assert!(!label.contains("cost_auto"), "{label}");
+    }
+
+    #[test]
+    fn stamp_cost_route_overrides_soft_and_aligns_provider() {
+        use crate::domain::worker::{CostRouteChange, CostRouteReport, CostTier};
+        let ir = mixed_plan();
+        let mut state = RunState::new(
+            "run-cost".into(),
+            PathBuf::from("/tmp/proj"),
+            &ir,
+            PathBuf::from("/tmp/run"),
+        );
+        // Pretend soft-fill already stamped.
+        state.tasks.get_mut("t1").unwrap().route_source = Some(RouteSource::SoftFill);
+        let report = CostRouteReport {
+            changed: vec![CostRouteChange {
+                task_id: "t1".into(),
+                from: "claude".into(),
+                to: "codex".into(),
+                tier: CostTier::Mid,
+                rationale: "费用优选·mid（中等费用）".into(),
+            }],
+            skipped_ids: vec![],
+        };
+        stamp_cost_route(&mut state, &report);
+        let ts = &state.tasks["t1"];
+        assert_eq!(ts.route_source, Some(RouteSource::CostAuto));
+        assert_eq!(ts.provider, "codex");
+        assert!(ts.route_note.as_deref().unwrap().contains("费用优选"));
+    }
+
+    #[test]
+    fn route_label_cost_escalate() {
+        let label = compose_route_label(
+            "claude",
+            Some(RouteSource::CostEscalate),
+            Some("codex"),
+        );
+        assert!(label.contains("升档"), "{label}");
+        assert!(label.contains("Codex"), "{label}");
+        assert!(label.contains("Claude"), "{label}");
     }
 
     #[test]

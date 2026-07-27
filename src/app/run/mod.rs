@@ -49,13 +49,13 @@ pub use foreground::{
 };
 pub use materialize::{
     apply_effort, apply_permission_mode, materialize_parse_only, materialize_run,
-    materialize_run_with_route,
+    materialize_run_with_route, materialize_run_with_route_opts, MaterializeRouteOpts,
 };
 pub use provenance::{
-    compose_route_label, provider_product_label, stamp_failover, stamp_route_fill,
-    stamp_route_inferred,
+    compose_route_label, provider_product_label, stamp_cost_escalate, stamp_cost_route,
+    stamp_failover, stamp_route_fill, stamp_route_inferred,
 };
-pub use route::apply_provider_override;
+pub use route::{apply_provider_override, list_cost_route_available};
 pub use status_line::{from_job_view, from_run_state, from_run_state_with_titles, resolve};
 
 use std::path::{Path, PathBuf};

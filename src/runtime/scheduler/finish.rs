@@ -101,7 +101,9 @@ impl Scheduler {
         if kind == RetryKind::TryFailover {
             let current = current_for_classify.clone();
             let tried = tried_for_classify.clone();
-            if let Some(fallback) = self.resolve_failover_provider(&current, &tried).await {
+            if let Some((fallback, fo_kind)) =
+                self.resolve_failover_provider(&current, &tried).await
+            {
                 self.archive_attempt_logs(id, attempt);
                 self.clear_done_flag(id);
 
@@ -112,6 +114,8 @@ impl Scheduler {
                 if let Ok(text) = serde_json::to_string_pretty(&self.plan) {
                     let _ = std::fs::write(&resolved, text);
                 }
+
+                let is_escalate = matches!(fo_kind, super::types::FailoverKind::CostEscalate);
 
                 if let Some(ts) = self.state.tasks.get_mut(id) {
                     ts.provider = fallback.clone();
@@ -126,16 +130,25 @@ impl Scheduler {
                     ts.attempt = 0;
                     ts.status = TaskStatus::Pending;
                     ts.error = result.error.clone().or_else(|| {
+                        let kind = if is_escalate { "升档" } else { "failover" };
                         Some(format!(
-                            "{reason_code} after {attempt} attempt(s); failover {current}→{fallback}"
+                            "{reason_code} after {attempt} attempt(s); {kind} {current}→{fallback}"
                         ))
                     });
                     ts.finished_at = None;
                     ts.started_at = None;
                     ts.pid = None;
-                    ts.last_retry_reason = Some(format!("failover:{reason_code}"));
-                    // P1-2: persist route provenance (failover + previous provider).
-                    ts.route_source = Some(crate::state::RouteSource::Failover);
+                    ts.last_retry_reason = Some(if is_escalate {
+                        format!("cost_escalate:{reason_code}")
+                    } else {
+                        format!("failover:{reason_code}")
+                    });
+                    // P1-2 / cost P1: persist route provenance.
+                    if is_escalate {
+                        ts.route_source = Some(crate::state::RouteSource::CostEscalate);
+                    } else {
+                        ts.route_source = Some(crate::state::RouteSource::Failover);
+                    }
                     ts.route_previous = Some(current.clone());
                     ts.route_note = Some(reason_code.to_string());
                 }

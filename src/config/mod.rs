@@ -133,6 +133,15 @@ pub struct DefaultSection {
     /// the plan (handwalk residual is demoted host-side and does not trigger).
     #[serde(default = "default_ensure_off")]
     pub auto_rework_docs_only: bool,
+    /// P0: role→tier→cheapest available CLI on still-default tasks.
+    /// Default **true**. Explicit / tag / force routes are never rewritten.
+    /// See `docs/cost-aware-cli-router-2026-07-27.md`.
+    #[serde(default = "default_cost_route_on")]
+    pub cost_route_enabled: bool,
+    /// P1: after same-CLI retries exhaust, prefer a higher-cost tier before
+    /// walking [`failover_order`]. Default **true**.
+    #[serde(default = "default_cost_route_on")]
+    pub cost_escalate_enabled: bool,
 }
 
 fn default_retry_max() -> u32 {
@@ -161,6 +170,9 @@ fn default_ensure_on() -> bool {
 }
 fn default_ensure_off() -> bool {
     false
+}
+fn default_cost_route_on() -> bool {
+    true
 }
 
 /// Allowed effort tokens (product + Claude CLI).
@@ -302,6 +314,8 @@ impl Default for DefaultSection {
             auto_closeout: default_ensure_on(),
             auto_rework: default_ensure_on(),
             auto_rework_docs_only: default_ensure_off(),
+            cost_route_enabled: default_cost_route_on(),
+            cost_escalate_enabled: default_cost_route_on(),
         }
     }
 }
@@ -504,6 +518,11 @@ effort = "high"
 # dontAsk auto-denies writes and produces false Done (whole plan looks "broken").
 permission_mode = "bypassPermissions"
 allowed_tools = ["Read", "Edit", "Bash", "Glob", "Grep", "Write"]
+# Cost-aware CLI pick on still-default tasks (role→tier→cheapest installed).
+# Explicit / tag / --provider / --force-provider are never rewritten.
+cost_route_enabled = true
+# After same-CLI retries exhaust, try a higher-cost tier before failover_order.
+cost_escalate_enabled = true
 
 [providers.claude]
 enabled = true

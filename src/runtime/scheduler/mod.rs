@@ -74,6 +74,8 @@ pub struct Scheduler {
     pub fallback_extra_attempts: u32,
     /// Production failover walk order (default claude,codex). Empty → policy default.
     pub failover_order: Vec<String>,
+    /// P1: prefer higher-cost tier before walking [`failover_order`].
+    pub cost_escalate_enabled: bool,
 }
 
 impl Scheduler {

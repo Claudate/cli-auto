@@ -93,8 +93,8 @@ pub fn confirm_materialize(
     // Soft defaults already applied; CLI override is **last write** (force/soft wins).
     let override_report = crate::app::run::apply_provider_override(
         &mut ir,
-        patches.provider,
-        patches.force_provider,
+        patches.provider.clone(),
+        patches.force_provider.clone(),
     );
     let fill_msg = override_report.as_ref().map(|r| r.summary_line());
     if let Some(m) = patches.mode {
@@ -110,11 +110,16 @@ pub fn confirm_materialize(
     crate::app::run::apply_effort(&mut ir, config, patches.effort.as_deref());
     // Last-write route report: override if present, else job soft defaults.
     let route_report = override_report.as_ref().or(Some(&soft_report));
-    let (run_id, st, ir) = crate::app::run::materialize_run_with_route(
+    // CLI --provider / --force-provider is last write → skip cost auto on those tasks' path.
+    let skip_cost = patches.provider.is_some() || patches.force_provider.is_some();
+    let (run_id, st, ir) = crate::app::run::materialize_run_with_route_opts(
         config,
         job.project.clone(),
         &ir,
         route_report,
+        crate::app::run::MaterializeRouteOpts {
+            skip_cost_route: skip_cost,
+        },
     )?;
     mark_confirmed(config, job_id, &run_id, &ir)?;
     Ok((run_id, st, ir, fill_msg))
@@ -278,6 +283,8 @@ mod tests {
         cfg.default.post_inspect_enabled = false;
         cfg.default.post_git_push_enabled = false;
         cfg.default.post_open_pr_enabled = false;
+        // Isolate soft-fill stamp contract from P0 cost auto.
+        cfg.default.cost_route_enabled = false;
         std::fs::create_dir_all(cfg.runs_dir()).unwrap();
 
         // Build a job with mixed providers without full plan file parse.

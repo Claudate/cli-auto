@@ -54,6 +54,10 @@ pub enum RouteSource {
     Force,
     /// H4 production failover switched provider mid-run.
     Failover,
+    /// P0 cost-aware tier pick on still-default tasks.
+    CostAuto,
+    /// P1 failure cascade: switched to a higher-cost tier.
+    CostEscalate,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -449,6 +453,8 @@ mod tests {
             (RouteSource::TagRouting, "tag_routing"),
             (RouteSource::Force, "force"),
             (RouteSource::Failover, "failover"),
+            (RouteSource::CostAuto, "cost_auto"),
+            (RouteSource::CostEscalate, "cost_escalate"),
         ];
         for (src, wire) in cases {
             let s = serde_json::to_string(&src).unwrap();
