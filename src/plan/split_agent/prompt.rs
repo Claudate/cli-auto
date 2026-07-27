@@ -62,12 +62,14 @@ pub fn system_prompt() -> String {
 ///
 /// `grain_hint`: optional one-line 偏粗/偏细 preference (W4); empty/None omitted.
 /// `revision_notes`: optional free-text replan feedback; empty/None omitted.
+/// `repo_digest`: optional host-built shallow tree (read-only); empty/None omitted.
 pub fn user_prompt(
     project_label: &str,
     max_parallel: usize,
     plan_md: &str,
     grain_hint: Option<&str>,
     revision_notes: Option<&str>,
+    repo_digest: Option<&str>,
 ) -> String {
     let grain_line = grain_hint
         .map(str::trim)
@@ -81,14 +83,20 @@ pub fn user_prompt(
             format!("用户对上次拆分的反馈（优先满足；与硬约束冲突时仍守硬约束）：\n{s}\n\n")
         })
         .unwrap_or_default();
+    let digest_block = repo_digest
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| format!("{s}\n\n"))
+        .unwrap_or_default();
     format!(
         r#"项目：{project_label}
 同时路数上限 max_parallel：{max_parallel}
-{grain_line}{revision_block}硬约束（写入每条 body 的「不要做什么」若相关）：
+{grain_line}{revision_block}{digest_block}硬约束（写入每条 body 的「不要做什么」若相关）：
 - 唯一开跑入口是人在拆分台确认；禁止设计旁路开跑
 - soft-fill 不得静默覆盖任务已显式指定的执行方式
 - 完成 = 对照计划验收，不是进程 exit 0
 - 并行单位 = 文件/模块所有权（scope_paths），不是「波次数字」
+- 若有仓库浅览：scope_paths 优先用真实存在的路径，勿编造未出现目录
 
 请将下列计划拆成 cco-split/v1 JSON（仅 JSON）。
 优先信计划正文里的「依赖 / 完成定义 / 落点」表；无依赖的步骤不要串成一条链。
@@ -166,7 +174,7 @@ mod tests {
 
     #[test]
     fn user_mentions_parallel_ownership() {
-        let u = user_prompt("/proj", 2, "# hi", None, None);
+        let u = user_prompt("/proj", 2, "# hi", None, None, None);
         assert!(u.contains("max_parallel：2"));
         assert!(u.contains("scope_paths") || u.contains("文件"));
         assert!(!u.contains("粒度偏好"));
@@ -175,7 +183,7 @@ mod tests {
 
     #[test]
     fn user_includes_grain_when_set() {
-        let u = user_prompt("/proj", 2, "# hi", Some("偏细：步骤拆开"), None);
+        let u = user_prompt("/proj", 2, "# hi", Some("偏细：步骤拆开"), None, None);
         assert!(u.contains("粒度偏好：偏细"));
     }
 
@@ -187,9 +195,24 @@ mod tests {
             "# hi",
             None,
             Some("合并文案与 SEO 为一步；scope 不要抢 index.html"),
+            None,
         );
         assert!(u.contains("用户对上次拆分的反馈"));
         assert!(u.contains("合并文案与 SEO"));
         assert!(u.contains("优先按反馈改"));
+    }
+
+    #[test]
+    fn user_includes_repo_digest_when_set() {
+        let u = user_prompt(
+            "/proj",
+            2,
+            "# hi",
+            None,
+            None,
+            Some("仓库浅览：\n顶层：src/ · web/"),
+        );
+        assert!(u.contains("仓库浅览"));
+        assert!(u.contains("真实存在的路径"));
     }
 }

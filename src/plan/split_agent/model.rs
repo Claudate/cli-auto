@@ -19,6 +19,7 @@ use crate::runtime::provider::sdk_http::{
 
 use super::parse::parse_agent_output;
 use super::prompt::{system_prompt, user_prompt};
+use super::repo_digest::{build_repo_digest, project_for_digest};
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const SPLIT_MAX_TOKENS: u32 = 8192;
@@ -95,12 +96,18 @@ fn call_messages_http(req: &SplitRequest) -> Result<String> {
         .and_then(|s| s.to_str())
         .unwrap_or("project");
     let plan_md = truncate_plan(&req.plan_md, 40_000);
+    let digest = build_repo_digest(&project_for_digest(&req.project), &plan_md);
     let user = user_prompt(
         project_label,
         req.max_parallel,
         &plan_md,
         req.grain_hint.as_deref(),
         req.revision_notes.as_deref(),
+        if digest.is_empty() {
+            None
+        } else {
+            Some(digest.as_str())
+        },
     );
     let body = json!({
         "model": model,
@@ -187,12 +194,18 @@ fn call_claude_cli_print(config: &Config, req: &SplitRequest) -> Result<String> 
         .and_then(|s| s.to_str())
         .unwrap_or("project");
     let plan_md = truncate_plan(&req.plan_md, 40_000);
+    let digest = build_repo_digest(&project_for_digest(&req.project), &plan_md);
     let user = user_prompt(
         project_label,
         req.max_parallel,
         &plan_md,
         req.grain_hint.as_deref(),
         req.revision_notes.as_deref(),
+        if digest.is_empty() {
+            None
+        } else {
+            Some(digest.as_str())
+        },
     );
     // CLI print: single user-ish prompt with system rules inlined (no separate system role).
     let prompt = format!("{}\n\n{}", system_prompt(), user);

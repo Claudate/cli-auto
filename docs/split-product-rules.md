@@ -107,6 +107,7 @@
 |----|------|
 | **revision_notes** | 拆分台「重新规划」可带一句话反馈 → `StartPlanJobRequest.revision_notes` → ModelSplitAgent user_prompt；**可空**；**不**碰 confirm / 不开跑 |
 | **与 grain_hint** | grain = 粗细偏好；revision = 上次哪里不对；二者并列，互不替代 |
+| **repo digest** | host 只读浅览（顶层 + 计划点名路径是否存在）；注入 split user_prompt；失败空串；**不**占任务图、**不** spawn worker |
 | **风险 chip** | 任务卡展示 `RiskClass`：只读 / 改本地 / 跑命令 / 会外发（domain 纯函数派生）；**不是** `permission_mode` 字符串 |
 | **确认条** | 默认强调「会改本地 · 默认不推远端」；已勾选 push/PR 时 CTA 可标「含外发」；仍唯一 `confirm_start` |
 

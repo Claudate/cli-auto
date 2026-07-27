@@ -9,6 +9,7 @@ mod extract;
 mod model;
 mod parse;
 mod prompt;
+mod repo_digest;
 
 pub use extract::extract_json_object;
 pub use model::{FixtureSplitAgent, ModelSplitAgent};
@@ -67,6 +68,20 @@ pub fn build_split_agent_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
                 &job.job_id,
                 &format!("ModelSplitAgent revision_notes: {preview}"),
             );
+        }
+    }
+    {
+        let hints = repo_digest::extract_path_hints(
+            &std::fs::read_to_string(&abs).unwrap_or_default(),
+        );
+        if !hints.is_empty() {
+            append_log(
+                config,
+                &job.job_id,
+                &format!("ModelSplitAgent path_hints: {}", hints.join(", ")),
+            );
+        } else {
+            append_log(config, &job.job_id, "ModelSplitAgent repo_digest: shallow top-level only");
         }
     }
     if let Some(ref e) = job.effort {
