@@ -406,9 +406,13 @@ tasks:
 
         let insp = ir.task("inspect").unwrap();
         assert_eq!(insp.role, Some(TaskRole::Inspect));
+        // materialize_role_defaults fills missing ISSUES when any inspect product is present.
         assert_eq!(
             insp.outputs,
-            vec![".cco-out/inspect/VERDICT.md".to_string()]
+            vec![
+                ".cco-out/inspect/VERDICT.md".to_string(),
+                ".cco-out/inspect/ISSUES.md".to_string(),
+            ]
         );
         assert_eq!(insp.depends_on, vec!["feat-a".to_string()]);
     }

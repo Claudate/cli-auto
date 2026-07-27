@@ -1,11 +1,11 @@
-//! Worker domain: pure route / capability / isolation / failover policy (A1-4).
+//! Worker domain: pure route / capability / isolation / failover / cost-route policy (A1-4).
 //!
 //! **No** process spawn, **no** path layout for worktrees, **no** preflight IO.
 //!
-//! [INPUT]: provider name strings · plan fields · failover flags
-//! [OUTPUT]: fill decisions · isolation mode · failover target name
+//! [INPUT]: provider name strings · plan fields · failover flags · available names
+//! [OUTPUT]: fill decisions · isolation mode · failover/escalate target · cost route report
 //! [POS]: domain/worker — scheduler + CLI call these; adapters do IO
-//! [PROTOCOL]: 变更时更新 domain/CLAUDE.md；soft-fill **不得**静默盖显式 route
+//! [PROTOCOL]: 变更时更新 domain/CLAUDE.md；soft-fill / cost-auto **不得**静默盖显式 route
 
 mod cost_route;
 mod failover;

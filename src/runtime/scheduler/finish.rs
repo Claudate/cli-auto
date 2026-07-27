@@ -154,6 +154,11 @@ impl Scheduler {
                 }
                 started.remove(id);
 
+                let switch_kind = if is_escalate {
+                    "cost_escalate"
+                } else {
+                    "failover"
+                };
                 self.state.event(
                     "provider_switched",
                     serde_json::json!({
@@ -161,6 +166,7 @@ impl Scheduler {
                         "from": current,
                         "to": fallback,
                         "reason": reason_code,
+                        "kind": switch_kind,
                         "attempt": attempt,
                         "fallback_extra_attempts": self.fallback_extra_attempts.min(10),
                     }),
@@ -172,7 +178,7 @@ impl Scheduler {
                         "attempt": attempt,
                         "next_attempt": 1,
                         "retry_max": self.fallback_extra_attempts.min(10),
-                        "reason": format!("failover:{reason_code}"),
+                        "reason": format!("{switch_kind}:{reason_code}"),
                         "error": result.error,
                         "provider": fallback,
                         "from_provider": current,
@@ -184,6 +190,7 @@ impl Scheduler {
                     from = %current,
                     to = %fallback,
                     reason = reason_code,
+                    kind = switch_kind,
                     "provider failover scheduled"
                 );
                 return Ok(true);

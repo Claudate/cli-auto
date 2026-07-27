@@ -105,12 +105,15 @@ ready 任务 → max_parallel
 
 ### 3.2 默认角色 × CLI 路由
 
-| role | 默认 provider | 典型限制 | 禁止 |
-|------|---------------|----------|------|
-| `scout` | claude | 只读 tools；worktree 可关 | 改业务代码 |
-| `implement` | claude **或** codex | 写死 `scope.paths`；worktree 开 | 改他人 scope、直接合 main |
-| `integrate` | **固定一家**（默认 claude） | 可读各产物；写集成分支 | 新开大功能 |
-| `inspect` | **固定一家**（建议 claude） | 默认只读业务 + 写报告；跑测 | 静默大改后宣称通过 |
+> **2026-07-27**：默认仍可被 **费用优选**（`cost_route_enabled`）在 still-default 任务上改写为 tier 池内最便宜可用 CLI；显式 `provider` / tags / force **不动**。真源 [`cost-aware-cli-router-2026-07-27.md`](./cost-aware-cli-router-2026-07-27.md)。
+
+| role | 默认 tier（费用优选） | 典型限制 | 禁止 |
+|------|----------------------|----------|------|
+| `scout` | cheap（如 qwen/gemini…） | 只读 tools；worktree 可关 | 改业务代码 |
+| `implement` / 空 | mid（codex；无则上借） | 写死 `scope.paths`；worktree 开 | 改他人 scope、直接合 main |
+| `integrate` | flagship（claude） | 可读各产物；写集成分支 | 新开大功能 |
+| `inspect` | flagship（claude） | 默认只读业务 + 写报告；跑测 | 静默大改后宣称通过 |
+| `closeout` | mid | 文档/账本关账 | 改业务源以刷绿 |
 
 ### 3.3 越界定义（可操作）
 
