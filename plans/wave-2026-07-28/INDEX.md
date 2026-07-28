@@ -11,6 +11,7 @@
 | 计划文件 | 做什么 | 先等谁 | 可并行 |
 |----------|--------|--------|--------|
 | [01-audience.md](./01-audience.md) | 主受众与例子文案对齐 | — | ∥ 02 |
+| [01b-persona-path-profiles.md](./01b-persona-path-profiles.md) | 九类多维旋钮（纠正只贴 L/M/H） | 01 | W0-7 |
 | [02-iterate-clarity.md](./02-iterate-clarity.md) | 边聊/反馈完善体验 | 01 文案更佳 | ∥ 01 |
 | [03-path-empty-cta.md](./03-path-empty-cta.md) | 空态 L/M/H + 主 CTA（**先做**） | — | 优先 |
 | [04-multi-plan-bundle.md](./04-multi-plan-bundle.md) | 索引→多执行计划 | 03 H 入口心智 | 设计∥05 |
