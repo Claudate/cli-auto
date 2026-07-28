@@ -13,6 +13,7 @@ use anyhow::{bail, Result};
 use chrono::Utc;
 use rusqlite::{params, OptionalExtension};
 use serde::Serialize;
+use std::collections::HashMap;
 
 use crate::config::Config;
 
@@ -265,6 +266,14 @@ pub fn format_memory_context(view: &ProjectMemoryView) -> String {
             lines.push(format!("上次摘要：{t}"));
         }
     }
+    
+    // P0-B: Inject persona preferences from pins into prompt context
+    for pin in &view.pins {
+        if pin.key == "persona" && !pin.value.is_empty() {
+            lines.push(format!("上次选择的角色：{}", pin.value));
+        }
+    }
+    
     if !view.pins.is_empty() {
         lines.push("项目 pin（仅上下文，勿改路由/勿自动确认）：".into());
         for p in &view.pins {
@@ -287,6 +296,36 @@ pub fn try_format_memory_context(config: &Config, project_id: &str) -> String {
             String::new()
         }
     }
+}
+
+/// Generic pin operations for arbitrary key/value storage (P0-B extensibility).
+
+/// Set a generic pin by key (same constraints as upsert_pin but exposes public API).
+pub fn set_project_pin(config: &Config, project_id: &str, key: &str, value: &str) -> Result<()> {
+    let _ = upsert_pin(config, project_id, key, value)?;
+    Ok(())
+}
+
+/// Get all pins for a project filtered by provided keys (or all if keys is empty).
+pub fn get_project_pins(config: &Config, project_id: &str, keys: &[&str]) -> Result<HashMap<String, String>> {
+    let pins = list_pins(config, project_id)?;
+    let mut result = HashMap::new();
+
+    if keys.is_empty() {
+        // Return all pins
+        for pin in pins {
+            result.insert(pin.key, pin.value);
+        }
+    } else {
+        // Return only specified keys
+        for pin in pins {
+            if keys.contains(&pin.key.as_str()) {
+                result.insert(pin.key, pin.value);
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]

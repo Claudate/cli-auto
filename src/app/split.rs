@@ -249,6 +249,7 @@ mod tests {
                 max_parallel: Some(1),
                 preserve_from_job_id: None,
                 grain_hint: None,
+                clarify_depth: None,
                 revision_notes: None,
                 effort: None,
             },

@@ -8,12 +8,17 @@
 pub mod cco_split_store;
 pub mod project_ui;
 pub mod project_memory;
+pub mod persona_store;
 pub mod sqlite;
 
 pub use project_memory::{
     compose_last_summary, format_memory_context, get_last_summary, get_memory, list_pins,
     set_last_summary, try_format_memory_context, try_set_last_summary, upsert_pin, delete_pin,
     ProjectLastSummary, ProjectMemoryView, ProjectPin, MAX_PINS_PER_PROJECT,
+};
+pub use persona_store::{
+    get_project_persona, set_project_persona, try_get_project_persona, try_set_project_persona,
+    ProjectPersona,
 };
 
 use std::collections::HashMap;

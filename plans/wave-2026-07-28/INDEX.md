@@ -18,10 +18,12 @@
 | [05-modular-split-run.md](./05-modular-split-run.md) | 模块化拆、并行叙事、省钱、验收 | 04 | 设计∥04 |
 | [06-audience-demand-field-research.md](./06-audience-demand-field-research.md) | 论坛/平台需求模式与沟通（研究） | 01 | 校正话术 |
 | [landing-checklist.md](./landing-checklist.md) | 波次验收清单（对照 docs landing） | 各计划 | — |
+| [EXEC-full-window-prompts.md](./EXEC-full-window-prompts.md) | **完整多窗提示词**（按现况：主路径 ✅ · 余 W1-6） | — | 执行用 |
+| [EXEC-multi-window-prompts.md](./EXEC-multi-window-prompts.md) | 旧版（W2 未完成时假设）· **勿优先** | — | 归档向 |
 
 ```text
 建议阅读：01 → 01b → 06 → 02 → 03 → 04 → 05
-建议实施：**W0-8 去三档** → W1 抽检 → W2–W3 多计划
+主路径已 ✅ 时执行：见 EXEC-full-window-prompts（必开 V-HUMAN）
 ```
 
 ## 总目标（本波）

@@ -506,6 +506,43 @@ fn project_pin_delete_cmd(
     Ok(json!({ "ok": true, "deleted": deleted, "key": key }))
 }
 
+#[tauri::command]
+fn get_project_persona_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<Option<serde_json::Value>, String> {
+    use cco::state::persona_store::try_get_project_persona;
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    match try_get_project_persona(&config, &project) {
+        Some(p) => Ok(Some(json!({
+            "persona_id": p.persona_id,
+            "clarify_depth": p.clarify_depth,
+            "split_grain": p.split_grain,
+        }))),
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
+fn set_project_persona_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    persona_id: Option<String>,
+    clarify_depth: Option<String>,
+    split_grain: Option<String>,
+) -> Result<bool, String> {
+    use cco::state::persona_store::{set_project_persona, ProjectPersona};
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    let persona = ProjectPersona {
+        persona_id,
+        clarify_depth,
+        split_grain,
+    };
+    // best-effort: return success even if storage fails (caller should handle errors)
+    let _ = set_project_persona(&config, &project, &persona);
+    Ok(true)
+}
+
 /// SQLite SoT: user finished this run in UI — project_live must not re-bind it.
 #[tauri::command]
 fn project_dismiss_run_cmd(
@@ -948,6 +985,8 @@ pub fn run() {
             project_pins_list_cmd,
             project_pin_upsert_cmd,
             project_pin_delete_cmd,
+            get_project_persona_cmd,
+            set_project_persona_cmd,
             project_dismiss_run_cmd,
             project_clear_dismissed_run_cmd,
             project_get_dismissed_run_cmd,

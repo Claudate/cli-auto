@@ -47,6 +47,7 @@ pub fn build_split_agent_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
         created_at: job.created_at.to_rfc3339(),
         updated_at: now.clone(),
         grain_hint: job.grain_hint.clone(),
+        clarify_depth: job.clarify_depth.clone(),  // new: clarify depth
         revision_notes: job.revision_notes.clone(),
         effort: job.effort.clone(),
     };
@@ -195,6 +196,7 @@ mod tests {
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
             grain_hint: None,
+            clarify_depth: None,
             revision_notes: None,
             effort: None,
             },
@@ -252,6 +254,7 @@ mod tests {
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
             grain_hint: None,
+            clarify_depth: None,
             revision_notes: None,
             effort: None,
             },
@@ -308,6 +311,7 @@ mod tests {
                 max_parallel: Some(4),
                 preserve_from_job_id: None,
                 grain_hint: None,
+                clarify_depth: None,
                 revision_notes: None,
                 effort: None,
             },

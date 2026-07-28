@@ -587,7 +587,7 @@
   min-height: 0;
   /* Allow the prompt body to own vertical scroll; head stays pinned. */
   overflow: hidden;
-  max-height: 100%;
+  max-height: calc(100% - 2px); /* Slightly less than full height to avoid scroll artifacts */
 }
 .confirm-detail-head {
   display: flex;

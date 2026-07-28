@@ -4,6 +4,7 @@
  * [POS]: A5-2b-fin features/project/sessionEntry.js
  * note: 打开项目默认 chat；仅活动 run/暂停 → workspace 运行页；拆分台不默认抢入口
  * note: goToPlanMonitor 活动→running、终态→done（勿停 pick 空引导 / 历史拆分只读）
+ * note: P0-B selectProject 时 best-effort 恢复项目 persona/芯片（chatPersonaSync）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -50,6 +51,7 @@ import {
   requireGateway,
 } from "./legacy.js";
 import { host } from "./host.js";
+import { restorePersonaForProject } from "../chat/chatPersonaSync.js";
 
 export function isPlanSessionActive(phase = state.phase) {
   return (
@@ -771,6 +773,10 @@ export async function selectProject(path) {
 
   state.selectedPath = path;
   state.logStick = true;
+  // P0-B: best-effort 恢复本项目 persona/芯片（无项目/无存储不报错）
+  try {
+    restorePersonaForProject(path).catch(() => {});
+  } catch (_) {}
   state.planPreview = null;
   state.selectedTaskId = null;
   state.planCollapsed = false;

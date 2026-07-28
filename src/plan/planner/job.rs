@@ -96,6 +96,9 @@ pub struct PlanJob {
     /// W4: grain line forwarded to ModelSplitAgent (empty = omit).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grain_hint: Option<String>,
+    /// Clarify depth forwarded to ModelSplitAgent (none/soft1/soft2/full_opt; empty = omit).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clarify_depth: Option<String>,
     /// Free-text replan feedback for ModelSplitAgent (empty = omit). Not an open-run gate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revision_notes: Option<String>,
@@ -121,7 +124,10 @@ pub struct StartPlanJobRequest {
     /// W4: optional grain line for ModelSplitAgent user prompt (偏粗/偏细); never forces fast.
     #[serde(default)]
     pub grain_hint: Option<String>,
-    /// Optional free-text “why re-split / what to change” for ModelSplitAgent.
+    /// Optional clarify depth for ModelSplitAgent user prompt (none/soft1/soft2/full_opt).
+    #[serde(default)]
+    pub clarify_depth: Option<String>,
+    /// Optional free-text "why re-split / what to change" for ModelSplitAgent.
     #[serde(default)]
     pub revision_notes: Option<String>,
     /// Optional per-split reasoning depth (`low`…`max`|`ultracode`); else config default.
@@ -241,6 +247,11 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         .as_ref()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
+    let clarify_depth = req
+        .clarify_depth
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
     // Cap so a pasted essay cannot blow the split prompt.
     let revision_notes = req
         .revision_notes
@@ -287,6 +298,7 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
         critic_llm_cost_usd: None,
         critic_llm_ms: None,
         grain_hint,
+        clarify_depth,
         revision_notes,
         effort,
     };
@@ -1851,6 +1863,7 @@ mod reap_pid_scan_tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            clarify_depth: None,
             revision_notes: None,
             effort: None,
         };
@@ -1920,6 +1933,7 @@ mod reap_pid_scan_tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            clarify_depth: None,
             revision_notes: None,
             effort: None,
         };
@@ -2029,6 +2043,7 @@ mod reap_pid_scan_tests {
             critic_llm_cost_usd: None,
             critic_llm_ms: None,
             grain_hint: None,
+            clarify_depth: None,
             revision_notes: None,
             effort: None,
         };
@@ -2118,6 +2133,7 @@ mod reap_pid_scan_tests {
                 critic_llm_cost_usd: None,
                 critic_llm_ms: None,
                 grain_hint: None,
+                clarify_depth: None,
                 revision_notes: None,
                 effort: None,
             };

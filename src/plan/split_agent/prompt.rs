@@ -61,6 +61,7 @@ pub fn system_prompt() -> String {
 /// User message with plan body and runtime caps.
 ///
 /// `grain_hint`: optional one-line 偏粗/偏细 preference (W4); empty/None omitted.
+/// `clarify_depth`: optional clarification style; none|soft1(soft)2(full_opt).
 /// `revision_notes`: optional free-text replan feedback; empty/None omitted.
 /// `repo_digest`: optional host-built shallow tree (read-only); empty/None omitted.
 pub fn user_prompt(
@@ -68,6 +69,7 @@ pub fn user_prompt(
     max_parallel: usize,
     plan_md: &str,
     grain_hint: Option<&str>,
+    clarify_depth: Option<&str>,
     revision_notes: Option<&str>,
     repo_digest: Option<&str>,
 ) -> String {
@@ -76,6 +78,14 @@ pub fn user_prompt(
         .filter(|s| !s.is_empty())
         .map(|s| format!("粒度偏好：{s}\n"))
         .unwrap_or_default();
+    // Map clarify depth to Chinese instructions.
+    let clarify_line = match clarify_depth.map(str::trim).filter(|s| !s.is_empty()).as_deref() {
+        Some("soft1") => "拆分前如信息不足，最多提一个软澄清问题（不阻塞）\n".to_string(),
+        Some("soft2") => "拆分前如信息不足，可列至多两个软澄清问题（不阻塞）\n".to_string(),
+        Some("full_opt") => "可列出完整的可选澄清问题（范围/假设），但不得阻塞拆分\n".to_string(),
+        Some("none") | None => String::new(),
+        _ => String::new(),
+    };
     let revision_block = revision_notes
         .map(str::trim)
         .filter(|s| !s.is_empty())
@@ -91,7 +101,7 @@ pub fn user_prompt(
     format!(
         r#"项目：{project_label}
 同时路数上限 max_parallel：{max_parallel}
-{grain_line}{revision_block}{digest_block}硬约束（写入每条 body 的「不要做什么」若相关）：
+{grain_line}{clarify_line}{revision_block}{digest_block}硬约束（写入每条 body 的「不要做什么」若相关）：
 - 唯一开跑入口是人在拆分台确认；禁止设计旁路开跑
 - soft-fill 不得静默覆盖任务已显式指定的执行方式
 - 完成 = 对照计划验收，不是进程 exit 0
@@ -174,7 +184,7 @@ mod tests {
 
     #[test]
     fn user_mentions_parallel_ownership() {
-        let u = user_prompt("/proj", 2, "# hi", None, None, None);
+        let u = user_prompt("/proj", 2, "# hi", None, None, None, None);
         assert!(u.contains("max_parallel：2"));
         assert!(u.contains("scope_paths") || u.contains("文件"));
         assert!(!u.contains("粒度偏好"));
@@ -183,8 +193,22 @@ mod tests {
 
     #[test]
     fn user_includes_grain_when_set() {
-        let u = user_prompt("/proj", 2, "# hi", Some("偏细：步骤拆开"), None, None);
+        let u = user_prompt("/proj", 2, "# hi", Some("偏细：步骤拆开"), None, None, None);
         assert!(u.contains("粒度偏好：偏细"));
+        assert!(u.contains("拆分前如信息不足，最多提一个软澄清问题（不阻塞）") || !u.contains("soft1"), "clarify should be omitted for soft1 unless set");
+    }
+
+    #[test]
+    fn user_includes_clarify_depth_when_set() {
+        // none: omit
+        let u = user_prompt("/proj", 2, "# hi", None, Some("none"), None, None);
+        assert!(!u.contains("拆分前如信息不足"));
+        // soft1: one question hint
+        let u = user_prompt("/proj", 2, "# hi", None, Some("soft1"), None, None);
+        assert!(u.contains("拆分前如信息不足，最多提一个软澄清问题（不阻塞）"));
+        // full_opt: all optional questions hint
+        let u = user_prompt("/proj", 2, "# hi", None, Some("full_opt"), None, None);
+        assert!(u.contains("可列出完整的可选澄清问题（范围/假设），但不得阻塞拆分"));
     }
 
     #[test]
@@ -193,6 +217,7 @@ mod tests {
             "/proj",
             2,
             "# hi",
+            None,
             None,
             Some("合并文案与 SEO 为一步；scope 不要抢 index.html"),
             None,
@@ -208,6 +233,7 @@ mod tests {
             "/proj",
             2,
             "# hi",
+            None,
             None,
             None,
             Some("仓库浅览：\n顶层：src/ · web/"),

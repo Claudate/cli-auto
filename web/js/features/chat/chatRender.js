@@ -2,6 +2,7 @@
  * [INPUT]: legacy · chatState · format · sessions · attachments · host
  * [OUTPUT]: renderChat* · fillChatExample · env-bar helpers
  * [POS]: A5-2a features/chat；自 chatActions 纵切（P-ship-D）
+ * note: P0-B setPersonaAndPaint 时 best-effort 保存项目 persona/芯片（chatPersonaSync）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 import {
@@ -83,6 +84,14 @@ export function setPersonaAndPaint(id, opts = {}) {
   const next = setPersonaId(id);
   const p = getPersonaProfile(next);
   applyPersonaOpener(next);
+  // P0-B: best-effort 保存本项目 persona/芯片（无项目不调用不报错）
+  try {
+    if (state.selectedPath) {
+      import("./chatPersonaSync.js")
+        .then((m) => m.savePersonaForProject(state.selectedPath))
+        .catch(() => {});
+    }
+  } catch (_) {}
   // Soft path bias only when applyPathBias:true (scene chip click)
   if (opts.applyPathBias && p?.pathBias) {
     try {

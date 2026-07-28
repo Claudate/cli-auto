@@ -3,6 +3,7 @@
  * [OUTPUT]: start_plan_job · poll · optional gate · advance (no silent auto-start past optionals)
  * [POS]: A5-2b-fin features/project/jobPoll.js
  * note: start_plan_job · poll · optional gate · advance (no silent auto-start past optionals)
+ * note: P0-A persona 芯片：clarify_depth 透传 start_plan_job；grain 芯片仅在未选工作习惯时作默认
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -52,7 +53,11 @@ import { host } from "./host.js";
 import {
   suggestedMaxParallel,
   suggestedGrainHint,
+  getWorkStyleId,
+  getProjectWorkStyleId,
 } from "../../shared/workStyle.js";
+import { getChipValue } from "../chat/chatPersona.js";
+import { chipGrainHintLine } from "../chat/chatPersonaSync.js";
 
 /** Humanize planner hard-timeout / engine errors for toast + failure panel. */
 function humanPlanFail(raw) {
@@ -179,6 +184,20 @@ export async function analyzePlanFromPicker(planPathArg) {
   } catch (_) {
     grainHint = "";
   }
+  // Persona chips as soft defaults: only when user never picked a work style
+  // (global or project override) does the chip grain replace the fallback line.
+  let clarifyDepth = null;
+  try {
+    const styleChosen =
+      !!getWorkStyleId() || !!getProjectWorkStyleId(projectPath);
+    if (!styleChosen) {
+      const chipLine = chipGrainHintLine(getChipValue("split_grain"));
+      if (chipLine) grainHint = chipLine;
+    }
+    clarifyDepth = getChipValue("clarify_depth") || null;
+  } catch (_) {
+    clarifyDepth = null;
+  }
   const revEl0 = $("#split-revision-notes");
   const revisionNotes =
     (revEl0 && String(revEl0.value || "").trim()) || null;
@@ -279,6 +298,8 @@ export async function analyzePlanFromPicker(planPathArg) {
         preserve_from_job_id: preserveFrom || null,
         // W4 grain + optional revision_notes (never opens a run).
         grain_hint: grainHint || null,
+        // Persona chip: clarify depth line for split prompt (none → omit).
+        clarify_depth: clarifyDepth,
         revision_notes: revisionNotes,
         effort: effort || null,
       },

@@ -12,6 +12,12 @@ const KEY = "cco.personaId";
 /** In-memory fallback when localStorage is unavailable (tests / private mode). */
 let memoryPersona = /** @type {PersonaId|null} */ (null);
 
+/** In-memory tracking for clarify_depth and split_grain chips (not persisted yet). */
+let currentChips = {
+    clarify_depth: 'soft1',      // default per W1-6 profiles
+    split_grain: 'balanced'     // matching W1-6 defaults
+};
+
 /**
  * @typedef {'founder'|'pm'|'designer'|'ops'|'creator'|'ecom'|'edu'|'admin'|'biz_lead'} PersonaId
  * @typedef {'offer'|'hide'|'danger_only'} DirectExec
@@ -26,6 +32,8 @@ let memoryPersona = /** @type {PersonaId|null} */ (null);
  *   directExec: DirectExec,
  *   doneWhenHint: string,
  *   nonGoalHint: string,
+ *   default_clarify_depth?: string,
+ *   default_split_grain?: string,
  * }} PersonaProfile
  */
 
@@ -51,6 +59,8 @@ export const PERSONA_PROFILES = Object.freeze({
     directExec: "offer",
     doneWhenHint: "能打开链接 · 主按钮可点 · 能演示给客户 3 分钟",
     nonGoalHint: "先不做：支付/会员/复杂后台/多端",
+    default_clarify_depth: 'none',
+    default_split_grain: 'coarse',
   },
   pm: {
     id: "pm",
@@ -72,6 +82,8 @@ export const PERSONA_PROFILES = Object.freeze({
     directExec: "hide",
     doneWhenHint: "验收条可勾 · 对照计划章节 · 遗漏可回补",
     nonGoalHint: "先不做：范围外 epic、未定调研当实现",
+    default_clarify_depth: 'soft1',
+    default_split_grain: 'balanced',
   },
   designer: {
     id: "designer",
@@ -93,6 +105,8 @@ export const PERSONA_PROFILES = Object.freeze({
     directExec: "hide",
     doneWhenHint: "预览像意图 · 主 CTA 位置对 · 关键态不崩",
     nonGoalHint: "先不做：设计系统大一统、动效全集、多主题",
+    default_clarify_depth: 'soft1',
+    default_split_grain: 'balanced',
   },
   ops: {
     id: "ops",
@@ -106,14 +120,16 @@ export const PERSONA_PROFILES = Object.freeze({
         fill: "大促本波三页：活动主页、规则页、留资表，要写清截止与必上清单",
       },
       {
-        short: "双语+表单",
-        fill: "中英双语落地页+留资表单，本波一起亮，先不做完整后台",
+        short: "双语 + 表单",
+        fill: "中英双语落地页 + 留资表单，本波一起亮，先不做完整后台",
       },
     ],
     primaryCta: "生成本波目录",
     directExec: "hide",
     doneWhenHint: "页可开 · 表可收 · 语种齐 · 活动日状态可指认",
     nonGoalHint: "先不做：年架重构、无关产品线",
+    default_clarify_depth: 'soft2',
+    default_split_grain: 'balanced',
   },
   creator: {
     id: "creator",
@@ -135,6 +151,8 @@ export const PERSONA_PROFILES = Object.freeze({
     directExec: "offer",
     doneWhenHint: "链接能发 · 像你的语气 · 主 CTA 可点",
     nonGoalHint: "先不做：社区、复杂会员、全站 CMS",
+    default_clarify_depth: 'none',
+    default_split_grain: 'coarse',
   },
   ecom: {
     id: "ecom",
@@ -148,14 +166,16 @@ export const PERSONA_PROFILES = Object.freeze({
         fill: "做单品详情可上架：卖点三句、规格、FAQ；禁止编造参数，主图位说清",
       },
       {
-        short: "活动+券",
-        fill: "活动页+券说明，上架清单齐：必含词、模块齐、无违禁编造",
+        short: "活动 + 券",
+        fill: "活动页 + 券说明，上架清单齐：必含词、模块齐、无违禁编造",
       },
     ],
     primaryCta: "拆成上架步骤",
     directExec: "danger_only",
     doneWhenHint: "上架清单：必含词、模块齐、无违禁编造、主图位说明清",
     nonGoalHint: "先不做：整站商城、支付中台",
+    default_clarify_depth: 'soft1',
+    default_split_grain: 'balanced',
   },
   edu: {
     id: "edu",
@@ -165,8 +185,8 @@ export const PERSONA_PROFILES = Object.freeze({
     coach: "按学员路径写：打开→学会→交作业。",
     examples: [
       {
-        short: "单课+作业",
-        fill: "单课说明+作业提交：学员是谁、学完能做什么、怎样交作业",
+        short: "单课 + 作业",
+        fill: "单课说明 + 作业提交：学员是谁、学完能做什么、怎样交作业",
       },
       {
         short: "报名页",
@@ -177,6 +197,8 @@ export const PERSONA_PROFILES = Object.freeze({
     directExec: "hide",
     doneWhenHint: "学员打开不懵 · 交作业/报名通 · 下学期能改一章",
     nonGoalHint: "先不做：直播中台、学分系统",
+    default_clarify_depth: 'soft2',
+    default_split_grain: 'balanced',
   },
   admin: {
     id: "admin",
@@ -190,14 +212,16 @@ export const PERSONA_PROFILES = Object.freeze({
         fill: "制度说明页：给谁看、哪些表述必审不能擅改，先出草案等人确认",
       },
       {
-        short: "收集表+说明",
-        fill: "内宣一页+收集确认表，可存档，先不做自动对外群发",
+        short: "收集表 + 说明",
+        fill: "内宣一页 + 收集确认表，可存档，先不做自动对外群发",
       },
     ],
     primaryCta: "生成草案并等人确认",
     directExec: "hide",
     doneWhenHint: "可存档 · 流程可走 · 必审句未乱改 · 表可收",
     nonGoalHint: "先不做：自动对外群发、改薪酬口径",
+    default_clarify_depth: 'soft2',
+    default_split_grain: 'balanced',
   },
   biz_lead: {
     id: "biz_lead",
@@ -219,6 +243,8 @@ export const PERSONA_PROFILES = Object.freeze({
     directExec: "hide",
     doneWhenHint: "业务结果可观察 · 负责人能汇报",
     nonGoalHint: "先不做：技术债大扫除当业务结果",
+    default_clarify_depth: 'soft1',
+    default_split_grain: 'coarse',
   },
 });
 
@@ -258,6 +284,23 @@ export const SCENE_CHIPS = Object.freeze([
   },
 ]);
 
+// Apply persona defaults to scene chips when clicked
+if (typeof document !== "undefined") {
+    document.addEventListener("click", (e) => {
+        const chip = e.target.closest("[data-scene-chip]");
+        if (chip) {
+            const persona = chip.dataset.persona;
+            if (persona) {
+                const p = PERSONA_PROFILES[persona];
+                if (p) {
+                    currentChips.clarify_depth = p.default_clarify_depth || 'soft1';
+                    currentChips.split_grain = p.default_split_grain || 'balanced';
+                }
+            }
+        }
+    });
+}
+
 /** @returns {PersonaId} */
 export function getPersonaId() {
   try {
@@ -268,6 +311,14 @@ export function getPersonaId() {
   } catch (_) {}
   if (memoryPersona && PERSONA_PROFILES[memoryPersona]) return memoryPersona;
   return DEFAULT_PERSONA;
+}
+
+/** Get current chip values. */
+export function getChipValue(type) { return currentChips[type]; }
+
+/** Set chip value (used when persona/chip clicked). */
+export function setChipValue(type, value) { 
+    currentChips[type] = value; 
 }
 
 /**
@@ -283,6 +334,12 @@ export function setPersonaId(id) {
   try {
     localStorage.setItem(KEY, next);
   } catch (_) {}
+  // Set chip defaults based on persona profile
+  const profile = PERSONA_PROFILES[next];
+  if (profile) {
+    currentChips.clarify_depth = profile.default_clarify_depth || 'soft1';
+    currentChips.split_grain = profile.default_split_grain || 'balanced';
+  }
   return next;
 }
 

@@ -102,6 +102,7 @@ fn call_messages_http(req: &SplitRequest) -> Result<String> {
         req.max_parallel,
         &plan_md,
         req.grain_hint.as_deref(),
+        req.clarify_depth.as_deref(),  // new
         req.revision_notes.as_deref(),
         if digest.is_empty() {
             None
@@ -200,6 +201,7 @@ fn call_claude_cli_print(config: &Config, req: &SplitRequest) -> Result<String> 
         req.max_parallel,
         &plan_md,
         req.grain_hint.as_deref(),
+        req.clarify_depth.as_deref(),  // new
         req.revision_notes.as_deref(),
         if digest.is_empty() {
             None
@@ -327,6 +329,7 @@ mod tests {
             created_at: "t0".into(),
             updated_at: "t0".into(),
             grain_hint: None,
+            clarify_depth: None,  // new
             revision_notes: None,
             effort: None,
         };

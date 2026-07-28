@@ -102,11 +102,13 @@ export const listPlanSplitIndex = (project) =>
   raw("list_plan_split_index_cmd", { project });
 export const updatePlanTask = (args) => raw("update_plan_task_cmd", args);
 export const removePlanTask = (args) => raw("remove_plan_task_cmd", args);
-/** 唯一业务开跑入口（Split 确认）；禁止 UI 旁路 start_run */
-/** @param {string} jobId @param {string|null|undefined} [effort] low…max|ultracode */
-export const confirmStart = (jobId, effort) => {
+/** 唯一业务开跑入口 (Split 确认)；禁止 UI 旁路 start_run */
+/** @param {string} jobId @param {string|null|undefined} [effort] low…max|ultracode @param {{clarify_depth?: string, split_grain?: string}} [chips] */
+export const confirmStart = (jobId, effort, chips) => {
   const args = { jobId };
   if (effort) args.effort = effort;
+  if (chips && chips.clarify_depth != null) args.clarify_depth = chips.clarify_depth;
+  if (chips && chips.split_grain != null) args.split_grain = chips.split_grain;
   return raw("confirm_start_cmd", args);
 };
 
@@ -134,6 +136,11 @@ export const projectPinUpsert = (project, key, value) =>
   raw("project_pin_upsert_cmd", { project, key, value });
 export const projectPinDelete = (project, key) =>
   raw("project_pin_delete_cmd", { project, key });
+/** Get persona preferences (persona_id, clarify_depth, split_grain). best-effort, no project check -> null */
+export const getProjectPersona = (project) => raw("get_project_persona_cmd", { project });
+/** Set persona preferences (any of the three may be omitted). best-effort. */
+export const setProjectPersona = (project, args) =>
+  raw("set_project_persona_cmd", { project, ...args });
 /** SQLite: finish round — hide this run from project_live until cleared. */
 export const projectDismissRun = (project, runId) =>
   raw("project_dismiss_run_cmd", { project, runId });
@@ -224,6 +231,8 @@ export const gateway = {
   projectPinsList,
   projectPinUpsert,
   projectPinDelete,
+  getProjectPersona,
+  setProjectPersona,
   projectDismissRun,
   projectClearDismissedRun,
   projectGetDismissedRun,

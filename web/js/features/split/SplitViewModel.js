@@ -359,7 +359,13 @@ export function createSplitViewModel(deps = {}) {
             .toLowerCase();
           if (EFFORT_OK.includes(raw)) effort = raw;
         } catch (_) {}
-        const res = await splitApi.confirmStart(s.jobId, effort);
+        // Get persona chip values
+        const { getChipValue } = await import("../chat/chatPersona.js");
+        const chips = {
+          clarify_depth: getChipValue('clarify_depth'),
+          split_grain: getChipValue('split_grain'),
+        };
+        const res = await splitApi.confirmStart(s.jobId, effort, chips);
         const runId = res?.run_id || res?.runId || null;
         const job = s.job
           ? { ...s.job, status: "confirmed", run_id: runId }

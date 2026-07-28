@@ -3,6 +3,9 @@
  * [OUTPUT]: 结果台意图（回补 / 接受残留 / 结束本轮）；不写 inspect 门禁
  * [POS]: A4-3 ResultViewModel；IPC 只经 resultApi → gateway
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ *
+ * acceptResidual：桌面禁用 window.prompt（WKWebView 静默 null＝按钮「没反应」）；
+ * 默认 note 写入 handoff；可选 deps.promptNote 自定义 UI。
  */
 
 import { createStore } from "../../shared/store.js";
@@ -67,6 +70,18 @@ export function createResultViewModel(deps = {}) {
     return live?.run_id || live?.runId || null;
   }
 
+  /** Prefer VM live; fall back to shell state so CTA works even if setLive lagged. */
+  function currentLive() {
+    const fromVm = snap().live;
+    if (fromVm && runIdOf(fromVm)) return fromVm;
+    try {
+      const w = typeof window !== "undefined" ? window : null;
+      const leg = w && w.state && w.state.live;
+      if (leg && runIdOf(leg)) return leg;
+    } catch (_) {}
+    return fromVm || null;
+  }
+
   return {
     store,
     getSnapshot: snap,
@@ -82,7 +97,9 @@ export function createResultViewModel(deps = {}) {
      * On success → phase run (new wave).
      */
     async startRework() {
-      const runId = runIdOf(snap().live);
+      const live = currentLive();
+      if (live) setPatch({ live });
+      const runId = runIdOf(live);
       if (!runId || typeof runId !== "string" || !runId.trim()) {
         toast("无运行记录可回补");
         return null;
@@ -111,32 +128,34 @@ export function createResultViewModel(deps = {}) {
 
     /**
      * Accept residual with optional note (DTO path only).
+     * Desktop must not use window.prompt — Tauri/WKWebView returns null with no UI
+     * (looks like the button does nothing). Default note is enough; host may inject promptNote.
      */
     async acceptResidual() {
-      const runId = runIdOf(snap().live);
+      const live = currentLive();
+      if (live) setPatch({ live });
+      const runId = runIdOf(live);
       if (!runId || typeof runId !== "string" || !runId.trim()) {
         toast("无运行记录");
         return null;
       }
-      if (snap().busy) return null;
+      if (snap().busy) {
+        toast("正在处理，请稍候");
+        return null;
+      }
       const defaultNote = "用户显式接受巡检残留";
       let note = defaultNote;
       if (typeof deps.promptNote === "function") {
         const n = deps.promptNote(defaultNote);
-        if (n === null) return null;
-        note = n || null;
-      } else if (typeof window !== "undefined" && typeof window.prompt === "function") {
-        const n = window.prompt(
-          "接受残留说明（将写入 handoff open_risks）",
-          defaultNote
-        );
+        // null = explicit cancel from custom UI only
         if (n === null) return null;
         note = n || null;
       }
+      // Do NOT call window.prompt here — silent null cancel on desktop WebView.
       setPatch({ busy: true, lastError: null });
       try {
         await resultApi.acceptResidual(runId, note);
-        toast("已记录「接受残留」");
+        toast("已记下「先这样结束」· 残留不等于已修好");
         if (typeof deps.onPhaseResult === "function") {
           try {
             deps.onPhaseResult();
@@ -158,7 +177,7 @@ export function createResultViewModel(deps = {}) {
      * Soft end + P2-2 writeback last_summary (best-effort; never blocks finish).
      */
     async finishRound() {
-      const runId = runIdOf(snap().live);
+      const runId = runIdOf(currentLive() || snap().live);
       if (runId && typeof runId === "string" && runId.trim()) {
         try {
           await resultApi.writebackMemory(runId);
