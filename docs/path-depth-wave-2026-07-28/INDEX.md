@@ -20,6 +20,8 @@
 | Q5 | 模块化拆、可并/必串、省钱 CLI、对照验收？ | [05-modular-split-run.md](./05-modular-split-run.md) |
 | Q6 | 论坛/知识平台上这些人需求模式？怎么沟通？cco 如何落地？ | [06-audience-demand-field-research.md](./06-audience-demand-field-research.md) |
 | — | 落地波次与成功标准 | [landing.md](./landing.md) |
+| — | W1-6 桌面抽检表 | [w1-6-desktop-checklist.md](./w1-6-desktop-checklist.md) |
+| — | W4-3 行数债 | [w4-3-line-debt.md](./w4-3-line-debt.md) |
 
 ---
 

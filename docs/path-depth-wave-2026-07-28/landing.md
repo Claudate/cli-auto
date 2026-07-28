@@ -10,7 +10,7 @@
 
 ## 状态行
 
-**2026-07-28**：文档多计划 ✅ · 06 田野 ✅ · **01b ✅** · **W0–W2 ✅** · **W3 总览+串行确认本波 ✅**（同 confirm_start · 默认同仓一轮）· **W4 文档关账 ✅** · W1-6 桌面 residual · W3-4 巡检齐活仍复用单计划 Ensure  
+**2026-07-28**：**W0–W3 主路径 ✅** · **W4 文档关账 ✅** · **W1-6 抽检表已备**（[w1-6-desktop-checklist.md](./w1-6-desktop-checklist.md) · 真人 ☐）· **W4-3 债表** [w4-3-line-debt.md](./w4-3-line-debt.md)（arch FAIL=0 · WARN 记账）  
 
 ---
 
@@ -59,7 +59,7 @@
 - [x] W1-3 已保存后「按我说的改/换方向」只聚焦输入重写草稿 · **≠** confirm/开跑  
 - [x] W1-4 与 session-digest 共存（条只读 session/draft/clarify，不拆 digest 管线）  
 - [x] W1-5 写作/澄清提示：`chat-plan-writing` 边聊/当前理解/假设·矛盾/场景验收词；split+planner 交叉；**零** P 代号教用户；`plan_writing_guidance` 单测  
-- [ ] W1-6 抽检：含糊三轮后摘要仍人话可认；不逼满页问卷（桌面 residual）  
+- [ ] W1-6 抽检：含糊三轮后摘要仍人话可认；不逼满页问卷 — **清单** [w1-6-desktop-checklist.md](./w1-6-desktop-checklist.md)（结构/脚本可代跑；**关账须真人**）  
 
 ## W2 · 索引与多计划 · 主责 04（+05 隔离）
 
@@ -80,7 +80,7 @@
 
 - [x] W4-1 角色文案：01 / 01b 真源 + PRODUCT 扩表链到 01/01b  
 - [x] W4-2 金样：W2-4 单测「B 不杀 A」+ wave 落盘单测；文案无 L/M/H 主路径  
-- [ ] W4-3 check-arch 全量 / 行数（`plansMgmt` 等偏厚 · residual 债）  
+- [x] W4-3 check-arch 可跑 FAIL=0；行数债 **记账** [w4-3-line-debt.md](./w4-3-line-debt.md)（本波抽 `chatWaveBatch` 降 plansMgmt；clarify 巨石另立）  
 - [x] W4-4 PRODUCT 受众表扩写并链 01/01b  
 - [x] W4-5 本文状态行收口；docs/CLAUDE 索引描述已更新  
 
@@ -110,4 +110,5 @@
 | 日期 | 说明 |
 |------|------|
 | 2026-07-28 | 自单文件拆出；勾选唯一落点 |
+| 2026-07-28 | W0–W3 主路径 + W4 文档关账；W1-6 清单 / W4-3 债表入库 |
 | 2026-07-28 | 去三档校正；计划内 L/M/H 清扫；词汇表消歧 |
