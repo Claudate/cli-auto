@@ -15,7 +15,7 @@
 |---|------|----------|
 | Q1 | 主用户是谁（创业者/小老板/PM/设计/运营/内容/电商/教培/行政…）？ | [01-audience.md](./01-audience.md) · **多维优化** [01b-persona-path-profiles.md](./01b-persona-path-profiles.md) |
 | Q2 | 需求常不清晰：边聊完善、反馈再完善，怎么当一等公民？ | [02-iterate-clarity.md](./02-iterate-clarity.md) |
-| Q3 | 空态/草稿迷路；**L/M/H 三档也不该教用户**？ | [03-path-empty-cta.md](./03-path-empty-cta.md)（交付形态仅对内） |
+| Q3 | 空态/草稿迷路；**空态不该教三档工作方式**？ | [03-path-empty-cta.md](./03-path-empty-cta.md)（交付形态仅对内） |
 | Q4 | 为何不该一篇长 md？索引→多执行计划→再拆？ | [04-multi-plan-bundle.md](./04-multi-plan-bundle.md) |
 | Q5 | 模块化拆、可并/必串、省钱 CLI、对照验收？ | [05-modular-split-run.md](./05-modular-split-run.md) |
 | Q6 | 论坛/知识平台上这些人需求模式？怎么沟通？cco 如何落地？ | [06-audience-demand-field-research.md](./06-audience-demand-field-research.md) |
@@ -52,7 +52,7 @@
 | **任务** | 计划拆出的子工单 |
 | **索引** | 本波目录：关系 + 多计划列表 |
 | **本波 Bundle** | 多计划集合 + 可选先后/可并 |
-| **delivery**（对内） | trial / single / bundle（旧 L/M/H；**不上主 UI**） |
+| **delivery**（对内） | trial / single / bundle（**不上主 UI**；迁移期勿写 L/M/H 新文案） |
 | **边聊完善** | 多轮对话里想清 |
 | **反馈完善** | AI 稿 → 人改 → 再生成 |
 
