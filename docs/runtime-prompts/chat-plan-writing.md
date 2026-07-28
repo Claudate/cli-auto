@@ -89,13 +89,15 @@ Brief 末提示主 CTA 心智：**认领并写成计划**（认领 ≠ 开跑）
 
 ```text
 交付深度 A–D → 后端有无 → 站点类型 → 版式变体 2～4
-→ 色系 kit（=字体 kit）→ 界面文案（主 CTA/空错载）→ 动效档 → 图片填充 → 成功标准
+→ 色系 kit（=字体 kit）→ **site-floor shell+kit（绿野强制）**
+→ 界面文案（主 CTA/空错载）→ 动效档 → 图片填充 → 成功标准
 ```
 
 **效果配方**（场景 + **平台气质**）：见 `ui-delivery-recipes.md`（会注入）。  
 - 场景例：R-overseas / R-shanshui / R-portfolio / R-tool / R-fintech / R-edu…  
 - 平台例：用户说 iOS/苹果 → **R-ios**；谷歌/Material/安卓 → **R-material**；微软 Fluent → **R-fluent**；中后台 Ant → **R-ant**；微信感 → **R-wechat**。  
-点名平台时 kit 用 `ios-hig` / `material` / `fluent` / `ant-design` / `wechat-lite` 等（见色系表），勿与国风/粒子乱串。
+点名平台时 kit 用 `ios-hig` / `material` / `fluent` / `ant-design` / `wechat-lite` 等（见色系表），勿与国风/粒子乱串。  
+- **可运行底板**：`examples/site-floor/`（`RECIPE-MAP.md` · `demos/r-*`）。绿野站「建议技术」须写 starter 路径（shell+kit 或具体 demo）；**禁止**从空白 HTML 另起土味默认。
 
 **界面文案**（网站段落 + App/软件按钮·空态·错误）：人话、动词 CTA、全产品主 CTA 一致；禁 Lorem/TODO 充完成。见 `ui-copy-systems.md`（会注入）。
 
@@ -121,14 +123,15 @@ Brief 末提示主 CTA 心智：**认领并写成计划**（认领 ≠ 开跑）
 - **图**：**意图 + 代理**——① 关键位真实感（商品/Hero/作品：图库可溯源 / 生成落盘 / 品牌图）② 且无 placehold 类 host + alt；禁止只写「无占位」而默许简笔 SVG 顶真图；区块填法见配方 §3  
 - **文案**：`ui-copy-systems.md`（营销 H1/CTA + App 微文案）  
 - **门禁**：`scripts/check-landing-gates.sh` + `landing-gates.md`（含 G7 图）
+- **site-floor**：可运行骨架+token；成功标准建议含「对齐 `examples/site-floor` 对应 demo/shell」+ 门禁无 FAIL
 
 ### 前端与体验（成功标准可勾选）
 
 - 首屏：唯一主 CTA + 建议 1 次 CTA；空/错/载/成功有人话；**主 CTA 动词全产品一致**。
 - **图标**：开源线标（Lucide 等）；**禁止** emoji 按钮图标。
 - 高级能力默认折叠/可选；不做 IDE 调试墙、不暴露内部 ID 作第一句。
-- **站点类型**：marketing / portfolio / content / ecommerce / dashboard / app-shell / story / event / waitlist；骨架固定 + **版式变体 2～4**（防死板）。
-- **视觉顺序**：类型 → 变体 → 色=字 kit → 动效 → 真图（勿先堆特效）。
+- **站点类型**：marketing / portfolio / content / ecommerce / dashboard / app-shell / story / event / waitlist；骨架固定 + **版式变体 2～4**（防死板）；**绿野从 site-floor 起步**。
+- **视觉顺序**：类型 → 变体 → 色=字 kit（site-floor）→ 动效 → 真图（勿先堆特效）。
 - **marketing**：Hero→证据→能力≤3→底 CTA→Footer；底带≠footer。
 - **中文**：标题 balance/断句；正文行高 ~1.6–1.8。
 - **真实资产**：无 example.com / 假邮箱；顶栏唯一主名；关键图真实感 + 无占位 host（缺图写清「搜图落盘」而非改弱验收）。
@@ -153,7 +156,7 @@ Brief 末提示主 CTA 心智：**认领并写成计划**（认领 ≠ 开跑）
    - 界面文案：主 CTA 人话且一致；空/错/载/成功有下一步；无 Lorem/内部 ID 第一句  
    - 动效不挡 CTA、reduced-motion；有后端则深度匹配  
    - 站点：`check-landing-gates.sh` 无 FAIL；30 秒走查  
-10. **任务大纲 · 默认只写 V1**（3–8 条；顺序宜：结构→关键文案→tokens→真图→动效→后端→门禁预览）  
+10. **任务大纲 · 默认只写 V1**（3–8 条；绿野顺序宜：**site-floor 骨架**→关键文案→tokens 微调→真图→动效→后端→门禁预览）  
 11. **V2 / Later**（**折叠一节**，不展开成长任务列表）  
 12. 结构对齐：marketing → SPEC；其它 → layout 对应节；整包默认 → 配方表  
 

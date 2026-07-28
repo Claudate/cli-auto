@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marketing shell · cco site-floor</title>
+  <meta name="description" content="cco site-floor · marketing 区块骨架：顶栏→Hero→证据→能力≤3→底 CTA→Footer" />
+  <link rel="stylesheet" href="../../shared/base.css" />
+  <link rel="stylesheet" href="../../kits/western-saas.css" />
+  <link rel="stylesheet" href="shell.css" />
+</head>
+<body data-recipe="shell-marketing" data-kit="western-saas">
+
+  <!-- 1. 顶栏：唯一主名 + 导航≤5 + 一个主 CTA -->
+  <header class="site-header">
+    <div class="container inner">
+      <a class="brand" href="#">Brand</a>
+      <nav class="nav" aria-label="主导航">
+        <a href="#proof">证据</a>
+        <a href="#features">能力</a>
+        <a href="#scenes">场景</a>
+        <a href="#cta">免费开始</a>
+      </nav>
+      <a class="btn btn-primary header-cta" href="#cta">免费开始</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- 2. Hero：结果导向 H1 + 导语 + 主/次 CTA + 示意位 -->
+    <section class="hero container" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow">Product</p>
+        <h1 id="hero-title">在一套精选设计系统上开始搭建</h1>
+        <p class="lead">给产品团队：先对齐结构与主按钮，再换品牌文案与真图。设计令牌、字体与基础组件已就位。</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#cta">免费开始</a>
+          <a class="btn btn-ghost" href="#features">了解能力</a>
+        </div>
+      </div>
+      <div class="visual-slot hero-visual" role="img" aria-label="产品界面示意（装饰色块，实现时换真实截图）">
+        产品界面示意
+      </div>
+    </section>
+
+    <!-- 3. 证据：数据条（可换截图 / Logo 墙） -->
+    <section class="proof container" id="proof" aria-label="证据">
+      <div class="proof-row">
+        <div><strong>12k+</strong>团队在用</div>
+        <div><strong>4.9</strong>满意度</div>
+        <div><strong>3 分钟</strong>上手主路径</div>
+        <div><strong>0</strong>假域名演示</div>
+      </div>
+    </section>
+
+    <!-- 4. 能力：≤3 张；每张 = 用户动作 → 可见结果 -->
+    <section class="features container" id="features" aria-labelledby="features-title">
+      <h2 id="features-title">三步看到结果</h2>
+      <div class="feature-grid">
+        <article class="card">
+          <svg class="icon-line" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12h14" />
+            <path d="M13 6l6 6-6 6" />
+          </svg>
+          <h3>说清目标</h3>
+          <p>一句话对齐给谁、要什么可观察结果。</p>
+        </article>
+        <article class="card">
+          <svg class="icon-line" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="4" y="4" width="16" height="16" rx="2" />
+            <path d="M8 12h8M12 8v8" />
+          </svg>
+          <h3>拆开可跑</h3>
+          <p>任务可读可改，主路径一点就到。</p>
+        </article>
+        <article class="card">
+          <svg class="icon-line" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="8" />
+            <path d="M12 8v4l3 2" />
+          </svg>
+          <h3>对照验收</h3>
+          <p>门禁脚本 + 人 30 秒走查一起过。</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- 5. 场景（可选）：≤2 条受众路径 -->
+    <section class="scenes container" id="scenes" aria-labelledby="scenes-title">
+      <h2 id="scenes-title">两条常见路径</h2>
+      <div class="scene-grid">
+        <article class="scene-card">
+          <h3>出海产品介绍</h3>
+          <p>3 秒懂给谁用；主 CTA 全站同一动词；证据在能力前。</p>
+        </article>
+        <article class="scene-card">
+          <h3>工具上新预热</h3>
+          <p>能力卡压到 2 张；底带收邮箱或预约，不塞说明书目录。</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- 6. 底 CTA 带：与 Footer 分色分层 -->
+    <section class="cta-band" id="cta" aria-labelledby="cta-title">
+      <div class="container">
+        <h2 id="cta-title">准备好推进主路径了吗？</h2>
+        <p>主按钮文案全站一致；此处是唯一强转化带，与页脚分层。</p>
+        <a class="btn btn-primary" href="#">免费开始</a>
+      </div>
+    </section>
+  </main>
+
+  <!-- 7. Footer：链 / 法务；默认无主 CTA 大按钮 -->
+  <footer class="site-footer">
+    <div class="container inner">
+      <div class="footer-brand">
+        <div class="brand">Brand</div>
+        <p class="footer-meta">© site-floor demo · 非生产品牌</p>
+      </div>
+      <div class="footer-links">
+        <a href="#features">能力</a>
+        <a href="#proof">证据</a>
+        <a href="#scenes">场景</a>
+        <a href="#">隐私</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

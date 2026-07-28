@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Waitlist shell · cco site-floor</title>
+  <meta name="description" content="cco site-floor · waitlist 区块骨架：短 Hero + 邮箱表单 + 可选权益" />
+  <link rel="stylesheet" href="../../shared/base.css" />
+  <link rel="stylesheet" href="../../kits/western-saas.css" />
+  <link rel="stylesheet" href="shell.css" />
+</head>
+<body data-recipe="shell-waitlist" data-kit="western-saas">
+
+  <!-- 1. 极简顶栏 -->
+  <header class="site-header">
+    <div class="container inner">
+      <a class="brand" href="#">Launchpad</a>
+    </div>
+  </header>
+
+  <main class="wait-main">
+    <!-- 2. 一屏：问题 + 价值 + 表单 + 主 CTA -->
+    <div class="container wait-layout">
+      <div class="wait-card">
+        <p class="eyebrow">Waitlist</p>
+        <h1>先留下邮箱，版本就绪就通知你</h1>
+        <p class="lead">短 Hero + 一表单。主按钮文案唯一，不拆成五段营销长页。</p>
+        <form class="wait-form" action="#" method="get" onsubmit="return false;">
+          <div class="field">
+            <label for="email">工作邮箱</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="you@company.com"
+              required
+            />
+          </div>
+          <button class="btn btn-primary" type="submit">加入候补</button>
+        </form>
+        <p class="fine">演示表单不提交。生产接第三方表单即可。</p>
+      </div>
+
+      <!-- 3. 可选 3 条权益 -->
+      <ul class="perks" aria-label="候补权益">
+        <li>
+          <svg class="icon-line" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          <span>优先体验通道</span>
+        </li>
+        <li>
+          <svg class="icon-line" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          <span>版本笔记直达邮箱</span>
+        </li>
+        <li>
+          <svg class="icon-line" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          <span>可随时一键退订</span>
+        </li>
+      </ul>
+    </div>
+  </main>
+
+  <!-- 4. Footer 轻；无主转化大钮 -->
+  <footer class="site-footer">
+    <div class="container">
+      <p class="footer-meta">site-floor waitlist · 页脚无主转化大钮</p>
+    </div>
+  </footer>
+
+</body>
+</html>

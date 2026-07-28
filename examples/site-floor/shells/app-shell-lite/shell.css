@@ -1,0 +1,192 @@
+/* app-shell-lite — tool floor (not marketing); colors from kit */
+
+.app-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-6);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.app-top-left,
+.app-top-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.app-top .brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--color-text);
+  text-decoration: none !important;
+}
+.nav-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  cursor: pointer;
+  padding: 0;
+}
+.nav-toggle .icon-line {
+  width: 20px;
+  height: 20px;
+  stroke: var(--color-text);
+}
+@media (min-width: 800px) {
+  .nav-toggle { display: none; }
+}
+.env-pill {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  background: var(--color-bg);
+}
+.icon-on-btn {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+}
+
+.app-body {
+  display: grid;
+  min-height: calc(100vh - 57px);
+}
+@media (min-width: 800px) {
+  .app-body { grid-template-columns: 220px 1fr; }
+}
+
+.side {
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg);
+  padding: var(--sp-6) var(--sp-4);
+  display: none;
+}
+@media (min-width: 800px) {
+  .side { display: block; }
+}
+.side-label {
+  font-family: var(--font-ui);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin: 0 0 var(--sp-3) var(--sp-3);
+}
+.side a {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  text-decoration: none !important;
+  font-size: 0.875rem;
+  margin-bottom: var(--sp-1);
+}
+.side a .icon-line {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+}
+.side a.active,
+.side a:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.main {
+  padding: var(--sp-8) var(--sp-6);
+  max-width: 960px;
+}
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--sp-6);
+}
+.main h1 {
+  font-size: 1.5rem;
+  margin-bottom: var(--sp-2);
+}
+.page-sub { margin: 0; max-width: 40rem; }
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+/* 空态 */
+.empty {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-12) var(--sp-8);
+  text-align: center;
+  color: var(--color-muted);
+  background: var(--color-surface);
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-3);
+}
+.empty-icon {
+  width: 32px;
+  height: 32px;
+  margin-bottom: var(--sp-2);
+}
+.empty strong {
+  display: block;
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+}
+.empty p {
+  margin: 0 0 var(--sp-4);
+  max-width: 28rem;
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+}
+
+/* 错误人话 */
+.error-sample {
+  margin-top: var(--sp-6);
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, #dc2626 35%, var(--color-border));
+  background: color-mix(in srgb, #dc2626 8%, var(--color-surface));
+  color: var(--color-text);
+  font-size: 0.875rem;
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+}
+.error-icon {
+  width: 20px;
+  height: 20px;
+  stroke: #dc2626;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.error-sample strong {
+  display: block;
+  margin-bottom: var(--sp-1);
+  font-family: var(--font-ui);
+}
+.error-sample p {
+  margin: 0;
+  color: var(--color-muted);
+}

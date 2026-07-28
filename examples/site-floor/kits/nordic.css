@@ -1,0 +1,23 @@
+/*
+ * kit: nordic — 北欧冷静
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 墨石 · footer 雾灰 · 可分色
+ */
+:root {
+  --color-bg: #F4F1EC;
+  --color-surface: #FFFCFA;
+  --color-text: #1C1917;
+  --color-muted: #78716C;
+  --color-border: #E7E5E4;
+  --color-primary: #292524;
+  --color-primary-fg: #FAFAF9;
+  --color-accent: #0F766E;
+  --color-cta-band: #1C1917;
+  --color-footer: #E7E5E4;
+  --color-footer-fg: #1C1917;
+  --color-footer-muted: #78716C;
+  --font-display: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  --font-body: "Source Sans 3", "IBM Plex Sans", system-ui, sans-serif;
+  --font-ui: "Source Sans 3", "IBM Plex Sans", system-ui, sans-serif;
+}

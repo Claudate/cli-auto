@@ -1,0 +1,23 @@
+/*
+ * kit: western-saas — 欧美现代 SaaS
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 深 slate · footer 浅灰 · 可分色
+ */
+:root {
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-text: #0F172A;
+  --color-muted: #64748B;
+  --color-border: #E2E8F0;
+  --color-primary: #2563EB;
+  --color-primary-fg: #FFFFFF;
+  --color-accent: #0EA5E9;
+  --color-cta-band: #0F172A;
+  --color-footer: #F1F5F9;
+  --color-footer-fg: #0F172A;
+  --color-footer-muted: #64748B;
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}

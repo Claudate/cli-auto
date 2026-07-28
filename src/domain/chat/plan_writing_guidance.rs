@@ -233,6 +233,10 @@ mod tests {
             g.contains("交付深度") || g.contains("backend-architecture"),
             "backend depth pointer"
         );
+        assert!(
+            g.contains("site-floor") || g.contains("RECIPE-MAP"),
+            "premium site-floor starter pointer"
+        );
     }
 
     /// Clarify-phase strategy lives in chat-plan-writing.md (t2 prompt true source).
@@ -331,6 +335,15 @@ mod tests {
             planner_greenfield_stack_blurb().contains("配方")
                 || planner_greenfield_stack_blurb().contains("结构")
         );
+        assert!(
+            planner_greenfield_stack_blurb().contains("site-floor"),
+            "greenfield must point at site-floor scaffold"
+        );
+        assert!(
+            split_agent_delivery_guidance().contains("site-floor")
+                || split_agent_delivery_guidance().contains("RECIPE-MAP"),
+            "split delivery must mention site-floor"
+        );
     }
 
     #[test]
@@ -358,6 +371,10 @@ mod tests {
         assert!(g.contains("western-saas") || g.contains("色系"));
         assert!(g.contains("图片") || g.contains("Hero"));
         assert!(g.contains("后端") || g.contains("交付深度"));
+        assert!(
+            g.contains("site-floor") || g.contains("demos/r-overseas"),
+            "recipes must link runnable site-floor"
+        );
     }
 
     #[test]

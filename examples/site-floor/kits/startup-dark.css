@@ -1,0 +1,25 @@
+/*
+ * kit: startup-dark — 深色科技 / 开发者
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 钢蓝 · footer 更深底 · 可分色；阴影加深
+ */
+:root {
+  --color-bg: #0B0F19;
+  --color-surface: #121826;
+  --color-text: #E5E7EB;
+  --color-muted: #9CA3AF;
+  --color-border: #1F2937;
+  --color-primary: #3B82F6;
+  --color-primary-fg: #FFFFFF;
+  --color-accent: #22D3EE;
+  --color-cta-band: #1E3A5F;
+  --color-footer: #030712;
+  --color-footer-fg: #F8FAFC;
+  --color-footer-muted: rgb(248 250 252 / 0.72);
+  --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 8px 24px -4px rgb(0 0 0 / 0.5);
+}

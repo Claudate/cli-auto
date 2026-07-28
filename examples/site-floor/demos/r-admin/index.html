@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Console · r-admin / R-ant</title>
+  <meta name="description" content="cco site-floor demo · R-admin / R-ant · app-shell-lite + ant-design kit" />
+  <link rel="stylesheet" href="../../shared/base.css" />
+  <link rel="stylesheet" href="../../kits/ant-design.css" />
+  <link rel="stylesheet" href="../../shells/app-shell-lite/shell.css" />
+</head>
+<body data-recipe="r-admin" data-kit="ant-design">
+
+  <header class="app-top">
+    <a class="brand" href="#">Console</a>
+    <a class="btn btn-primary" href="#">新建记录</a>
+  </header>
+  <div class="app-body">
+    <aside class="side" aria-label="侧栏">
+      <a class="active" href="#">列表</a>
+      <a href="#">筛选</a>
+      <a href="#">权限</a>
+    </aside>
+    <main class="main">
+      <h1>列表</h1>
+      <p class="muted">中后台轻量壳（非密表）：侧栏 + 顶栏主操作；空 / 错态人话。R-ant 同此组合。</p>
+      <div class="toolbar">
+        <a class="btn btn-primary" href="#">新建记录</a>
+        <a class="btn btn-ghost" href="#">导出</a>
+      </div>
+      <div class="empty">
+        <strong>暂无数据</strong>
+        调整筛选条件，或新建第一条记录。
+      </div>
+      <div class="error-sample" role="status">加载失败：服务暂时不可用。请稍后重试。</div>
+    </main>
+  </div>
+
+</body>
+</html>

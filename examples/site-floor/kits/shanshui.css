@@ -1,0 +1,23 @@
+/*
+ * kit: shanshui — 山水 / 水墨
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * display 文楷仅短标题；cta-band 远山青 · footer 宣纸浅 · 可分色
+ */
+:root {
+  --color-bg: #F3F0E8;
+  --color-surface: #FBFAF6;
+  --color-text: #1E2A2F;
+  --color-muted: #5C6B73;
+  --color-border: #D9D3C5;
+  --color-primary: #3D5A5B;
+  --color-primary-fg: #F7F5EF;
+  --color-accent: #8B9A7D;
+  --color-cta-band: #2C3E40;
+  --color-footer: #E8E2D6;
+  --color-footer-fg: #1E2A2F;
+  --color-footer-muted: #5C6B73;
+  --font-display: "LXGW WenKai", "Kaiti SC", "STKaiti", "Noto Serif SC", serif;
+  --font-body: "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-ui: "Noto Sans SC", "PingFang SC", sans-serif;
+}

@@ -1,0 +1,23 @@
+/*
+ * kit: cn-ink — 中国当代 / 墨色
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 墨黑 · footer 暖纸 · 可分色
+ */
+:root {
+  --color-bg: #F7F4EF;
+  --color-surface: #FFFCF7;
+  --color-text: #1A1A1A;
+  --color-muted: #6B6560;
+  --color-border: #E4DDD4;
+  --color-primary: #8C1F28;
+  --color-primary-fg: #FFF8F5;
+  --color-accent: #2F5D50;
+  --color-cta-band: #1A1A1A;
+  --color-footer: #EFE8DF;
+  --color-footer-fg: #1A1A1A;
+  --color-footer-muted: #6B6560;
+  --font-display: "Noto Serif SC", "Songti SC", "Source Han Serif SC", serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-ui: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}

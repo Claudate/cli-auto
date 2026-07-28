@@ -1,0 +1,23 @@
+/*
+ * kit: cn-festive — 喜庆 / 大促
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 深红 · footer 更深墨红 + 浅字 · 可分色（禁止两段同红粘连）
+ */
+:root {
+  --color-bg: #FFF8F5;
+  --color-surface: #FFFFFF;
+  --color-text: #2B0B0E;
+  --color-muted: #8A5A5A;
+  --color-border: #F0D9D4;
+  --color-primary: #C8102E;
+  --color-primary-fg: #FFFFFF;
+  --color-accent: #C5A46E;
+  --color-cta-band: #8B0000;
+  --color-footer: #2B0B0E;
+  --color-footer-fg: #F8FAFC;
+  --color-footer-muted: rgb(248 250 252 / 0.72);
+  --font-display: "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-body: "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-ui: "Noto Sans SC", "PingFang SC", sans-serif;
+}

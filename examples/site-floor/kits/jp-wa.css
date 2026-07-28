@@ -1,0 +1,23 @@
+/*
+ * kit: jp-wa — 和风（温暖纸感）
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 墨 · footer 和纸浅 · 可分色
+ */
+:root {
+  --color-bg: #F7F3EB;
+  --color-surface: #FFFDF8;
+  --color-text: #2A2522;
+  --color-muted: #7A7168;
+  --color-border: #E5DCCF;
+  --color-primary: #B54A3C;
+  --color-primary-fg: #FFF8F5;
+  --color-accent: #4A6670;
+  --color-cta-band: #2A2522;
+  --color-footer: #EFE8DC;
+  --color-footer-fg: #2A2522;
+  --color-footer-muted: #7A7168;
+  --font-display: "Noto Serif JP", "Hiragino Mincho ProN", serif;
+  --font-body: "Noto Sans JP", "Hiragino Sans", sans-serif;
+  --font-ui: "Noto Sans JP", "Hiragino Sans", sans-serif;
+}

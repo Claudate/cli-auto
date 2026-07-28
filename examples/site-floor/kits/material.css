@@ -1,0 +1,23 @@
+/*
+ * kit: material — Google Material 气质
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 深紫容器 · footer 浅紫灰 · 可分色
+ */
+:root {
+  --color-bg: #FFFBFE;
+  --color-surface: #FFFFFF;
+  --color-text: #1C1B1F;
+  --color-muted: #49454F;
+  --color-border: #CAC4D0;
+  --color-primary: #6750A4;
+  --color-primary-fg: #FFFFFF;
+  --color-accent: #625B71;
+  --color-cta-band: #21005D;
+  --color-footer: #F3EDF7;
+  --color-footer-fg: #1C1B1F;
+  --color-footer-muted: #49454F;
+  --font-display: "Roboto", "Noto Sans SC", system-ui, sans-serif;
+  --font-body: "Roboto", "Noto Sans SC", system-ui, sans-serif;
+  --font-ui: "Roboto", "Noto Sans SC", system-ui, sans-serif;
+}

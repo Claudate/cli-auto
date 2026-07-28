@@ -24,6 +24,8 @@
 | 路径 | 用途 |
 |------|------|
 | [`examples/marketing-landing-reference/SPEC.md`](../../examples/marketing-landing-reference/SPEC.md) | 营销站区块节奏 reference |
+| [`examples/site-floor/`](../../examples/site-floor/) | **可运行**高端底板（shell×kit·demos）；绿野站复制/对齐此处；**不**整包注入 LLM |
+| [`examples/site-floor/RECIPE-MAP.md`](../../examples/site-floor/RECIPE-MAP.md) | R-* → shell + kit |
 | [`scripts/check-landing-gates.sh`](../../scripts/check-landing-gates.sh) | 假域名 / 页脚主 CTA 等门禁 |
 | [`session-digest-extract.md`](./session-digest-extract.md) | **不注入** · 会话 digest 抽取系统提示（人/Agent） |
 | [`session-digest-workflow.md`](./session-digest-workflow.md) | **不注入** · 读/写 digest 工作流 |

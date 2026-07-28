@@ -1,0 +1,23 @@
+/*
+ * kit: jp-minimal — 日系极简（无印感）
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 近黑 · footer 浅中性 · 可分色
+ */
+:root {
+  --color-bg: #FAFAF8;
+  --color-surface: #FFFFFF;
+  --color-text: #222222;
+  --color-muted: #8A8A8A;
+  --color-border: #E8E8E4;
+  --color-primary: #222222;
+  --color-primary-fg: #FAFAF8;
+  --color-accent: #6B7C5C;
+  --color-cta-band: #111111;
+  --color-footer: #F0F0EC;
+  --color-footer-fg: #222222;
+  --color-footer-muted: #8A8A8A;
+  --font-display: "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+  --font-body: "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+  --font-ui: "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+}

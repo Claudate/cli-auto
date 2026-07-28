@@ -1,0 +1,23 @@
+/*
+ * kit: edu-soft — 教育柔和
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 靛蓝 · footer 浅靛 · 可分色
+ */
+:root {
+  --color-bg: #F8F7FF;
+  --color-surface: #FFFFFF;
+  --color-text: #1E1B4B;
+  --color-muted: #6B7280;
+  --color-border: #E9E5FF;
+  --color-primary: #4F46E5;
+  --color-primary-fg: #FFFFFF;
+  --color-accent: #F59E0B;
+  --color-cta-band: #312E81;
+  --color-footer: #EEF2FF;
+  --color-footer-fg: #1E1B4B;
+  --color-footer-muted: #6B7280;
+  --font-display: "Nunito", "Plus Jakarta Sans", "Noto Sans SC", system-ui, sans-serif;
+  --font-body: "Nunito", "Noto Sans SC", system-ui, sans-serif;
+  --font-ui: "Nunito", "Noto Sans SC", system-ui, sans-serif;
+}

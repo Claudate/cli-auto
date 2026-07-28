@@ -1,0 +1,23 @@
+/*
+ * kit: fluent — Microsoft Fluent 气质
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 深灰 · footer 浅灰 · 可分色
+ */
+:root {
+  --color-bg: #F5F5F5;
+  --color-surface: #FFFFFF;
+  --color-text: #242424;
+  --color-muted: #616161;
+  --color-border: #E0E0E0;
+  --color-primary: #5B5FC7;
+  --color-primary-fg: #FFFFFF;
+  --color-accent: #0078D4;
+  --color-cta-band: #292929;
+  --color-footer: #EBEBEB;
+  --color-footer-fg: #242424;
+  --color-footer-muted: #616161;
+  --font-display: "Segoe UI", system-ui, "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-body: "Segoe UI", system-ui, "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-ui: "Segoe UI", system-ui, "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}

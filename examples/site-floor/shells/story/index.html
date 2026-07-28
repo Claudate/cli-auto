@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Story shell · cco site-floor</title>
+  <meta name="description" content="cco site-floor · story 区块骨架：全幅 Hero + 章节左右交替 + 轻转化" />
+  <link rel="stylesheet" href="../../shared/base.css" />
+  <link rel="stylesheet" href="../../kits/shanshui.css" />
+  <link rel="stylesheet" href="shell.css" />
+</head>
+<body data-recipe="shell-story" data-kit="shanshui">
+
+  <header class="site-header">
+    <div class="container inner">
+      <a class="brand" href="#">远山记</a>
+      <nav class="nav" aria-label="章节">
+        <a href="#ch1">动身</a>
+        <a href="#ch2">抵达</a>
+        <a href="#highlights">亮点</a>
+      </nav>
+      <a class="btn btn-primary" href="#cta">预约探访</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- 1. 全幅氛围 Hero -->
+    <section class="story-hero" aria-labelledby="story-title">
+      <div class="story-hero-inner">
+        <p class="eyebrow">Story</p>
+        <h1 id="story-title">雾起时，路仍在山脊</h1>
+        <p class="lead">诗意标题用文楷短句；正文与按钮保持可读黑体。把章节换成你的叙事。</p>
+        <a class="btn btn-primary" href="#cta">预约探访</a>
+      </div>
+    </section>
+
+    <!-- 2. 章节叙事：图文左右交替 -->
+    <section class="container chapter" id="ch1" aria-labelledby="ch1-title">
+      <div class="chapter-copy">
+        <p class="eyebrow">第一章</p>
+        <h2 id="ch1-title">为何动身</h2>
+        <p>用左右交替讲清场景与感受，而不是堆功能三卡片。插图位实现时换实景或生成图，禁止占位图服务。</p>
+      </div>
+      <div class="visual-slot" role="img" aria-label="章节插图示意：山脊晨雾">章节插图 · 山脊晨雾</div>
+    </section>
+
+    <section class="container chapter reverse" id="ch2" aria-labelledby="ch2-title">
+      <div class="chapter-copy">
+        <p class="eyebrow">第二章</p>
+        <h2 id="ch2-title">抵达之后</h2>
+        <p>主 CTA 若存在，必须可读可点。禁止全文隶书、禁止粒子特效默认开。节奏靠留白与图文对位。</p>
+      </div>
+      <div class="visual-slot" role="img" aria-label="章节插图示意：院落午后">章节插图 · 院落午后</div>
+    </section>
+
+    <section class="container chapter" id="ch3" aria-labelledby="ch3-title">
+      <div class="chapter-copy">
+        <p class="eyebrow">第三章</p>
+        <h2 id="ch3-title">夜里仍有灯</h2>
+        <p>第三屏可再压短：一句感受 + 一张氛围图。连续四屏同一左右比会显死板，本页已对调。</p>
+      </div>
+      <div class="visual-slot" role="img" aria-label="章节插图示意：夜灯">章节插图 · 夜灯</div>
+    </section>
+
+    <!-- 3. 体验 / 亮点 ≤3 -->
+    <section class="container highlights" id="highlights" aria-labelledby="hl-title">
+      <h2 id="hl-title">这一程可带走</h2>
+      <div class="hl-grid">
+        <article class="hl-card">
+          <svg class="icon-line" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3l2.2 6.6H21l-5.4 4 2.1 6.4L12 16.8 6.3 20l2.1-6.4L3 9.6h6.8z" />
+          </svg>
+          <h3>清晨云海</h3>
+          <p>山脊观云，两小时徒步可及。</p>
+        </article>
+        <article class="hl-card">
+          <svg class="icon-line" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 19h16M6 16V8l6-4 6 4v8" />
+            <path d="M9 16v-4h6v4" />
+          </svg>
+          <h3>院落慢食</h3>
+          <p>本地时令，不设流水线套餐。</p>
+        </article>
+        <article class="hl-card">
+          <svg class="icon-line" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </svg>
+          <h3>两日节奏</h3>
+          <p>行程可读；可选加一日写生。</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- 4. 轻转化底带（勿硬广腔） -->
+    <section class="cta-band" id="cta" aria-labelledby="cta-title">
+      <div class="container">
+        <h2 id="cta-title">下一程，一起走</h2>
+        <p>转化带与页脚分色，避免粘成一块。主动词全站一致。</p>
+        <a class="btn btn-primary" href="#">预约探访</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container inner">
+      <span class="footer-meta">© 远山记 · site-floor story shell</span>
+      <div class="footer-links">
+        <a href="#ch1">章节</a>
+        <a href="#cta">预约</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -5,10 +5,12 @@
 
 ```text
 交付深度 A–D → 要不要后端 → 站点类型 → 版式变体 2～4
-→ 色系 kit（= 字体 kit）→ 界面文案（主 CTA/空错载）→ 动效档 → 图片 → 成功标准
+→ 色系 kit（= 字体 kit）→ **选 site-floor shell+kit（绿野强制）**
+→ 界面文案（主 CTA/空错载）→ 动效档 → 图片 → 成功标准
 ```
 
-用户说「默认/你定」：按下表对应行整包采用，计划里写配方 id + 一句假设。
+用户说「默认/你定」：按下表对应行整包采用，计划里写配方 id + 一句假设。  
+**可运行底板**：`examples/site-floor/`（`RECIPE-MAP.md` · `demos/r-*`）。绿野站**禁止**跳过底板从空白猜视觉。
 
 ---
 
@@ -16,33 +18,33 @@
 
 #### 1.1 场景 / 行业
 
-| 配方 id | 用户要什么 | 深度 | 站点类型 | 色系 kit | 动效 | 后端 |
-|---------|------------|------|----------|----------|------|------|
-| **R-overseas** | 出海落地页 / SaaS 介绍 | A 或 B | marketing | western-saas | light→brand | 无 / 表单 |
-| **R-cn-brand** | 国风品牌 / 茶文旅 | A | story/marketing | cn-ink 或 shanshui | light | 无或表单 |
-| **R-shanshui** | 山水 / 诗意叙事 | A | story | shanshui | light | 无 |
-| **R-jp** | 日系生活 / 匠人 | A | marketing/story | jp-wa / jp-minimal | none/light | 无 |
-| **R-portfolio** | 作品集 / 个人站 | A | portfolio | nordic/custom | light | 无或表单 |
-| **R-waitlist** | 预热留资 | A/B | waitlist | western-saas/品牌 | none/light | 表单 |
-| **R-docs** | 文档 / 博客 | A/B | content | nordic | none/light | 无或 SSG |
-| **R-shop** | 小店 / 商品 | B | ecommerce | custom/cn-festive | light | 支付按需 |
-| **R-tool** | 登录后 Web 工具 | B/C | app-shell | western-saas/品牌 | none/light | **API** |
-| **R-admin** | 后台 / 控制台 | B/C | dashboard | ant-design 或 nordic | none | **API** |
-| **R-event** | 活动报名 | A/B | event | cn-festive/brand | light | 表单/票务 |
-| **R-fintech** | 金融/理财介绍 | A/B | marketing | fintech | light | 合规表单 |
-| **R-edu** | 教育/课程落地 | A/B | marketing | edu-soft | light | 表单/B 登录 |
-| **R-devtool** | 开发者工具 / 深色品牌 | A/B | marketing/app-shell | startup-dark | light/brand | 无或 API |
+| 配方 id | 用户要什么 | 深度 | 站点类型 | 色系 kit | 动效 | 后端 | site-floor |
+|---------|------------|------|----------|----------|------|------|------------|
+| **R-overseas** | 出海落地页 / SaaS 介绍 | A 或 B | marketing | western-saas | light→brand | 无 / 表单 | marketing + western-saas · `demos/r-overseas` |
+| **R-cn-brand** | 国风品牌 / 茶文旅 | A | story/marketing | cn-ink 或 shanshui | light | 无或表单 | story + cn-ink · `demos/r-cn-brand` |
+| **R-shanshui** | 山水 / 诗意叙事 | A | story | shanshui | light | 无 | story + shanshui · `demos/r-shanshui` |
+| **R-jp** | 日系生活 / 匠人 | A | marketing/story | jp-wa / jp-minimal | none/light | 无 | story + jp-wa · `demos/r-jp` |
+| **R-portfolio** | 作品集 / 个人站 | A | portfolio | nordic/custom | light | 无或表单 | portfolio + nordic · `demos/r-portfolio` |
+| **R-waitlist** | 预热留资 | A/B | waitlist | western-saas/品牌 | none/light | 表单 | waitlist + western-saas · `demos/r-waitlist` |
+| **R-docs** | 文档 / 博客 | A/B | content | nordic | none/light | 无或 SSG | marketing 疏 + nordic · `demos/r-docs` |
+| **R-shop** | 小店 / 商品 | B | ecommerce | custom/cn-festive | light | 支付按需 | marketing + cn-ink · `demos/r-shop` |
+| **R-tool** | 登录后 Web 工具 | B/C | app-shell | western-saas/品牌 | none/light | **API** | app-shell-lite · `demos/r-tool` |
+| **R-admin** | 后台 / 控制台 | B/C | dashboard | ant-design 或 nordic | none | **API** | app-shell-lite + ant · `demos/r-admin` |
+| **R-event** | 活动报名 | A/B | event | cn-festive/brand | light | 表单/票务 | marketing + cn-festive · `demos/r-event` |
+| **R-fintech** | 金融/理财介绍 | A/B | marketing | fintech | light | 合规表单 | marketing + fintech · `demos/r-fintech` |
+| **R-edu** | 教育/课程落地 | A/B | marketing | edu-soft | light | 表单/B 登录 | marketing + edu-soft · `demos/r-edu` |
+| **R-devtool** | 开发者工具 / 深色品牌 | A/B | marketing/app-shell | startup-dark | light/brand | 无或 API | marketing + startup-dark · `demos/r-devtool` |
 
 #### 1.2 平台 / 设计系统气质（用户说「像 iOS / 谷歌 / 微软…」）
 
-| 配方 id | 用户话术 | 站点类型默认 | 色系 kit | 字/控件口音 | 动效 | 备注 |
-|---------|----------|--------------|----------|-------------|------|------|
-| **R-ios** | iOS、苹果风、Apple 感、Health 类 | marketing 或 app-shell | **ios-hig** | 系统栈/苹方；大圆角；细线图标 | light（spring 短） | Web 近似 HIG，非官方 UIKit |
-| **R-material** | 谷歌、Material、Android 风 | marketing 或 app-shell | **material** | Roboto/Noto；filled 主钮 | light | 可对齐 M3 容器色思路 |
-| **R-fluent** | 微软、Fluent、Teams/Office 感 | marketing 或 dashboard | **fluent** | Segoe；分区清晰 | none/light | 企业协作落地页 |
-| **R-ant** | Ant Design、中后台、阿里风表格 | dashboard / app-shell | **ant-design** | Ant 系统栈 | none | 密信息；少营销大 Hero |
-| **R-wechat** | 微信风、小程序介绍、社群工具 | marketing / waitlist | **wechat-lite** | 系统中文；绿 CTA | none/light | 底带与 footer 分层 |
-| **R-android-app** | 安卓 App 壳 / 工具 | app-shell | material | 同 R-material | none/light | 导航底栏或侧栏 |
+| 配方 id | 用户话术 | 站点类型默认 | 色系 kit | 字/控件口音 | 动效 | site-floor |
+|---------|----------|--------------|----------|-------------|------|------------|
+| **R-ios** | iOS、苹果风、Apple 感、Health 类 | marketing 或 app-shell | **ios-hig** | 系统栈/苹方；大圆角；细线图标 | light（spring 短） | `demos/r-ios` |
+| **R-material** | 谷歌、Material、Android 风 | marketing 或 app-shell | **material** | Roboto/Noto；filled 主钮 | light | `demos/r-material` |
+| **R-fluent** | 微软、Fluent、Teams/Office 感 | marketing 或 dashboard | **fluent** | Segoe；分区清晰 | none/light | `demos/r-fluent` |
+| **R-ant** | Ant Design、中后台、阿里风表格 | dashboard / app-shell | **ant-design** | Ant 系统栈 | none | 同 `demos/r-admin` |
+| **R-wechat** | 微信风、小程序介绍、社群工具 | marketing / waitlist | **wechat-lite** | 系统中文；绿 CTA | none/light | `demos/r-wechat` |
+| **R-android-app** | 安卓 App 壳 / 工具 | app-shell | material | 同 R-material | none/light | `demos/r-android-app` |
 
 **组合规则**：平台配方与场景配方冲突时——**用户点名平台优先**（例：「出海但要 iOS 感」→ R-ios + 站点 marketing + 文案出海）。  
 **禁止串味**：R-admin 用营销五段；R-shanshui 上科技粒子；R-ios 用微信绿主 CTA；R-material 全文书法。
@@ -172,15 +174,16 @@
 
 **实现顺序建议（任务大纲）**
 
-1. 信息结构 + 版式变体（可点骨架）  
-2. **关键文案**（主 CTA、Hero/屏标题、空错载成功草稿）— 见 `ui-copy-systems.md`  
-3. tokens：色 + 字（`:root`）  
-4. 真实图填入关键位（Hero/作品）  
-5. 动效 light 封顶（除非配方写 brand/3d）  
-6. 后端（若需要）与主路径联调  
-7. 门禁 + 预览验收  
+1. **绿野：按 RECIPE-MAP 落 site-floor shell+kit**（或复制对应 `demos/r-*`）作可点骨架；**禁止**空白 HTML 另起  
+2. 版式变体 2～4 + 信息结构对齐 layout/SPEC  
+3. **关键文案**（主 CTA、Hero/屏标题、空错载成功草稿）— 见 `ui-copy-systems.md`  
+4. tokens 微调：色 + 字（在 kit 上改，勿重造 `:root`）  
+5. 真实图填入关键位（Hero/作品）  
+6. 动效 light 封顶（除非配方写 brand/3d）  
+7. 后端（若需要）与主路径联调  
+8. 门禁 + 预览验收  
 
-勿：先上 3D/粒子再补文案结构；A 深度却搭完整 DDD；假字 Lorem 留到上线。
+勿：跳过 site-floor 从零猜视觉；先上 3D/粒子再补文案结构；A 深度却搭完整 DDD；假字 Lorem 留到上线。
 
 ---
 
@@ -192,6 +195,7 @@
 - 站点类型：…
 - 版式变体：Hero=… · 密度=… · …
 - 色系 kit：…（字体同 kit；平台 kit 见 color 表 ios-hig/material/…）
+- site-floor：shell=… · kit=… · 对齐 demos/r-…（绿野强制；见 RECIPE-MAP）
 - 字体：display=… / body=… / ui=…
 - 文案：主 CTA 动词=…；语气跟配方；空/错/载各一句
 - 动效档：none|light|brand|3d-hero · 库：…
@@ -204,6 +208,7 @@
 ### 6. 成功标准（效果向 · 可并入计划）
 
 - [ ] 配方 id 与站点类型一致，无串味  
+- [ ] **绿野**：已从 `examples/site-floor` 对应 shell+kit / demo 起步（非空白土味默认）  
 - [ ] 版式变体 ≥2 维已落地（非纯默认死板三卡）  
 - [ ] 色/字 CSS 变量齐全；展示字不进按钮长文  
 - [ ] 主 CTA 人话且一致；空/错/载/成功有下一步；无 Lorem/内部 ID 第一句  
@@ -217,6 +222,7 @@
 
 | 主题 | 文件 |
 |------|------|
+| **可运行底板** | `examples/site-floor/` · [`RECIPE-MAP.md`](../../examples/site-floor/RECIPE-MAP.md) · `demos/r-*` |
 | 布局/变体 | `ui-layout-systems.md` |
 | 色 | `ui-color-systems.md` |
 | 字 | `ui-typography-systems.md` |

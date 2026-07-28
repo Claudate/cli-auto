@@ -1,5 +1,6 @@
 - **技术默认写入实现类 prompt**：出海/个人/营销页 → 静态或 SSG（HTML/Astro）+ 托管；工具型 Web → 跟仓库或 Vite+简单 API；**禁止**无依据微服务/中台。
-- UI 类工作包：主路径可点、空/错/载人话、开源线标；点名**配方 id 或**站点类型 + 色/字 kit + **主 CTA 文案** + 动效档（库≤2）+ 真图来源；对齐 recipes + layout/color/type/copy/motion。
+- **绿野 UI 第一步（强制）**：按配方查 `examples/site-floor/RECIPE-MAP.md`，**复制或对齐**对应 `shells/` + `kits/` + `shared/base.css`；**禁止**从空白另起满屏默认 Inter/系统黑 + 随机三原色。预览参考 `examples/site-floor/demos/r-*`。
+- UI 类工作包：主路径可点、空/错/载人话、开源线标；点名**配方 id 或**站点类型 + 色/字 kit + **主 CTA 文案** + 动效档（库≤2）+ 真图来源；对齐 recipes + layout/color/type/copy/motion + **site-floor**。
 - 有后端：交付深度 A/B/C + 语言 + 架构档；演示勿企业空壳（`backend-architecture`）。
 - brownfield：挂载目录清晰，禁止「重写整站框架」。
-- 任务顺序建议：结构 → 关键文案 → CSS tokens → 图片 → 动效 → 后端 → 门禁/预览。
+- 任务顺序建议：**site-floor 骨架/tokens** → 关键文案 → 微调 CSS tokens → 图片 → 动效 → 后端 → 门禁/预览。

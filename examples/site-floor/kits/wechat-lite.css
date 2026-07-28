@@ -1,0 +1,23 @@
+/*
+ * kit: wechat-lite — 微信 / 轻社交中国消费气质
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 微信绿 · footer 必须浅灰 · 可分色（禁止两段同绿）
+ */
+:root {
+  --color-bg: #EDEDED;
+  --color-surface: #FFFFFF;
+  --color-text: #191919;
+  --color-muted: #888888;
+  --color-border: #E5E5E5;
+  --color-primary: #07C160;
+  --color-primary-fg: #FFFFFF;
+  --color-accent: #576B95;
+  --color-cta-band: #07C160;
+  --color-footer: #F7F7F7;
+  --color-footer-fg: #191919;
+  --color-footer-muted: #888888;
+  --font-display: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+  --font-body: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+  --font-ui: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+}

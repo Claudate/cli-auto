@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portfolio shell · cco site-floor</title>
+  <meta name="description" content="cco site-floor · portfolio 区块骨架：首屏作品栅格 + 关于 + 联系" />
+  <link rel="stylesheet" href="../../shared/base.css" />
+  <link rel="stylesheet" href="../../kits/nordic.css" />
+  <link rel="stylesheet" href="shell.css" />
+</head>
+<body data-recipe="shell-portfolio" data-kit="nordic">
+
+  <header class="site-header">
+    <div class="container inner">
+      <a class="brand" href="#">Alex River</a>
+      <nav class="nav" aria-label="主导航">
+        <a href="#work">作品</a>
+        <a href="#about">关于</a>
+        <a href="#contact">联系</a>
+      </nav>
+      <a class="btn btn-primary" href="#contact">联系合作</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- 短导语，不占两屏；首屏即见作品 -->
+    <section class="intro container" aria-labelledby="intro-title">
+      <p class="eyebrow">Portfolio</p>
+      <h1 id="intro-title">精选作品</h1>
+      <p class="lead">首屏就看见项目。每格实现时换成真实项目图，禁止占位图 host。</p>
+    </section>
+
+    <!-- 2. 精选栅格：2–6 格；hover 出项目名 -->
+    <section class="work-grid container" id="work" aria-label="作品">
+      <a class="work-card" href="#case-a">
+        <div class="thumb" role="img" aria-label="北岸品牌站示意"></div>
+        <div class="meta">
+          <h3>北岸品牌站</h3>
+          <p>营销 · 2026</p>
+        </div>
+      </a>
+      <a class="work-card" href="#case-b">
+        <div class="thumb thumb-b" role="img" aria-label="工具控制台示意"></div>
+        <div class="meta">
+          <h3>工具控制台</h3>
+          <p>产品 · 2025</p>
+        </div>
+      </a>
+      <a class="work-card" href="#">
+        <div class="thumb thumb-c" role="img" aria-label="展览视觉示意"></div>
+        <div class="meta">
+          <h3>展览视觉</h3>
+          <p>叙事 · 2025</p>
+        </div>
+      </a>
+      <a class="work-card" href="#">
+        <div class="thumb thumb-d" role="img" aria-label="移动购物流示意"></div>
+        <div class="meta">
+          <h3>移动购物流</h3>
+          <p>电商 · 2024</p>
+        </div>
+      </a>
+      <a class="work-card" href="#">
+        <div class="thumb thumb-e" role="img" aria-label="候补落地页示意"></div>
+        <div class="meta">
+          <h3>候补落地页</h3>
+          <p>增长 · 2024</p>
+        </div>
+      </a>
+      <a class="work-card" href="#">
+        <div class="thumb thumb-f" role="img" aria-label="文档站示意"></div>
+        <div class="meta">
+          <h3>文档站改版</h3>
+          <p>内容 · 2023</p>
+        </div>
+      </a>
+    </section>
+
+    <!-- 3. 精选案例 1–2 个深度 -->
+    <section class="cases container" aria-labelledby="cases-title">
+      <h2 id="cases-title">深度案例</h2>
+      <article class="case" id="case-a">
+        <div class="case-copy">
+          <p class="eyebrow">Case 01</p>
+          <h3>北岸品牌站</h3>
+          <p><strong>问题</strong>：旧站五段同色，主 CTA 沉到第三屏。</p>
+          <p><strong>做法</strong>：marketing shell + 证据前置；主按钮三处同文案。</p>
+          <p><strong>结果</strong>：首屏可完成主任务；门禁 G1/G7 全过。</p>
+        </div>
+        <div class="visual-slot" role="img" aria-label="北岸案例示意">案例示意 A</div>
+      </article>
+      <article class="case reverse" id="case-b">
+        <div class="case-copy">
+          <p class="eyebrow">Case 02</p>
+          <h3>工具控制台</h3>
+          <p><strong>问题</strong>：登录后像营销页，空态只有灰块。</p>
+          <p><strong>做法</strong>：app-shell-lite；空态/错误用人话写下一步。</p>
+          <p><strong>结果</strong>：主操作在工具栏右上，窄屏仍可达。</p>
+        </div>
+        <div class="visual-slot" role="img" aria-label="控制台案例示意">案例示意 B</div>
+      </article>
+    </section>
+
+    <!-- 4. 关于短：一屏内；技能 ≤8 -->
+    <section class="about container" id="about" aria-labelledby="about-title">
+      <h2 id="about-title">关于</h2>
+      <p class="about-lead">独立设计师 / 前端。偏好可交付的结构与门禁，不堆 IDE 式第一屏。</p>
+      <ul class="tags" aria-label="技能">
+        <li>信息架构</li>
+        <li>落地页</li>
+        <li>设计系统</li>
+        <li>静态站</li>
+        <li>无障碍</li>
+        <li>中文排版</li>
+      </ul>
+    </section>
+
+    <!-- 5. 联系 -->
+    <section class="contact container" id="contact" aria-labelledby="contact-title">
+      <h2 id="contact-title">联系合作</h2>
+      <p>请写清预算与时间窗。演示不接表单提交。</p>
+      <a class="btn btn-primary" href="mailto:hello@alexriver.studio">发邮件</a>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p class="footer-meta">© Alex River · site-floor portfolio shell</p>
+    </div>
+  </footer>
+
+</body>
+</html>

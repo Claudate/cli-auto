@@ -1,0 +1,23 @@
+/*
+ * kit: fintech — 金融可信
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 深青绿 · footer 浅冷灰 · 可分色
+ */
+:root {
+  --color-bg: #F4F7F5;
+  --color-surface: #FFFFFF;
+  --color-text: #0F172A;
+  --color-muted: #64748B;
+  --color-border: #D1D9E0;
+  --color-primary: #0F766E;
+  --color-primary-fg: #FFFFFF;
+  --color-accent: #B45309;
+  --color-cta-band: #134E4A;
+  --color-footer: #E2E8F0;
+  --color-footer-fg: #0F172A;
+  --color-footer-muted: #64748B;
+  --font-display: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-ui: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+}

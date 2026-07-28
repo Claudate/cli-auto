@@ -1,0 +1,116 @@
+/* waitlist shell — short hero + form; colors from kit */
+
+.site-header .inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-4) 0;
+}
+.brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--color-text);
+  text-decoration: none !important;
+}
+
+.wait-main {
+  min-height: calc(100vh - 140px);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-12) 0 var(--sp-16);
+  background:
+    radial-gradient(
+      ellipse at 50% 0%,
+      color-mix(in srgb, var(--color-primary) 8%, transparent),
+      transparent 55%
+    );
+}
+
+.wait-layout {
+  width: min(100%, 32rem);
+  display: grid;
+  gap: var(--sp-8);
+}
+
+.wait-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-10);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+}
+.wait-card h1 {
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+}
+.wait-card .lead {
+  color: var(--color-muted);
+  margin-bottom: var(--sp-8);
+}
+
+.field {
+  text-align: left;
+  margin-bottom: var(--sp-4);
+}
+.field label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-bottom: var(--sp-2);
+  font-family: var(--font-ui);
+}
+.field input {
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+}
+.field input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+.wait-form .btn {
+  width: 100%;
+  margin-top: var(--sp-2);
+}
+.fine {
+  margin-top: var(--sp-4);
+  margin-bottom: 0;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+/* 可选权益 */
+.perks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--sp-3);
+}
+.perks li {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: 0.9375rem;
+  color: var(--color-muted);
+  justify-content: center;
+}
+.perks .icon-line {
+  width: 18px;
+  height: 18px;
+}
+
+.site-footer {
+  text-align: center;
+  padding: var(--sp-8) 0;
+  background: var(--color-footer);
+  font-size: 0.8125rem;
+}
+.footer-meta {
+  margin: 0;
+  color: var(--color-footer-muted);
+}

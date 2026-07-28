@@ -2,7 +2,8 @@
 
 > **用途**：实现时对齐**节奏与层次**，不是抄品牌皮。  
 > **真源关系**：纪律见 `docs/runtime-prompts/`；整包默认抄 **`ui-delivery-recipes` → R-overseas**；**本文件 = 站点类型 `marketing` 区块 reference**。其它类型见 `ui-layout-systems.md`。  
-> **非**：完整可运行站（需要时再脚手架）；Agent 应对齐本结构，而非另发明五段同色深底。
+> **可运行底板**：[`examples/site-floor/shells/marketing`](../site-floor/shells/marketing/) + kit；配方组合见 [`site-floor/RECIPE-MAP.md`](../site-floor/RECIPE-MAP.md) · demo [`site-floor/demos/r-overseas`](../site-floor/demos/r-overseas/)。  
+> **非**：本 SPEC 自身不是完整站点源码；实现应对齐本结构 **并**从 site-floor 起步，而非另发明五段同色深底。
 
 ## 一句话
 

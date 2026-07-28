@@ -14,7 +14,8 @@
 architecture-redesign-2026-07-20.md: **系统架构大改 · A0–A5 ✅ 收口**（Ports&Adapters · App 用例 · Domain · 桌面 MVVM · Worker/Split/Run/Inspect · **P2-17 t58** · **A5-5 可选不做**；**本轮架构/实施真源**）
 a5-5-workspace-crates-eval-2026-07-21.md: **A5-5** workspace/`cco-domain`/`cco-app` 评估 — **本轮不做 / 不落 crate**；门槛=A5-2+A5-4+Store DI
 contracts/: A0 契约冻结（behavior-golden · run-dir · plan-job · README）
-runtime-prompts/: **软件内底层提示真源**（Markdown 加载 · 聊天/拆分/规划器 · **ui-delivery-recipes** 效果配方 · layout/color/type/**copy**/motion · **backend-architecture** · **landing-gates**；覆盖序见目录 README）
+runtime-prompts/: **软件内底层提示真源**（Markdown 加载 · 聊天/拆分/规划器 · **ui-delivery-recipes** 效果配方 · layout/color/type/**copy**/motion · **backend-architecture** · **landing-gates**；覆盖序见目录 README）  
+../examples/site-floor/: **可运行高端站点底板**（非注入 LLM · shell×kit·R-* demos；绿野 UI 起步；与 recipes 同构）
 split-product-rules.md: **拆分产品规则短真源**（改拆分/拆分台/confirm 行为；**无**平行阶段表；全文波次史见 archive）
 cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**（顺序/并发/是否执行 + 完整任务字段；**S3/S4 ✅ 核销** · S2/S5/S6 ☐ 可选/中长期 · 文末唯一勾选）
 browser-automation-cco.md: **浏览器自动化契约**（**W0–W3+++ ✅** · 默认证据 outputs · 设置引擎/预览门闩 · 点图放大 · 非 Claude soft · **本能力唯一勾选**）
@@ -25,6 +26,8 @@ browser-automation-cco.md: **浏览器自动化契约**（**W0–W3+++ ✅** · 
 
 ### 还在做（活跃落地 · 可有 ☐）
 
+path-depth-wave-2026-07-28/: **路径分档 L/M/H · 多计划索引 · 主受众与边聊完善**（**多计划文档** · [INDEX](./path-depth-wave-2026-07-28/INDEX.md) · 勾选只认 [landing](./path-depth-wave-2026-07-28/landing.md) · W0 空态优先 · H/W2+ 后置 · 旧单文件已改指针）  
+path-depth-multi-plan-audience-2026-07-28.md: **指针** → 上目录（勿再追加正文）  
 context-digest-compress-landing-2026-07-27.md: **会话语义压缩 Session Digest**（**C0–C2 ✅ · 内置默认每轮** · 桌面 chat 抽/存/剥/注入 · 契约/skill · C3 可选 pin · **非**口令开关 · **非** gzip/文言 · **不**重开 guided G；**本能力唯一勾选**）
 cost-aware-cli-router-2026-07-27.md: **费用感知 CLI 优选**（**P0–P3 ✅**；role→tier · 升档 · 预算/粘滞 · **intent 默认关** · 显式 route 不动）
 next-landing-sequence-2026-07-27.md: **下一轮落地序（协调）**（**W0/W1/W3 ✅** · W2 自动化代理 ✅ / **真人 V1–V5 ☐** · W0 GUI 目视 residual · W4 无新痛；**旁轨** session-digest 不替代 W0–W4；**不**替代各题勾选真源）

@@ -1,0 +1,25 @@
+/*
+ * kit: ios-hig — Apple / iOS 气质（Web 近似）
+ * 真源: docs/runtime-prompts/ui-color-systems.md
+ *       docs/runtime-prompts/ui-typography-systems.md
+ * cta-band 系统近黑 · footer 分组灰 · 可分色；圆角略大
+ */
+:root {
+  --color-bg: #F2F2F7;
+  --color-surface: #FFFFFF;
+  --color-text: #1C1C1E;
+  --color-muted: #8E8E93;
+  --color-border: #C6C6C8;
+  --color-primary: #007AFF;
+  --color-primary-fg: #FFFFFF;
+  --color-accent: #5856D6;
+  --color-cta-band: #1C1C1E;
+  --color-footer: #E5E5EA;
+  --color-footer-fg: #1C1C1E;
+  --color-footer-muted: #8E8E93;
+  --font-display: system-ui, -apple-system, "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif;
+  --font-body: system-ui, -apple-system, "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-ui: system-ui, -apple-system, "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+}
