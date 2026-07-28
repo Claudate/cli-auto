@@ -304,6 +304,39 @@ mod tests {
         );
     }
 
+    /// W1-5: iterate-clarity + persona lexicon + zero internal mode codes in prompts.
+    #[test]
+    fn embedded_chat_covers_iterate_and_lexicon() {
+        let g = chat_plan_writing_guidance();
+        assert!(
+            g.contains("当前理解") || g.contains("边聊"),
+            "iterate / understanding"
+        );
+        assert!(
+            g.contains("按我说的改")
+                || g.contains("按反馈改")
+                || g.contains("换个方向"),
+            "feedback revise path"
+        );
+        assert!(
+            g.contains("矛盾") || g.contains("冲突"),
+            "contradiction alignment"
+        );
+        assert!(
+            g.contains("上架") || g.contains("存档") || g.contains("本波"),
+            "scene-specific done-when lexicon"
+        );
+        assert!(
+            g.contains("零") && (g.contains("代号") || g.contains("P1")),
+            "forbid teaching internal mode codes"
+        );
+        // Must not present P-codes as user-facing primary vocabulary positively
+        assert!(
+            g.contains("禁止") || g.contains("零内部"),
+            "negative framing for internal codes"
+        );
+    }
+
     #[test]
     fn ui_copy_covers_product_ui_strings() {
         let g = ui_copy_systems_guidance();
@@ -343,6 +376,19 @@ mod tests {
             split_agent_delivery_guidance().contains("site-floor")
                 || split_agent_delivery_guidance().contains("RECIPE-MAP"),
             "split delivery must mention site-floor"
+        );
+        let split = split_agent_delivery_guidance();
+        assert!(
+            split.contains("上架")
+                || split.contains("验收词")
+                || split.contains("开课")
+                || split.contains("存档"),
+            "split bodies should follow scene lexicon"
+        );
+        assert!(
+            planner_greenfield_stack_blurb().contains("假设")
+                || planner_greenfield_stack_blurb().contains("人话"),
+            "planner greenfield: assumptions / human copy"
         );
     }
 
