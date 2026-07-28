@@ -11,22 +11,22 @@
 | 计划文件 | 做什么 | 先等谁 | 可并行 |
 |----------|--------|--------|--------|
 | [01-audience.md](./01-audience.md) | 主受众与例子文案对齐 | — | ∥ 02 |
-| [01b-persona-path-profiles.md](./01b-persona-path-profiles.md) | 九类多维旋钮（纠正只贴 L/M/H） | 01 | W0-7 |
+| [01b-persona-path-profiles.md](./01b-persona-path-profiles.md) | 九类多维旋钮 + delivery 对内 | 01 | W0-7 |
 | [02-iterate-clarity.md](./02-iterate-clarity.md) | 边聊/反馈完善体验 | 01 文案更佳 | ∥ 01 |
-| [03-path-empty-cta.md](./03-path-empty-cta.md) | 空态 L/M/H + 主 CTA（**先做**） | — | 优先 |
-| [04-multi-plan-bundle.md](./04-multi-plan-bundle.md) | 索引→多执行计划 | 03 H 入口心智 | 设计∥05 |
+| [03-path-empty-cta.md](./03-path-empty-cta.md) | 空态主 CTA + **去三档**（W0-8） | — | 优先 |
+| [04-multi-plan-bundle.md](./04-multi-plan-bundle.md) | 索引→多执行计划 | 03 空态/芯片心智 | 设计∥05 |
 | [05-modular-split-run.md](./05-modular-split-run.md) | 模块化拆、并行叙事、省钱、验收 | 04 | 设计∥04 |
 | [06-audience-demand-field-research.md](./06-audience-demand-field-research.md) | 论坛/平台需求模式与沟通（研究） | 01 | 校正话术 |
 | [landing-checklist.md](./landing-checklist.md) | 波次验收清单（对照 docs landing） | 各计划 | — |
 
 ```text
-建议阅读：01 → 06 → 02 → 03 → 04 → 05
-建议实施：03 → 02 → 04 → 05（01/06 管文案与话术）
+建议阅读：01 → 01b → 06 → 02 → 03 → 04 → 05
+建议实施：**W0-8 去三档** → W1 抽检 → W2–W3 多计划
 ```
 
 ## 总目标（本波）
 
-非技术主用户按深浅选工作方式；需求可边聊、可反馈迭代；深用户多材料→索引→多计划→模块化拆跑→对照验收；开跑须确认。
+非技术主用户用场景与对话推进（**不**先选三档）；需求可边聊、可反馈迭代；深用户多材料→索引→多计划→模块化拆跑→对照验收；开跑须确认。
 
 ## 总非目标
 
