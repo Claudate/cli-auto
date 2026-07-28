@@ -318,8 +318,8 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
             req.plan.display()
         ),
     );
-    // 同项目旧 planning 标 cancelled，避免 latest/UI 串到僵尸 job（CLI 线程可能仍跑完但不再晋升 planned）
-    supersede_planning_jobs(config, &project, &job_id);
+    // 同项目 + 同 plan_path 的旧 planning 标 cancelled（W2-4：不误杀其它计划的 planned/planning）
+    supersede_planning_jobs(config, &project, &req.plan, &job_id);
 
     // `ai` may call Claude CLI (print) and take minutes — background + UI poll.
     // 若本机解析不到 claude bin，则同步跑启发式，避免 UI 空等异步轮询。
@@ -395,8 +395,17 @@ fn split_agent_can_run_without_cli() -> bool {
     crate::runtime::provider::sdk_http::resolve_api_key().is_some()
 }
 
-/// Mark other in-flight planning jobs for this project cancelled and kill planner PID (C6).
-fn supersede_planning_jobs(config: &Config, project: &Path, keep_job_id: &str) {
+/// Mark other in-flight **planning** jobs for the same project **and same plan
+/// document** as cancelled; kill planner PID (C6).
+///
+/// W2-4: supersede is per `plan_path`, not whole-project — re-splitting plan A
+/// must not cancel plan B's still-planning job.
+fn supersede_planning_jobs(
+    config: &Config,
+    project: &Path,
+    plan_path: &Path,
+    keep_job_id: &str,
+) {
     let root = plan_jobs_dir(config);
     if !root.is_dir() {
         return;
@@ -404,6 +413,7 @@ fn supersede_planning_jobs(config: &Config, project: &Path, keep_job_id: &str) {
     let project = project
         .canonicalize()
         .unwrap_or_else(|_| project.to_path_buf());
+    let want_plan = crate::state::sqlite::plan_path_key(&plan_path.to_string_lossy());
     let Ok(entries) = std::fs::read_dir(&root) else {
         return;
     };
@@ -434,16 +444,29 @@ fn supersede_planning_jobs(config: &Config, project: &Path, keep_job_id: &str) {
         if jp != project {
             continue;
         }
+        // Same plan document only (normalized key; allow suffix match like loaders).
+        if !want_plan.is_empty() {
+            let other_plan =
+                crate::state::sqlite::plan_path_key(&other.plan_path.to_string_lossy());
+            let same = other_plan == want_plan
+                || (!other_plan.is_empty()
+                    && (other_plan.ends_with(&want_plan) || want_plan.ends_with(&other_plan)));
+            if !same {
+                continue;
+            }
+        }
         // Kill leftover planner CLI so it cannot keep spinning after cancel.
         kill_planner_pid(config, &other.job_id);
         other.status = PlanJobStatus::Cancelled;
-        other.error = Some("superseded by newer plan job".into());
+        other.error = Some("superseded by newer plan job for same plan_path".into());
         other.updated_at = Utc::now();
         let _ = other.save(config);
         append_log(
             config,
             &other.job_id,
-            &format!("cancelled: superseded by {keep_job_id} (planner pid kill attempted)"),
+            &format!(
+                "cancelled: superseded by {keep_job_id} (same plan_path; planner pid kill attempted)"
+            ),
         );
     }
 }
@@ -2052,6 +2075,83 @@ mod reap_pid_scan_tests {
         assert!(
             job_dir(&cfg, &id).join("plan.proposed.json").is_file(),
             "proposed missing after salvage"
+        );
+    }
+
+    /// W2-4: re-split plan A must not cancel plan B's in-flight planning job.
+    #[test]
+    fn supersede_planning_is_per_plan_path() {
+        use super::{plan_jobs_dir, supersede_planning_jobs};
+
+        let dir = tempdir().unwrap();
+        let project = dir.path().join("proj");
+        std::fs::create_dir_all(&project).unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().join("state");
+        std::fs::create_dir_all(plan_jobs_dir(&cfg)).unwrap();
+
+        let mk = |id: &str, plan: &str| {
+            let j = PlanJob {
+                job_id: id.into(),
+                status: PlanJobStatus::Planning,
+                project: project.clone(),
+                plan_path: PathBuf::from(plan),
+                plan_mode: "fast".into(),
+                provider: "fake".into(),
+                exec_mode: "print".into(),
+                error: None,
+                run_id: None,
+                created_at: Utc::now() - Duration::minutes(1),
+                updated_at: Utc::now() - Duration::minutes(1),
+                plan_name: None,
+                task_count: None,
+                max_parallel: Some(2),
+                adapter: None,
+                planner_cost_usd: None,
+                digest_mode: None,
+                critic_summary: None,
+                critic_edges_removed: None,
+                critic_titles_rewritten: None,
+                critic_prompts_tagged: None,
+                critic_notes: vec![],
+                critic_llm_used: None,
+                critic_llm_cost_usd: None,
+                critic_llm_ms: None,
+                grain_hint: None,
+                revision_notes: None,
+                effort: None,
+            };
+            std::fs::create_dir_all(job_dir(&cfg, id)).unwrap();
+            j.save(&cfg).unwrap();
+        };
+
+        mk("job-a-old", "plans/a.md");
+        mk("job-b", "plans/b.md");
+        mk("job-a-new", "plans/a.md");
+
+        supersede_planning_jobs(
+            &cfg,
+            &project,
+            PathBuf::from("plans/a.md").as_path(),
+            "job-a-new",
+        );
+
+        let a_old = PlanJob::load(&cfg, "job-a-old").unwrap();
+        let b = PlanJob::load(&cfg, "job-b").unwrap();
+        let a_new = PlanJob::load(&cfg, "job-a-new").unwrap();
+        assert!(
+            matches!(a_old.status, PlanJobStatus::Cancelled),
+            "same plan_path old planning must cancel, got {:?}",
+            a_old.status
+        );
+        assert!(
+            matches!(b.status, PlanJobStatus::Planning),
+            "other plan_path must survive, got {:?}",
+            b.status
+        );
+        assert!(
+            matches!(a_new.status, PlanJobStatus::Planning),
+            "keep job must stay planning"
         );
     }
 }

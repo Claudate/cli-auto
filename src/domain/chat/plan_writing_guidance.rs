@@ -335,6 +335,15 @@ mod tests {
             g.contains("禁止") || g.contains("零内部"),
             "negative framing for internal codes"
         );
+        // W2-3 multi-plan cutting (bundle) without teaching L/H
+        assert!(
+            g.contains("索引") || g.contains("多执行计划") || g.contains("多份"),
+            "multi-plan / index guidance"
+        );
+        assert!(
+            g.contains("粘成") || g.contains("超长"),
+            "forbid glue-into-one long md"
+        );
     }
 
     #[test]
