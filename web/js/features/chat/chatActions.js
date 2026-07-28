@@ -32,6 +32,7 @@ import {
 } from "./chatSessions.js";
 import { renderChatPage, renderChatMessages } from "./chatRender.js";
 import { applyPathModeHeadStep, getPathMode } from "./chatPathMode.js";
+import { applyPersonaOpener, getPersonaId } from "./chatPersona.js";
 import {
   installClarifyUi,
   selectClarifyEntry,
@@ -59,6 +60,7 @@ import {
 export {
   fillChatExample,
   setPathModeAndPaint,
+  setPersonaAndPaint,
   renderChatMessages,
   renderChatEnvBar,
   dismissChatEnvBar,
@@ -115,9 +117,10 @@ export async function openChatPage() {
   // t3: install clarify click/styles once; ensure default entry
   installClarifyUi();
   ensureClarifyState();
-  // W0: head step follows path L/M/H
+  // W0 / W0-7: head step + persona opener
   try {
     applyPathModeHeadStep(getPathMode());
+    applyPersonaOpener(getPersonaId());
   } catch (_) {}
   // P2-2: clear stale last_summary until load
   state.chatLastSummary = null;

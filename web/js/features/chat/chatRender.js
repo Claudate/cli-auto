@@ -52,11 +52,40 @@ import {
   getPathMode,
   setPathMode,
 } from "./chatPathMode.js";
+import {
+  sceneChipsHtml,
+  personaExampleChipsHtml,
+  applyPersonaOpener,
+  setPersonaId,
+  getPersonaId,
+  getPersonaProfile,
+} from "./chatPersona.js";
 
 /** W0: switch path L/M/H and repaint empty / head step. */
 export function setPathModeAndPaint(id) {
   const next = setPathMode(id);
   applyPathModeHeadStep(next);
+  try {
+    renderChatMessages();
+  } catch (_) {}
+  return next;
+}
+
+/**
+ * W0-7: scene chip → persona knobs; optionally nudge pathBias if user hasn't locked path.
+ * Does not force occupation; user can still change L/M/H.
+ */
+export function setPersonaAndPaint(id, opts = {}) {
+  const next = setPersonaId(id);
+  const p = getPersonaProfile(next);
+  applyPersonaOpener(next);
+  // Soft path bias only when applyPathBias:true (scene chip click)
+  if (opts.applyPathBias && p?.pathBias) {
+    try {
+      setPathMode(p.pathBias);
+      applyPathModeHeadStep(p.pathBias);
+    } catch (_) {}
+  }
   try {
     renderChatMessages();
   } catch (_) {}
@@ -128,8 +157,9 @@ export function renderChatMessages() {
   // Re-read after ensureClaimDraftMessageVisible may have injected a plan bubble
   const msgsNow = state.chatSession.messages || [];
   if (!msgsNow.length && !state.chatBusy) {
-    // W0: path L/M/H + coach first; clarify demoted (L hide / M·H fold)
+    // W0: path L/M/H + coach first; W0-7 scene chips + persona examples
     applyPathModeHeadStep(getPathMode());
+    applyPersonaOpener(getPersonaId());
     const claimed =
       state.chatClarify?.phase === "claimed_to_plan" ||
       !!state.chatSession?.draft_plan?.markdown;
@@ -147,11 +177,14 @@ export function renderChatMessages() {
       // Thin success only — plan card appears once messages hydrate
       clarifyBlock = thinClaimSuccessHtml();
     } else {
-      lead = pathModeSegmentHtml() + pathModeCoachHtml();
+      lead =
+        pathModeSegmentHtml() +
+        pathModeCoachHtml() +
+        sceneChipsHtml() +
+        personaExampleChipsHtml();
       const rawClarify = renderClarifyPanelHtml({ mode: "empty" });
       const weight = pathModeClarifyWeight();
       if (activeClarify) {
-        // Mid-flow: keep full panel visible
         clarifyBlock = rawClarify;
       } else if (weight === "hide") {
         clarifyBlock = "";
@@ -162,19 +195,23 @@ export function renderChatMessages() {
           rawClarify +
           `</details>`;
       }
+      // Templates stay tertiary; persona examples already in lead
       const legacyEmpty =
         typeof planTemplateChatEmptyHtml === "function"
           ? planTemplateChatEmptyHtml()
-          : `<div class="chat-empty-legacy muted"><p>用自然语言说明你要做什么，保存后再点「拆成步骤」。</p></div>`;
-      secondary =
-        `<div class="chat-empty-secondary">` +
-        (legacyEmpty.includes('class="chat-empty')
-          ? legacyEmpty.replace(
-              /<div class="chat-empty[^"]*">/,
-              '<div class="chat-empty-legacy">'
-            )
-          : legacyEmpty) +
-        `</div>`;
+          : "";
+      if (legacyEmpty) {
+        // Only keep template chips row if present — strip duplicate coach if any
+        secondary =
+          `<div class="chat-empty-secondary chat-empty-templates">` +
+          (legacyEmpty.includes('class="chat-empty')
+            ? legacyEmpty.replace(
+                /<div class="chat-empty[^"]*">/,
+                '<div class="chat-empty-legacy">'
+              )
+            : legacyEmpty) +
+          `</div>`;
+      }
     }
     list.innerHTML =
       `<div class="chat-empty muted">` +
@@ -198,6 +235,7 @@ export function renderChatMessages() {
   // only" froze unexecuted drafts after any later AI turn / preview reply.
   // t3: inline clarify strip when still in clarify flow with messages present
   applyPathModeHeadStep(getPathMode());
+  applyPersonaOpener(getPersonaId());
   ensureChatMsgEnhanceStyles();
   let clarifyInline = renderClarifyInlineIfNeeded();
   // W0: after claim, avoid dual-card (success preview + plan bubble same md)

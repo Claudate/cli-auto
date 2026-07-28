@@ -128,6 +128,22 @@ export function attachDocumentClick(deps) {
         return;
       }
 
+      // W0-7: scene chip → persona (not job ID card)
+      const sceneChip = ct?.closest?.("[data-scene-chip][data-persona]");
+      if (sceneChip) {
+        e.preventDefault();
+        e.stopPropagation();
+        const pid = sceneChip.getAttribute("data-persona") || "";
+        if (window.ccoChat?.setPersona) {
+          window.ccoChat.setPersona(pid, { applyPathBias: true });
+        } else if (typeof g("setPersonaAndPaint") === "function") {
+          call("setPersonaAndPaint", pid, { applyPathBias: true });
+        } else if (typeof g("setPersona") === "function") {
+          call("setPersona", pid, { applyPathBias: true });
+        }
+        return;
+      }
+
       const exampleChip = ct?.closest?.(
         ".chat-example-chip[data-chat-example]"
       );

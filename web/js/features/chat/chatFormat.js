@@ -8,6 +8,11 @@ import { state, toast, hasActiveRun, normalizePlanPath } from "./legacy.js";
 import { host } from "./host.js";
 import { ensureChatState, stashChatSession } from "./chatState.js";
 import { renderMarkdown } from "../../shared/markdown.js";
+import {
+  personaPrimaryCtaLabel,
+  personaDirectExec,
+  getPersonaProfile,
+} from "./chatPersona.js";
 
 export function chatEsc(s) {
   return String(s ?? "")
@@ -305,9 +310,11 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
     );
   }
 
-  // W0：唯一主 CTA =「拆成步骤」(primary)；「直接执行」降权 ghost（仍走 direct 链，无 start_run）
-  // 已保存且已拆分：路径 + 展开 +「查看拆分结果」（不在聊天重复拆）
+  // W0 + W0-7：唯一 primary = 画像 primary_cta；direct_exec 随画像 offer/hide/danger_only
+  // 仍走 assign/direct 原链，无 start_run
   const canExec = !runLocked && !busy && !!md;
+  const ctaLabel = personaPrimaryCtaLabel();
+  const dex = personaDirectExec();
   const assignTitle = runLocked
     ? "运行中，请先停止后再拆分"
     : isSaved
@@ -315,11 +322,15 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
       : "先保存到本机计划，再进入拆分台";
   const directTitle = runLocked
     ? "运行中，请先停止后再执行"
-    : "不拆成多步，整份计划交给一个窗口直接执行（次要）";
+    : dex === "danger_only"
+      ? "整份当一步风险较高，仅特殊情况使用"
+      : "不拆成多步，整份计划交给一个窗口直接执行（次要）";
   const assignBtn =
-    `<button type="button" class="btn primary sm btn-chat-plan-assign" ${canExec ? "" : "disabled"} title="${assignTitle}">拆成步骤</button>`;
-  const directBtn =
-    `<button type="button" class="btn ghost sm btn-chat-plan-direct" ${canExec ? "" : "disabled"} title="${directTitle}">直接执行</button>`;
+    `<button type="button" class="btn primary sm btn-chat-plan-assign" ${canExec ? "" : "disabled"} title="${assignTitle}">${chatEsc(ctaLabel)}</button>`;
+  const showDirect = dex === "offer" || dex === "danger_only";
+  const directBtn = showDirect
+    ? `<button type="button" class="btn ghost sm btn-chat-plan-direct" ${canExec ? "" : "disabled"} title="${directTitle}">直接执行</button>`
+    : "";
   if (isSaved && alreadySplit) {
     return (
       `<span class="chat-plan-card-saved muted" title="已保存并拆分；改计划请到计划管理或拆分台「重新规划」">已保存：${chatEsc(savedPath)}</span>` +
@@ -355,11 +366,18 @@ export function chatFormatPlanCard(rawMd, opts = {}) {
   const md = String(rawMd || "").trim();
   const { title } = chatPlanOutline(md);
   const lines = chatPlanThreeLines(md);
+  const persona = getPersonaProfile();
+  // Prefer plan body; if stub/empty, surface persona lexicon so ecom≠admin
+  const goal = lines.goal !== "（待补）" ? lines.goal : persona.coach;
+  const nonGoals =
+    lines.nonGoals !== "（待补）" ? lines.nonGoals : persona.nonGoalHint;
+  const doneWhen =
+    lines.doneWhen !== "（待补）" ? lines.doneWhen : persona.doneWhenHint;
   const threeHtml =
     `<ul class="chat-plan-threelines">` +
-    `<li><span class="k">做成什么</span> ${chatEsc(lines.goal)}</li>` +
-    `<li><span class="k">不做</span> ${chatEsc(lines.nonGoals)}</li>` +
-    `<li><span class="k">怎样算完</span> ${chatEsc(lines.doneWhen)}</li>` +
+    `<li><span class="k">做成什么</span> ${chatEsc(goal)}</li>` +
+    `<li><span class="k">不做</span> ${chatEsc(nonGoals)}</li>` +
+    `<li><span class="k">怎样算完</span> ${chatEsc(doneWhen)}</li>` +
     `</ul>`;
   // Expand view = rendered markdown; raw kept in hidden pre for adopt/assign.
   return (

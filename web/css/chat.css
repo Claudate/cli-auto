@@ -552,6 +552,55 @@
   font-weight: 650;
 }
 
+/* W0-7: scene chips → persona (not occupation gate) */
+.chat-scene-chips {
+  margin: 0.55rem auto 0.65rem;
+  max-width: 32rem;
+}
+.chat-scene-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.chat-scene-row {
+  justify-content: center;
+}
+.chat-scene-chip {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg, #fff);
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.3;
+}
+.chat-scene-chip:hover {
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 45%, var(--border));
+  background: #f4f8fd;
+  color: var(--accent, #2563eb);
+}
+.chat-scene-chip.is-active {
+  border-color: var(--accent, #2563eb);
+  background: color-mix(in srgb, var(--accent, #2563eb) 10%, transparent);
+  font-weight: 600;
+  color: var(--accent, #2563eb);
+}
+.chat-persona-examples {
+  margin: 0.35rem auto 0.75rem;
+  max-width: 32rem;
+}
+.chat-persona-lexicon {
+  margin: 0.45rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+.chat-empty-templates {
+  opacity: 0.9;
+  margin-top: 0.5rem;
+}
+
 /* W0: clarify fold — not the door */
 .chat-clarify-fold {
   margin: 0.5rem auto 0.75rem;
