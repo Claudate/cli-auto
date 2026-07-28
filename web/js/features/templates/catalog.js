@@ -158,7 +158,7 @@ export function planTemplateById(id) {
   return PLAN_TEMPLATES[id] || null;
 }
 
-/** Chat empty-state HTML (B1): coach line + 3 examples + 2 templates; no eng jargon. */
+/** Chat empty-state HTML (W0): ≥4 职业场景例子 + 模板；无职业问卷大门、无工程黑话。 */
 export function planTemplateChatEmptyHtml() {
   const tplBtns = Object.values(PLAN_TEMPLATES)
     .slice(0, 2)
@@ -170,12 +170,14 @@ export function planTemplateChatEmptyHtml() {
     )
     .join("");
   return `
-      <div class="chat-empty muted">
-        <p class="chat-empty-coach">懒得打字？点一个例子，填进下面再改两句就行。</p>
+      <div class="chat-empty-legacy muted">
+        <p class="chat-empty-coach">懒得打字？点一个例子，填进<strong>下方输入框</strong>再改两句。</p>
         <div class="chat-example-chips">
-          <button type="button" class="chat-example-chip" data-chat-example="做一个提醒浇水的小工具，自己先用，先不做社区">浇水提醒小工具</button>
-          <button type="button" class="chat-example-chip" data-chat-example="把产品官网改成双语落地页，含表单与 SEO 要点">出海落地页</button>
-          <button type="button" class="chat-example-chip" data-chat-example="优化登录与注册体验，写清范围和怎样算做完">优化登录体验</button>
+          <button type="button" class="chat-example-chip" data-chat-example="做一个内部报价小工具，自己和销售先用，先不做客户登录和支付">创业·报价小工具</button>
+          <button type="button" class="chat-example-chip" data-chat-example="把产品介绍做成中英双语落地页，含留资表单与 SEO 要点，先不做完整后台">出海·双语落地页</button>
+          <button type="button" class="chat-example-chip" data-chat-example="做一页周末大促活动页，商品图位真实感，主 CTA 去购买，一天内能上线预览">电商·活动页</button>
+          <button type="button" class="chat-example-chip" data-chat-example="做一页课程报名说明：时间地点、费用、报名表单，做成后能发给学员打开">教培·报名说明</button>
+          <button type="button" class="chat-example-chip" data-chat-example="把一份制度整理成内宣页，含收集确认表，先不做复杂审批流">行政·制度内宣</button>
         </div>
         <p class="chat-hint chat-hint-tpl">想用完整模板起笔：</p>
         <div class="chat-example-chips chat-tpl-chips">${tplBtns}</div>

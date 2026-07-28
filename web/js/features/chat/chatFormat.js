@@ -54,6 +54,47 @@ export function chatPlanOutline(md) {
   return { title, outline };
 }
 
+/**
+ * W0: three human lines for draft card — 做成什么 / 不做 / 怎样算完.
+ * @returns {{ goal: string, nonGoals: string, doneWhen: string }}
+ */
+export function chatPlanThreeLines(md) {
+  const text = String(md || "").replace(/\r\n/g, "\n");
+  const sections = {};
+  let cur = null;
+  for (const raw of text.split("\n")) {
+    const h = raw.match(/^##\s+(.+?)\s*$/);
+    if (h) {
+      cur = h[1].trim();
+      if (!sections[cur]) sections[cur] = [];
+      continue;
+    }
+    if (!cur) continue;
+    const t = raw.trim();
+    if (!t || t.startsWith("#") || t.startsWith("```")) continue;
+    sections[cur].push(t.replace(/^[-*•]\s+/, "").replace(/^\d+[\.\)]\s+/, ""));
+  }
+  const pick = (keys) => {
+    for (const k of keys) {
+      for (const name of Object.keys(sections)) {
+        if (name === k || name.includes(k)) {
+          const body = (sections[name] || []).filter(Boolean);
+          if (body.length) {
+            const s = body.slice(0, 2).join("；");
+            return s.length > 96 ? s.slice(0, 94) + "…" : s;
+          }
+        }
+      }
+    }
+    return "";
+  };
+  return {
+    goal: pick(["目标", "做成", "给谁"]) || "（待补）",
+    nonGoals: pick(["非目标", "不做", "先不做"]) || "（待补）",
+    doneWhen: pick(["验收", "成功标准", "怎样算", "做完"]) || "（待补）",
+  };
+}
+
 /** Line-start ``` only (mirrors services/chat.rs fence helpers). */
 export function chatIsLineStartFence(s, idx) {
   return idx === 0 || s[idx - 1] === "\n" || s[idx - 1] === "\r";
@@ -264,7 +305,7 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
     );
   }
 
-  // B2：主 CTA 始终「拆成步骤」；「直接执行」= 整份计划单任务开跑（跳过多步拆分台）
+  // W0：唯一主 CTA =「拆成步骤」(primary)；「直接执行」降权 ghost（仍走 direct 链，无 start_run）
   // 已保存且已拆分：路径 + 展开 +「查看拆分结果」（不在聊天重复拆）
   const canExec = !runLocked && !busy && !!md;
   const assignTitle = runLocked
@@ -274,9 +315,11 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
       : "先保存到本机计划，再进入拆分台";
   const directTitle = runLocked
     ? "运行中，请先停止后再执行"
-    : "不拆成多步，整份计划交给一个窗口直接执行";
+    : "不拆成多步，整份计划交给一个窗口直接执行（次要）";
+  const assignBtn =
+    `<button type="button" class="btn primary sm btn-chat-plan-assign" ${canExec ? "" : "disabled"} title="${assignTitle}">拆成步骤</button>`;
   const directBtn =
-    `<button type="button" class="btn primary sm btn-chat-plan-direct" ${canExec ? "" : "disabled"} title="${directTitle}">直接执行</button>`;
+    `<button type="button" class="btn ghost sm btn-chat-plan-direct" ${canExec ? "" : "disabled"} title="${directTitle}">直接执行</button>`;
   if (isSaved && alreadySplit) {
     return (
       `<span class="chat-plan-card-saved muted" title="已保存并拆分；改计划请到计划管理或拆分台「重新规划」">已保存：${chatEsc(savedPath)}</span>` +
@@ -292,7 +335,7 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
       `<div class="chat-plan-card-actions-btns">` +
       expand +
       `<button type="button" class="btn ghost sm btn-chat-plan-adopt" ${busy ? "disabled" : ""} title="覆盖保存到本地计划文件">仅保存</button>` +
-      `<button type="button" class="btn ghost sm btn-chat-plan-assign" ${canExec ? "" : "disabled"} title="${assignTitle}">拆成步骤</button>` +
+      assignBtn +
       directBtn +
       `</div>`
     );
@@ -302,7 +345,7 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
     `<div class="chat-plan-card-actions-btns">` +
     expand +
     `<button type="button" class="btn ghost sm btn-chat-plan-adopt" ${busy || !md ? "disabled" : ""} title="只保存到本机，暂不拆分">仅保存</button>` +
-    `<button type="button" class="btn ghost sm btn-chat-plan-assign" ${canExec ? "" : "disabled"} title="${assignTitle}">拆成步骤</button>` +
+    assignBtn +
     directBtn +
     `</div>`
   );
@@ -310,20 +353,21 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
 
 export function chatFormatPlanCard(rawMd, opts = {}) {
   const md = String(rawMd || "").trim();
-  const { title, outline } = chatPlanOutline(md);
-  const outlineHtml =
-    outline.length > 0
-      ? `<ul class="chat-plan-outline">${outline
-          .map((o) => `<li>${chatEsc(o)}</li>`)
-          .join("")}</ul>`
-      : `<p class="chat-plan-outline-empty muted">（暂无大纲条目）</p>`;
+  const { title } = chatPlanOutline(md);
+  const lines = chatPlanThreeLines(md);
+  const threeHtml =
+    `<ul class="chat-plan-threelines">` +
+    `<li><span class="k">做成什么</span> ${chatEsc(lines.goal)}</li>` +
+    `<li><span class="k">不做</span> ${chatEsc(lines.nonGoals)}</li>` +
+    `<li><span class="k">怎样算完</span> ${chatEsc(lines.doneWhen)}</li>` +
+    `</ul>`;
   // Expand view = rendered markdown; raw kept in hidden pre for adopt/assign.
   return (
     `<div class="chat-plan-card" data-plan-md="1">` +
     `<div class="chat-plan-card-label">计划草稿</div>` +
     `<div class="chat-plan-card-title">${chatEsc(title)}</div>` +
     `<div class="chat-plan-summary">` +
-    outlineHtml +
+    threeHtml +
     `</div>` +
     `<pre class="chat-plan-raw" hidden>${chatEsc(md)}</pre>` +
     `<div class="chat-plan-full md-body" hidden>${renderMarkdown(md)}</div>` +

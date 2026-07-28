@@ -43,6 +43,25 @@ import {
   renderFoldAgainBtn,
   ensureChatMsgEnhanceStyles,
 } from "./chatMsgEnhance.js";
+import {
+  pathModeSegmentHtml,
+  pathModeCoachHtml,
+  pathModeClarifyWeight,
+  thinClaimSuccessHtml,
+  applyPathModeHeadStep,
+  getPathMode,
+  setPathMode,
+} from "./chatPathMode.js";
+
+/** W0: switch path L/M/H and repaint empty / head step. */
+export function setPathModeAndPaint(id) {
+  const next = setPathMode(id);
+  applyPathModeHeadStep(next);
+  try {
+    renderChatMessages();
+  } catch (_) {}
+  return next;
+}
 
 export function fillChatExample(text) {
   const input = $("#chat-input");
@@ -109,18 +128,44 @@ export function renderChatMessages() {
   // Re-read after ensureClaimDraftMessageVisible may have injected a plan bubble
   const msgsNow = state.chatSession.messages || [];
   if (!msgsNow.length && !state.chatBusy) {
-    // t3: clarify phase leads empty state
-    const clarifyHtml = renderClarifyPanelHtml({ mode: "empty" });
+    // W0: path L/M/H + coach first; clarify demoted (L hide / M·H fold)
+    applyPathModeHeadStep(getPathMode());
     const claimed =
       state.chatClarify?.phase === "claimed_to_plan" ||
       !!state.chatSession?.draft_plan?.markdown;
-    // After claim: do NOT show “再问清楚 / 示例模板” coach — that fights the success CTA
+    const phase = String(state.chatClarify?.phase || "not_started");
+    const activeClarify =
+      phase === "clarifying" ||
+      phase === "brief_ready" ||
+      phase === "skipped_to_plan";
+
+    let lead = "";
+    let clarifyBlock = "";
     let secondary = "";
-    if (!claimed) {
+
+    if (claimed) {
+      // Thin success only — plan card appears once messages hydrate
+      clarifyBlock = thinClaimSuccessHtml();
+    } else {
+      lead = pathModeSegmentHtml() + pathModeCoachHtml();
+      const rawClarify = renderClarifyPanelHtml({ mode: "empty" });
+      const weight = pathModeClarifyWeight();
+      if (activeClarify) {
+        // Mid-flow: keep full panel visible
+        clarifyBlock = rawClarify;
+      } else if (weight === "hide") {
+        clarifyBlock = "";
+      } else {
+        clarifyBlock =
+          `<details class="chat-clarify-fold">` +
+          `<summary class="chat-clarify-fold-sum">先问关键的（可跳过）</summary>` +
+          rawClarify +
+          `</details>`;
+      }
       const legacyEmpty =
         typeof planTemplateChatEmptyHtml === "function"
           ? planTemplateChatEmptyHtml()
-          : `<div class="chat-empty muted"><p>用自然语言说明你要做什么，保存后再点「拆成步骤」。</p></div>`;
+          : `<div class="chat-empty-legacy muted"><p>用自然语言说明你要做什么，保存后再点「拆成步骤」。</p></div>`;
       secondary =
         `<div class="chat-empty-secondary">` +
         (legacyEmpty.includes('class="chat-empty')
@@ -132,7 +177,11 @@ export function renderChatMessages() {
         `</div>`;
     }
     list.innerHTML =
-      `<div class="chat-empty muted">` + clarifyHtml + secondary + `</div>`;
+      `<div class="chat-empty muted">` +
+      lead +
+      clarifyBlock +
+      secondary +
+      `</div>`;
     if (!claimed) {
       const ignored =
         state.selectedPath &&
@@ -148,8 +197,17 @@ export function renderChatMessages() {
   // (or stream partials, which force activePlan:false). Earlier "last assistant
   // only" froze unexecuted drafts after any later AI turn / preview reply.
   // t3: inline clarify strip when still in clarify flow with messages present
+  applyPathModeHeadStep(getPathMode());
   ensureChatMsgEnhanceStyles();
-  const clarifyInline = renderClarifyInlineIfNeeded();
+  let clarifyInline = renderClarifyInlineIfNeeded();
+  // W0: after claim, avoid dual-card (success preview + plan bubble same md)
+  const claimedInline = state.chatClarify?.phase === "claimed_to_plan";
+  const hasPlanBubble = msgsNow.some(
+    (m) => m && /```plan\b/i.test(String(m.content || ""))
+  );
+  if (claimedInline && hasPlanBubble) {
+    clarifyInline = thinClaimSuccessHtml();
+  }
   const total = msgsNow.length;
   let html = (clarifyInline || "") + msgsNow
     .map((m, idx) => {

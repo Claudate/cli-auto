@@ -114,6 +114,20 @@ export function attachDocumentClick(deps) {
         }
       }
 
+      // W0: path L/M/H segment
+      const pathSeg = ct?.closest?.("[data-path-mode]");
+      if (pathSeg) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = pathSeg.getAttribute("data-path-mode") || "M";
+        if (window.ccoChat?.setPathMode) {
+          window.ccoChat.setPathMode(id);
+        } else if (typeof g("setPathMode") === "function") {
+          call("setPathMode", id);
+        }
+        return;
+      }
+
       const exampleChip = ct?.closest?.(
         ".chat-example-chip[data-chat-example]"
       );

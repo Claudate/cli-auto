@@ -117,6 +117,7 @@ export function createChatDesk(opts = {}) {
     openImageLightbox: chatAttachments.openImageLightbox,
     closeImageLightbox: chatAttachments.closeImageLightbox,
     fillChatExample: chatActions.fillChatExample,
+    setPathMode: chatActions.setPathModeAndPaint,
     handleLastSummaryAction: chatActions.handleLastSummaryAction,
     loadChatLastSummary: chatActions.loadChatLastSummary,
     // t3+t4 clarify phase (入口/卡片/Brief/认领/黄条)
@@ -220,6 +221,7 @@ export function createChatDesk(opts = {}) {
     window.ensureClarifyState = chatClarify.ensureClarifyState;
     window.installClarifyUi = chatClarify.installClarifyUi;
     window.fillChatExample = chatActions.fillChatExample;
+    window.setPathMode = chatActions.setPathModeAndPaint;
     window.handleLastSummaryAction = chatActions.handleLastSummaryAction;
     window.pickChatQuizOption = chatMsgEnhance.pickChatQuizOption;
     window.fillChatQuizDraft = chatMsgEnhance.fillChatQuizDraft;

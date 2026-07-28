@@ -31,6 +31,7 @@ import {
   stopChatWaitTicker,
 } from "./chatSessions.js";
 import { renderChatPage, renderChatMessages } from "./chatRender.js";
+import { applyPathModeHeadStep, getPathMode } from "./chatPathMode.js";
 import {
   installClarifyUi,
   selectClarifyEntry,
@@ -57,6 +58,7 @@ import {
 // Re-export surfaces so installChat `...chatActions` stays stable.
 export {
   fillChatExample,
+  setPathModeAndPaint,
   renderChatMessages,
   renderChatEnvBar,
   dismissChatEnvBar,
@@ -113,6 +115,10 @@ export async function openChatPage() {
   // t3: install clarify click/styles once; ensure default entry
   installClarifyUi();
   ensureClarifyState();
+  // W0: head step follows path L/M/H
+  try {
+    applyPathModeHeadStep(getPathMode());
+  } catch (_) {}
   // P2-2: clear stale last_summary until load
   state.chatLastSummary = null;
   renderChatPage();
