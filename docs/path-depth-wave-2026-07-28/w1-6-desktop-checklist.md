@@ -5,6 +5,16 @@
 
 [PROTOCOL]: 自动化代理可代勾「结构/脚本」项；**W1-6 本体须真人**（或录屏）。失败只记 residual，勿回灌成第二套 W 波次。
 
+**结构/脚本代跑（不替代真人 A–D 关键）**：
+
+```bash
+node scripts/path-depth-wave-smoke.mjs
+node scripts/claim-boundary-check.mjs
+node scripts/clarify-split-visual-smoke.mjs
+```
+
+过 → 可在记录表勾「结构冒烟 PASS」；**不可**因此把 landing W1-6 标 ✅。
+
 ---
 
 ## 准备

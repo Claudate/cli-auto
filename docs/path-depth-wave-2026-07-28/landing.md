@@ -10,7 +10,7 @@
 
 ## 状态行
 
-**2026-07-28**：**W0–W3 主路径 ✅** · **W4 文档关账 ✅** · **W1-6 抽检表已备**（[w1-6-desktop-checklist.md](./w1-6-desktop-checklist.md) · 真人 ☐）· **W4-3 债表** [w4-3-line-debt.md](./w4-3-line-debt.md)（arch FAIL=0 · WARN 记账）  
+**2026-07-28**：**W0–W3 主路径 ✅** · **W4 文档关账 ✅** · **W1-6 抽检表已备**（真人 ☐）· **结构冒烟** `path-depth-wave-smoke.mjs` 34/34 · **W4-3 债表**（arch FAIL=0 · WARN 记账）  
 
 ---
 
