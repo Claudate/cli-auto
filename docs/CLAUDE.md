@@ -26,7 +26,7 @@ browser-automation-cco.md: **浏览器自动化契约**（**W0–W3+++ ✅** · 
 
 ### 还在做（活跃落地 · 可有 ☐）
 
-path-depth-wave-2026-07-28/: **路径分档 L/M/H · 多计划索引 · 主受众与边聊完善**（**多计划文档** · [INDEX](./path-depth-wave-2026-07-28/INDEX.md) · 勾选只认 [landing](./path-depth-wave-2026-07-28/landing.md) · W0 空态优先 · H/W2+ 后置 · 旧单文件已改指针）  
+path-depth-wave-2026-07-28/: **空态分群 · 更懂边聊 · 多计划本波**（去三档英雄键 · 01b 画像 · wave 认领/分组/总览 · 勾选只认 [landing](./path-depth-wave-2026-07-28/landing.md) · [INDEX](./path-depth-wave-2026-07-28/INDEX.md) · W0–W2 主路径已落 · W3 总览薄实现 · W1-6 桌面 residual）  
 path-depth-multi-plan-audience-2026-07-28.md: **指针** → 上目录（勿再追加正文）  
 context-digest-compress-landing-2026-07-27.md: **会话语义压缩 Session Digest**（**C0–C2 ✅ · 内置默认每轮** · 桌面 chat 抽/存/剥/注入 · 契约/skill · C3 可选 pin · **非**口令开关 · **非** gzip/文言 · **不**重开 guided G；**本能力唯一勾选**）
 cost-aware-cli-router-2026-07-27.md: **费用感知 CLI 优选**（**P0–P3 ✅**；role→tier · 升档 · 预算/粘滞 · **intent 默认关** · 显式 route 不动）

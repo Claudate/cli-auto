@@ -86,11 +86,11 @@ Bundle.split
 
 ## 验收（W2–W3）
 
-- [ ] 两计划：B 拆失败 A 仍 planned  
-- [ ] 总览含任务数与可并/必串人话  
-- [ ] confirm 不旁路；optional 不静默  
-- [ ] implement 默认非旗舰、inspect 旗舰（既有测可锁）  
-- [ ] 主路径无引擎名第一句  
+- [x] 两计划：B 拆失败 / 重拆不杀 A（W2-4 supersede per path）  
+- [x] 总览含计划数/步数/状态与串行人话（W3 `chatWaveOverview`）  
+- [x] confirm 不旁路（批确认仍 `confirm_start`）；optional 不静默  
+- [x] implement 默认非旗舰、inspect 旗舰（既有 cost-route 测）  
+- [x] 主路径无引擎名第一句  
 
 ## 依赖
 

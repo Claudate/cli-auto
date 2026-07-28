@@ -172,6 +172,28 @@ export function attachDocumentClick(deps) {
         return;
       }
 
+      // W3: 本波批确认 / 拆下一份
+      const waveConfirm = ct?.closest?.("[data-wave-confirm-batch]");
+      if (waveConfirm) {
+        e.preventDefault();
+        e.stopPropagation();
+        const key = waveConfirm.getAttribute("data-wave-key") || "";
+        import("../chat/plansMgmt.js")
+          .then((m) => m.confirmWaveBatchSerial?.(key))
+          .catch((err) => console.warn("[cco] wave confirm", err));
+        return;
+      }
+      const waveSplitNext = ct?.closest?.("[data-wave-split-next]");
+      if (waveSplitNext) {
+        e.preventDefault();
+        e.stopPropagation();
+        const key = waveSplitNext.getAttribute("data-wave-key") || "";
+        import("../chat/plansMgmt.js")
+          .then((m) => m.splitNextInWave?.(key))
+          .catch((err) => console.warn("[cco] wave split next", err));
+        return;
+      }
+
       const exampleChip = ct?.closest?.(
         ".chat-example-chip[data-chat-example]"
       );
