@@ -141,6 +141,62 @@ pub fn extract_plan_fence(text: &str) -> Option<String> {
     extract_tagged_fence(text, "plan")
 }
 
+/// Pull **all** line-start fenced bodies for `want_tag` (document order).
+///
+/// W2: multi-plan replies may contain several ```plan blocks; last-wins alone
+/// is not enough to land a wave bundle.
+pub fn extract_all_tagged_fences(text: &str, want_tag: &str) -> Vec<String> {
+    let want = want_tag.trim();
+    if want.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut search = text;
+    while let Some(idx) = search.find("```") {
+        if !is_line_start_fence(search, idx) {
+            search = &search[idx + 3..];
+            continue;
+        }
+        let after = &search[idx + 3..];
+        let tag_len = fence_lang_tag_len(after);
+        let tag = &after[..tag_len];
+        if tag.eq_ignore_ascii_case(want) {
+            let body = after[tag_len..]
+                .trim_start_matches(|c: char| c == '\n' || c == '\r' || c == ' ' || c == '\t');
+            if let Some((end, cont)) = close_fence_body(body) {
+                let block = body[..end].trim();
+                if !block.is_empty() {
+                    out.push(block.to_string());
+                }
+                search = &body[cont..];
+            } else {
+                break;
+            }
+        } else {
+            let body = after[tag_len..]
+                .trim_start_matches(|c: char| c == '\n' || c == '\r' || c == ' ' || c == '\t');
+            if let Some((_end, cont)) = close_fence_body(body) {
+                search = &body[cont..];
+            } else if let Some(end) = after.find("```") {
+                search = &after[end + 3..];
+            } else {
+                search = after;
+            }
+        }
+    }
+    out
+}
+
+/// All ```plan bodies in document order (W2 multi-plan).
+pub fn extract_all_plan_fences(text: &str) -> Vec<String> {
+    extract_all_tagged_fences(text, "plan")
+}
+
+/// Pull ```wave-index … ``` body (本波索引；认领 ≠ 开跑).
+pub fn extract_wave_index_fence(text: &str) -> Option<String> {
+    extract_tagged_fence(text, "wave-index")
+}
+
 /// Pull ```session-digest … ``` body (last fence wins).
 pub fn extract_session_digest_fence(text: &str) -> Option<String> {
     extract_tagged_fence(text, "session-digest")

@@ -32,7 +32,8 @@ use cco::config::Config;
 use cco::services::{
     add_project, get_settings, list_projects, open_task_terminal, project_live_view, remove_project,
     run_doctor, set_settings, task_logs, ChatAttachment, ChatNormalizePlanResponse,
-    ChatSavePlanResponse, ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
+    ChatSavePlanResponse, ChatSaveWaveResponse, ChatSendResponse, ChatSession,
+    ChatSessionSummary, ChatStreamPartial,
     PlanJobView, PlanMeta, PlanPreview, PreviewStatus, ProjectLiveView, ProjectSummary,
     ReworkStartResponse, RunSummary, SanitizeDepsResult, SettingsUpdate, SettingsView,
     StartPlanJobRequest, StartRunRequest,
@@ -850,6 +851,27 @@ async fn chat_save_plan_cmd(
     .map_err(|e| format!("chat_save_plan join error: {e}"))?
 }
 
+/// W2: claim wave-index + N plans under plans/wave-…/ — **never** confirm/start_run.
+#[tauri::command]
+async fn chat_save_wave_bundle_cmd(
+    project: String,
+    markdown: String,
+    #[allow(non_snake_case)] sessionId: Option<String>,
+    #[allow(non_snake_case)] plansDir: Option<String>,
+) -> Result<ChatSaveWaveResponse, String> {
+    tokio::task::spawn_blocking(move || {
+        chat_uc::save_wave_bundle(
+            PathBuf::from(project).as_path(),
+            sessionId.as_deref(),
+            &markdown,
+            plansDir.as_deref(),
+        )
+        .map_err(map_err)
+    })
+    .await
+    .map_err(|e| format!("chat_save_wave_bundle join error: {e}"))?
+}
+
 #[tauri::command]
 async fn chat_normalize_plan_cmd(
     state: tauri::State<'_, AppState>,
@@ -945,6 +967,7 @@ pub fn run() {
             preview_stop_cmd,
             preview_status_cmd,
             chat_save_plan_cmd,
+            chat_save_wave_bundle_cmd,
             chat_normalize_plan_cmd,
             chat_save_attachment_cmd,
             read_plan_md_cmd,

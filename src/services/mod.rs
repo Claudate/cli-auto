@@ -22,11 +22,11 @@ mod util;
 
 pub use chat::{
     chat_delete_session, chat_list_sessions, chat_new_session, chat_normalize_plan,
-    chat_rename_session, chat_save_attachment, chat_save_plan, chat_send, chat_session_get,
-    chat_stream_partial, cleanup_expired_chat_sessions, extract_title_from_md,
+    chat_rename_session, chat_save_attachment, chat_save_plan, chat_save_wave_bundle, chat_send,
+    chat_session_get, chat_stream_partial, cleanup_expired_chat_sessions, extract_title_from_md,
     normalize_plan_markdown, read_plan_md, sanitize_plan_title, structure_plan_markdown,
     ChatAttachment, ChatDraftPlan, ChatMessage, ChatNormalizePlanResponse, ChatSavePlanResponse,
-    ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
+    ChatSaveWaveResponse, ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
 };
 pub use preview::{
     annotate_false_preview_claims, preview_start, preview_status, preview_stop, PreviewStatus,

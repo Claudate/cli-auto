@@ -109,6 +109,77 @@ export function reviseChatDraft(kind = "revise") {
 }
 
 /**
+ * W2: claim wave-index + N plans from the latest assistant multi-plan reply.
+ * Disk only — never confirm_start / start_run.
+ * @param {HTMLElement} [btn]
+ */
+export async function claimWaveBundle(btn) {
+  ensureChatState();
+  if (!state.selectedPath) {
+    toast("请先选择项目");
+    return null;
+  }
+  // Prefer raw text from the message that owns the claim bar
+  let md = "";
+  const msgEl = btn?.closest?.(".chat-msg");
+  if (msgEl) {
+    // cards hold raw plan; rebuild a synthetic multi-fence body from cards + wave-index
+    const parts = [];
+    const idx = msgEl.querySelector(".chat-wave-index .md-body");
+    if (idx) {
+      // best-effort: re-wrap as fence from rendered text is lossy — use data if present
+      const rawIdx = msgEl.getAttribute("data-wave-src");
+      if (rawIdx) parts.push(rawIdx);
+    }
+    const cards = msgEl.querySelectorAll(".chat-plan-card");
+    cards.forEach((card) => {
+      const raw = card.querySelector(".chat-plan-raw");
+      const body = raw ? String(raw.textContent || "").trim() : "";
+      if (body) parts.push("```plan\n" + body + "\n```");
+    });
+    if (parts.length) md = parts.join("\n\n");
+  }
+  if (!md) {
+    // Fallback: last assistant message content from session
+    const msgs = state.chatSession?.messages || [];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m?.role === "assistant" && String(m.content || "").trim()) {
+        md = String(m.content);
+        break;
+      }
+    }
+  }
+  if (!md.trim()) {
+    toast("没有可认领的本波内容");
+    return null;
+  }
+  try {
+    const { saveWaveBundle } = await import("./chatApi.js");
+    const sid = state.chatSession?.session_id || "default";
+    const resp = await saveWaveBundle({
+      project: state.selectedPath,
+      sessionId: sid,
+      markdown: md,
+    });
+    toast(resp?.summary || "本波已保存（未开跑）");
+    // Refresh session so draft path points at primary plan
+    try {
+      if (typeof host.loadChatSession === "function") {
+        await host.loadChatSession();
+      }
+    } catch (_) {}
+    try {
+      renderChatMessages();
+    } catch (_) {}
+    return resp;
+  } catch (e) {
+    toast(String(e?.message || e || "认领本波失败"));
+    return null;
+  }
+}
+
+/**
  * P2-2: one-line last_summary banner for author empty state.
  * @param {string|null|undefined} text
  */

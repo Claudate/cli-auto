@@ -46,6 +46,15 @@ export function savePlan(args) {
   return gateway.chatSavePlan(args);
 }
 
+/**
+ * W2: persist ```wave-index + all ```plan fences under plans/wave-…/
+ * Does NOT call confirm_start / start_run.
+ * @param {Record<string, unknown>} args
+ */
+export function saveWaveBundle(args) {
+  return gateway.chatSaveWaveBundle(args);
+}
+
 export function getSession(project, sessionId) {
   return gateway.chatSessionGet(project, sessionId);
 }

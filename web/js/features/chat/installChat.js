@@ -121,6 +121,7 @@ export function createChatDesk(opts = {}) {
     setPersona: chatActions.setPersonaAndPaint,
     setPersonaAndPaint: chatActions.setPersonaAndPaint,
     reviseChatDraft: chatActions.reviseChatDraft,
+    claimWaveBundle: chatActions.claimWaveBundle,
     handleLastSummaryAction: chatActions.handleLastSummaryAction,
     loadChatLastSummary: chatActions.loadChatLastSummary,
     // t3+t4 clarify phase (入口/卡片/Brief/认领/黄条)
@@ -228,6 +229,7 @@ export function createChatDesk(opts = {}) {
     window.setPersona = chatActions.setPersonaAndPaint;
     window.setPersonaAndPaint = chatActions.setPersonaAndPaint;
     window.reviseChatDraft = chatActions.reviseChatDraft;
+    window.claimWaveBundle = chatActions.claimWaveBundle;
     window.handleLastSummaryAction = chatActions.handleLastSummaryAction;
     window.pickChatQuizOption = chatMsgEnhance.pickChatQuizOption;
     window.fillChatQuizDraft = chatMsgEnhance.fillChatQuizDraft;

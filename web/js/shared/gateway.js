@@ -161,6 +161,9 @@ export const chatSessionGet = (project, sessionId) =>
 export const chatSend = (args) => raw("chat_send_cmd", args);
 export const chatStreamPartial = (args) => raw("chat_stream_partial_cmd", args);
 export const chatSavePlan = (args) => raw("chat_save_plan_cmd", args);
+/** W2: wave-index + N plans; claim ≠ run. */
+export const chatSaveWaveBundle = (args) =>
+  raw("chat_save_wave_bundle_cmd", args);
 export const chatNormalizePlan = (args) => raw("chat_normalize_plan_cmd", args);
 export const chatSaveAttachment = (args) =>
   raw("chat_save_attachment_cmd", args);

@@ -62,6 +62,7 @@ export {
   setPathModeAndPaint,
   setPersonaAndPaint,
   reviseChatDraft,
+  claimWaveBundle,
   renderChatMessages,
   renderChatEnvBar,
   dismissChatEnvBar,

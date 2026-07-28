@@ -33,7 +33,8 @@ pub use clarify::{
     REQUIRED_SLOTS,
 };
 pub use fence::{
-    extract_plan_fence, extract_session_digest_fence, extract_tagged_fence,
+    extract_all_plan_fences, extract_all_tagged_fences, extract_plan_fence,
+    extract_session_digest_fence, extract_tagged_fence, extract_wave_index_fence,
     strip_session_digest_fences,
 };
 pub use plan_writing_guidance::{
@@ -66,6 +67,25 @@ mod tests {
     fn extract_plan_fence_last_wins() {
         let t = "intro\n```plan\n# A\n```\nmore\n```plan\n# B\nbody\n```\n";
         assert_eq!(extract_plan_fence(t).as_deref(), Some("# B\nbody"));
+    }
+
+    #[test]
+    fn extract_all_plan_fences_keeps_order() {
+        let t = "```plan\n# A\na\n```\nmid\n```plan\n# B\nb\n```\n";
+        let all = extract_all_plan_fences(t);
+        assert_eq!(all.len(), 2);
+        assert!(all[0].starts_with("# A"));
+        assert!(all[1].starts_with("# B"));
+        // last-wins still holds for single extract
+        assert_eq!(extract_plan_fence(t).as_deref(), Some("# B\nb"));
+    }
+
+    #[test]
+    fn extract_wave_index_fence_ok() {
+        let t = "说明\n```wave-index\n# 本波索引\n## 计划列表\n- a\n```\n```plan\n# 执行A\n```\n";
+        let idx = extract_wave_index_fence(t).expect("index");
+        assert!(idx.contains("本波索引"));
+        assert!(idx.contains("计划列表"));
     }
 
     #[test]

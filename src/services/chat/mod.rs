@@ -40,7 +40,7 @@ mod tests;
 
 pub use attachment::chat_save_attachment;
 pub use normalize::chat_normalize_plan;
-pub use plan_md::{chat_save_plan, read_plan_md};
+pub use plan_md::{chat_save_plan, chat_save_wave_bundle, read_plan_md};
 pub use send::chat_send;
 pub use session::{
     chat_delete_session, chat_list_sessions, chat_new_session, chat_rename_session,
@@ -49,15 +49,16 @@ pub use session::{
 pub use stream::chat_stream_partial;
 pub use types::{
     ChatAttachment, ChatDraftPlan, ChatMessage, ChatNormalizePlanResponse, ChatSavePlanResponse,
-    ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
+    ChatSaveWaveResponse, ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
 };
 
 // Domain pure surface re-exported for stable `crate::services::chat::*` / services facade call sites.
 // `extract_plan_fence` is part of the public pure API (used by tests and callers via re-export).
 #[allow(unused_imports)] // re-export surface; used outside this module
 pub use crate::domain::chat::{
-    apply_skip_with_assumptions, detect_missing_slots, extract_plan_fence, extract_title_from_md,
-    normalize_plan_markdown, sanitize_plan_title, set_slot_fill, structure_plan_markdown,
+    apply_skip_with_assumptions, detect_missing_slots, extract_all_plan_fences, extract_plan_fence,
+    extract_title_from_md, extract_wave_index_fence, normalize_plan_markdown, sanitize_plan_title,
+    set_slot_fill, structure_plan_markdown,
     ClarifyEntry, ClarifyPhase, ClarifySlotId, ClarifyState, MissingSlotsReport, SlotFillKind,
     REQUIRED_SLOTS,
 };

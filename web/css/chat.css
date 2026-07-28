@@ -713,6 +713,36 @@
   font-size: 0.75rem;
 }
 
+/* W2: wave claim bar */
+.chat-wave-claim {
+  margin: 0.35rem auto 0.75rem;
+  max-width: 36rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent, #2563eb) 8%, var(--bg2, var(--bg)));
+  text-align: left;
+}
+.chat-wave-claim-hint {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.chat-wave-index {
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+  background: var(--bg2, var(--bg));
+  text-align: left;
+}
+.chat-wave-index-label {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
 /* W1: plan feedback actions */
 .chat-plan-feedback {
   display: flex;

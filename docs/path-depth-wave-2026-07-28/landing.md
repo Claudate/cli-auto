@@ -10,7 +10,7 @@
 
 ## 状态行
 
-**2026-07-28**：文档多计划 ✅ · 06 田野 ✅ · **01b ✅** · **W0–W0-8 ✅** · **W1 UI+W1-5 ✅** · W1-6 桌面 ☐ · **W2-4 supersede 按 plan_path ✅** · W2 索引/切 N 计划 UI ☐ · W3–W4 ☐  
+**2026-07-28**：文档多计划 ✅ · 06 田野 ✅ · **01b ✅** · **W0–W0-8 ✅** · **W1 UI+W1-5 ✅** · W1-6 桌面 ☐ · **W2-3/4 ✅** · **W2 认领本波落盘 ✅**（wave-index+N plan · 非开跑）· W2-5 排队 UI ☐ · W3–W4 ☐  
 
 ---
 
@@ -63,11 +63,11 @@
 
 ## W2 · 索引与多计划 · 主责 04（+05 隔离）
 
-- [ ] W2-1 需求包入场约定（多附件 UI 仍弱；prompt 已点名多材料）  
-- [ ] W2-2 索引 md 生成/认领（无一等 Bundle 对象 UI）  
+- [x] W2-1 需求包入场约定（多材料话术 + 多附件既有；prompt 点名）  
+- [x] W2-2 索引 md 生成/认领：` ```wave-index` + `save_wave_bundle` / UI「认领本波」· **≠** confirm  
 - [x] W2-3 切割规则进 `chat-plan-writing`（单波 ≤5～7；不同结果→不同 plan；**禁**粘成长 md）  
-- [x] W2-4 supersede 按 `plan_path`（`supersede_planning_jobs` 同路径才取消；单测 `supersede_planning_is_per_plan_path`）  
-- [ ] W2-5 分计划排队拆；单计划失败可重拆（依赖 W2-2 列表）  
+- [x] W2-4 supersede 按 `plan_path`（同路径才取消；单测绿）  
+- [ ] W2-5 分计划排队拆总览 UI；单计划失败可重拆（列表可先用计划管理）  
 
 ## W3 · 总览与执行 · 主责 05
 

@@ -96,6 +96,19 @@ pub struct ChatSavePlanResponse {
     pub session_id: String,
 }
 
+/// W2: save wave-index + N execution plans under `plans/wave-…/` (claim ≠ run).
+#[derive(Debug, Clone, Serialize)]
+pub struct ChatSaveWaveResponse {
+    /// Relative path of INDEX.md when a ```wave-index fence was present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub index_rel: Option<String>,
+    /// Relative paths of saved execution plans (document order).
+    pub plan_rels: Vec<String>,
+    pub session_id: String,
+    /// Human one-liner for UI (no run_id / confirm).
+    pub summary: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChatStreamPartial {
     /// Accumulated assistant prose so far (may be empty while CLI starts).

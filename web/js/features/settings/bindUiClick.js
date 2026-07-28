@@ -162,6 +162,16 @@ export function attachDocumentClick(deps) {
         return;
       }
 
+      // W2: 认领本波（索引+多 plan 落盘；≠ 开跑）
+      const waveClaim = ct?.closest?.("[data-chat-wave-claim]");
+      if (waveClaim) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.ccoChat?.claimWaveBundle) window.ccoChat.claimWaveBundle(waveClaim);
+        else if (typeof g("claimWaveBundle") === "function") call("claimWaveBundle", waveClaim);
+        return;
+      }
+
       const exampleChip = ct?.closest?.(
         ".chat-example-chip[data-chat-example]"
       );

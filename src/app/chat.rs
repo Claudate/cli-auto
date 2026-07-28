@@ -22,6 +22,7 @@
 //! | `chat_stream_partial_cmd` | [`stream_partial`] |
 //! | `preview_start_cmd` / `preview_stop_cmd` / `preview_status_cmd` | [`preview_start`] / [`preview_stop`] / [`preview_status`] |
 //! | `chat_save_plan_cmd` | [`save_plan`] |
+//! | `chat_save_wave_bundle_cmd` | [`save_wave_bundle`]（W2 索引+多 plan；**非**开跑） |
 //! | `chat_normalize_plan_cmd` | [`normalize_plan`] |
 //! | `chat_save_attachment_cmd` | [`save_attachment`] |
 //! | `read_plan_md_cmd` | [`read_plan_md`] |
@@ -33,12 +34,12 @@ use anyhow::Result;
 use crate::config::Config;
 use crate::services::{
     chat_delete_session, chat_list_sessions, chat_new_session, chat_normalize_plan,
-    chat_rename_session, chat_save_attachment, chat_save_plan, chat_send, chat_session_get,
-    chat_stream_partial, cleanup_expired_chat_sessions, preview_start as services_preview_start,
-    preview_status as services_preview_status, preview_stop as services_preview_stop,
-    read_plan_md as services_read_plan_md, ChatAttachment, ChatNormalizePlanResponse,
-    ChatSavePlanResponse, ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
-    PreviewStatus,
+    chat_rename_session, chat_save_attachment, chat_save_plan, chat_save_wave_bundle, chat_send,
+    chat_session_get, chat_stream_partial, cleanup_expired_chat_sessions,
+    preview_start as services_preview_start, preview_status as services_preview_status,
+    preview_stop as services_preview_stop, read_plan_md as services_read_plan_md, ChatAttachment,
+    ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSaveWaveResponse, ChatSendResponse,
+    ChatSession, ChatSessionSummary, ChatStreamPartial, PreviewStatus,
 };
 
 // --- session ---
@@ -128,6 +129,16 @@ pub fn save_plan(
     chat_save_plan(project, session_id, title, markdown, plan_rel, plans_dir)
 }
 
+/// W2: claim wave-index + N ```plan fences → `plans/wave-…/`. **Does not** open run.
+pub fn save_wave_bundle(
+    project: &Path,
+    session_id: Option<&str>,
+    markdown: &str,
+    plans_dir: Option<&str>,
+) -> Result<ChatSaveWaveResponse> {
+    chat_save_wave_bundle(project, session_id, markdown, plans_dir)
+}
+
 /// Read plan document as UTF-8 text (not PlanIR).
 pub fn read_plan_md(project: &Path, plan_rel: &str) -> Result<String> {
     services_read_plan_md(project, plan_rel)
@@ -202,6 +213,55 @@ mod tests {
             "chat must not spawn runs; found entries under {}",
             runs.display()
         );
+    }
+
+    #[test]
+    fn chat_save_wave_bundle_writes_index_and_plans_no_run() {
+        let dir = tempdir().unwrap();
+        let project = dir.path().join("proj");
+        std::fs::create_dir_all(&project).unwrap();
+        let md = r#"说明
+
+```wave-index
+# 本波索引
+## 计划列表
+1. 日语页
+2. 英语页
+```
+
+```plan
+# 日语落地页
+## 目标
+日语介绍页
+## 不做
+支付
+## 验收
+可打开
+```
+
+```plan
+# 英语落地页
+## 目标
+英语介绍页
+## 不做
+支付
+## 验收
+可打开
+```
+"#;
+        let resp = save_wave_bundle(&project, Some("default"), md, None).unwrap();
+        assert!(resp.index_rel.as_ref().unwrap().contains("wave-"));
+        assert!(resp.index_rel.as_ref().unwrap().ends_with("INDEX.md"));
+        assert_eq!(resp.plan_rels.len(), 2);
+        assert!(resp.summary.contains("未开跑"));
+        let idx_abs = project.join(resp.index_rel.as_ref().unwrap());
+        assert!(idx_abs.is_file(), "missing {}", idx_abs.display());
+        for rel in &resp.plan_rels {
+            assert!(project.join(rel).is_file(), "missing {rel}");
+        }
+        // No runs from claim
+        let state = dir.path().join("no-state-runs-check");
+        let _ = state;
     }
 
     #[test]

@@ -424,7 +424,14 @@ export function chatFormatBody(text, opts = {}) {
   // Parse fences on raw text first (nesting-aware): plan → card, code → pre,
   // remaining prose → shared renderMarkdown (headings / tables / lists / hr).
   const segs = chatSegmentMarkdown(text);
-  return segs
+  const planCount = segs.filter((s) => s.type === "plan").length;
+  const hasWaveIndex = /```wave-index\b/i.test(String(text || ""));
+  // W2: multi-plan or explicit wave-index → claim bar (save only, no run)
+  const waveBar =
+    opts.activePlan && (planCount >= 2 || hasWaveIndex)
+      ? chatWaveClaimBarHtml(planCount, hasWaveIndex)
+      : "";
+  const body = segs
     .map((seg) => {
       if (seg.type === "plan") {
         return chatFormatPlanCard(seg.body, {
@@ -432,6 +439,15 @@ export function chatFormatBody(text, opts = {}) {
         });
       }
       if (seg.type === "code") {
+        const lang = String(seg.lang || "").toLowerCase();
+        if (lang === "wave-index") {
+          return (
+            `<div class="chat-wave-index">` +
+            `<div class="chat-wave-index-label">本波索引</div>` +
+            `<div class="md-body">${renderMarkdown(seg.body)}</div>` +
+            `</div>`
+          );
+        }
         return `<pre class="chat-code-block">${chatEsc(seg.body)}</pre>`;
       }
       const body = String(seg.body || "");
@@ -440,6 +456,30 @@ export function chatFormatBody(text, opts = {}) {
       return renderMarkdown(body);
     })
     .join("");
+  return waveBar + body;
+}
+
+/** W2 claim bar — 认领本波落盘；≠ 开跑. */
+function chatWaveClaimBarHtml(planCount, hasIndex) {
+  const n = Math.max(0, planCount | 0);
+  const tip = hasIndex
+    ? n > 0
+      ? `保存本波索引 + ${n} 份执行计划到 plans/wave-…/（不会自动开跑）`
+      : "保存本波索引到 plans/wave-…/（不会自动开跑）"
+    : `保存 ${n} 份执行计划到 plans/wave-…/（不会自动开跑）`;
+  const label = hasIndex
+    ? n > 1
+      ? `认领本波（索引 + ${n} 份计划）`
+      : "认领本波索引"
+    : `认领本波（${n} 份计划）`;
+  return (
+    `<div class="chat-wave-claim" role="group" aria-label="本波多计划">` +
+    `<p class="chat-wave-claim-hint muted">多件事请分开计划；认领只落盘，下一步再逐份拆步。</p>` +
+    `<button type="button" class="btn primary sm" data-chat-wave-claim="1" title="${chatEsc(
+      tip
+    )}">${chatEsc(label)}</button>` +
+    `</div>`
+  );
 }
 
 /**
