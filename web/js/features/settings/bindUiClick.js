@@ -144,6 +144,24 @@ export function attachDocumentClick(deps) {
         return;
       }
 
+      // W1: plan feedback — 按我说的改 / 换个方向（不 spawn）
+      const reviseBtn = ct?.closest?.("[data-chat-revise]");
+      if (reviseBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.ccoChat?.reviseChatDraft) window.ccoChat.reviseChatDraft("revise");
+        else if (typeof g("reviseChatDraft") === "function") call("reviseChatDraft", "revise");
+        return;
+      }
+      const pivotBtn = ct?.closest?.("[data-chat-pivot]");
+      if (pivotBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.ccoChat?.reviseChatDraft) window.ccoChat.reviseChatDraft("pivot");
+        else if (typeof g("reviseChatDraft") === "function") call("reviseChatDraft", "pivot");
+        return;
+      }
+
       const exampleChip = ct?.closest?.(
         ".chat-example-chip[data-chat-example]"
       );

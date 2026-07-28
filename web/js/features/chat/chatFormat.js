@@ -13,6 +13,7 @@ import {
   personaDirectExec,
   getPersonaProfile,
 } from "./chatPersona.js";
+import { planFeedbackActionsHtml } from "./chatUnderstand.js";
 
 export function chatEsc(s) {
   return String(s ?? "")
@@ -340,12 +341,18 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
       `</div>`
     );
   }
+  const saveLabel = "这版作数";
+  const saveTitle = isSaved
+    ? "覆盖保存到本机计划（这版作数）"
+    : "保存到本机计划文件 · 这版作数（不会开跑）";
+  const feedback = planFeedbackActionsHtml({ canAssign: canExec });
   if (isSaved) {
     return (
+      feedback +
       `<span class="chat-plan-card-saved muted">已保存：${chatEsc(savedPath)}</span>` +
       `<div class="chat-plan-card-actions-btns">` +
       expand +
-      `<button type="button" class="btn ghost sm btn-chat-plan-adopt" ${busy ? "disabled" : ""} title="覆盖保存到本地计划文件">仅保存</button>` +
+      `<button type="button" class="btn ghost sm btn-chat-plan-adopt" ${busy ? "disabled" : ""} title="${saveTitle}">${saveLabel}</button>` +
       assignBtn +
       directBtn +
       `</div>`
@@ -353,9 +360,10 @@ export function chatPlanCardActionsHtml(md, opts = {}) {
   }
 
   return (
+    feedback +
     `<div class="chat-plan-card-actions-btns">` +
     expand +
-    `<button type="button" class="btn ghost sm btn-chat-plan-adopt" ${busy || !md ? "disabled" : ""} title="只保存到本机，暂不拆分">仅保存</button>` +
+    `<button type="button" class="btn ghost sm btn-chat-plan-adopt" ${busy || !md ? "disabled" : ""} title="${saveTitle}">${saveLabel}</button>` +
     assignBtn +
     directBtn +
     `</div>`

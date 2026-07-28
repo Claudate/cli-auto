@@ -60,6 +60,10 @@ import {
   getPersonaId,
   getPersonaProfile,
 } from "./chatPersona.js";
+import {
+  renderUnderstandingBarHtml,
+  beginReviseInComposer,
+} from "./chatUnderstand.js";
 
 /** W0: switch path L/M/H and repaint empty / head step. */
 export function setPathModeAndPaint(id) {
@@ -97,6 +101,11 @@ export function fillChatExample(text) {
   if (!input || !state.selectedPath) return;
   input.value = text;
   input.focus();
+}
+
+/** W1: focus composer to revise / pivot current draft (no spawn). */
+export function reviseChatDraft(kind = "revise") {
+  beginReviseInComposer(kind === "pivot" ? "pivot" : "revise");
 }
 
 /**
@@ -247,7 +256,9 @@ export function renderChatMessages() {
     clarifyInline = thinClaimSuccessHtml();
   }
   const total = msgsNow.length;
-  let html = (clarifyInline || "") + msgsNow
+  // W1: 「当前理解」短条 — 边聊中始终可见（不教模式代号）
+  const understandBar = renderUnderstandingBarHtml(state);
+  let html = (understandBar || "") + (clarifyInline || "") + msgsNow
     .map((m, idx) => {
       const role = m.role === "assistant" ? "assistant" : m.role === "system" ? "system" : "user";
       const label = role === "assistant" ? "AI" : role === "system" ? "系统" : "我";

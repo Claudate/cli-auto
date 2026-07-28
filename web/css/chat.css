@@ -658,6 +658,61 @@
   gap: 0.4rem;
 }
 
+/* W1: 当前理解 short bar */
+.chat-understand {
+  margin: 0.25rem auto 0.65rem;
+  max-width: 36rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent, #2563eb) 6%, var(--bg2, var(--bg)));
+  text-align: left;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+.chat-understand-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
+  margin-bottom: 0.3rem;
+}
+.chat-understand-title {
+  font-weight: 650;
+  font-size: 0.82rem;
+}
+.chat-understand-hint {
+  font-size: 0.72rem;
+}
+.chat-understand-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.chat-understand-lines .k {
+  display: inline-block;
+  min-width: 4.2rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* W1: plan feedback actions */
+.chat-plan-feedback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin: 0 0 0.45rem;
+  width: 100%;
+}
+.chat-plan-feedback-note {
+  font-size: 0.72rem;
+}
+
 /* W0: draft card three human lines */
 .chat-plan-threelines {
   list-style: none;

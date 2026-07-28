@@ -61,6 +61,7 @@ export {
   fillChatExample,
   setPathModeAndPaint,
   setPersonaAndPaint,
+  reviseChatDraft,
   renderChatMessages,
   renderChatEnvBar,
   dismissChatEnvBar,
