@@ -1,36 +1,46 @@
 /**
  * [INPUT]: localStorage
- * [OUTPUT]: path L/M/H prefs + empty-state segment HTML + head-step copy
- * [POS]: features/chat — W0 工作方式（与 workStyle 职业习惯正交）
- * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ * [OUTPUT]: 对内 delivery（旧 L/M/H）+ 空态 coach / 高级纠正 / 顶栏人话
+ * [POS]: features/chat — W0-8 主路径不教三档；与 workStyle / persona 正交
+ * [PROTOCOL]: 对外禁止 L/M/H 英雄键；对内 trial|single|bundle（存盘仍用 L/M/H 兼容）
  *
- * 只影响 author 空态权重与文案；不改 plan_mode、不写 gateway 策略、不开跑。
+ * 只影响 author 权重；不改 plan_mode、不写 gateway、不开跑。
  */
 
 const KEY = "cco.pathMode";
 
-/** @typedef {'L'|'M'|'H'} PathModeId */
+/** In-memory fallback when localStorage is unavailable (tests / private mode). */
+let memoryPath = /** @type {PathModeId|null} */ (null);
 
-/** @type {Record<PathModeId, { label: string, hint: string, headStep: string }>} */
+/** @typedef {'L'|'M'|'H'} PathModeId */
+/** @typedef {'trial'|'single'|'bundle'} DeliveryId */
+
+/** Internal delivery meta. Labels are human; never teach L/M/H on main path. */
 export const PATH_MODES = Object.freeze({
   L: {
-    label: "快试",
-    hint: "一句话说清，尽快看到像不像",
-    headStep: "说一句 → 看结果",
+    delivery: /** @type {DeliveryId} */ ("trial"),
+    label: "先看一版就好",
+    hint: "一句话先验证像不像（系统内部 trial）",
+    headStep: "说清楚 → 写成计划 → 拆开做 → 看齐了没",
   },
   M: {
-    label: "写一份计划",
-    hint: "经典：说清 → 计划 → 拆步 → 跑 → 验",
-    headStep: "计划 → 拆 → 跑 → 验",
+    delivery: /** @type {DeliveryId} */ ("single"),
+    label: "就这一件事",
+    hint: "一份计划拆开做（默认 single）",
+    headStep: "说清楚 → 写成计划 → 拆开做 → 看齐了没",
   },
   H: {
-    label: "多需求一起排",
-    hint: "多材料/多计划索引（引擎稍后）；先把主需求说清",
-    headStep: "材料 → 索引 → 多计划…",
+    delivery: /** @type {DeliveryId} */ ("bundle"),
+    label: "好几件事一起排",
+    hint: "多材料/多页时系统偏本波目录（bundle；引擎后置）",
+    headStep: "说清楚 → 本波几件事 → 拆开做 → 看齐了没",
   },
 });
 
 export const DEFAULT_PATH_MODE = /** @type {PathModeId} */ ("M");
+
+/** Fixed head step for normal author path (W0-8: no mode class). */
+export const HEAD_STEP_DEFAULT = "说清楚 → 写成计划 → 拆开做 → 看齐了没";
 
 /** @returns {PathModeId} */
 export function getPathMode() {
@@ -38,16 +48,29 @@ export function getPathMode() {
     const raw = String(localStorage.getItem(KEY) || "").trim().toUpperCase();
     if (raw === "L" || raw === "M" || raw === "H") return raw;
   } catch (_) {}
+  if (memoryPath === "L" || memoryPath === "M" || memoryPath === "H") {
+    return memoryPath;
+  }
   return DEFAULT_PATH_MODE;
 }
 
+/** @returns {DeliveryId} */
+export function getDeliveryId() {
+  return PATH_MODES[getPathMode()]?.delivery || "single";
+}
+
 /**
- * @param {PathModeId|string} id
+ * @param {PathModeId|DeliveryId|string} id
  * @returns {PathModeId}
  */
 export function setPathMode(id) {
-  const next =
-    id === "L" || id === "M" || id === "H" ? id : DEFAULT_PATH_MODE;
+  let next = DEFAULT_PATH_MODE;
+  const raw = String(id || "").trim();
+  const up = raw.toUpperCase();
+  if (up === "L" || raw === "trial") next = "L";
+  else if (up === "H" || raw === "bundle") next = "H";
+  else if (up === "M" || raw === "single") next = "M";
+  memoryPath = next;
   try {
     localStorage.setItem(KEY, next);
   } catch (_) {}
@@ -56,12 +79,13 @@ export function setPathMode(id) {
 
 /** @param {PathModeId} [mode] */
 export function pathModeHeadStepText(mode) {
-  const m = PATH_MODES[mode || getPathMode()] || PATH_MODES.M;
-  return m.headStep;
+  const m = mode || getPathMode();
+  if (m === "H") return PATH_MODES.H.headStep;
+  return HEAD_STEP_DEFAULT;
 }
 
 /**
- * Update `.chat-head-step` lead text; keep project label span if present.
+ * Update `.chat-head-step` — fixed human skeleton; bundle only soft-varies.
  * @param {PathModeId} [mode]
  */
 export function applyPathModeHeadStep(mode) {
@@ -76,8 +100,12 @@ export function applyPathModeHeadStep(mode) {
     : escapeHtml(step);
 }
 
-/** Segment control for empty state. */
-export function pathModeSegmentHtml() {
+/**
+ * W0-8: **no hero segment**. Optional advanced fold with human corrects only.
+ * @param {{ advanced?: boolean }} [opts]
+ */
+export function pathModeSegmentHtml(opts = {}) {
+  if (!opts.advanced) return "";
   const cur = getPathMode();
   const btns = /** @type {PathModeId[]} */ (["L", "M", "H"])
     .map((id) => {
@@ -94,35 +122,31 @@ export function pathModeSegmentHtml() {
     })
     .join("");
   return (
-    `<div class="chat-path-mode" role="group" aria-label="本次怎么干">` +
-    `<p class="chat-path-mode-label">本次怎么干？</p>` +
+    `<details class="chat-delivery-advanced">` +
+    `<summary class="chat-delivery-advanced-sum">范围不对？可改（一般不用点）</summary>` +
+    `<div class="chat-path-mode chat-path-mode-advanced" role="group" aria-label="纠正范围">` +
     `<div class="chat-path-segs">${btns}</div>` +
-    `</div>`
+    `<p class="chat-delivery-advanced-hint muted">默认由你说的话和上面例子自动判断；这里只是纠偏。</p>` +
+    `</div></details>`
   );
 }
 
-/** Coach under path segs — points at bottom composer. */
+/** Coach — points at composer; no mode class. */
 export function pathModeCoachHtml() {
-  const cur = getPathMode();
-  let line =
-    "在<strong>下方输入框</strong>说要做成什么，或拖入文件。点发送后开始。";
-  if (cur === "L") {
-    line =
-      "快试：用一句话说目标，发下去即可——<strong>不必先答问卷</strong>。输入框在下面。";
-  } else if (cur === "H") {
-    line =
-      "多需求：先把<strong>这一波主目标</strong>写进下方输入框；多计划索引能力稍后上线，可先附材料。";
-  }
-  return `<p class="chat-path-coach">${line}</p>`;
+  return (
+    `<p class="chat-path-coach">` +
+    `在<strong>下方输入框</strong>说要做成什么，或拖入文件；也可先点一个像你业务的例子。` +
+    `不必先学任何「模式」。` +
+    `</p>`
+  );
 }
 
 /**
- * How empty-state should treat clarify grill.
+ * How empty-state should treat clarify grill (internal delivery).
  * @returns {'hide'|'fold'}
  */
 export function pathModeClarifyWeight() {
-  const m = getPathMode();
-  if (m === "L") return "hide";
+  if (getDeliveryId() === "trial") return "hide";
   return "fold";
 }
 

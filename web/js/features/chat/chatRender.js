@@ -186,11 +186,12 @@ export function renderChatMessages() {
       // Thin success only — plan card appears once messages hydrate
       clarifyBlock = thinClaimSuccessHtml();
     } else {
+      // W0-8: 无 L/M/H 英雄键；输入心智 + 场景芯片 + 画像例；delivery 仅高级折
       lead =
-        pathModeSegmentHtml() +
         pathModeCoachHtml() +
         sceneChipsHtml() +
-        personaExampleChipsHtml();
+        personaExampleChipsHtml() +
+        pathModeSegmentHtml({ advanced: true });
       const rawClarify = renderClarifyPanelHtml({ mode: "empty" });
       const weight = pathModeClarifyWeight();
       if (activeClarify) {

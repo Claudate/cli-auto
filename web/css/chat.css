@@ -503,16 +503,39 @@
   opacity: 1;
 }
 
-/* W0: path L/M/H segment — first visual on empty */
-.chat-path-mode {
-  margin: 0 auto 0.75rem;
-  max-width: 28rem;
-}
-.chat-path-mode-label {
-  margin: 0 0 0.4rem;
-  font-size: 0.85rem;
-  font-weight: 600;
+/* W0-8: no hero L/M/H — coach only; advanced delivery fold is tertiary */
+.chat-path-coach {
+  margin: 0.15rem auto 0.75rem;
+  max-width: 32rem;
+  font-size: 0.92rem;
   color: var(--text);
+  line-height: 1.45;
+}
+.chat-path-coach strong {
+  font-weight: 650;
+}
+.chat-delivery-advanced {
+  margin: 0.75rem auto 0.35rem;
+  max-width: 28rem;
+  text-align: left;
+  border: none;
+}
+.chat-delivery-advanced-sum {
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--muted);
+  list-style: none;
+}
+.chat-delivery-advanced-sum::-webkit-details-marker {
+  display: none;
+}
+.chat-delivery-advanced-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+.chat-path-mode-advanced {
+  margin: 0.35rem 0 0;
 }
 .chat-path-segs {
   display: flex;
@@ -522,34 +545,24 @@
 }
 .chat-path-seg {
   font: inherit;
-  font-size: 0.82rem;
-  padding: 0.4rem 0.75rem;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.6rem;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px dashed var(--border);
   background: var(--bg, #fff);
-  color: var(--text);
+  color: var(--muted);
   cursor: pointer;
   line-height: 1.3;
 }
 .chat-path-seg:hover {
   border-color: color-mix(in srgb, var(--accent, #2563eb) 45%, var(--border));
-  background: #f4f8fd;
+  color: var(--text);
 }
 .chat-path-seg.is-active {
+  border-style: solid;
   border-color: var(--accent, #2563eb);
-  background: color-mix(in srgb, var(--accent, #2563eb) 12%, transparent);
   color: var(--accent, #2563eb);
   font-weight: 600;
-}
-.chat-path-coach {
-  margin: 0.35rem auto 0.85rem;
-  max-width: 28rem;
-  font-size: 0.9rem;
-  color: var(--text);
-  line-height: 1.45;
-}
-.chat-path-coach strong {
-  font-weight: 650;
 }
 
 /* W0-7: scene chips → persona (not occupation gate) */
