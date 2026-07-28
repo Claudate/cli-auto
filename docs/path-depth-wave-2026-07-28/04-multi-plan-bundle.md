@@ -76,16 +76,17 @@ PlanEdge  { from, to, kind: after | parallel_ok }
 
 ## 现状
 
-- 单 plan job、按项目 supersede planning → **堵**多计划安心拆  
-- 无 Index/Bundle 一等公民  
-- 本目录 + `plans/wave-2026-07-28/` 即**文档层示范**（先地图后地形）  
+- supersede **按 plan_path**（W2-4 ✅）  
+- 认领：`wave-index` + 多 `plan` → `plans/wave-…/`（W2 落盘 ✅；≠ 开跑）  
+- 计划管理本波分组（W2-5 ✅）；Bundle 批确认总览仍 W3  
+- 本目录 + `plans/wave-2026-07-28/` 即**文档层示范**  
 
 ## 验收（W2）
 
-- [ ] 两份材料 → 索引 → 两份 plan 路径约定可测  
-- [ ] supersede 按 `plan_path`，不误杀其它 planned  
-- [ ] 无粘成单 md 的主路径教唆  
-- [ ] 认领索引不调用 confirm_start  
+- [x] 两份材料 → 索引 → 两份 plan 路径约定可测（`chat_save_wave_bundle` 单测）  
+- [x] supersede 按 `plan_path`，不误杀其它 planned  
+- [x] 无粘成单 md 的主路径教唆（prompt）  
+- [x] 认领索引不调用 confirm_start  
 
 ## 依赖
 

@@ -349,6 +349,44 @@
   font-size: 0.8rem;
   text-align: center;
 }
+/* W2-5: 本波分组 */
+.plans-wave-group {
+  margin: 0.35rem 0 0.55rem;
+  padding: 0.35rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 22%, var(--border));
+  background: color-mix(in srgb, var(--accent, #2563eb) 5%, transparent);
+}
+.plans-wave-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.2rem 0.35rem 0.4rem;
+}
+.plans-wave-title {
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.plans-wave-count {
+  font-size: 0.72rem;
+}
+.plans-wave-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.plans-mgmt-item.is-wave-index {
+  border-style: dashed;
+}
+.plans-wave-note {
+  margin: 0 0 0.65rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.plans-wave-sib {
+  font-size: 0.8rem;
+}
 .plans-mgmt-item {
   display: flex;
   flex-direction: column;

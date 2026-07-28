@@ -19,6 +19,13 @@ import {
 import { chatEsc } from "./chatFormat.js";
 import * as chatApi from "./chatApi.js";
 import { renderMarkdown } from "../../shared/markdown.js";
+import {
+  groupPlanItemsByWave,
+  renderWaveGroupHtml,
+  isWaveIndexPath,
+  waveSiblingPlans,
+  waveDirKeyFromPath,
+} from "./chatWavePlans.js";
 
 /**
  * Drop selection pointers whose source .md is gone (no ghost list rows).
@@ -221,7 +228,7 @@ export async function renderPlansMgmtPage() {
       ? normalizePlanPath(latestPath, root) || latestPath
       : latestPath;
 
-  const rows = parts.visible.map((it) => {
+  const rowHtml = (it) => {
     const path = it.path || "";
     const fileName =
       String(path)
@@ -229,7 +236,8 @@ export async function renderPlansMgmtPage() {
         .filter(Boolean)
         .pop() || path;
     const rawTitle = it.title || host.planRailTitleFromPath(path);
-    const title = sanitizePlanTitle(rawTitle) || host.planRailTitleFromPath(path);
+    let title = sanitizePlanTitle(rawTitle) || host.planRailTitleFromPath(path);
+    if (isWaveIndexPath(path)) title = title || "本波索引";
     const badge = host.planRailBadgeInfo(it);
     const norm =
       typeof normalizePlanPath === "function" ? normalizePlanPath(path, root) || path : path;
@@ -240,14 +248,25 @@ export async function renderPlansMgmtPage() {
     const latestMark = isLatest
       ? `<span class="plan-latest-tag">最新</span>`
       : "";
+    const indexCls = isWaveIndexPath(path) ? " is-wave-index" : "";
     return (
-      `<button type="button" class="plans-mgmt-item${selected}${isLatest}" data-plans-mgmt="${chatEsc(path)}" title="${chatEsc(path)}">` +
+      `<button type="button" class="plans-mgmt-item${selected}${isLatest}${indexCls}" data-plans-mgmt="${chatEsc(path)}" title="${chatEsc(path)}">` +
       `<div class="plans-mgmt-item-title">${chatEsc(title)}${latestMark}</div>` +
       `<div class="plans-mgmt-item-path" title="${chatEsc(path)}">${chatEsc(fileName)}</div>` +
       `<div class="plans-mgmt-item-meta"><span class="plan-rail-badge ${badge.cls}">${chatEsc(badge.label)}</span></div>` +
       `</button>`
     );
-  });
+  };
+
+  // W2-5: group plans/wave-* under 本波 heads; flat list keeps other plans
+  const { waves, flat } = groupPlanItemsByWave(parts.visible);
+  const rows = [];
+  for (const g of waves) {
+    rows.push(renderWaveGroupHtml(g, rowHtml, chatEsc));
+  }
+  for (const it of flat) {
+    rows.push(rowHtml(it));
+  }
   if (parts.historyHidden) {
     rows.push(
       `<div class="plan-history-hint muted" role="note">已隐藏 ${parts.historyCount} 份已执行 · 勾选「显示已执行」</div>`
@@ -317,7 +336,9 @@ export async function renderPlansMgmtDetail(item) {
     }
     markdown = `（无法读取：这份计划文件打不开。可点「刷新」或换一份计划。）`;
   }
+  const isIndex = isWaveIndexPath(path);
   const title =
+    (isIndex ? "本波索引" : null) ||
     sanitizePlanTitle(item.title) ||
     host.planTitleFromMarkdown(markdown) ||
     host.planRailTitleFromPath(path);
@@ -335,19 +356,64 @@ export async function renderPlansMgmtDetail(item) {
     pathEl.title = path || "";
   }
   if (badgeEl) {
-    badgeEl.textContent = badge.label;
-    badgeEl.className = `plan-rail-badge ${badge.cls}`;
+    badgeEl.textContent = isIndex ? "索引" : badge.label;
+    badgeEl.className = `plan-rail-badge ${isIndex ? "plan-rail-badge-pending" : badge.cls}`;
   }
   // 预览态按 Markdown 渲染（非编辑）；全文勿再 slice——中长计划会被砍掉后半
   if (bodyEl) {
     const full = String(markdown || "");
     bodyEl.classList.add("md-body");
-    bodyEl.innerHTML = renderMarkdown(full);
+    let html = renderMarkdown(full);
+    // W2-5: siblings under same wave — re-split one plan never cancels others (W2-4)
+    const sibs = waveSiblingPlans(path, state.planRailItems || []);
+    const waveKey = waveDirKeyFromPath(path);
+    if (waveKey && (isIndex || sibs.length > 0)) {
+      const others = isIndex
+        ? sibs
+        : sibs.filter((s) => {
+            const sp = s.path || "";
+            const n =
+              typeof normalizePlanPath === "function"
+                ? normalizePlanPath(sp, root) || sp
+                : sp;
+            return n !== path && sp !== path;
+          });
+      const links = others
+        .map((s) => {
+          const sp = s.path || "";
+          const st =
+            sanitizePlanTitle(s.title) || host.planRailTitleFromPath(sp);
+          return (
+            `<button type="button" class="linkish plans-wave-sib" data-plans-mgmt="${chatEsc(
+              sp
+            )}">${chatEsc(st)}</button>`
+          );
+        })
+        .join(" · ");
+      const note = isIndex
+        ? `<p class="plans-wave-note muted">本波索引只给人核对；请点下方某份<strong>执行计划</strong>再「拆成步骤」。重拆其中一份不会取消同波其它计划。</p>`
+        : `<p class="plans-wave-note muted">同波还有 ${others.length} 份计划；失败可只重拆这一份（按路径隔离）。${
+            links ? ` 同波：${links}` : ""
+          }</p>`;
+      html = note + html;
+    }
+    bodyEl.innerHTML = html;
     bodyEl.dataset.chars = String(full.length);
   }
   if (btnAssign) {
-    btnAssign.disabled = !path;
-    btnAssign.dataset.plan = path;
+    // INDEX is not executable — pick an execution plan instead
+    btnAssign.disabled = !path || isIndex;
+    btnAssign.dataset.plan = isIndex ? "" : path;
+    btnAssign.title = isIndex
+      ? "索引不能直接拆步 · 请选同波某份执行计划"
+      : "把计划拆成可执行步骤";
+    if (isIndex) btnAssign.textContent = "请选执行计划";
+    else if (btnAssign.dataset.defaultLabel) {
+      btnAssign.textContent = btnAssign.dataset.defaultLabel;
+    } else {
+      btnAssign.dataset.defaultLabel = btnAssign.textContent || "拆成步骤";
+      btnAssign.textContent = btnAssign.dataset.defaultLabel;
+    }
   }
   const btnPreview = $("#btn-plans-preview");
   if (btnPreview) btnPreview.dataset.plan = path;

@@ -172,6 +172,13 @@ export async function claimWaveBundle(btn) {
     try {
       renderChatMessages();
     } catch (_) {}
+    // W2-5: jump to 计划管理 so user sees 本波 group
+    try {
+      const { openPlanManagement } = await import("./plansMgmt.js");
+      if (typeof openPlanManagement === "function") {
+        await openPlanManagement();
+      }
+    } catch (_) {}
     return resp;
   } catch (e) {
     toast(String(e?.message || e || "认领本波失败"));
