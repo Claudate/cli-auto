@@ -476,6 +476,31 @@ pub fn stop_run(config: &Config, run_id: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn pause_run(config: &Config, run_id: &str) -> Result<()> {
+    let dir = state::resolve_run_dir(&config.runs_dir(), Some(run_id))?;
+    let mut rs = RunState::load(&dir)?;
+
+    // Check if run is currently running
+    if !matches!(rs.status, RunStatus::Running) {
+        bail!("run 当前状态为 {:?},无法暂停", rs.status);
+    }
+
+    // Save current run state before pausing
+    rs.save()?;
+
+    rs.status = RunStatus::Paused;
+    rs.save()?;
+
+    let _ = rs.event(
+        "run_pause",
+        serde_json::json!({
+            "status": "paused",
+            "via": "desktop",
+        }),
+    );
+    Ok(())
+}
+
 pub fn resume_run_async(config: Config, run_id: &str) -> Result<()> {
     spawn_resume(config, run_id, None)
 }

@@ -7,7 +7,7 @@
 import {
   state, $, toast, showPage, normalizePlanPath, selectPlan,
   startExecuteFromSelection, openPlanChooser, renderPlanPicker,
-  partitionPlanItems, syncShowExecutedToggles,
+  partitionPlanItems, syncShowExecutedToggles, hasActiveRun,
 } from "./legacy.js";
 import { host } from "./host.js";
 import { ensureChatState, stashChatSession, sanitizePlanTitle } from "./chatState.js";
@@ -43,7 +43,7 @@ import {
  */
 async function dropMissingPlanPointers(root) {
   if (!root) return;
-  const keys = ["selectedPlan", "chatDraftPlan", "planRailSelected"];
+  const keys = ["selectedPlan", "chatDraftPlan"];
   for (const key of keys) {
     const raw = state[key];
     if (!raw) continue;
@@ -81,7 +81,7 @@ async function ensurePinnedPlanItems(items, pinPaths, root) {
     ...(pinPaths || []),
     state.chatDraftPlan,
     state.selectedPlan,
-    state.planRailSelected,
+    state.planItems,
   ].filter(Boolean);
   for (const raw of candidates) {
     const path =
@@ -126,7 +126,6 @@ export async function openPlanManagement() {
   // 源文件已删 → 清掉选中指针，避免幽灵「已拆分」
   await dropMissingPlanPointers(state.selectedPath);
   const selected =
-    state.planRailSelected ||
     state.selectedPlan ||
     state.chatDraftPlan ||
     null;
@@ -146,7 +145,7 @@ export async function openPlanManagement() {
       await window.loadPlanSplitIndex(state.selectedPath);
     }
   } catch (_) {}
-  await host.loadPlanRail();
+  await host.loadPlanItems();
   if (selected) {
     host.selectPlanRailItem(selected);
     try {
@@ -168,7 +167,7 @@ export async function renderPlansMgmtPage() {
   const empty = $("#plans-mgmt-empty");
   if (!list) return;
 
-  if (state.planRailLoading) {
+  if (state.planItemsLoading) {
     if (empty) empty.hidden = true;
     list.innerHTML =
       '<div class="plan-rail-loading"><span class="spinner sm" aria-hidden="true"></span>扫描计划…</div>';
@@ -181,7 +180,6 @@ export async function renderPlansMgmtPage() {
     await dropMissingPlanPointers(root);
   }
   const selectedPath =
-    state.planRailSelected ||
     state.selectedPlan ||
     state.chatDraftPlan ||
     null;
@@ -189,7 +187,7 @@ export async function renderPlansMgmtPage() {
     typeof normalizePlanPath === "function" && selectedPath
       ? normalizePlanPath(selectedPath, root) || selectedPath
       : selectedPath;
-  const pinPaths = [state.chatDraftPlan, state.selectedPlan, state.planRailSelected, activePath]
+  const pinPaths = [state.chatDraftPlan, state.selectedPlan, activePath]
     .filter(Boolean)
     .map((p) =>
       typeof normalizePlanPath === "function" ? normalizePlanPath(p, root) || p : p
@@ -197,7 +195,7 @@ export async function renderPlansMgmtPage() {
 
   // 选中文件夹 → 严格过滤到该夹（不带 pin 外溢）；未选则项目内全量
   const scopeDir = getPlansMgmtScopeDir();
-  let dirItems = state.planRailItems || [];
+  let dirItems = state.planItems || [];
   if (scopeDir) {
     const dirParts = partitionByPlansDir(dirItems, {
       plansDir: scopeDir,
@@ -245,10 +243,10 @@ export async function renderPlansMgmtPage() {
         .split("/")
         .filter(Boolean)
         .pop() || path;
-    const rawTitle = it.title || host.planRailTitleFromPath(path);
-    let title = sanitizePlanTitle(rawTitle) || host.planRailTitleFromPath(path);
+    const rawTitle = it.title || host.planDisplayName(path);
+    let title = sanitizePlanTitle(rawTitle) || host.planDisplayName(path);
     if (isWaveIndexPath(path)) title = title || "本波索引";
-    const badge = host.planRailBadgeInfo(it);
+    const badge = host.planExecBadgeInfo(it);
     const norm =
       typeof normalizePlanPath === "function" ? normalizePlanPath(path, root) || path : path;
     const selected =
@@ -325,14 +323,14 @@ export async function renderPlansMgmtDetail(item) {
     // 源文件已删：从选中/列表指针清掉，不在详情里挂幽灵
     const msg = String(e?.message || e || "");
     if (/not found|No such file|无法找到|不存在/i.test(msg)) {
-      if (state.planRailSelected === path || state.selectedPlan === path) {
-        state.planRailSelected = null;
+      if (state.selectedPlan === path) {
+        state.selectedPlan = null;
         if (state.selectedPlan === path) state.selectedPlan = null;
         if (state.chatDraftPlan === path) state.chatDraftPlan = null;
       }
       // Drop from rail items so list no longer shows it
-      if (Array.isArray(state.planRailItems)) {
-        state.planRailItems = state.planRailItems.filter((it) => {
+      if (Array.isArray(state.planItems)) {
+        state.planItems = state.planItems.filter((it) => {
           const p = it?.path || it;
           return p !== path;
         });
@@ -351,8 +349,8 @@ export async function renderPlansMgmtDetail(item) {
     (isIndex ? "本波索引" : null) ||
     sanitizePlanTitle(item.title) ||
     host.planTitleFromMarkdown(markdown) ||
-    host.planRailTitleFromPath(path);
-  const badge = host.planRailBadgeInfo(item);
+    host.planDisplayName(path);
+  const badge = host.planExecBadgeInfo(item);
 
   if (titleEl) titleEl.textContent = title || "—";
   // 路径 + 文件名并排，避免只靠中文标题找不到 ux-nondev-*.md
@@ -376,7 +374,7 @@ export async function renderPlansMgmtDetail(item) {
     let html = renderMarkdown(full);
     // W2-5 / W3: wave overview + siblings
     const waveKey = waveDirKeyFromPath(path);
-    const pool = state.planRailItems || [];
+    const pool = state.planItems || [];
     if (waveKey) {
       const jobsByPath = await loadWaveJobsByPath(root, pool, waveKey);
       const ov = buildWaveOverview({
@@ -389,7 +387,9 @@ export async function renderPlansMgmtDetail(item) {
             ? normalizePlanPath(p, root) || p
             : p,
       });
-      const ovHtml = renderWaveOverviewHtml(ov, chatEsc);
+      const runLocked =
+        typeof hasActiveRun === "function" ? hasActiveRun() : false;
+      const ovHtml = renderWaveOverviewHtml(ov, chatEsc, { runLocked });
       const sibs = waveSiblingPlans(path, pool);
       const others = isIndex
         ? sibs
@@ -405,7 +405,7 @@ export async function renderPlansMgmtDetail(item) {
         .map((s) => {
           const sp = s.path || "";
           const st =
-            sanitizePlanTitle(s.title) || host.planRailTitleFromPath(sp);
+            sanitizePlanTitle(s.title) || host.planDisplayName(sp);
           return (
             `<button type="button" class="linkish plans-wave-sib" data-plans-mgmt="${chatEsc(
               sp
@@ -497,7 +497,6 @@ export async function openPlansMgmtItem(planPath) {
 export async function assignFromPlansMgmt() {
   const path =
     $("#btn-plans-assign")?.dataset?.plan ||
-    state.planRailSelected ||
     state.selectedPlan;
   await assignFromPlansMgmtPath(path);
 }
@@ -517,7 +516,6 @@ export async function splitNextInWave(waveKey) {
 export async function viewSplitFromPlansMgmt() {
   const path =
     $("#btn-plans-view-split")?.dataset?.plan ||
-    state.planRailSelected ||
     state.selectedPlan;
   if (!path) {
     toast("请先选中一份计划");

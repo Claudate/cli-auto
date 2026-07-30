@@ -18,6 +18,10 @@ import { host } from "./host.js";
 import * as chatApi from "./chatApi.js";
 import { stashChatSession, ensureChatState, sanitizePlanTitle } from "./chatState.js";
 import { getPlansDir } from "./planDir.js";
+// note: clarify/briefAndClaim.js 是纵切草稿；本文件仍持完整实现与 export。
+// 禁止再 `export { … } from "./clarify/briefAndClaim.js"` 与下方同名 export 并存
+// （Duplicate export 会让 type=module main.js 整链挂掉 → 无图标 / 无项目列表）。
+
 
 // ─── Copy contract (product; first sentence human · non-dev tone) ────────────
 // Internal wire ids (entry/slot/phase) stay English; UI labels stay business Chinese.
@@ -53,6 +57,7 @@ export const CLARIFY_COPY = Object.freeze({
   hollowDoneWhen: "还没写清「怎样算做完」",
   moreWays: "换一种方式",
   claimTitle: "写入计划草稿，不会自动开始执行",
+  claimGuide: "如有调整，直接在下方输入告诉我；满意后点「这版作数」。",
 });
 
 /** Wire schema tag — keep in sync with domain CLARIFY_SCHEMA_VERSION. */
@@ -1845,12 +1850,21 @@ export async function claimBriefToPlan() {
     try {
       const note = CLARIFY_COPY.success;
       const msgs = state.chatSession.messages || (state.chatSession.messages = []);
-      // Also plant a plan fence as assistant bubble so plan card appears
       const planFence = "```plan\n" + md.trim() + "\n```";
-      msgs.push({
-        role: "assistant",
-        content: `${note}\n\n${planFence}`,
-      });
+      const newContent = `${note}\n\n${planFence}\n\n${CLARIFY_COPY.claimGuide}`;
+      // Replace last existing plan fence to avoid duplicates (reload / re-claim)
+      let existIdx = -1;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i] && /```plan\b/i.test(String(msgs[i].content || ""))) {
+          existIdx = i;
+          break;
+        }
+      }
+      if (existIdx >= 0) {
+        msgs[existIdx] = { ...msgs[existIdx], content: newContent };
+      } else {
+        msgs.push({ role: "assistant", content: newContent });
+      }
     } catch (_) {}
 
     stashChatSession(state.selectedPath);

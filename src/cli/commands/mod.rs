@@ -7,6 +7,7 @@
 
 pub mod common;
 pub mod doctor;
+pub mod git;
 pub mod init;
 pub mod logs;
 pub mod parse;

@@ -86,7 +86,7 @@ export function setPlansDir(dir) {
   syncPlansDirLabels();
   toast(`新计划将保存到 ${d}/ · 列表已按此目录刷新`);
   // 更换目录后立刻重扫管理页 / 右栏
-  Promise.resolve(host.loadPlanRail())
+  Promise.resolve(host.loadPlanItems())
     .then(() => {
       if (state.page === "plans") {
         try {
@@ -231,7 +231,6 @@ export async function pickPlanFileForMgmt() {
     if (typeof host.selectPlanRailItem === "function") {
       host.selectPlanRailItem(path);
     }
-    state.planRailSelected = path;
     state.chatDraftPlan = path;
     if (state.page === "plans" && typeof host.renderPlansMgmtPage === "function") {
       host.renderPlansMgmtPage();

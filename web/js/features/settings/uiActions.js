@@ -424,7 +424,6 @@ export function createUiActions() {
       const st = state();
       const p =
         $("#btn-plans-preview")?.dataset?.plan ||
-        st?.planRailSelected ||
         st?.selectedPlan;
       if (!p) return toast("请先选中计划");
       return typeof g("openPlansMgmtItem") === "function"
@@ -452,7 +451,11 @@ export function createUiActions() {
       call("openPlanChooser", false);
       return call("openChatPage");
     },
-    "btn-chat-send": () => call("sendChatMessage"),
+    "btn-chat-send": () => {
+      const el = document.getElementById("btn-chat-send");
+      if (el?.dataset?.chatMode === "cancel") return call("cancelChatMessage");
+      return call("sendChatMessage");
+    },
     "btn-chat-save": () => call("saveChatPlan"),
     "btn-chat-assign": () =>
       typeof g("assignFromChat") === "function" ? call("assignFromChat") : null,

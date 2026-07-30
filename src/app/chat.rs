@@ -25,6 +25,7 @@
 //! | `chat_save_wave_bundle_cmd` | [`save_wave_bundle`]（W2 索引+多 plan；**非**开跑） |
 //! | `chat_normalize_plan_cmd` | [`normalize_plan`] |
 //! | `chat_save_attachment_cmd` | [`save_attachment`] |
+//! | `chat_read_image_data_url_cmd` | [`read_image_data_url`] |
 //! | `read_plan_md_cmd` | [`read_plan_md`] |
 
 use std::path::Path;
@@ -34,12 +35,13 @@ use anyhow::Result;
 use crate::config::Config;
 use crate::services::{
     chat_delete_session, chat_list_sessions, chat_new_session, chat_normalize_plan,
-    chat_rename_session, chat_save_attachment, chat_save_plan, chat_save_wave_bundle, chat_send,
-    chat_session_get, chat_stream_partial, cleanup_expired_chat_sessions,
-    preview_start as services_preview_start, preview_status as services_preview_status,
-    preview_stop as services_preview_stop, read_plan_md as services_read_plan_md, ChatAttachment,
-    ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSaveWaveResponse, ChatSendResponse,
-    ChatSession, ChatSessionSummary, ChatStreamPartial, PreviewStatus,
+    chat_read_image_data_url, chat_rename_session, chat_save_attachment, chat_save_plan,
+    chat_save_wave_bundle, chat_cancel, chat_send, chat_session_get, chat_stream_partial,
+    cleanup_expired_chat_sessions, preview_start as services_preview_start,
+    preview_status as services_preview_status, preview_stop as services_preview_stop,
+    read_plan_md as services_read_plan_md, ChatAttachment, ChatNormalizePlanResponse,
+    ChatSavePlanResponse, ChatSaveWaveResponse, ChatSendResponse, ChatSession,
+    ChatSessionSummary, ChatStreamPartial, PreviewStatus,
 };
 
 // --- session ---
@@ -96,6 +98,12 @@ pub fn send(
 /// Best-effort partial assistant text while send is in flight.
 pub fn stream_partial(project: &Path, session_id: Option<&str>) -> Result<ChatStreamPartial> {
     chat_stream_partial(project, session_id)
+}
+
+/// Cancel the in-flight chat CLI process (SIGTERM + SIGKILL).
+/// Returns true when a pid was targeted, false when nothing was running.
+pub fn cancel(project: &Path) -> Result<bool> {
+    chat_cancel(project)
 }
 
 // --- local preview (detached; not Mode B worker) ---
@@ -165,6 +173,11 @@ pub fn save_attachment(
     data: &[u8],
 ) -> Result<ChatAttachment> {
     chat_save_attachment(project, session_id, file_name, mime, data)
+}
+
+/// Read project-relative image → data URL for chat markdown / attachment thumbs.
+pub fn read_image_data_url(project: &Path, rel_path: &str) -> Result<String> {
+    chat_read_image_data_url(project, rel_path)
 }
 
 #[cfg(test)]

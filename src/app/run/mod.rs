@@ -69,10 +69,10 @@ use crate::domain::run::{
 use crate::plan::PlanIR;
 use crate::report;
 use crate::services::{
-    accept_run_residual, list_plan_meta, list_plans, list_runs, load_run, preview_plan,
-    resume_run_async, retry_task_async, start_rework_from_run, start_run_async, start_run_from_plan,
-    stop_run, stop_task as services_stop_task, PlanMeta, PlanPreview, ReworkStartResponse,
-    RunSummary, StartRunRequest,
+    accept_run_residual, list_plan_meta, list_plans, list_runs, load_run, pause_run,
+    preview_plan, resume_run_async, retry_task_async, start_rework_from_run, start_run_async,
+    start_run_from_plan, stop_run, stop_task as services_stop_task, PlanMeta, PlanPreview,
+    ReworkStartResponse, RunSummary, StartRunRequest,
 };
 use crate::state::{RunState, RunStatus};
 
@@ -110,6 +110,11 @@ pub fn retry_decision(
 /// Stop a whole run (freeze Pending included). A0-R2.
 pub fn stop(config: &Config, run_id: &str) -> Result<()> {
     stop_run(config, run_id)
+}
+
+/// Pause a running run.
+pub fn pause(config: &Config, run_id: &str) -> Result<()> {
+    pause_run(config, run_id)
 }
 
 /// Stop one task (`Some`) or live-helper whole-run path (`None`, freezes Pending).

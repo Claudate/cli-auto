@@ -167,6 +167,7 @@ export const chatSessionGet = (project, sessionId) =>
   raw("chat_session_get_cmd", { project, sessionId });
 export const chatSend = (args) => raw("chat_send_cmd", args);
 export const chatStreamPartial = (args) => raw("chat_stream_partial_cmd", args);
+export const chatCancel = (project) => raw("chat_cancel_cmd", { project });
 export const chatSavePlan = (args) => raw("chat_save_plan_cmd", args);
 /** W2: wave-index + N plans; claim ≠ run. */
 export const chatSaveWaveBundle = (args) =>
@@ -174,6 +175,9 @@ export const chatSaveWaveBundle = (args) =>
 export const chatNormalizePlan = (args) => raw("chat_normalize_plan_cmd", args);
 export const chatSaveAttachment = (args) =>
   raw("chat_save_attachment_cmd", args);
+/** Project-relative image → data: URL for chat thumbs / markdown. */
+export const chatReadImageDataUrl = (project, path) =>
+  raw("chat_read_image_data_url_cmd", { project, path });
 /** Detached local preview (npm run dev…); not Mode B worker. */
 export const previewStart = (project) => raw("preview_start_cmd", { project });
 export const previewStop = (project) => raw("preview_stop_cmd", { project });
@@ -243,9 +247,11 @@ export const gateway = {
   chatSessionGet,
   chatSend,
   chatStreamPartial,
+  chatCancel,
   chatSavePlan,
   chatNormalizePlan,
   chatSaveAttachment,
+  chatReadImageDataUrl,
   previewStart,
   previewStop,
   previewStatus,

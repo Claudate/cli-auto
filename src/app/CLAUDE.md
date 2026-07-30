@@ -13,20 +13,20 @@ run/: **A1-3/A1-7/A5-1/A5-3 · S-run 多文件** Run 用例面（单文件 ≤40
   · provenance.rs: **P1-2** stamp_route_fill / stamp_route_inferred / stamp_failover / **stamp_cost_route** / **stamp_cost_escalate** → TaskState.route_* · **P1-3** compose_route_label（含 **费用优选 / 失败后升档**）/ provider_product_label
   · **status_line.rs（H1）**：`from_run_state` / `from_job_view` / `resolve` → `StatusOneLiner`；CLI/live 共用
   · 编排循环仍在 `runtime/scheduler`；**不**旁路 Mode B；TUI 只经本面
-chat.rs: **A1-6/A1-7** Chat 用例面 — session list/get/new/**rename**/delete · send · stream_partial · **preview_start/stop/status**（本地 dev 独立进程）· save_plan · read_plan_md · normalize_plan · save_attachment · cleanup_expired；委托 `services::chat_*` / `preview`；**禁止** confirm/start_run
+chat.rs: **A1-6/A1-7** Chat 用例面 — session list/get/new/**rename**/delete · send · stream_partial · **preview_start/stop/status**（本地 dev 独立进程）· save_plan · read_plan_md · normalize_plan · save_attachment · **read_image_data_url** · cleanup_expired；委托 `services::chat_*` / `preview`；**禁止** confirm/start_run
 memory.rs: **P2-2** 项目轻记忆 — get/last_summary/list_pins/upsert_pin/delete_pin · writeback_from_run · prompt_context
 project_ui.rs: **项目 UI 偏好** — dismiss_run / clear_dismissed_run（SQLite `project_ui_prefs`；结束本轮 SoT）
 （A1-5 **未**加 `app/inspect` 用例面：inspect 纯规则在 `domain/inspect`，IO 在 `runtime/handoff`；桌面 rework 经 `app::run::start_rework` → services。A4 再做人话 DTO 用例。）
 
 ## 硬规则
 
-1. Presentation（CLI/Tauri/TUI）只调 app 用例，不写业务策略。  
-2. **开跑**只经 [`split::confirm`](./split.rs) / [`confirm_materialize`](./split.rs)（`services::confirm_start` 为后台 facade）；ParseOnly 走 `run::materialize_run`（文档化，非 Mode B；**仍** drop `optional && !include` · A0-R4/D-T3-1；调度须用返回 IR）。  
-3. 禁止新建上帝 Manager；组合逻辑写在用例内。  
-4. 体积：软 400 / 硬 600 行。  
-5. `app/run` **不**旁路 Mode B；stop 冻 Pending 语义与 `services::stop_run` 一致。  
-6. **禁止**在 app 内重写 VERDICT 正文解析（domain/inspect 真源）。  
-7. **`app/chat` 只写散文 plan.md / 会话 JSON**；不得旁路 confirm 或 spawn 执行 worker。  
+1. Presentation（CLI/Tauri/TUI）只调 app 用例，不写业务策略。
+2. **开跑**只经 [`split::confirm`](./split.rs) / [`confirm_materialize`](./split.rs)（`services::confirm_start` 为后台 facade）；ParseOnly 走 `run::materialize_run`（文档化，非 Mode B；**仍** drop `optional && !include` · A0-R4/D-T3-1；调度须用返回 IR）。
+3. 禁止新建上帝 Manager；组合逻辑写在用例内。
+4. 体积：软 400 / 硬 600 行。
+5. `app/run` **不**旁路 Mode B；stop 冻 Pending 语义与 `services::stop_run` 一致。
+6. **禁止**在 app 内重写 VERDICT 正文解析（domain/inspect 真源）。
+7. **`app/chat` 只写散文 plan.md / 会话 JSON**；不得旁路 confirm 或 spawn 执行 worker。
 8. **`app/run/` 已纵切**（S-run）：禁止再合并成单文件；新逻辑按 materialize / foreground / route / facade 归类。
 
 法则: 成员完整·一行一文件·父级链接·技术词前置

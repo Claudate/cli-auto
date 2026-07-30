@@ -137,6 +137,25 @@ check(
 check("bindUi wave confirm + split next", /data-wave-confirm-batch/.test(bindUi) && /data-wave-split-next/.test(bindUi));
 check("INDEX cannot assign (isWaveIndexPath gate)", /isWaveIndexPath/.test(plansMgmt) || /isWaveIndexPath/.test(batch));
 
+// ── V-WAVE-HARDEN：批确认 run-lock disable + 失败人话 + INDEX 误点拆步 ────
+check(
+  "overview confirm button disabled when runLocked",
+  /runLocked\s*\?/.test(overview) && /disabled\s+data-wave-confirm-batch/.test(overview)
+);
+check(
+  "plansMgmt passes runLocked from hasActiveRun",
+  /renderWaveOverviewHtml\(ov,\s*chatEsc,\s*\{\s*runLocked\s*\}\)/.test(plansMgmt) &&
+    /hasActiveRun/.test(plansMgmt)
+);
+check(
+  "batch failure toast tells rest untouched + retry gate",
+  /确认失败/.test(batch) && /未动/.test(batch) && /确认本波/.test(batch)
+);
+check(
+  "INDEX mis-split toast is human (目录不可拆)",
+  /本波索引（目录）/.test(batch) && /拆成步骤/.test(batch)
+);
+
 // ── docs ───────────────────────────────────────────────────────────────────
 check("W1-6 checklist exists", exists("docs/path-depth-wave-2026-07-28/w1-6-desktop-checklist.md"));
 check("W4-3 debt ledger exists", exists("docs/path-depth-wave-2026-07-28/w4-3-line-debt.md"));

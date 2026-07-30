@@ -499,10 +499,15 @@ export async function deleteChatSession(sessionId) {
       title: sid === cur ? state.chatSession?.title : null,
     }
   );
+  const isCurrent = sid === cur;
   const ok = window.confirm(
-    sid === "default"
-      ? "清空默认会话的聊天记录与草稿绑定？计划文件本身不会删除。"
-      : `删除会话「${label}」？计划文件本身不会删除。`
+    isCurrent
+      ? (sid === "default"
+          ? "当前聊天记录将被清空，确认后将自动打开新会话。计划文件本身不会删除。"
+          : `将删除当前会话「${label}」，确认后将自动打开新会话。计划文件本身不会删除。`)
+      : (sid === "default"
+          ? "清空默认会话的聊天记录与草稿绑定？计划文件本身不会删除。"
+          : `删除会话「${label}」？计划文件本身不会删除。`)
   );
   if (!ok) return;
   try {
@@ -514,22 +519,14 @@ export async function deleteChatSession(sessionId) {
     }
     toast(sid === "default" ? "已清空默认会话" : "已删除会话");
     await loadChatSessionList();
-    if (sid === cur) {
-      state.chatSession = {
-        session_id: "default",
-        messages: [],
-        draft_plan: null,
-        title: null,
-      };
+    if (isCurrent) {
+      // Reset state first so newChatSession stashes a clean slate
+      state.chatSession = { session_id: "default", messages: [], draft_plan: null, title: null };
       state.chatDraftPlan = null;
       state.chatFake = false;
       state.chatEnvNote = null;
-      const next =
-        (state.chatSessionList || []).find((r) => r.session_id === "default")
-          ?.session_id ||
-        state.chatSessionList?.[0]?.session_id ||
-        "default";
-      await switchChatSession(next);
+      resetClarifyState();
+      await newChatSession();
     } else {
       renderChatSessionSelect();
     }

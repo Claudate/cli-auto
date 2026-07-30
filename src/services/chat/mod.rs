@@ -24,6 +24,7 @@
 //! note: C3 流式 partial：chat_stream_partial 读 stdout 增量；失败降级整段 reply（不 panic）
 //! note: chat_send 入口 clear_chat_stream_work，防新一轮 poll 把上一条整段当流式刷出
 //! note: Clarify 相：session.clarify 承载入口/槽位/假设；纯规则在 domain/chat/clarify；禁 confirm_start
+//! note: 聊天验收：call_claude_chat 可选 browser MCP + chat-visual-review（截图→![]→分析→优化）；显示靠 web markdown hydrate
 
 mod attachment;
 mod cli_call;
@@ -38,7 +39,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use attachment::chat_save_attachment;
+pub use attachment::{chat_read_image_data_url, chat_save_attachment};
 pub use normalize::chat_normalize_plan;
 pub use plan_md::{chat_save_plan, chat_save_wave_bundle, read_plan_md};
 pub use send::chat_send;
@@ -46,7 +47,7 @@ pub use session::{
     chat_delete_session, chat_list_sessions, chat_new_session, chat_rename_session,
     chat_session_get, cleanup_expired_chat_sessions,
 };
-pub use stream::chat_stream_partial;
+pub use stream::{chat_cancel, chat_stream_partial};
 pub use types::{
     ChatAttachment, ChatDraftPlan, ChatMessage, ChatNormalizePlanResponse, ChatSavePlanResponse,
     ChatSaveWaveResponse, ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,

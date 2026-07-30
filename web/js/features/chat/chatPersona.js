@@ -12,7 +12,7 @@ const KEY = "cco.personaId";
 /** In-memory fallback when localStorage is unavailable (tests / private mode). */
 let memoryPersona = /** @type {PersonaId|null} */ (null);
 
-/** In-memory tracking for clarify_depth and split_grain chips (not persisted yet). */
+/** In-memory tracking for clarify_depth and split_grain chips (persisted per-project via chatPersonaSync). */
 let currentChips = {
     clarify_depth: 'soft1',      // default per W1-6 profiles
     split_grain: 'balanced'     // matching W1-6 defaults
@@ -317,8 +317,8 @@ export function getPersonaId() {
 export function getChipValue(type) { return currentChips[type]; }
 
 /** Set chip value (used when persona/chip clicked). */
-export function setChipValue(type, value) { 
-    currentChips[type] = value; 
+export function setChipValue(type, value) {
+    currentChips[type] = value;
 }
 
 /**

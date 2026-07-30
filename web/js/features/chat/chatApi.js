@@ -83,6 +83,11 @@ export function saveAttachment(args) {
   return gateway.chatSaveAttachment(args);
 }
 
+/** Project-relative image path → data URL (chat inline / attachment rehydrate). */
+export function readImageDataUrl(project, path) {
+  return gateway.chatReadImageDataUrl(project, path);
+}
+
 export function readPlanMd(project, plan) {
   return gateway.readPlanMd(project, plan);
 }
@@ -121,4 +126,8 @@ export function getProjectMemory(project) {
 
 export function getLastSummary(project) {
   return gateway.projectMemoryLastSummary(project);
+}
+
+export function cancelMessage(project) {
+  return gateway.chatCancel(project);
 }

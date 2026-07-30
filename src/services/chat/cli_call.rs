@@ -22,14 +22,16 @@ pub(crate) fn system_prompt(project: &Path) -> String {
     let copy = crate::domain::chat::ui_copy_systems_guidance();
     let motion = crate::domain::chat::ui_motion_effects_guidance();
     let backend = crate::domain::chat::backend_architecture_guidance();
+    let visual = crate::domain::chat::chat_visual_review_guidance();
     format!(
-        r#"你是 cco 桌面应用里的「计划写作助手」。用户在项目目录中与你对话，主目标是共建一份可执行的**计划文档**（Markdown 散文/大纲）。
+        r#"你是 cco 桌面应用里的「计划写作助手」。用户在项目目录中与你对话，主目标是共建一份可执行的**计划文档**（Markdown 散文/大纲）；用户要**看效果/验收/优化界面**时，先截图再分析（见文末「网页/界面验收」）。
 
 项目路径：{project}
 
 职责：
 1. 用简短中文澄清：目标、范围、约束、验收标准、风险；按受众给出**建议技术**（优先抄效果配方 R-*，再落到深度/类型/色字/界面文案/动效/图/后端）。
 2. 当信息足够，或用户要求「生成计划/收口/写计划」时，输出完整 Markdown 计划。
+2b. 用户要**验收 / 截图 / 看网页效果 / 怎么优化界面**时：按「网页/界面验收」真截图 → 回复内嵌 `![说明](项目相对路径)` → 观察 + 可执行优化建议（可同时收 plan，但验收结论不得只靠读代码）。
 3. 计划正文必须用下面 fence 包起来（便于应用解析预填；用户仍需点「保存」才会落盘）：
 
 ```plan
@@ -100,6 +102,8 @@ pub(crate) fn system_prompt(project: &Path) -> String {
 {copy}
 
 {motion}
+
+{visual}
 "#,
         project = project.display(),
         guidance = guidance,
@@ -110,6 +114,7 @@ pub(crate) fn system_prompt(project: &Path) -> String {
         typeface = typeface,
         copy = copy,
         motion = motion,
+        visual = visual,
     )
 }
 
@@ -284,7 +289,9 @@ pub(crate) fn call_claude_chat(
         .and_then(crate::config::normalize_effort)
         .or_else(|| crate::config::normalize_effort(&config.default.effort))
         .unwrap_or_else(|| "high".into());
-    let chat_task = TaskIR {
+    // tag browser so prepare_task_browser can inject MCP when config.browser.enabled
+    // (no ui-verify → require_preview soft-fail does not block chat).
+    let mut chat_task = TaskIR {
         id: "__chat__".into(),
         title: "plan chat".into(),
         depends_on: vec![],
@@ -317,15 +324,62 @@ pub(crate) fn call_claude_chat(
         role: None,
         scope: None,
         outputs: vec![],
-        tags: vec![],
+        tags: vec!["browser".into()],
     };
+
+    // Visual QA path: optional browser MCP + preview URL env (display still via ![path]).
+    let preview_url = crate::services::preview_status(project)
+        .ok()
+        .and_then(|s| s.url)
+        .filter(|u| !u.trim().is_empty());
+    let mut env_extra = match crate::runtime::browser_mcp::prepare_task_browser(
+        &config.browser,
+        &mut chat_task,
+        project,
+        &task_dir,
+        preview_url.as_deref(),
+    ) {
+        Ok(env) => env,
+        Err(e) => {
+            // Chat must not die on browser setup; fall back to Bash screenshot guidance.
+            tracing::warn!(error = %e, "chat browser prepare skipped");
+            vec![]
+        }
+    };
+    // Chat-specific: after shots, embed markdown images in the user-visible reply.
+    {
+        const CHAT_VISUAL_MARKER: &str = "CCO chat visual-review:";
+        let extra = "CCO chat visual-review: when you capture screenshots for the user, \
+the assistant reply MUST include `![short label](project-relative/path.png)` for each shot \
+(under CCO_BROWSER_OUT or `.cco-out/screenshots/…`), then short analysis + 3–5 optimizations. \
+Do not only list bare paths.";
+        let existing = chat_task
+            .provider_opts
+            .get("append_system_prompt")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if !existing.contains(CHAT_VISUAL_MARKER) {
+            let merged = if existing.trim().is_empty() {
+                extra.to_string()
+            } else {
+                format!("{existing}\n\n{extra}")
+            };
+            chat_task.provider_opts["append_system_prompt"] = serde_json::json!(merged);
+        }
+    }
+    if let Some(url) = preview_url.as_ref() {
+        if !env_extra.iter().any(|(k, _)| k == "CCO_PREVIEW_URL") {
+            env_extra.push(("CCO_PREVIEW_URL".into(), url.clone()));
+        }
+    }
 
     let ctx = StartCtx {
         run_id: format!("chat-{}", sess.session_id),
         project_root: project.to_path_buf(),
         work_dir: project.to_path_buf(),
         task_dir: task_dir.clone(),
-        env_extra: vec![],
+        env_extra,
     };
 
     let rt = tokio::runtime::Builder::new_current_thread()

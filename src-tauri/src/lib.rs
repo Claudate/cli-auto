@@ -15,10 +15,10 @@
 //! | confirm_start_cmd | app::split::confirm |
 //! | start_plan_job_cmd / get_plan_job_cmd / latest_plan_job_cmd | app::split::* |
 //! | update/remove/sanitize plan task | app::split::* |
-//! | stop_run_cmd / resume_run_cmd / retry_task_cmd / rework / residual | app::run::* |
+//! | stop_run_cmd / pause_run_cmd / resume_run_cmd / retry_task_cmd / rework / residual | app::run::* |
 //! | get_runs / get_run / plan meta / preview | app::run::* |
 //! | start_run (legacy ParseOnly) | app::run::start_from_request |
-//! | chat_* / read_plan_md / preview_* | app::chat::* |
+//! | chat_* / read_plan_md / chat_read_image_data_url / preview_* | app::chat::* |
 //! | live / projects / settings / doctor | services thin adapters (not yet app modules) |
 
 use std::path::PathBuf;
@@ -100,6 +100,16 @@ fn get_run(state: tauri::State<'_, AppState>, run_id: String) -> Result<Value, S
         "run_dir": rs.run_dir,
         "report_md": report_md,
     }))
+}
+
+#[tauri::command]
+fn get_run_status_cmd(run_id: String) -> Result<String, String> {
+    let config = Config::load().unwrap_or_default();
+    let dir = cco::state::resolve_run_dir(&config.runs_dir(), Some(&run_id))
+        .map_err(|e| e.to_string())?;
+    let rs = cco::state::RunState::load(&dir)
+        .map_err(|e| e.to_string())?;
+    Ok(format!("{:?}", rs.status).to_ascii_lowercase())
 }
 
 #[tauri::command]
@@ -394,6 +404,16 @@ fn stop_run_cmd(
     let config = state.config.lock().map_err(|e| e.to_string())?;
     run_uc::stop(&config, &runId).map_err(map_err)?;
     Ok(json!({ "ok": true, "run_id": runId, "status": "aborted" }))
+}
+
+#[tauri::command]
+fn pause_run_cmd(
+    state: tauri::State<'_, AppState>,
+    #[allow(non_snake_case)] runId: String,
+) -> Result<Value, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    run_uc::pause(&config, &runId).map_err(map_err)?;
+    Ok(json!({ "ok": true, "run_id": runId, "status": "paused" }))
 }
 
 #[tauri::command]
@@ -813,6 +833,11 @@ fn chat_stream_partial_cmd(
     chat_uc::stream_partial(PathBuf::from(project).as_path(), sessionId.as_deref()).map_err(map_err)
 }
 
+#[tauri::command]
+fn chat_cancel_cmd(project: String) -> Result<bool, String> {
+    chat_uc::cancel(PathBuf::from(project).as_path()).map_err(map_err)
+}
+
 /// Detached local dev/preview (not Mode B worker; survives chat Claude exit).
 #[tauri::command]
 async fn preview_start_cmd(project: String) -> Result<PreviewStatus, String> {
@@ -862,6 +887,19 @@ async fn chat_save_attachment_cmd(
     })
     .await
     .map_err(|e| format!("chat_save_attachment join error: {e}"))?
+}
+
+/// Project-relative image → data URL for chat markdown / attachment thumbs.
+#[tauri::command]
+async fn chat_read_image_data_url_cmd(
+    project: String,
+    path: String,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        chat_uc::read_image_data_url(PathBuf::from(project).as_path(), &path).map_err(map_err)
+    })
+    .await
+    .map_err(|e| format!("chat_read_image_data_url join error: {e}"))?
 }
 
 #[tauri::command]
@@ -953,6 +991,7 @@ pub fn run() {
             meta,
             get_runs,
             get_run,
+            get_run_status_cmd,
             get_plans,
             get_plan_meta,
             preview_plan_cmd,
@@ -975,6 +1014,7 @@ pub fn run() {
             remove_plan_task_cmd,
             sanitize_plan_deps_cmd,
             stop_run_cmd,
+            pause_run_cmd,
             resume_run_cmd,
             retry_task_cmd,
             start_rework_cmd,
@@ -1002,6 +1042,7 @@ pub fn run() {
             chat_delete_session_cmd,
             chat_send_cmd,
             chat_stream_partial_cmd,
+            chat_cancel_cmd,
             preview_start_cmd,
             preview_stop_cmd,
             preview_status_cmd,
@@ -1009,6 +1050,7 @@ pub fn run() {
             chat_save_wave_bundle_cmd,
             chat_normalize_plan_cmd,
             chat_save_attachment_cmd,
+            chat_read_image_data_url_cmd,
             read_plan_md_cmd,
         ])
         .run(tauri::generate_context!())

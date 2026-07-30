@@ -19,6 +19,7 @@ pub const FILE_UI_TYPOGRAPHY: &str = "ui-typography-systems.md";
 pub const FILE_UI_MOTION: &str = "ui-motion-effects.md";
 pub const FILE_UI_COPY: &str = "ui-copy-systems.md";
 pub const FILE_BACKEND_ARCHITECTURE: &str = "backend-architecture.md";
+pub const FILE_CHAT_VISUAL_REVIEW: &str = "chat-visual-review.md";
 
 /// Env: absolute or relative dir containing the markdown files above.
 pub const ENV_RUNTIME_PROMPTS_DIR: &str = "CCO_RUNTIME_PROMPTS_DIR";
@@ -35,6 +36,7 @@ const EMBED_UI_TYPE: &str = include_str!("../../../docs/runtime-prompts/ui-typog
 const EMBED_UI_MOTION: &str = include_str!("../../../docs/runtime-prompts/ui-motion-effects.md");
 const EMBED_UI_COPY: &str = include_str!("../../../docs/runtime-prompts/ui-copy-systems.md");
 const EMBED_BACKEND: &str = include_str!("../../../docs/runtime-prompts/backend-architecture.md");
+const EMBED_CHAT_VISUAL: &str = include_str!("../../../docs/runtime-prompts/chat-visual-review.md");
 
 /// Compact architect + frontend co-plan rules for the desktop chat system prompt.
 pub fn chat_plan_writing_guidance() -> &'static str {
@@ -86,6 +88,11 @@ pub fn backend_architecture_guidance() -> &'static str {
     load_cached(FILE_BACKEND_ARCHITECTURE, EMBED_BACKEND)
 }
 
+/// Chat visual QA: screenshot → analyze → embed `![](path)` → optimize advice.
+pub fn chat_visual_review_guidance() -> &'static str {
+    load_cached(FILE_CHAT_VISUAL_REVIEW, EMBED_CHAT_VISUAL)
+}
+
 fn load_cached(file_name: &'static str, embedded: &'static str) -> &'static str {
     match file_name {
         FILE_CHAT_PLAN_WRITING => {
@@ -125,6 +132,10 @@ fn load_cached(file_name: &'static str, embedded: &'static str) -> &'static str 
             CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
         }
         FILE_BACKEND_ARCHITECTURE => {
+            static CELL: OnceLock<String> = OnceLock::new();
+            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+        }
+        FILE_CHAT_VISUAL_REVIEW => {
             static CELL: OnceLock<String> = OnceLock::new();
             CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
         }
@@ -354,6 +365,24 @@ mod tests {
         assert!(g.contains("App") || g.contains("软件") || g.contains("按钮"));
         assert!(g.contains("Lorem") || g.contains("占位") || g.contains("TODO"));
         assert!(g.contains("人话") || g.contains("帮人办事"));
+    }
+
+    #[test]
+    fn chat_visual_review_requires_embed_and_honest_shots() {
+        let g = chat_visual_review_guidance();
+        assert!(g.contains("![") || g.contains("![]"), "require markdown image embed");
+        assert!(
+            g.contains("截图") || g.contains("screenshot"),
+            "screenshot flow"
+        );
+        assert!(
+            g.contains("优化") || g.contains("建议"),
+            "optimization advice"
+        );
+        assert!(
+            g.contains("禁止") && (g.contains("编") || g.contains("空想") || g.contains("没截图")),
+            "forbid inventing visuals"
+        );
     }
 
     #[test]

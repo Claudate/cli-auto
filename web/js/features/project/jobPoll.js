@@ -99,7 +99,6 @@ export async function analyzePlanFromPicker(planPathArg) {
     (typeof planPathArg === "string" && planPathArg.trim()) ||
     state.selectedPlan ||
     state.chatDraftPlan ||
-    state.planRailSelected ||
     null;
   const plan =
     (typeof normalizePlanPath === "function"
@@ -179,20 +178,17 @@ export async function analyzePlanFromPicker(planPathArg) {
   // Commit any in-progress concurrency edit before reading.
   const maxParallel = host.commitSplitMaxParallel($("#chooser-max-parallel") || $("#pp-max-parallel"));
   let grainHint = "";
-  try {
-    grainHint = suggestedGrainHint(projectPath) || "";
-  } catch (_) {
-    grainHint = "";
-  }
-  // Persona chips as soft defaults: only when user never picked a work style
-  // (global or project override) does the chip grain replace the fallback line.
-  let clarifyDepth = null;
+  let clarifyDepth; // declare before use in try/catch below
   try {
     const styleChosen =
       !!getWorkStyleId() || !!getProjectWorkStyleId(projectPath);
-    if (!styleChosen) {
+    if (styleChosen) {
+      // 有显式选择就使用
+      grainHint = suggestedGrainHint(projectPath) || "";
+    } else {
+      // 无显式选择，用 chip 作为默认；若无 chip 则用 project 的软默认
       const chipLine = chipGrainHintLine(getChipValue("split_grain"));
-      if (chipLine) grainHint = chipLine;
+      grainHint = chipLine || suggestedGrainHint(projectPath) || "";
     }
     clarifyDepth = getChipValue("clarify_depth") || null;
   } catch (_) {

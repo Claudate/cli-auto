@@ -88,6 +88,8 @@ export function savePersonaForProject(project) {
         clarifyDepth: getChipValue(CHIP_CLARIFY) || null,
         splitGrain: getChipValue(CHIP_GRAIN) || null,
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn("[P0-B] set_project_persona failed", err);
+      });
   } catch (_) {}
 }

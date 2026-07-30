@@ -4,6 +4,9 @@
  * [POS]: D9 自 state.js 抽出；classic 经 installMarkdown → window.renderMarkdown；chatFormatBody 复用
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  * note: bare http(s) → .md-ext-link；点击经 ccoGateway.openPath → 系统浏览器
+ * note: ![alt](src) → img；本地相对路径 data-md-img-path 由 chat 异步灌 data URL
+ * note: 单独一行的项目相对 .png/.jpg… 路径也会变成图（截图报告）
+ * smoke: node scripts/chat-md-image-smoke.mjs
  */
 
 import { esc } from "./statusUi.js";
@@ -152,8 +155,77 @@ export function renderMarkdown(src) {
     return `<a class="md-ext-link" href="${safe}" target="_blank" rel="noopener noreferrer">${text}</a>`;
   }
 
+  function isImagePath(src) {
+    const s = String(src || "").trim();
+    if (!s) return false;
+    if (/^data:image\//i.test(s)) return true;
+    // strip optional title: path "title"
+    const bare = s.replace(/\s+".*"$/, "").replace(/\s+'.*'$/, "").trim();
+    if (/^https?:\/\//i.test(bare)) {
+      return /\.(png|jpe?g|webp|gif|svg)(\?|#|$)/i.test(bare);
+    }
+    return /\.(png|jpe?g|webp|gif|svg)$/i.test(bare.split("?")[0].split("#")[0]);
+  }
+
+  function peelImageSrc(raw) {
+    let s = String(raw || "").trim();
+    // optional markdown title after path
+    const m = s.match(/^(\S+)(?:\s+["'].*["'])?$/);
+    if (m) s = m[1];
+    return s;
+  }
+
+  function mdImageHtml(alt, rawSrc) {
+    const src = peelImageSrc(rawSrc);
+    const altSafe = esc(alt || "");
+    if (/^data:image\//i.test(src)) {
+      return (
+        `<img class="md-img chat-img-zoomable" src="${esc(src)}" alt="${altSafe}" ` +
+        `data-img-src="${esc(src)}" data-img-name="${altSafe}" loading="lazy" title="点击放大" />`
+      );
+    }
+    if (/^https?:\/\//i.test(src) && isImagePath(src)) {
+      // External image hosts rarely allowed by CSP (img-src self data) — still emit
+      // for browser/dev; Tauri may block. Prefer local project paths in product.
+      return (
+        `<img class="md-img chat-img-zoomable" src="${esc(src)}" alt="${altSafe}" ` +
+        `data-img-src="${esc(src)}" data-img-name="${altSafe}" loading="lazy" title="点击放大" />`
+      );
+    }
+    // Local / project-relative path — placeholder; chat hydrates via data URL.
+    const path = src.replace(/^\.\//, "");
+    return (
+      `<span class="md-img-pending" data-md-img-path="${esc(path)}" data-md-img-alt="${altSafe}">` +
+      `<img class="md-img chat-img-zoomable is-pending" alt="${altSafe}" ` +
+      `data-img-name="${altSafe}" loading="lazy" title="${esc(path)}" />` +
+      `<span class="md-img-cap muted">${altSafe || esc(path)}</span>` +
+      `</span>`
+    );
+  }
+
   function inlineMd(s) {
-    let x = esc(s);
+    // Pull images out on raw text first (avoid double-esc + link rule eating ![x](y))
+    const imgs = [];
+    let raw = String(s ?? "");
+    raw = raw.replace(
+      /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+      (_, alt, url) => {
+        const i = imgs.length;
+        imgs.push(mdImageHtml(alt, url));
+        return `%%IMG${i}%%`;
+      }
+    );
+    // Sole bare project-relative image path (AI screenshot reports often list paths alone)
+    raw = raw.replace(
+      /(^|\n)(\.?\.?\/?[\w.-]+(?:\/[\w.-]+)+\.(?:png|jpe?g|webp|gif|svg))(?=\n|$)/gi,
+      (full, pre, path) => {
+        const i = imgs.length;
+        const base = path.split("/").pop() || path;
+        imgs.push(mdImageHtml(base, path));
+        return `${pre}%%IMG${i}%%`;
+      }
+    );
+    let x = esc(raw);
     x = x.replace(/`([^`]+)`/g, "<code>$1</code>");
     x = x.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     x = x.replace(/__([^_]+)__/g, "<strong>$1</strong>");
@@ -172,6 +244,8 @@ export function renderMarkdown(src) {
       return `${pre}${extAnchor(url)}${trail}`;
     });
     x = x.replace(/\n/g, "<br>");
+    // Restore image HTML (placeholders survived esc)
+    x = x.replace(/%%IMG(\d+)%%/g, (_, idx) => imgs[Number(idx)] || "");
     return x;
   }
 

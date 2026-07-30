@@ -25,6 +25,7 @@ function openChatPage(...a) { return _chatCall("openChatPage", ...a); }
 function renderChatPage(...a) { return _chatCall("renderChatPage", ...a); }
 function renderChatMessages(...a) { return _chatCall("renderChatMessages", ...a); }
 function sendChatMessage(...a) { return _chatCall("sendChatMessage", ...a); }
+function cancelChatMessage(...a) { return _chatCall("cancelChatMessage", ...a); }
 function saveChatPlan(...a) { return _chatCall("saveChatPlan", ...a); }
 function assignFromChat(...a) { return _chatCall("assignFromChat", ...a); }
 function assignAndSplitFromChat(...a) { return _chatCall("assignAndSplitFromChat", ...a); }

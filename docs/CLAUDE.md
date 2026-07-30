@@ -4,7 +4,7 @@
 
 产品方向（非本目录）：[`../PRODUCT.md`](../PRODUCT.md) — 给谁用 · 轻量定位 · 五步主循环；**不是**落地计划
 
-索引分三档（**2026-07-22 · 档 B 再归档**）：真源 · 业务规则参考 · **历史已迁 [`archive/`](./archive/)**。  
+索引分三档（**2026-07-22 · 档 B 再归档**）：真源 · 业务规则参考 · **历史已迁 [`archive/`](./archive/)**。
 **禁止**把历史 ✅ 再写成缺口；**禁止**平行第二套阶段表。
 
 ---
@@ -14,7 +14,7 @@
 architecture-redesign-2026-07-20.md: **系统架构大改 · A0–A5 ✅ 收口**（Ports&Adapters · App 用例 · Domain · 桌面 MVVM · Worker/Split/Run/Inspect · **P2-17 t58** · **A5-5 可选不做**；**本轮架构/实施真源**）
 a5-5-workspace-crates-eval-2026-07-21.md: **A5-5** workspace/`cco-domain`/`cco-app` 评估 — **本轮不做 / 不落 crate**；门槛=A5-2+A5-4+Store DI
 contracts/: A0 契约冻结（behavior-golden · run-dir · plan-job · README）
-runtime-prompts/: **软件内底层提示真源**（Markdown 加载 · 聊天/拆分/规划器 · **ui-delivery-recipes** 效果配方 · layout/color/type/**copy**/motion · **backend-architecture** · **landing-gates**；覆盖序见目录 README）  
+runtime-prompts/: **软件内底层提示真源**（Markdown 加载 · 聊天/拆分/规划器 · **chat-visual-review** 截图验收 · **ui-delivery-recipes** 效果配方 · layout/color/type/**copy**/motion · **backend-architecture** · **landing-gates**；覆盖序见目录 README）
 ../examples/site-floor/: **可运行高端站点底板**（非注入 LLM · shell×kit·R-* demos；绿野 UI 起步；与 recipes 同构）
 split-product-rules.md: **拆分产品规则短真源**（改拆分/拆分台/confirm 行为；**无**平行阶段表；全文波次史见 archive）
 cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**（顺序/并发/是否执行 + 完整任务字段；**S3/S4 ✅ 核销** · S2/S5/S6 ☐ 可选/中长期 · 文末唯一勾选）
@@ -26,8 +26,8 @@ browser-automation-cco.md: **浏览器自动化契约**（**W0–W3+++ ✅** · 
 
 ### 还在做（活跃落地 · 可有 ☐）
 
-path-depth-wave-2026-07-28/: **空态分群 · 更懂边聊 · 多计划本波**（去三档英雄键 · 01b 画像 · wave 认领/分组/总览 · 勾选只认 [landing](./path-depth-wave-2026-07-28/landing.md) · [INDEX](./path-depth-wave-2026-07-28/INDEX.md) · W0–W2 主路径已落 · W3 总览薄实现 · W1-6 桌面 residual）  
-path-depth-multi-plan-audience-2026-07-28.md: **指针** → 上目录（勿再追加正文）  
+path-depth-wave-2026-07-28/: **空态分群 · 更懂边聊 · 多计划本波**（去三档英雄键 · 01b 画像 · wave 认领/分组/总览 · 勾选只认 [landing](./path-depth-wave-2026-07-28/landing.md) · [INDEX](./path-depth-wave-2026-07-28/INDEX.md) · W0–W2 主路径已落 · W3 总览薄实现 · W1-6 桌面 residual）
+path-depth-multi-plan-audience-2026-07-28.md: **指针** → 上目录（勿再追加正文）
 context-digest-compress-landing-2026-07-27.md: **会话语义压缩 Session Digest**（**C0–C2 ✅ · 内置默认每轮** · 桌面 chat 抽/存/剥/注入 · 契约/skill · C3 可选 pin · **非**口令开关 · **非** gzip/文言 · **不**重开 guided G；**本能力唯一勾选**）
 cost-aware-cli-router-2026-07-27.md: **费用感知 CLI 优选**（**P0–P3 ✅**；role→tier · 升档 · 预算/粘滞 · **intent 默认关** · 显式 route 不动）
 next-landing-sequence-2026-07-27.md: **下一轮落地序（协调）**（**W0/W1/W3 ✅** · W2 自动化代理 ✅ / **真人 V1–V5 ☐** · W0 GUI 目视 residual · W4 无新痛；**旁轨** session-digest 不替代 W0–W4；**不**替代各题勾选真源）
@@ -57,42 +57,42 @@ archive/human-status-verify-dual-landing-2026-07-24.md — 人话状态 + 可执
 
 ### 2026-07-22 再归档（B 表）
 
-archive/claude-cli-orchestrator-plan.md — 编排器设计 M0–M4（根迁入；**工程设计现行真源 = architecture**）  
-archive/ux-nondev-mainpath-2026-07-21.md — 非开发主路径诊断+原则  
-archive/ux-nondev-landing-2026-07-21.md — 非开发体验落地 A–D ✅  
-archive/shell-chrome-simplify-2026-07-22.md — 壳层减法 A–D ✅  
-archive/split-desk-dual-audience-landing-2026-07-22.md — 拆分台双受众 S0–S3 ✅  
-archive/multi-window-split-landing-2026-07-22.md — 多窗口可并发 W1–W4 ✅  
-archive/split-quality-work-style-2026-07-22.md — 拆分质量/习惯 Q0–Q6 ✅  
-archive/openhands-style-split-agent-landing-2026-07-21.md — OpenHands 拆分 Agent P0–P5 ✅  
-archive/split-agent-model-path-2026-07-21.md — 专用拆分 Agent 路径（被 openhands 吸收）  
-archive/pilotdeck-borrow-landing-2026-07-21.md — PilotDeck 借鉴 P0–P2 ✅  
-archive/p2-7-sdk-provider-2026-07-21.md — P2-7 `sdk` WorkerPort S0–S2 ✅  
-archive/split-soft-sqlite-2026-07-21.md — 软接受+SQLite **过渡**（**S2–S6 开项只认 cco-split 文末**）  
+archive/claude-cli-orchestrator-plan.md — 编排器设计 M0–M4（根迁入；**工程设计现行真源 = architecture**）
+archive/ux-nondev-mainpath-2026-07-21.md — 非开发主路径诊断+原则
+archive/ux-nondev-landing-2026-07-21.md — 非开发体验落地 A–D ✅
+archive/shell-chrome-simplify-2026-07-22.md — 壳层减法 A–D ✅
+archive/split-desk-dual-audience-landing-2026-07-22.md — 拆分台双受众 S0–S3 ✅
+archive/multi-window-split-landing-2026-07-22.md — 多窗口可并发 W1–W4 ✅
+archive/split-quality-work-style-2026-07-22.md — 拆分质量/习惯 Q0–Q6 ✅
+archive/openhands-style-split-agent-landing-2026-07-21.md — OpenHands 拆分 Agent P0–P5 ✅
+archive/split-agent-model-path-2026-07-21.md — 专用拆分 Agent 路径（被 openhands 吸收）
+archive/pilotdeck-borrow-landing-2026-07-21.md — PilotDeck 借鉴 P0–P2 ✅
+archive/p2-7-sdk-provider-2026-07-21.md — P2-7 `sdk` WorkerPort S0–S2 ✅
+archive/split-soft-sqlite-2026-07-21.md — 软接受+SQLite **过渡**（**S2–S6 开项只认 cco-split 文末**）
 archive/subjective-desire-decision-concept.md — 主观渴望构思全文（无排期；子集落地留根）
 
 ### 2026-07-21 档 B（既有）
 
-archive/desktop-ux-redesign-plan.md — 桌面壳 UX 0–4  
-archive/ux-simple-mainpath-2026-07-17.md — 三步主路径；默认停拆分（S0）后经 P2-16  
-archive/terminal-console-plan.md — 监视日志 A/P0–P2  
-archive/chat-plan-builder-2026-07-18.md — 聊天共建 C0–C3 / P2-9  
-archive/chat-ux-focus-2026-07-19.md — 注意力 U0–U2 / P2-10  
-archive/chat-utf8-fence-panic-2026-07-19.md — fence UTF-8 热修 F0+F1  
-archive/chat-home-plan-cli-2026-07-19.md — 聊天主窗 H0–H4 / P2-12  
-archive/ux-plan-mgmt-attach-ttl-2026-07-19.md — 计划管理 G0–G6 / P2-13  
-archive/plan-mgmt-to-exec-flow-2026-07-19.md — 计划→执行 E0–E4 / P2-14  
-archive/system-post-tasks-2026-07-19.md — 系统收尾 / P2-15  
+archive/desktop-ux-redesign-plan.md — 桌面壳 UX 0–4
+archive/ux-simple-mainpath-2026-07-17.md — 三步主路径；默认停拆分（S0）后经 P2-16
+archive/terminal-console-plan.md — 监视日志 A/P0–P2
+archive/chat-plan-builder-2026-07-18.md — 聊天共建 C0–C3 / P2-9
+archive/chat-ux-focus-2026-07-19.md — 注意力 U0–U2 / P2-10
+archive/chat-utf8-fence-panic-2026-07-19.md — fence UTF-8 热修 F0+F1
+archive/chat-home-plan-cli-2026-07-19.md — 聊天主窗 H0–H4 / P2-12
+archive/ux-plan-mgmt-attach-ttl-2026-07-19.md — 计划管理 G0–G6 / P2-13
+archive/plan-mgmt-to-exec-flow-2026-07-19.md — 计划→执行 E0–E4 / P2-14
+archive/system-post-tasks-2026-07-19.md — 系统收尾 / P2-15
 （关联 skill，非 docs 成员）`../.claude/skills/cco-run/`：`/cco-run` · P2-6 ✅
 
 ---
 
 ## 硬规则（继承 L1）
 
-1. **产品方向**不进本清单正文（见 [`../PRODUCT.md`](../PRODUCT.md)）。  
-2. **本轮架构/实施勾选真源** = [`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)（P2-17）；拆分行为短规则 = [`split-product-rules.md`](./split-product-rules.md)；存储/S2–S6 = [`cco-split-format-sqlite-2026-07-21.md`](./cco-split-format-sqlite-2026-07-21.md)。其他默认参考。  
-3. **禁止**平行第二套阶段表 / 回灌 D0–D4 / 把历史 ✅ 再写成缺口。  
-4. 工程硬规则全文在 [`../CLAUDE.md`](../CLAUDE.md)「工程硬规则」；改规则须 GEB 同步。  
+1. **产品方向**不进本清单正文（见 [`../PRODUCT.md`](../PRODUCT.md)）。
+2. **本轮架构/实施勾选真源** = [`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)（P2-17）；拆分行为短规则 = [`split-product-rules.md`](./split-product-rules.md)；存储/S2–S6 = [`cco-split-format-sqlite-2026-07-21.md`](./cco-split-format-sqlite-2026-07-21.md)。其他默认参考。
+3. **禁止**平行第二套阶段表 / 回灌 D0–D4 / 把历史 ✅ 再写成缺口。
+4. 工程硬规则全文在 [`../CLAUDE.md`](../CLAUDE.md)「工程硬规则」；改规则须 GEB 同步。
 5. **档 B**：历史子计划只住 `archive/`；新链接写 `docs/archive/…` 或 `./archive/…`；禁止把已归档再移回根当「未做」。
 
 法则: 三档清晰·真源短·参考可查·历史进 archive；**产品方向不进本清单**

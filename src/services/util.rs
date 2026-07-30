@@ -13,7 +13,7 @@ use crate::state::RunStatus;
 
 /// Best-effort stop a worker OS process. Unix: SIGTERM then SIGKILL so hung
 /// Claude/Codex CLIs actually die (desktop stop used to send only SIGTERM).
-pub(super) fn kill_pid(pid: u32) {
+pub(crate) fn kill_pid(pid: u32) {
     #[cfg(unix)]
     {
         unsafe {

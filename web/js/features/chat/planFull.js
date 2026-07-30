@@ -53,7 +53,6 @@ export function closePlanFullView() {
     diffRight: "",
   };
   renderPlanFullView();
-  host.renderPlanRail();
 }
 
 /**
@@ -185,7 +184,7 @@ export async function openPlanFullView(planPath, meta) {
   const root = state.selectedPath;
   const path = normalizePlanPath(planPath, root) || planPath;
   // Resolve meta from rail if not provided
-  const rail = (state.planRailItems || []).find((it) => it.path === path) || meta || {};
+  const rail = (state.planItems || []).find((it) => it.path === path) || meta || {};
   const everCompleted = !!(rail.ever_completed || rail.everCompleted);
   const lastRunStatus = rail.last_run_status || rail.lastRunStatus || null;
 
@@ -197,7 +196,7 @@ export async function openPlanFullView(planPath, meta) {
     return;
   }
   const title =
-    rail.title || host.planTitleFromMarkdown(markdown) || host.planRailTitleFromPath(path);
+    rail.title || host.planTitleFromMarkdown(markdown) || host.planDisplayName(path);
   state.planFull = {
     open: true,
     path,
@@ -214,7 +213,6 @@ export async function openPlanFullView(planPath, meta) {
     diffRight: "",
   };
   renderPlanFullView();
-  host.renderPlanRail();
 }
 
 export function renderPlanFullView() {
@@ -248,10 +246,10 @@ export function renderPlanFullView() {
   const btnCancel = $("#btn-plan-full-cancel-edit");
   const btnAssign = $("#btn-plan-full-assign");
 
-  if (titleEl) titleEl.textContent = pf.title || host.planRailTitleFromPath(pf.path) || "计划全文";
+  if (titleEl) titleEl.textContent = pf.title || host.planDisplayName(pf.path) || "计划全文";
   if (pathEl) pathEl.textContent = pf.path || "—";
 
-  const badge = host.planRailBadgeInfo({
+  const badge = host.planExecBadgeInfo({
     ever_completed: pf.everCompleted,
     last_run_status: pf.lastRunStatus,
   });
@@ -468,7 +466,7 @@ export async function savePlanFullView({ asCopy = false } = {}) {
     pf.original = md;
     pf.dirty = false;
     pf.editing = false;
-    pf.title = host.planTitleFromMarkdown(md) || host.planRailTitleFromPath(newPath);
+    pf.title = host.planTitleFromMarkdown(md) || host.planDisplayName(newPath);
     // 副本视为未执行
     if (asCopy) {
       pf.everCompleted = false;

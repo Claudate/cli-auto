@@ -1,6 +1,6 @@
 /**
  * [INPUT]: legacy · chatApi · sessions · host · chatRender · chatPlanOps
- * [OUTPUT]: send · openChat · re-export render* / planOps*
+ * [OUTPUT]: send · cancel · openChat · re-export render* / planOps*
  * [POS]: A5-2a features/chat/chatActions.js；P-ship-D 纵切 → chatRender + chatPlanOps
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -55,6 +55,8 @@ import {
   CLARIFY_COPY,
   DEFAULT_CLARIFY_ENTRY,
 } from "./chatClarify.js";
+// Note: Brief+Claim functions (claimBriefToPlan, rechatFromBrief, etc.) are now in clarify/briefAndClaim.js
+// but re-exported from chatClarify for backward compatibility.
 
 // Re-export surfaces so installChat `...chatActions` stays stable.
 export {
@@ -111,7 +113,6 @@ export async function openChatPage() {
   // Leaving another page: keep current chat in cache first.
   if (state.chatProjectPath) stashChatSession(state.chatProjectPath);
   // 聊天右栏已撤：强制关轨
-  state.planRailOpen = false;
   showPage("chat");
   // Restore immediately so history is never blank while disk loads.
   restoreChatSession(state.selectedPath);
@@ -394,5 +395,21 @@ export async function sendChatMessage() {
       state.chatSessions[projectPath].busy = false;
       state.chatSessions[projectPath].waitStartedAt = 0;
     }
+  }
+}
+
+/**
+ * Cancel the in-flight chat Claude CLI (stop button while chatBusy).
+ * Best-effort: writes stopped.flag + SIGKILL on the pid from meta.json.
+ * The send() promise still resolves normally after the process exits.
+ */
+export async function cancelChatMessage() {
+  if (!state.chatBusy) return;
+  const project = state.chatProjectPath || state.selectedPath;
+  if (!project) return;
+  try {
+    await chatApi.cancelMessage(project);
+  } catch (_) {
+    // best-effort; send() will finish on its own
   }
 }

@@ -31,14 +31,11 @@ export function ensureChatState() {
   // C3 multi-session list (ChatSessionSummary[])
   if (!Array.isArray(state.chatSessionList)) state.chatSessionList = [];
   if (state.chatSessionListLoading == null) state.chatSessionListLoading = false;
-  // H1 plan-rail + full-view modal
-  if (!Array.isArray(state.planRailItems)) state.planRailItems = [];
-  if (state.planRailLoading == null) state.planRailLoading = false;
+  // H1 plan items list (loaded by loadPlanItems)
+  if (!Array.isArray(state.planItems)) state.planItems = [];
+  if (state.planItemsLoading == null) state.planItemsLoading = false;
   if (!Array.isArray(state.planMetaItems)) state.planMetaItems = [];
   if (!state.planMetaByPath) state.planMetaByPath = {};
-  // 聊天右栏已撤：始终关；列表走 page-plans
-  state.planRailOpen = false;
-  if (state.planRailSelected == null) state.planRailSelected = null;
   // G1: default plans dir (project-relative), persisted per project — 仅聊天落盘
   if (state.plansDir == null) {
     const k = state.selectedPath

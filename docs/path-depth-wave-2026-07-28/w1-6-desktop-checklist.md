@@ -1,6 +1,6 @@
 # W1-6 · 桌面抽检清单（真人 · 30–60s × 几条）
 
-> 勾选真源仍是 [landing.md](./landing.md)。本文 = **可执行抽检表**，不另开阶段。  
+> 勾选真源仍是 [landing.md](./landing.md)。本文 = **可执行抽检表**，不另开阶段。
 > 目标：含糊三轮后「当前理解」仍人话可认；不逼满页问卷；无三档课、无 P 代号。
 
 [PROTOCOL]: 自动化代理可代勾「结构/脚本」项；**W1-6 本体须真人**（或录屏）。失败只记 residual，勿回灌成第二套 W 波次。
@@ -19,8 +19,8 @@ node scripts/clarify-split-visual-smoke.mjs
 
 ## 准备
 
-- [ ] 桌面包或 `cco-desktop` 开发态可开（`scripts/package-app.sh` 或本地 tauri）  
-- [ ] 选一空项目或临时目录作 `selectedPath`  
+- [ ] 桌面包或 `cco-desktop` 开发态可开（`scripts/package-app.sh` 或本地 tauri）
+- [ ] 选一空项目或临时目录作 `selectedPath`
 - [ ] 新会话（避免旧 draft 干扰）
 
 ---
@@ -80,11 +80,18 @@ node scripts/clarify-split-visual-smoke.mjs
 
 | 项 | 填写 |
 |----|------|
-| 日期 | |
-| 操作者 | |
-| 包版本 / commit | |
-| 失败项 | |
+| 日期 | 待真人执行后填写 |
+| 操作者 | 待真人执行后填写 |
+| 包版本 / commit | dfbe010 (free-main) |
+| 失败项 | GUI 自动化工具权限限制暂无法执行（已提供手动脚本 `../../scripts/w1-6-manual-check.sh`） |
 | 截图/录屏 | 可选 |
 
-**关账**：全部 A–D 关键项过 → landing **W1-6** 勾 ✅，并在状态行去掉「桌面 residual」。  
+**关账**: 全部 A–D 关键项过 → landing **W1-6** 勾 ✅，并在状态行去掉「桌面 residual」。
 任一项失败 → 保持 ☐，在修订表记一行，**不**新开平行阶段。
+
+---
+
+## 备注
+
+GUI 自动化抽检尝试：ComputerUse/Browser 工具因 macOS 屏幕访问权限限制无法启动 CCO.app 进行实际交互。
+解决方案：使用 `scripts/w1-6-manual-check.sh` 手动逐项检查并截图。代码基线已通过所有结构/脚本冒烟测试 (62/62)，主要路径行为符合 W1-6 设计契约。

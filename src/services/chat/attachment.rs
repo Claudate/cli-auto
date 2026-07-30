@@ -323,3 +323,100 @@ pub(crate) fn format_attachments_block(atts: &[ChatAttachment]) -> String {
     }
     lines.join("\n")
 }
+
+/// Max bytes for chat inline image previews (data URL). Larger files stay path-only.
+const MAX_IMAGE_PREVIEW_BYTES: u64 = 2_500_000;
+
+/// Read a project-relative image as `data:image/…;base64,…` for chat / markdown thumbs.
+///
+/// Security: path must resolve under `project`; only image extensions; size capped.
+pub fn chat_read_image_data_url(project: &Path, rel_path: &str) -> Result<String> {
+    if !project.is_dir() {
+        bail!("project path is not a directory: {}", project.display());
+    }
+    let rel = rel_path.trim().trim_start_matches('/').replace('\\', "/");
+    if rel.is_empty() {
+        bail!("empty image path");
+    }
+    if rel.contains('\0') || rel.split('/').any(|s| s == "..") {
+        bail!("image path escapes project");
+    }
+    // Reject absolute / Windows drive / URL schemes
+    if Path::new(&rel).is_absolute()
+        || rel.contains("://")
+        || (rel.len() >= 2 && rel.as_bytes()[1] == b':')
+    {
+        bail!("image path must be project-relative");
+    }
+    let ext = Path::new(&rel)
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let mime = match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        _ => bail!("not an image extension: .{ext}"),
+    };
+    let abs = project.join(&rel);
+    let canon_proj = project
+        .canonicalize()
+        .with_context(|| format!("canonicalize project {}", project.display()))?;
+    let canon_file = abs
+        .canonicalize()
+        .with_context(|| format!("image not found: {rel}"))?;
+    if !canon_file.starts_with(&canon_proj) {
+        bail!("image path escapes project");
+    }
+    if !canon_file.is_file() {
+        bail!("not a file: {rel}");
+    }
+    let meta = std::fs::metadata(&canon_file)
+        .with_context(|| format!("stat image {}", canon_file.display()))?;
+    if meta.len() == 0 {
+        bail!("empty image: {rel}");
+    }
+    if meta.len() > MAX_IMAGE_PREVIEW_BYTES {
+        bail!(
+            "image too large for inline preview (max {} MB): {rel}",
+            MAX_IMAGE_PREVIEW_BYTES / (1024 * 1024)
+        );
+    }
+    let bytes = std::fs::read(&canon_file)
+        .with_context(|| format!("read image {}", canon_file.display()))?;
+    let b64 = encode_base64_std(&bytes);
+    Ok(format!("data:{mime};base64,{b64}"))
+}
+
+/// Standard base64 (no extra crate; shared with browser evidence style).
+fn encode_base64_std(data: &[u8]) -> String {
+    const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    let mut i = 0;
+    while i + 3 <= data.len() {
+        let n = ((data[i] as u32) << 16) | ((data[i + 1] as u32) << 8) | (data[i + 2] as u32);
+        out.push(T[((n >> 18) & 63) as usize] as char);
+        out.push(T[((n >> 12) & 63) as usize] as char);
+        out.push(T[((n >> 6) & 63) as usize] as char);
+        out.push(T[(n & 63) as usize] as char);
+        i += 3;
+    }
+    let rem = data.len() - i;
+    if rem == 1 {
+        let n = (data[i] as u32) << 16;
+        out.push(T[((n >> 18) & 63) as usize] as char);
+        out.push(T[((n >> 12) & 63) as usize] as char);
+        out.push('=');
+        out.push('=');
+    } else if rem == 2 {
+        let n = ((data[i] as u32) << 16) | ((data[i + 1] as u32) << 8);
+        out.push(T[((n >> 18) & 63) as usize] as char);
+        out.push(T[((n >> 12) & 63) as usize] as char);
+        out.push(T[((n >> 6) & 63) as usize] as char);
+        out.push('=');
+    }
+    out
+}

@@ -291,6 +291,18 @@ export function attachDocumentClick(deps) {
         }
         return;
       }
+      const bodyLess = el?.closest?.("[data-chat-body-less]");
+      if (bodyLess) {
+        e.preventDefault();
+        e.stopPropagation();
+        const msgKey = bodyLess.getAttribute("data-chat-body-less");
+        if (window.ccoChat?.collapseChatMsgBody) {
+          window.ccoChat.collapseChatMsgBody(msgKey);
+        } else if (typeof g("collapseChatMsgBody") === "function") {
+          call("collapseChatMsgBody", msgKey);
+        }
+        return;
+      }
 
       // P2-2: last_summary 沿用 / 忽略
       const lastSumBtn = el?.closest?.("[data-last-summary]");

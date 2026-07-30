@@ -58,12 +58,13 @@ export async function confirmWaveBatchSerial(waveKey, opts = {}) {
     toast("请先选择项目");
     return;
   }
+  // 批确认前检查是否有活跃 run
   if (typeof hasActiveRun === "function" && hasActiveRun()) {
-    toast("本轮还在执行，请等结束后再确认下一份");
+    toast("本轮还在执行，请先等结束后再确认下一份");
     return;
   }
   const root = state.selectedPath;
-  const pool = state.planRailItems || [];
+  const pool = state.planItems || [];
   const jobsBy = await loadWaveJobsByPath(root, pool, waveKey);
   const ov = buildWaveOverview({
     path: `${waveKey}/INDEX.md`,
@@ -80,11 +81,16 @@ export async function confirmWaveBatchSerial(waveKey, opts = {}) {
     toast("没有「已拆好」可确认的计划 · 请先逐份拆成步骤");
     return;
   }
+
+  // 明确告知用户将串行确认
   toast(`将串行确认 ${ready.length} 份（同一确认闸 · 不并行开跑）`);
+
   const gw =
     (typeof window !== "undefined" && window.ccoGateway) || gateway;
   for (let i = 0; i < ready.length; i++) {
     const row = ready[i];
+
+    // 每轮开始前再次检查活跃 run（防止后台手动启动）
     if (typeof hasActiveRun === "function" && hasActiveRun()) {
       toast(
         `已开跑中 · 本波剩余 ${ready.length - i} 份等本轮结束后再点「确认本波」`
@@ -100,19 +106,25 @@ export async function confirmWaveBatchSerial(waveKey, opts = {}) {
       }
       await gw.confirmStart(row.jobId);
       toast(`已确认开跑 ${i + 1}/${ready.length}：${row.title}`);
+
+      // 第 1 份开跑后暂停，避免同仓多 run
       if (i === 0 && ready.length > 1) {
         toast(
-          "已开跑第 1 份 · 默认同仓一次只跑一轮；结束后再点「确认本波」继续下一批"
+          `已开跑第 1 份 · 默认同仓一次只跑一轮；剩余 ${ready.length - 1} 份等本轮结束后再点「确认本波」继续`
         );
         break;
       }
     } catch (e) {
+      // 失败即停：人话说清哪份失败、还剩几份未动、下一步怎么办
+      const rest = ready.length - i - 1;
+      const restNote = rest > 0 ? `其余 ${rest} 份未动` : "后面没有其他份了";
       toast(
-        `确认失败（${row.title}）：${String(e?.message || e)} · 其余未动`
+        `确认失败（${row.title}）：${String(e?.message || e)} · ${restNote} · 处理后再点「确认本波」重试`
       );
       break;
     }
   }
+
   try {
     if (typeof opts.after === "function") await opts.after();
   } catch (_) {}
@@ -121,7 +133,7 @@ export async function confirmWaveBatchSerial(waveKey, opts = {}) {
 /** Open next unsplit plan on the split desk. */
 export async function splitNextInWave(waveKey) {
   const root = state.selectedPath;
-  const pool = state.planRailItems || [];
+  const pool = state.planItems || [];
   const jobsBy = await loadWaveJobsByPath(root, pool, waveKey);
   const ov = buildWaveOverview({
     path: `${waveKey}/INDEX.md`,
@@ -135,7 +147,7 @@ export async function splitNextInWave(waveKey) {
   });
   const next = (ov?.rows || []).find((r) => r.canSplit);
   if (!next) {
-    toast("没有未拆的执行计划");
+    toast("没有未拆的执行计划 · 本波所有计划都已拆开或已完成");
     return;
   }
   await assignFromPlansMgmtPath(next.path);
@@ -147,7 +159,9 @@ export async function assignFromPlansMgmtPath(path) {
     return;
   }
   if (isWaveIndexPath(path)) {
-    toast("索引不能拆步 · 请选执行计划");
+    toast(
+      "这份是本波索引（目录），不是可拆的执行计划 · 请在同一组里点开某份执行计划再「拆成步骤」"
+    );
     return;
   }
   host.selectPlanRailItem(path);

@@ -1,6 +1,9 @@
 /target
+node_modules/
 **/*.rs.bk
+*.bak
 .DS_Store
+.qoder/
 .cco/
 .cco-out/
 *.swp

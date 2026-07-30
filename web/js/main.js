@@ -493,6 +493,8 @@ function wireShellNav() {
             appVm.selectProject(s.selectedPath);
           }
           appVm.goAuthor();
+          // Also sync chat sessions when navigating to chat page
+          softSyncFromLegacy();
         }, 0);
       },
       true
@@ -546,6 +548,14 @@ function softSyncFromLegacy() {
   const path = s.selectedPath || null;
   if (path !== chatVm.getSnapshot().projectPath) {
     chatVm.setProject(path);
+    // Trigger session list + current session load when project changes so history renders
+    if (typeof chatDesk.loadChatSessionList === "function") {
+      chatDesk.loadChatSessionList().catch(() => {});
+    }
+    // Also load current session messages (needed when switching to chat page)
+    if (typeof chatDesk.loadChatSession === "function") {
+      chatDesk.loadChatSession().catch(() => {});
+    }
   }
   if (s.planJob && (s.phase === "confirm" || s.phase === "planning")) {
     try {

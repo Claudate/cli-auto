@@ -1,62 +1,27 @@
 /**
- * [INPUT]: legacy · gateway · planDir · host mgmt/full/ready
- * [OUTPUT]: load plan meta/list · select · badge（聊天右栏 DOM 已撤；paint 仅 no-op）
+ * [INPUT]: legacy · gateway · chatState
+ * [OUTPUT]: load plan items list · select · badge info（聊天右栏 UI 已撤；renderPlanRail 已删除）
  * [POS]: A5-2a features/chat/planRail.js
+ * [DEPRECATED]: 正在迁移到 plansMgmt.js；保留数据加载函数直到完成迁移
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 import {
   state,
-  $,
   normalizePlanPath,
   planDisplayName,
   planExecBadgeInfo,
   applyPlanMetaItems,
-  partitionPlanItems,
   isPlanUnderProject,
   selectPlan,
-  syncShowExecutedToggles,
 } from "./legacy.js";
 import gateway from "../../shared/gateway.js";
 import { host } from "./host.js";
-import { ensureChatState, sanitizePlanTitle } from "./chatState.js";
-import {
-  getPlansDir,
-  applyPlanRailVisibility,
-  syncPlansDirLabels,
-  partitionByPlansDir,
-} from "./planDir.js";
-import { chatEsc } from "./chatFormat.js";
+import { ensureChatState } from "./chatState.js";
 import * as chatApi from "./chatApi.js";
 
-export function planRailTitleFromPath(path) {
-  if (typeof planDisplayName === "function") return planDisplayName(path);
-  const parts = String(path || "").split(/[/\\]/).filter(Boolean);
-  return parts[parts.length - 1] || path || "—";
-}
-
-/** H2: alias → shared planExecBadgeInfo (chooser / rail 同一规则) */
-export function planRailBadgeInfo(item) {
-  if (typeof planExecBadgeInfo === "function") return planExecBadgeInfo(item);
-  if (!item) return { label: "未执行", cls: "plan-rail-badge-pending", kind: "pending" };
-  if (item.ever_completed || item.everCompleted) {
-    return { label: "已执行", cls: "plan-rail-badge-done", kind: "done" };
-  }
-  const st = String(item.last_run_status || item.lastRunStatus || "").toLowerCase();
-  if (st && ["aborted", "stopped", "cancelled", "canceled"].includes(st)) {
-    return { label: "已中止", cls: "plan-rail-badge-pending", kind: "stopped" };
-  }
-  if (st && ["failed", "timeout"].includes(st)) {
-    return { label: "失败过", cls: "plan-rail-badge-failed", kind: "failed" };
-  }
-  if (st && st !== "completed" && st !== "done" && st !== "paused") {
-    return { label: "失败过", cls: "plan-rail-badge-failed", kind: "failed" };
-  }
-  return { label: "未执行", cls: "plan-rail-badge-pending", kind: "pending" };
-}
-
+/** 从 markdown 提取 # 标题 */
 export function planTitleFromMarkdown(md) {
   if (!md) return null;
-  // Prefer line-based scan; also handle single-line walls (no \n).
   const text = String(md);
   for (const line of text.split("\n")) {
     const t = line.trim();
@@ -72,16 +37,34 @@ export function planTitleFromMarkdown(md) {
   return null;
 }
 
-export async function loadPlanRail() {
+/** 从路径/时间戳猜「最新」计划（chat-YYYYMMDD-HHMM 优先，否则列表首项）. */
+export function pickLatestPlanPath(items) {
+  if (!Array.isArray(items) || !items.length) return null;
+  let best = null;
+  let bestKey = "";
+  for (const it of items) {
+    const p = String(it.path || "");
+    const base = p.split(/[/\\]/).pop() || p;
+    const m = base.match(/(\d{8})[-_]?(\d{4,6})?/);
+    const key = m ? `${m[1]}${m[2] || "0000"}` : "";
+    if (key && key >= bestKey) {
+      bestKey = key;
+      best = p;
+    }
+  }
+  if (best) return best;
+  return items[0]?.path || null;
+}
+
+/** 加载计划列表数据到 state.planItems */
+export async function loadPlanItems() {
   ensureChatState();
   if (!state.selectedPath) {
-    state.planRailItems = [];
-    state.planRailLoading = false;
-    renderPlanRail();
+    state.planItems = [];
+    state.planItemsLoading = false;
     return [];
   }
-  state.planRailLoading = true;
-  renderPlanRail();
+  state.planItemsLoading = true;
   const root = state.selectedPath;
   try {
     // SQLite split index for「已拆分」badge / reopen (best-effort)
@@ -154,12 +137,10 @@ export async function loadPlanRail() {
         }
       }
     }
-    // 仅 pin 仍在磁盘上的选中/草稿（list_plans 文件名过滤漏网时补回）。
-    // **禁止**用 planSplitByPath 注入 — 源 md 已删时会变「幽灵已拆分」。
+    // 仅 pin 仍在磁盘上的选中/草稿
     const pinInject = [
       state.selectedPlan,
       state.chatDraftPlan,
-      state.planRailSelected,
     ];
     for (const raw of pinInject) {
       if (!raw) continue;
@@ -187,9 +168,6 @@ export async function loadPlanRail() {
         if (state.chatDraftPlan === raw || state.chatDraftPlan === path) {
           state.chatDraftPlan = null;
         }
-        if (state.planRailSelected === raw || state.planRailSelected === path) {
-          state.planRailSelected = null;
-        }
         continue;
       }
       items.unshift({
@@ -199,9 +177,9 @@ export async function loadPlanRail() {
         last_run_status: null,
       });
     }
-    // E4：全量保留在 planRailItemsAll；默认展示按 plans_dir 过滤
-    state.planRailItemsAll = items;
-    // Sync chooser path list when rail loads first（仍用全量，换文件可跨夹）
+    // 全量保留在 planItemsAll
+    state.planItemsAll = items;
+    // Sync chooser path list when rail loads first
     if (items.length && (!state.plans || !state.plans.length)) {
       state.plans = items.map((it) => it.path);
     } else if (items.length && Array.isArray(state.plans)) {
@@ -211,167 +189,26 @@ export async function loadPlanRail() {
         }
       }
     }
-    state.planRailItems = items;
+    state.planItems = items;
   } catch (e) {
-    console.warn("loadPlanRail", e);
-    state.planRailItems = [];
+    console.warn("loadPlanItems", e);
+    state.planItems = [];
   } finally {
-    state.planRailLoading = false;
-    renderPlanRail();
+    state.planItemsLoading = false;
     if (state.page === "plans") {
       try {
         host.renderPlansMgmtPage();
       } catch (_) {}
     }
   }
-  return state.planRailItems;
+  return state.planItems;
 }
 
-export function renderPlanRail() {
-  ensureChatState();
-  applyPlanRailVisibility();
-  syncPlansDirLabels();
-  // 聊天右栏 DOM 已撤：仅维护 state / 目录标签；列表 UI 在 page-plans
-  const list = $("#plan-rail-list");
-  const empty = $("#plan-rail-empty");
-  if (!list) return;
-  // 兼容旧壳：若残 DOM 仍存在也不展开
-  if (!state.planRailOpen) return;
-  if (typeof syncShowExecutedToggles === "function") syncShowExecutedToggles();
-  if (state.planRailLoading) {
-    if (empty) empty.hidden = true;
-    list.innerHTML =
-      '<div class="plan-rail-loading"><span class="spinner sm" aria-hidden="true"></span>扫描计划…</div>';
-    return;
-  }
-  const root = state.selectedPath;
-  const selectedPath =
-    state.planRailSelected ||
-    state.selectedPlan ||
-    (state.planFull?.open && state.planFull.path) ||
-    state.chatDraftPlan ||
-    null;
-  const activePath =
-    typeof normalizePlanPath === "function" && selectedPath
-      ? normalizePlanPath(selectedPath, root) || selectedPath
-      : selectedPath;
-  // 未保存/草稿 + 当前选中/打开 优先露出（即使已执行也不藏）
-  const pinPaths = [
-    state.chatDraftPlan,
-    state.selectedPlan,
-    state.planRailSelected,
-    activePath,
-    state.planFull?.path,
-  ]
-    .filter(Boolean)
-    .map((p) => (typeof normalizePlanPath === "function" ? normalizePlanPath(p, root) || p : p));
-
-  // E4：右栏默认本夹
-  const dirParts = partitionByPlansDir(state.planRailItems || [], {
-    plansDir: getPlansDir(),
-    root,
-    pinPaths,
-    showOther: false,
-  });
-  const dirItems = dirParts.primary;
-  if (!(state.planRailItems || []).length || !dirItems.length) {
-    list.innerHTML = "";
-    if (empty) {
-      empty.hidden = false;
-      empty.textContent = `「${getPlansDir()}/」暂无 · 保存后出现在这里`;
-    }
-    return;
-  }
-  if (empty) empty.hidden = true;
-
-  const parts =
-    typeof partitionPlanItems === "function"
-      ? partitionPlanItems(dirItems, {
-          showExecuted: !!state.showExecutedPlans,
-          pinPaths,
-        })
-      : {
-          visible: dirItems,
-          historyHidden: false,
-          historyCount: 0,
-        };
-
-  const latestPath = pickLatestPlanPath(parts.visible);
-  const latestNorm =
-    latestPath && typeof normalizePlanPath === "function"
-      ? normalizePlanPath(latestPath, root) || latestPath
-      : latestPath;
-
-  // shell-chrome C1：当前内存里的 planJob 指向哪份计划 → 可「查看拆分结果」
-  const job = state.planJob;
-  const jobSt = String(job?.status || "").toLowerCase();
-  const jobPathRaw = job?.plan_path || job?.planPath || "";
-  const jobPath =
-    jobPathRaw && typeof normalizePlanPath === "function"
-      ? normalizePlanPath(jobPathRaw, root) || jobPathRaw
-      : jobPathRaw;
-  const jobHasSplit =
-    !!job &&
-    !!jobPath &&
-    ["planned", "confirmed", "running", "done", "completed"].includes(jobSt);
-
-  const rows = parts.visible.map((it) => {
-    const path = it.path || "";
-    const rawTitle = it.title || planRailTitleFromPath(path);
-    const title = sanitizePlanTitle(rawTitle) || planRailTitleFromPath(path);
-    const badge = planRailBadgeInfo(it);
-    const norm =
-      typeof normalizePlanPath === "function" ? normalizePlanPath(path, root) || path : path;
-    const active = norm && activePath && norm === activePath ? " is-active" : "";
-    const selected =
-      state.planRailSelected &&
-      (state.planRailSelected === path || state.planRailSelected === norm)
-        ? " is-selected"
-        : "";
-    const isLatest =
-      latestNorm && (norm === latestNorm || path === latestPath) ? " is-latest" : "";
-    const latestMark = isLatest
-      ? `<span class="plan-latest-tag">最新</span>`
-      : "";
-    const canViewSplit =
-      jobHasSplit &&
-      (norm === jobPath || path === jobPath || path === jobPathRaw);
-    const viewSplitBtn = canViewSplit
-      ? `<button type="button" class="plan-rail-view-split" data-plan-rail-view="${chatEsc(
-          path
-        )}" title="查看拆分结果">查看拆分结果</button>`
-      : "";
-    return (
-      `<div class="plan-rail-row${active}${selected}${isLatest}">` +
-      `<button type="button" class="plan-rail-item${active}${selected}${isLatest}" data-plan-rail="${chatEsc(path)}" title="${chatEsc(path)}">` +
-      `<div class="plan-rail-item-title">${chatEsc(title)}${latestMark}</div>` +
-      `<div class="plan-rail-item-path">${chatEsc(path)}</div>` +
-      `<div class="plan-rail-item-meta"><span class="plan-rail-badge ${badge.cls}">${chatEsc(badge.label)}</span></div>` +
-      `</button>` +
-      viewSplitBtn +
-      `</div>`
-    );
-  });
-  if (parts.historyHidden) {
-    rows.push(
-      `<div class="plan-history-hint muted" role="note">` +
-        `已隐藏 ${parts.historyCount} 份已执行 · 勾选「显示已执行」可展开；有拆分的可点「查看拆分结果」` +
-        `</div>`
-    );
-  }
-  list.innerHTML = rows.join("");
-}
-
-/**
- * shell-chrome C1：从聊天 plan-rail 回看拆分台。
- * Restores from SQLite/disk when memory planJob is missing or for another plan.
- * @param {string} [planPath]
- */
+/** shell-chrome C1：从聊天回看拆分台。Restores from SQLite/disk when memory planJob is missing. */
 export async function viewSplitFromPlanRail(planPath) {
   ensureChatState();
   const path =
     planPath ||
-    state.planRailSelected ||
     state.selectedPlan ||
     null;
   if (!path) {
@@ -436,27 +273,6 @@ export async function viewSplitFromPlanRail(planPath) {
   if (typeof window.showPage === "function") window.showPage("workspace");
 }
 
-/** 从路径/时间戳猜「最新」计划（chat-YYYYMMDD-HHMM 优先，否则列表首项）. */
-export function pickLatestPlanPath(items) {
-  if (!Array.isArray(items) || !items.length) return null;
-  let best = null;
-  let bestKey = "";
-  for (const it of items) {
-    const p = String(it.path || "");
-    const base = p.split(/[/\\]/).pop() || p;
-    // chat-20260719-2245.md / cco-plan-...
-    const m = base.match(/(\d{8})[-_]?(\d{4,6})?/);
-    const key = m ? `${m[1]}${m[2] || "0000"}` : "";
-    if (key && key >= bestKey) {
-      bestKey = key;
-      best = p;
-    }
-  }
-  if (best) return best;
-  // fallback: first visible / last in array (often newest scan order)
-  return items[0]?.path || null;
-}
-
 /** G1: single-click selects plan (no modal). */
 export function selectPlanRailItem(planPath) {
   ensureChatState();
@@ -466,17 +282,12 @@ export function selectPlanRailItem(planPath) {
     typeof normalizePlanPath === "function"
       ? normalizePlanPath(planPath, root) || planPath
       : planPath;
-  state.planRailSelected = path;
+  state.selectedPlan = path;
   if (typeof selectPlan === "function") {
     try {
       selectPlan(path);
-    } catch (_) {
-      state.selectedPlan = path;
-    }
-  } else {
-    state.selectedPlan = path;
+    } catch (_) {}
   }
-  renderPlanRail();
   if (state.page === "plans") {
     try {
       host.renderPlansMgmtPage();

@@ -1,11 +1,16 @@
 /**
  * [INPUT]: assistant plain text · state.chatQuizDraft / chatMsgFold
- * [OUTPUT]: 编号题 A/B/C 可点选 · 历史消息默认折叠自展开
+ * [OUTPUT]: 编号题 A/B/C 可点选 · 历史消息折叠（Cursor 风：少折、摘要可读、气泡内渐隐）
  * [POS]: features/chat/chatMsgEnhance.js — 不进 chatFormat 厚文件
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
  * 解析须容忍模型常见 markdown：`**1. 标题？**`、硬换行尾空格、`---` 分隔。
  * 回归：`node scripts/chat-quiz-parse-smoke.mjs`（真实会话 shape）。
+ *
+ * 折叠策略（对齐 Cursor / Claude.ai）：
+ * - 短会话不整条折；只折「更早」的长消息
+ * - 短用户句永远展开；优先气泡内 clamp，而不是整条灰条
+ * - 摘要去 markdown 符号，像正常预览而不是源码一行
  *
  * 不做：改 Mode B / confirm；不在 JS 写业务策略；不堆进 chatFormat/chatClarify。
  */
@@ -15,10 +20,15 @@ import { chatEsc } from "./chatFormat.js";
 import { ensureChatState, stashChatSession } from "./chatState.js";
 
 const STYLE_ID = "cco-chat-msg-enhance-style";
-const FOLD_CHAR_SOFT = 420;
-const FOLD_LINES_SOFT = 10;
-/** Keep this many newest messages fully open (plus pending bubble). */
-const KEEP_OPEN_TAIL = 2;
+/** 气泡内「展开全部」：更长才裁，给截图报告留出可视高度 */
+const FOLD_CHAR_SOFT = 900;
+const FOLD_LINES_SOFT = 18;
+/** 最近 N 条整条展开（含用户短句）；更早的才考虑整条折 */
+const KEEP_OPEN_TAIL = 8;
+/** 总条数少于此，整条不自动折（短会话完整时间线） */
+const MIN_TOTAL_TO_AUTO_FOLD = 12;
+/** 短于此时长的内容不自动整条折（用户短句 / 短确认） */
+const SHORT_MSG_CHARS = 160;
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
@@ -28,46 +38,111 @@ export function ensureChatMsgEnhanceStyles() {
   const s = document.createElement("style");
   s.id = STYLE_ID;
   s.textContent = `
+/* 整条折起：保留左右对齐，看起来像变淡的气泡预览，而不是工具条 */
+.chat-msg.is-folded {
+  opacity: 0.92;
+}
 .chat-msg.is-folded > .chat-msg-body { display: none; }
 .chat-msg-fold-bar {
-  display: flex; align-items: flex-start; gap: 0.5rem;
-  margin: 0.15rem 0 0.1rem; padding: 0.45rem 0.65rem;
-  border-radius: 10px; border: 1px solid var(--border, #e5e7eb);
-  background: color-mix(in srgb, var(--bg3, #f3f4f6) 70%, transparent);
-  cursor: pointer; text-align: left; width: 100%; box-sizing: border-box;
-  font: inherit; color: var(--text, #111);
+  display: flex; align-items: center; gap: 0.55rem;
+  margin: 0.1rem 0; padding: 0.55rem 0.75rem;
+  border-radius: 14px; border: 1px solid color-mix(in srgb, var(--border, #e5e7eb) 85%, transparent);
+  background: color-mix(in srgb, var(--bg2, #fff) 88%, var(--bg3, #f3f4f6));
+  cursor: pointer; text-align: left; width: auto; max-width: min(100%, 36rem);
+  box-sizing: border-box; font: inherit; color: var(--text, #111);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 35%, transparent);
+  transition: border-color .12s ease, background .12s ease, box-shadow .12s ease;
+}
+.chat-msg-user.is-folded {
+  display: flex; justify-content: flex-end;
+}
+.chat-msg-user.is-folded .chat-msg-fold-bar {
+  margin-left: auto;
+  background: color-mix(in srgb, var(--accent, #2563eb) 8%, var(--bg2, #fff));
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 18%, var(--border));
+}
+.chat-msg-assistant.is-folded .chat-msg-fold-bar,
+.chat-msg-system.is-folded .chat-msg-fold-bar {
+  max-width: min(100%, 40rem);
 }
 .chat-msg-fold-bar:hover {
-  border-color: color-mix(in srgb, var(--accent, #2563eb) 35%, var(--border));
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent, #2563eb) 6%, var(--bg2, #fff));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent, #2563eb) 10%, transparent);
+}
+.chat-msg-fold-bar:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent, #2563eb) 55%, transparent);
+  outline-offset: 2px;
 }
 .chat-msg-fold-role {
-  flex-shrink: 0; font-size: 0.72rem; font-weight: 600;
-  color: var(--muted, #6b7280); min-width: 1.6rem; padding-top: 0.1rem;
+  flex-shrink: 0; font-size: 0.68rem; font-weight: 650; letter-spacing: 0.02em;
+  color: var(--muted, #6b7280); min-width: 1.4rem; line-height: 1.2;
+  padding: 0.12rem 0.35rem; border-radius: 999px;
+  background: color-mix(in srgb, var(--bg3, #f3f4f6) 80%, transparent);
+}
+.chat-msg-fold-main {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.12rem;
 }
 .chat-msg-fold-sum {
-  flex: 1; min-width: 0; font-size: 0.84rem; line-height: 1.4;
-  color: var(--muted, #6b7280);
+  font-size: 0.86rem; line-height: 1.45;
+  color: color-mix(in srgb, var(--text, #111) 78%, var(--muted, #6b7280));
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow: hidden; word-break: break-word;
+}
+.chat-msg-fold-meta {
+  font-size: 0.7rem; color: var(--muted, #6b7280); line-height: 1.2;
 }
 .chat-msg-fold-cta {
-  flex-shrink: 0; font-size: 0.75rem; color: var(--accent, #2563eb);
-  font-weight: 550; white-space: nowrap; padding-top: 0.1rem;
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.2rem;
+  font-size: 0.72rem; color: var(--accent, #2563eb);
+  font-weight: 600; white-space: nowrap; padding: 0.15rem 0.1rem;
+  opacity: 0.92;
 }
+.chat-msg-fold-cta::after {
+  content: ""; width: 0.4rem; height: 0.4rem;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); margin-left: 0.05rem; opacity: 0.85;
+}
+/* 气泡内裁切：更高可视区 + 底部渐隐，像 Cursor「Show more」 */
 .chat-msg-body-long {
   position: relative;
 }
 .chat-msg-body-long.is-clamped .chat-msg-body-inner {
-  max-height: 9.5rem; overflow: hidden;
-  mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+  max-height: 22rem; overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
+}
+.chat-msg-body-long.is-clamped > .chat-msg-body-more {
+  position: sticky; bottom: 0;
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  margin-top: -0.15rem; padding: 0.35rem 0.15rem 0.1rem;
+  background: linear-gradient(to bottom, transparent, var(--bg2, #fff) 35%);
+  width: 100%; box-sizing: border-box;
 }
 .chat-msg-body-more {
   margin-top: 0.35rem; font: inherit; font-size: 0.78rem;
   color: var(--accent, #2563eb); background: none; border: none;
-  cursor: pointer; padding: 0.15rem 0; font-weight: 550;
+  cursor: pointer; padding: 0.2rem 0; font-weight: 550;
 }
 .chat-msg-body-more:hover { text-decoration: underline; }
+/* 展开后的「收起」：放在气泡底部，够明显可点 */
+.chat-msg-collapse-row {
+  display: flex; align-items: center; justify-content: flex-start;
+  gap: 0.65rem; margin-top: 0.45rem; padding-top: 0.35rem;
+  border-top: 1px solid color-mix(in srgb, var(--border, #e5e7eb) 70%, transparent);
+}
+.chat-msg-user .chat-msg-collapse-row { justify-content: flex-end; }
+.chat-msg-collapse-row .chat-msg-body-more,
+.chat-msg-collapse-row .chat-msg-fold-again {
+  margin: 0; font-size: 0.78rem; opacity: 1; font-weight: 600;
+  padding: 0.2rem 0.15rem;
+}
+.chat-msg-fold-again {
+  font: inherit; font-size: 0.78rem;
+  color: var(--accent, #2563eb); background: none; border: none;
+  cursor: pointer; padding: 0.2rem 0; font-weight: 600;
+}
+.chat-msg-fold-again:hover { text-decoration: underline; }
 
 .chat-quiz {
   margin: 0.55rem 0 0.25rem;
@@ -407,29 +482,76 @@ export function enhanceAssistantBody(text, msgIndex, formatBodyFn) {
 
 // ─── Message fold ────────────────────────────────────────────────────────────
 
-function oneLineSummary(text, max = 72) {
-  const s = String(text || "")
-    .replace(/```[\s\S]*?```/g, "〔计划/代码〕")
+/** Strip md noise so folded preview reads like speech, not source. */
+function cleanPreviewText(text) {
+  return String(text || "")
+    .replace(/```[\s\S]*?```/g, " 〔代码/计划〕 ")
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, " 〔图〕 ")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, "$1$2")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/\|/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function oneLineSummary(text, max = 96) {
+  const s = cleanPreviewText(text);
   if (!s) return "（空消息）";
   const chars = Array.from(s);
   if (chars.length <= max) return s;
   return chars.slice(0, max).join("") + "…";
 }
 
+function contentStats(text) {
+  const s = String(text || "");
+  const lines = s ? s.split(/\n/).length : 0;
+  return { chars: s.length, lines };
+}
+
+/**
+ * Cursor-like whole-message fold:
+ * - user preference always wins
+ * - short chats stay fully open
+ * - recent KEEP_OPEN_TAIL stay open
+ * - short user / short assistant never auto-fold
+ * - only older, longer turns collapse to a preview pill
+ *
+ * @param {number} msgIndex
+ * @param {number} total
+ * @param {string} content
+ * @param {{ forceOpen?: boolean, role?: string }} [opts]
+ */
 export function shouldFoldMessage(msgIndex, total, content, opts = {}) {
   ensureQuizDraftBag();
   const key = quizMsgKey(msgIndex);
   // Explicit user preference wins
   if (state.chatMsgFold[key] === false) return false;
   if (state.chatMsgFold[key] === true) return true;
-  // Default: fold all but last KEEP_OPEN_TAIL (unless forceOpen e.g. has quiz on latest)
   if (opts.forceOpen) return false;
+
   const fromEnd = total - 1 - msgIndex;
   if (fromEnd < KEEP_OPEN_TAIL) return false;
-  // Always offer fold for older turns
+  if (total < MIN_TOTAL_TO_AUTO_FOLD) return false;
+
+  const { chars } = contentStats(content);
+  const role = String(opts.role || "");
+  // Short user pings / short AI acks stay visible — folding them into pills is hostile
+  if (role === "user" && chars <= SHORT_MSG_CHARS * 1.5) return false;
+  if (chars <= SHORT_MSG_CHARS) return false;
+
   return true;
+}
+
+/** True if content is long enough to deserve clamp / collapse controls. */
+export function isLongChatBody(content) {
+  const { chars, lines } = contentStats(content);
+  return chars > FOLD_CHAR_SOFT || lines > FOLD_LINES_SOFT;
 }
 
 export function shouldClampBody(content, msgIndex, opts = {}) {
@@ -437,9 +559,16 @@ export function shouldClampBody(content, msgIndex, opts = {}) {
   ensureQuizDraftBag();
   const key = quizMsgKey(msgIndex);
   if (state.chatMsgBodyOpen[key]) return false;
-  const s = String(content || "");
-  const lines = s.split(/\n/).length;
-  return s.length > FOLD_CHAR_SOFT || lines > FOLD_LINES_SOFT;
+  return isLongChatBody(content);
+}
+
+/** Body was long + user already clicked 展开全部 → show 收起. */
+export function shouldShowBodyCollapse(content, msgIndex, opts = {}) {
+  if (opts.usedQuiz) return false;
+  ensureQuizDraftBag();
+  const key = quizMsgKey(msgIndex);
+  if (!state.chatMsgBodyOpen[key]) return false;
+  return isLongChatBody(content);
 }
 
 export function wrapClampedBody(innerHtml, msgIndex, clamped) {
@@ -455,15 +584,48 @@ export function wrapClampedBody(innerHtml, msgIndex, clamped) {
   );
 }
 
-export function renderFoldBarHtml(roleLabel, content, msgIndex) {
+/** Full body after 展开全部 — bottom 「收起」 re-clamps. */
+export function wrapExpandedBody(innerHtml, msgIndex) {
+  const key = quizMsgKey(msgIndex);
+  return (
+    `<div class="chat-msg-body-long" data-msg-body="${chatEsc(key)}">` +
+    `<div class="chat-msg-body-inner">${innerHtml}</div>` +
+    `<div class="chat-msg-collapse-row">` +
+    `<button type="button" class="chat-msg-body-more" data-chat-body-less="${chatEsc(
+      key
+    )}">收起</button>` +
+    `</div>` +
+    `</div>`
+  );
+}
+
+export function renderFoldBarHtml(roleLabel, content, msgIndex, opts = {}) {
   const key = quizMsgKey(msgIndex);
   const sum = oneLineSummary(content);
+  const { chars, lines } = contentStats(content);
+  let meta = "";
+  if (chars > 240 || lines > 6) {
+    meta =
+      lines > 8
+        ? `${lines} 行 · 点击展开`
+        : chars > 500
+          ? `较长回复 · 点击展开`
+          : `点击展开`;
+  } else {
+    meta = "点击展开";
+  }
+  const role = String(opts.role || "");
+  const aria =
+    role === "user" ? "展开我的这条消息" : "展开 AI 的这条消息";
   return (
     `<button type="button" class="chat-msg-fold-bar" data-chat-msg-unfold="${chatEsc(
       key
-    )}" title="展开这条消息">` +
+    )}" title="${chatEsc(aria)}" aria-label="${chatEsc(aria + "：" + sum)}">` +
     `<span class="chat-msg-fold-role">${chatEsc(roleLabel)}</span>` +
+    `<span class="chat-msg-fold-main">` +
     `<span class="chat-msg-fold-sum">${chatEsc(sum)}</span>` +
+    `<span class="chat-msg-fold-meta">${chatEsc(meta)}</span>` +
+    `</span>` +
     `<span class="chat-msg-fold-cta">展开</span>` +
     `</button>`
   );
@@ -472,10 +634,36 @@ export function renderFoldBarHtml(roleLabel, content, msgIndex) {
 export function renderFoldAgainBtn(msgIndex) {
   const key = quizMsgKey(msgIndex);
   return (
-    `<button type="button" class="chat-msg-body-more" data-chat-msg-fold="${chatEsc(
+    `<div class="chat-msg-collapse-row">` +
+    `<button type="button" class="chat-msg-fold-again" data-chat-msg-fold="${chatEsc(
       key
-    )}" style="margin:0.15rem 0 0.35rem">收起这条</button>`
+    )}" title="收起这条消息">收起</button>` +
+    `</div>`
   );
+}
+
+/**
+ * Show whole-message 「收起」 when:
+ * - user explicitly unfolded a folded pill, or
+ * - message is long enough that auto-fold would apply (older long turns)
+ * Not for the newest couple turns / short pings.
+ */
+export function shouldShowFoldAgain(msgIndex, total, content, opts = {}) {
+  ensureQuizDraftBag();
+  const key = quizMsgKey(msgIndex);
+  // User explicitly unfolded → always offer re-fold (even if now near tail)
+  if (state.chatMsgFold[key] === false) return true;
+  if (opts.forceOpen) return false;
+  const fromEnd = total - 1 - msgIndex;
+  // Keep the live end clean — no collapse chrome on the last 2
+  if (fromEnd < 2) return false;
+  const { chars } = contentStats(content);
+  if (chars <= SHORT_MSG_CHARS) return false;
+  // Long body: allow manual whole-fold even in mid-session (not only auto-fold band)
+  if (isLongChatBody(content) && fromEnd >= 2) return true;
+  if (fromEnd < KEEP_OPEN_TAIL) return false;
+  if (total < MIN_TOTAL_TO_AUTO_FOLD) return false;
+  return true;
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
@@ -609,5 +797,19 @@ export function foldChatMessage(msgKey) {
 export function expandChatMsgBody(msgKey) {
   ensureQuizDraftBag();
   state.chatMsgBodyOpen[String(msgKey)] = true;
+  repaintMessages();
+}
+
+/** Reverse of 展开全部 — re-clamp long body. */
+export function collapseChatMsgBody(msgKey) {
+  ensureQuizDraftBag();
+  const key = String(msgKey || "");
+  if (!key) return;
+  if (state.chatMsgBodyOpen && typeof state.chatMsgBodyOpen === "object") {
+    delete state.chatMsgBodyOpen[key];
+  }
+  try {
+    stashChatSession(state.selectedPath);
+  } catch (_) {}
   repaintMessages();
 }

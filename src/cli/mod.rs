@@ -174,6 +174,116 @@ pub enum Commands {
     Tui {
         run_id: Option<String>,
     },
+    /// Git operations: status / remote (国内·国外) / identity / commit / push / doctor
+    Git {
+        #[command(subcommand)]
+        cmd: GitCommands,
+    },
+}
+
+/// `cco git` subcommands.
+#[derive(Debug, Subcommand)]
+pub enum GitCommands {
+    /// Show git status for a project (branch / changes / remotes / identity)
+    Status {
+        #[arg(long)]
+        project: Option<PathBuf>,
+    },
+    /// Manage configured remotes (国内 Gitee / 国外 GitHub …)
+    Remote {
+        #[command(subcommand)]
+        cmd: GitRemoteCommands,
+    },
+    /// Set or show repo-local git identity (user.name / user.email)
+    Identity {
+        #[command(subcommand)]
+        cmd: GitIdentityCommands,
+    },
+    /// Commit changes (auto-filters secrets/.env; optional push)
+    Commit {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        /// Commit message (required unless --dry-run)
+        #[arg(short, long)]
+        message: Option<String>,
+        /// List files that would be committed without committing
+        #[arg(long)]
+        dry_run: bool,
+        /// Push after successful commit
+        #[arg(long)]
+        push: bool,
+        /// Add all changes (default); use --paths to add specific files
+        #[arg(long, default_value_t = true)]
+        all: bool,
+        /// Specific paths to add (overrides --all)
+        #[arg(long, value_delimiter = ',')]
+        paths: Vec<String>,
+        /// Allow force-push (only effective when config.git.auto_commit.allow_force is true)
+        #[arg(long)]
+        force: bool,
+    },
+    /// Push current branch to a remote
+    Push {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        /// Remote name (default: picked from config.git.default_region)
+        #[arg(long)]
+        remote: Option<String>,
+        /// Branch (default: current)
+        #[arg(long)]
+        branch: Option<String>,
+        /// Force-push (only if config.git.auto_commit.allow_force)
+        #[arg(long)]
+        force: bool,
+    },
+    /// Check git environment (binary / repo / remotes / identity)
+    Doctor {
+        #[arg(long)]
+        project: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum GitRemoteCommands {
+    /// List configured remotes
+    List,
+    /// Add or update a remote in config (国内|国外)
+    Add {
+        name: String,
+        url: String,
+        /// domestic | overseas (aliases: cn/国内/github/海外…)
+        #[arg(long, default_value = "overseas")]
+        region: String,
+        #[arg(long)]
+        note: Option<String>,
+    },
+    /// Remove a remote from config (does not touch git itself)
+    Remove {
+        name: String,
+    },
+    /// Apply configured remotes to the actual git repo (git remote add/set-url)
+    Apply {
+        #[arg(long)]
+        project: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum GitIdentityCommands {
+    /// Set repo-local user.name / user.email (never touches --global)
+    Set {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        email: Option<String>,
+    },
+    /// Show current identity
+    Show {
+        #[arg(long)]
+        project: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -288,5 +398,6 @@ pub async fn execute(cli: Cli) -> Result<i32> {
         } => commands::logs::run(&config, run_id, task, follow).await,
         Commands::Term { cmd } => commands::term::run(&config, cmd),
         Commands::Tui { run_id } => commands::tui_cmd::run(&config, run_id),
+        Commands::Git { cmd } => commands::git::run(&config, cmd),
     }
 }

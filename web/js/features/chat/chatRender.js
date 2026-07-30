@@ -3,6 +3,7 @@
  * [OUTPUT]: renderChat* · fillChatExample · env-bar helpers
  * [POS]: A5-2a features/chat；自 chatActions 纵切（P-ship-D）
  * note: P0-B setPersonaAndPaint 时 best-effort 保存项目 persona/芯片（chatPersonaSync）
+ * note: 渲染后 hydrateChatImages — 本地截图/附件 path → data URL 内联
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 import {
@@ -35,15 +36,21 @@ import {
   ensureClaimDraftMessageVisible,
   renderHollowBarHtml,
 } from "./chatClarify.js";
+// Note: ensureClaimDraftMessageVisible and renderHollowBarHtml are now in clarify/briefAndClaim.js
+// but re-exported from chatClarify for backward compatibility.
 import {
   enhanceAssistantBody,
   shouldFoldMessage,
   shouldClampBody,
+  shouldShowBodyCollapse,
+  shouldShowFoldAgain,
   wrapClampedBody,
+  wrapExpandedBody,
   renderFoldBarHtml,
   renderFoldAgainBtn,
   ensureChatMsgEnhanceStyles,
 } from "./chatMsgEnhance.js";
+import { hydrateChatImages } from "./chatImageHydrate.js";
 import {
   pathModeSegmentHtml,
   pathModeCoachHtml,
@@ -335,12 +342,12 @@ export function renderChatMessages() {
   applyPersonaOpener(getPersonaId());
   ensureChatMsgEnhanceStyles();
   let clarifyInline = renderClarifyInlineIfNeeded();
-  // W0: after claim, avoid dual-card (success preview + plan bubble same md)
+  // t3: avoid dual-render of claim success (inline panel + thin bar)
   const claimedInline = state.chatClarify?.phase === "claimed_to_plan";
   const hasPlanBubble = msgsNow.some(
     (m) => m && /```plan\b/i.test(String(m.content || ""))
   );
-  if (claimedInline && hasPlanBubble) {
+  if (claimedInline && hasPlanBubble && !clarifyInline) {
     clarifyInline = thinClaimSuccessHtml();
   }
   const total = msgsNow.length;
@@ -357,6 +364,7 @@ export function renderChatMessages() {
             .map((a) => {
               const src = a._preview || "";
               const name = chatEsc(a.name || a.path || "附件");
+              const path = String(a.path || "").replace(/\\/g, "/");
               const mime = String(a.mime || "").toLowerCase();
               const isImg =
                 !!src ||
@@ -364,8 +372,16 @@ export function renderChatMessages() {
                 /\.(png|jpe?g|webp|gif|svg)$/i.test(a.name || a.path || "");
               if (isImg && src) {
                 return (
-                  `<div class="chat-msg-att">` +
+                  `<div class="chat-msg-att" data-att-path="${chatEsc(path)}" data-att-mime="${chatEsc(mime)}" data-att-name="${name}" data-att-done="1">` +
                   `<img class="chat-img-zoomable" src="${src}" alt="${name}" data-img-src="${chatEsc(src)}" data-img-name="${name}" title="点击放大" />` +
+                  `<span>${name}</span></div>`
+                );
+              }
+              if (isImg && path) {
+                // Reload / history: path only — hydrateChatImages fills data URL
+                return (
+                  `<div class="chat-msg-att chat-msg-att-path" data-att-path="${chatEsc(path)}" data-att-mime="${chatEsc(mime)}" data-att-name="${name}" title="${chatEsc(path)}">` +
+                  `<img class="chat-img-zoomable is-pending" alt="${name}" data-img-name="${name}" />` +
                   `<span>${name}</span></div>`
                 );
               }
@@ -390,31 +406,34 @@ export function renderChatMessages() {
       } else {
         bodyInner = chatFormatBody(content, { activePlan: false });
       }
-      // Long non-quiz bodies: clamp with 展开全部
+      // Long non-quiz bodies: clamp ↔ 展开全部 / 收起
       if (shouldClampBody(content, idx, { usedQuiz })) {
         bodyInner = wrapClampedBody(bodyInner, idx, true);
+      } else if (shouldShowBodyCollapse(content, idx, { usedQuiz })) {
+        bodyInner = wrapExpandedBody(bodyInner, idx);
       }
-      // Older turns: whole bubble collapsed to one-line bar (self-expand)
-      const forceOpen = usedQuiz && total - 1 - idx < 2;
-      if (shouldFoldMessage(idx, total, content, { forceOpen })) {
+      // 更早的长消息才整条折成预览气泡；短会话 / 短句保持时间线
+      const forceOpen = usedQuiz && total - 1 - idx < 3;
+      if (shouldFoldMessage(idx, total, content, { forceOpen, role })) {
         return (
           `<div class="chat-msg chat-msg-${role} is-folded" data-msg-idx="${idx}">` +
-          renderFoldBarHtml(label, content, idx) +
+          renderFoldBarHtml(label, content, idx, { role }) +
           `</div>`
         );
       }
-      // 「收起」：非最近两条，或用户曾手动展开过
-      const foldKey = `m${idx}`;
+      // 整条「收起」放气泡底部（展开全部的收起已在 body 内）
+      const bodyAlreadyHasCollapse = shouldShowBodyCollapse(content, idx, {
+        usedQuiz,
+      });
       const showFoldAgain =
-        total > 2 &&
-        (total - 1 - idx >= 2 ||
-          (state.chatMsgFold && state.chatMsgFold[foldKey] === false));
+        !bodyAlreadyHasCollapse &&
+        shouldShowFoldAgain(idx, total, content, { forceOpen, role });
       const foldAgain = showFoldAgain ? renderFoldAgainBtn(idx) : "";
       return (
         `<div class="chat-msg chat-msg-${role}" data-msg-idx="${idx}">` +
         `<div class="chat-msg-role">${label}</div>` +
-        foldAgain +
         `<div class="chat-msg-body md-body">${bodyInner}${attHtml}</div>` +
+        foldAgain +
         `</div>`
       );
     })
@@ -446,6 +465,16 @@ export function renderChatMessages() {
     }
   }
   list.innerHTML = html;
+  // Local screenshots / attachment thumbs → data URL (CSP: img-src data)
+  try {
+    hydrateChatImages(list);
+  } catch (_) {}
+  // Ensure newly rendered icons (data-icon) get SVG markup
+  try {
+    if (typeof window !== "undefined" && typeof window.ccoHydrateIcons === "function") {
+      window.ccoHydrateIcons(list);
+    }
+  } catch (_) {}
   // t4: hollow yellow bar near plan card — warn only; never disables 仅保存/拆成步骤
   try {
     const draftMd = state.chatSession?.draft_plan?.markdown || "";
@@ -542,24 +571,38 @@ export function renderChatPage() {
     // Keep the composer editable while waiting so the app never feels frozen;
     // only the send button is gated (double-send guard).
     input.disabled = !state.selectedPath;
+    const _clarifyPhase = state.chatClarify?.phase;
+    const _planDone = _clarifyPhase === "claimed_to_plan" || _clarifyPhase === "skipped_to_plan";
     input.placeholder = !state.selectedPath
       ? "请先在左侧选择项目"
       : state.chatBusy
         ? "AI 正在回复，可先写下一条…"
-        : "说清目标与约束，或拖入文件…";
+        : _planDone
+          ? "直接说哪里需要调整，或点「这版作数」继续…"
+          : "说清目标与约束，或拖入文件…";
   }
   if (sendBtn) {
-    // Disabled while waiting = prevent double-send, NOT app freeze.
-    // Backend chat_send runs on a worker thread so the rest of the UI stays live.
-    // Icon-only send (arrow-up); never wipe SVG with textContent.
-    sendBtn.disabled = !state.selectedPath || !!state.chatBusy;
-    sendBtn.title = state.chatBusy
-      ? "正在等待本机 Claude CLI 回复，请稍候"
-      : "发送（Enter）";
-    sendBtn.setAttribute(
-      "aria-label",
-      state.chatBusy ? "思考中…" : "发送"
-    );
+    if (state.chatBusy) {
+      // Busy: repurpose button as stop/cancel (red background).
+      sendBtn.disabled = false;
+      sendBtn.title = "中断（停止当前回复）";
+      sendBtn.setAttribute("aria-label", "中断");
+      sendBtn.dataset.chatMode = "cancel";
+      sendBtn.classList.add("is-cancel");
+      // Directly set SVG to bypass hydrateIcons' skip-if-already-has-svg guard.
+      if (typeof window !== "undefined" && typeof window.ccoIcon === "function") {
+        sendBtn.innerHTML = window.ccoIcon("square", { size: 16 });
+      }
+    } else {
+      sendBtn.disabled = !state.selectedPath;
+      sendBtn.title = "发送（Enter）";
+      sendBtn.setAttribute("aria-label", "发送");
+      delete sendBtn.dataset.chatMode;
+      sendBtn.classList.remove("is-cancel");
+      if (typeof window !== "undefined" && typeof window.ccoIcon === "function") {
+        sendBtn.innerHTML = window.ccoIcon("arrow-up", { size: 16 });
+      }
+    }
   }
   // Codex-style auto-grow textarea
   if (input && typeof input.scrollHeight === "number") {

@@ -78,7 +78,7 @@ export function setAssignBusy(busy) {
       } else if (btn.id === "btn-chat-assign") {
         btn.disabled = !state.chatDraftPlan || !!active;
       } else if (btn.id === "btn-plans-assign") {
-        btn.disabled = !(state.planRailSelected || state.selectedPlan) || !!active;
+        btn.disabled = !state.selectedPlan || !!active;
       } else {
         btn.disabled = !!active;
       }
@@ -125,7 +125,6 @@ export async function startExecuteFromSelection(planPath, opts = {}) {
     planPath ||
     state.selectedPlan ||
     state.chatDraftPlan ||
-    state.planRailSelected ||
     null;
   const path =
     (typeof normalizePlanPath === "function"

@@ -9,14 +9,15 @@ commands/resume.rs: **A5-1** → `app::run::{prepare_resume,prepare_scheduler}`
 commands/stop.rs: **A1-7** 整 run / 单 task → `app::run::{stop,stop_task}`
 commands/plan_cmd.rs: **A1-7** → `app::split::{start_job,get_job}`
 commands/status.rs: **A5-1** → `app::run::{load_by_dir,handoff_paths,format_status_by_provider}`；**H0-5** 首行 `report_summary_line`
+commands/git.rs: `cco git` 薄壳；status/remote/identity/commit/push/doctor → services::git；不 force-push、不写全局 identity
 commands/plans.rs: **A5-1** → `app::run::plans`
 commands/common.rs: plan_then_load_ir → app::split；`run_scheduler_loop`（**H0-4** 结束先 `report_summary_line` 再 status 枚举 + finish_with_reports）；term path helper
 interactive.rs: 交互选 project/plan · confirm · 非交互硬要求 --project
 
 ## A5-1 CLI ↔ app 1:1 表（真源）
 
-> 规则：handler = argv 解析 → **Application 用例** → 打印 DTO。  
-> **禁止**第二套 soft-fill / confirm / 手搓 `new_run_id`+`mark_confirmed`+Scheduler 策略字段。  
+> 规则：handler = argv 解析 → **Application 用例** → 打印 DTO。
+> **禁止**第二套 soft-fill / confirm / 手搓 `new_run_id`+`mark_confirmed`+Scheduler 策略字段。
 > 桌面 IPC 名**不动**（本表只收敛 CLI 侧调用路径）。
 
 ### Mode B / Run / Split
@@ -59,11 +60,11 @@ interactive.rs: 交互选 project/plan · confirm · 非交互硬要求 --projec
 
 ## 硬规则（继承 L1 · 本层加严）
 
-1. Handler **薄壳**：argv → **Application 用例** → 打印 DTO；目标 **≤ 30 行**业务编排（解析/打印除外可略长）。  
-2. **禁止**在 `commands/*` 实现调度循环、inspect 解析、混跑 failover 策略。  
-3. 与桌面**同一 app 路径**；CLI 不是第二产品内核。  
-4. `--provider` = soft-fill；`--force-provider` = 全量覆盖；**不得**用 soft 静默擦掉任务显式 route（真源 domain/worker + app::run）。  
-5. Mode B：`plan` 只规划；开跑经 **`split::confirm` / `confirm_materialize`**，禁止 silent 旁路。  
+1. Handler **薄壳**：argv → **Application 用例** → 打印 DTO；目标 **≤ 30 行**业务编排（解析/打印除外可略长）。
+2. **禁止**在 `commands/*` 实现调度循环、inspect 解析、混跑 failover 策略。
+3. 与桌面**同一 app 路径**；CLI 不是第二产品内核。
+4. `--provider` = soft-fill；`--force-provider` = 全量覆盖；**不得**用 soft 静默擦掉任务显式 route（真源 domain/worker + app::run）。
+5. Mode B：`plan` 只规划；开跑经 **`split::confirm` / `confirm_materialize`**，禁止 silent 旁路。
 6. **A5-1**：上表为 CLI↔app 1:1 真源；改命令须同步本表。
 
 法则: 成员完整·一行一文件·父级链接·技术词前置

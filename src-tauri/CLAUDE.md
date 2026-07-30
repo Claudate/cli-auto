@@ -18,16 +18,16 @@ build.rs: tauri build 钩子
 | update/remove/sanitize plan task | app::split::* |
 | stop_run_cmd / stop_task_cmd / resume_run_cmd / **retry_task_cmd** / rework / residual | app::run::* |
 | get_runs / get_run / plan meta / preview / start_run（ParseOnly） | app::run::* |
-| chat_* / read_plan_md / preview_start|stop|status | app::chat::* |
+| chat_* / read_plan_md / **chat_read_image_data_url** / preview_start|stop|status | app::chat::* |
 | live / projects / settings / doctor | services thin（未建 app 模块） |
 
 ## 硬规则（继承 L1 · 本层加严）
 
-1. **每个 command 无业务策略**：解析参数 → 调 `cco::app` → 映射错误；目标 **≤ ~30 行/命令**。  
-2. **禁止**在本 crate 拼 prompt、改 DAG、实现调度/混跑策略。  
-3. `chat_send_cmd` 必须 **async + spawn_blocking**（同步会堵 UI）。  
-4. 开跑只暴露确认用例对应命令；**禁止**为 UI 方便新增旁路 `start_run` 业务语义（legacy `start_run` = ParseOnly，非 Mode B）。  
-5. 新命令优先聚合进已有用例组，避免无 app 的「扁平命令袋」膨胀。  
+1. **每个 command 无业务策略**：解析参数 → 调 `cco::app` → 映射错误；目标 **≤ ~30 行/命令**。
+2. **禁止**在本 crate 拼 prompt、改 DAG、实现调度/混跑策略。
+3. `chat_send_cmd` 必须 **async + spawn_blocking**（同步会堵 UI）。
+4. 开跑只暴露确认用例对应命令；**禁止**为 UI 方便新增旁路 `start_run` 业务语义（legacy `start_run` = ParseOnly，非 Mode B）。
+5. 新命令优先聚合进已有用例组，避免无 app 的「扁平命令袋」膨胀。
 6. **不**静默改 IPC 命令名 / JSON 字段（web 兼容）。
 
 法则: 成员完整·一行一文件·父级链接·技术词前置

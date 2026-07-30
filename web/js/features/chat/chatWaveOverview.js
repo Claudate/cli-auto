@@ -138,9 +138,11 @@ export function buildWaveOverview(opts = {}) {
 /**
  * @param {ReturnType<typeof buildWaveOverview>} ov
  * @param {(s:string)=>string} esc
+ * @param {{ runLocked?: boolean }} [opts] runLocked=有活跃 run 时批确认按钮禁用（仍同一 confirm 闸，不旁路）
  */
-export function renderWaveOverviewHtml(ov, esc) {
+export function renderWaveOverviewHtml(ov, esc, opts = {}) {
   if (!ov) return "";
+  const runLocked = !!opts.runLocked;
   const rows = (ov.rows || [])
     .map((r, i) => {
       const tc =
@@ -158,11 +160,17 @@ export function renderWaveOverviewHtml(ov, esc) {
 
   const confirmBtn =
     ov.readyCount > 0
-      ? `<button type="button" class="btn primary sm" data-wave-confirm-batch="1" data-wave-key="${esc(
-          ov.key
-        )}" title="对已拆好的计划依次调用确认开跑（同一 confirm，不旁路）">确认本波已拆好的（串行 · ${
-          ov.readyCount
-        }）</button>`
+      ? runLocked
+        ? `<button type="button" class="btn primary sm" disabled data-wave-confirm-batch="1" data-wave-key="${esc(
+            ov.key
+          )}" title="本轮还在执行；结束后再确认下一批（同一确认闸）">本轮执行中 · 结束后可确认（${
+            ov.readyCount
+          }）</button>`
+        : `<button type="button" class="btn primary sm" data-wave-confirm-batch="1" data-wave-key="${esc(
+            ov.key
+          )}" title="对已拆好的计划依次调用确认开跑（同一 confirm，不旁路）">确认本波已拆好的（串行 · ${
+            ov.readyCount
+          }）</button>`
       : "";
   const splitBtn =
     ov.needSplitCount > 0

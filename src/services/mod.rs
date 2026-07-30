@@ -12,6 +12,7 @@
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md
 
 mod chat;
+pub mod git;
 mod live;
 mod live_status;
 mod preview;
@@ -21,12 +22,13 @@ mod settings;
 mod util;
 
 pub use chat::{
-    chat_delete_session, chat_list_sessions, chat_new_session, chat_normalize_plan,
-    chat_rename_session, chat_save_attachment, chat_save_plan, chat_save_wave_bundle, chat_send,
-    chat_session_get, chat_stream_partial, cleanup_expired_chat_sessions, extract_title_from_md,
-    normalize_plan_markdown, read_plan_md, sanitize_plan_title, structure_plan_markdown,
-    ChatAttachment, ChatDraftPlan, ChatMessage, ChatNormalizePlanResponse, ChatSavePlanResponse,
-    ChatSaveWaveResponse, ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
+    chat_cancel, chat_delete_session, chat_list_sessions, chat_new_session, chat_normalize_plan,
+    chat_read_image_data_url, chat_rename_session, chat_save_attachment, chat_save_plan,
+    chat_save_wave_bundle, chat_send, chat_session_get, chat_stream_partial,
+    cleanup_expired_chat_sessions, extract_title_from_md, normalize_plan_markdown, read_plan_md,
+    sanitize_plan_title, structure_plan_markdown, ChatAttachment, ChatDraftPlan, ChatMessage,
+    ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSaveWaveResponse, ChatSendResponse,
+    ChatSession, ChatSessionSummary, ChatStreamPartial,
 };
 pub use preview::{
     annotate_false_preview_claims, preview_start, preview_status, preview_stop, PreviewStatus,
@@ -37,14 +39,22 @@ pub use live::{
 };
 pub use projects::{add_project, list_projects, remove_project, ProjectSummary};
 pub use runs::{
-    accept_run_residual, confirm_start, get_plan_job, latest_plan_job_for_project, list_plan_meta,
-    list_plans, list_runs, load_run, preview_plan, resume_run_async, retry_task_async, run_doctor,
-    remove_proposed_task, sanitize_proposed_deps, start_plan_job, start_rework_from_run,
-    start_run_async, start_run_from_plan, start_run_from_plan_with_route, stop_run,
-    update_proposed_task, PlanJobView, PlanMeta, PlanPreview, ReworkStartResponse, RunSummary,
-    SanitizeDepsResult, StartPlanJobRequest, StartRunRequest,
+    accept_run_residual, confirm_start, get_plan_job, latest_plan_job_for_project,
+    list_plan_meta, list_plans, list_runs, load_run, pause_run, preview_plan,
+    resume_run_async, retry_task_async, run_doctor, remove_proposed_task,
+    sanitize_proposed_deps, start_plan_job, start_rework_from_run, start_run_async,
+    start_run_from_plan, start_run_from_plan_with_route, stop_run, update_proposed_task,
+    PlanJobView, PlanMeta, PlanPreview, ReworkStartResponse, RunSummary, SanitizeDepsResult,
+    StartPlanJobRequest, StartRunRequest,
 };
 pub use settings::{get_settings, set_settings, SettingsUpdate, SettingsView};
+pub use git::{
+    add_remote, apply_remotes, commit as git_commit, doctor as git_doctor,
+    is_git_repo as git_is_repo, list_actual_remotes as git_list_actual_remotes,
+    list_commit_candidates as git_list_commit_candidates, push as git_push,
+    remove_remote, set_identity as git_set_identity, status as git_status,
+    CommitResult, GitActualRemote, GitDoctorLine, GitRemoteView, GitStatusView, PushResult,
+};
 
 #[cfg(test)]
 mod tests {

@@ -258,7 +258,7 @@ export async function pickPlanFileForPicker() {
     }
     if (!state.plans.includes(rel)) state.plans = [rel, ...state.plans];
     await selectPlan(rel);
-    state.planRailSelected = rel;
+    state.selectedPlan = rel;
     state.chatDraftPlan = rel;
     // 留在弹窗内，方便直接点「开始拆分」
     if (state.planChooserOpen) {
@@ -268,7 +268,7 @@ export async function pickPlanFileForPicker() {
     // 计划管理页：刷新列表与详情
     if (state.page === "plans" && typeof renderPlansMgmtPage === "function") {
       try {
-        await loadPlanRail();
+        await loadPlanItems();
       } catch (_) {}
       try {
         if (typeof selectPlanRailItem === "function") selectPlanRailItem(rel);

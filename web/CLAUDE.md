@@ -7,9 +7,9 @@ app.js: 入口说明（逻辑在 js/）
 app.css: @import 聚合 css/*（含 chat · tokens CTA）
 js/: **A5 S8 facade** state（**D9 桥/瘦 ~230**）· flow · **templates≤80**（**P-ship-D D7 ✅**）· plan≤200 · monitor≤200 · result≤80 · split 空壳 · log≤200 · chat≤80 · doctor≤80（**禁止堆新功能**；**A5-0/2 清单**见下文 · **A5-4 收口**）
 js/main.js: **ESM 入口** — AppViewModel + gateway + **installStatusUi/markdown/shellUi（D9）** + **installSelectUi** + **chat/settings/project/templates desk** + split + run + result · `window.ccoChat` / **`ccoProject`** / `ccoRun` / `ccoResult` / **`ccoSettings`** / `ccoLog` / `ccoSplit` / **`ccoTemplates`** / **`ccoSelectUi`**
-js/shared/: **gateway.js**（IPC 唯一出口）· **store.js**（可订阅薄 store）· **statusUi.js**（D9 人话/badge/elapsed）· **markdown.js**（D9 确认屏/计划说明/**聊天气泡** md）· **shellUi.js**（D9 pages/projects/run-lock · **B1 侧栏 × 移除项目**）· **clickOutside.js**（**B2** 展开 details/菜单/设置高级点空白收）· **selectUi.js**（原生 select 增强为 macOS 风下拉；保留 `.value`/`change`）· **icons.js**（Lucide 风格开源线条图标 · `data-icon` / `ccoIcon` · **禁止 emoji 作按钮图标**）· **workStyle.js**（方案 C 工作习惯四选一 · 可跳过 · 并发/模板/grain 种子 · 项目级覆盖 W4-2 · **不**改 plan_mode 默认 ai）
+js/shared/: **gateway.js**（IPC 唯一出口 · 含 **chatReadImageDataUrl**）· **store.js**（可订阅薄 store）· **statusUi.js**（D9 人话/badge/elapsed）· **markdown.js**（D9 确认屏/计划说明/**聊天气泡** md · **`![alt](path)` 本地图占位**）· **shellUi.js**（D9 pages/projects/run-lock · **B1 侧栏 × 移除项目**）· **clickOutside.js**（**B2** 展开 details/菜单/设置高级点空白收）· **selectUi.js**（原生 select 增强为 macOS 风下拉；保留 `.value`/`change`）· **icons.js**（Lucide 风格开源线条图标 · `data-icon` / `ccoIcon` · **禁止 emoji 作按钮图标**）· **workStyle.js**（方案 C 工作习惯四选一 · 可跳过 · 并发/模板/grain 种子 · 项目级覆盖 W4-2 · **不**改 plan_mode 默认 ai）
 js/app/: **AppViewModel.js** · **routes.js**（phase author|split|run|result ↔ page）· **wireRunResult.js**（A4 壳接线）
-js/features/chat/: **A5-2a ✅ · P-ship-D 软超纵切** chatApi · ChatViewModel · chatState · chatSessions · **chatSessionRename**（历史面板重命名）· chatActions · **chatRender** · **chatMsgEnhance**（AI 编号题 A/B/C **可点选** · 历史消息默认折叠自展开）· **chatPlanOps**（**直接执行** = `plan_mode=direct` + auto-confirm；**无** start_run）· chatFormat · chatAttachments · planDir · planRail（**数据/meta 加载 · 聊天右栏 DOM 已撤**）· planFull · **plansMgmt**（计划列表 UI 唯一入口 · 顶栏「计划管理」）· installChat · legacy/host · index（经 gateway；**无** confirm/start_run）
+js/features/chat/: **A5-2a ✅ · P-ship-D 软超纵切** chatApi · ChatViewModel · chatState · chatSessions · **chatSessionRename**（历史面板重命名）· chatActions · **chatRender** · **chatImageHydrate**（`![alt](本地图)` / 附件 path → data URL 内联）· **chatMsgEnhance**（AI 编号题 A/B/C **可点选** · 历史消息默认折叠自展开）· **chatPlanOps**（**直接执行** = `plan_mode=direct` + auto-confirm；**无** start_run）· chatFormat · chatAttachments · planDir · planRail（**数据/meta 加载 · 聊天右栏 DOM 已撤**）· planFull · **plansMgmt**（计划列表 UI 唯一入口 · 顶栏「计划管理」）· installChat · legacy/host · index（经 gateway；**无** confirm/start_run）
 js/features/project/: **A5-2b-fin D5 ✅** projectApi · ProjectViewModel · sessionEntry（**tryRestorePlanJobForPlan / loadPlanSplitIndex** 按路径回看拆分 · SQLite）· shellChrome · projectCrud · planMeta（**已拆分 badge**）· projectPicker · planSelect · jobPoll · confirmActions · loadLiveBridge · installProject · legacy/host · index（picker/H0/job 轮询/optional 门；confirm→ccoSplit；**无** invoke/start_run）
 js/features/split/: **A3 ✅ · A5-2b · S-role · P1-4 · 双受众 S0–S3 · shell-chrome A2/A5** splitApi · SplitViewModel · splitRender · splitDetail（要做什么/怎样算做完 · **本步说明**在下 · 无技术/完整说明壳 · paintChrome「重新规划/执行规划」）· **splitTaskBody**（【做什么】…→可读 md）· SplitView · **splitFillMeta**（顶栏人话 + 来源 · acceptance 黄条）· index
 js/features/run/: **A4 ✅ · A5-2b · A5-2c · P-ship-D · ux-C · P1-3** runApi · runBuckets · RunViewModel · RunView（失败摘要含执行方式）· logPanel · **loadLive** · **log\*** · **logBoardCard**（人话进展 · 失败卡 route_label）· **logBoardEvents** · index（进度·stall·停/续；**运行端 CLI 看板始终可见** · 卡内详细日志按需；日志栏右侧 **高度 + 继续 + 结束计划**；workspace 轮询壳）
@@ -21,13 +21,13 @@ css/: tokens（A2-3 主 CTA 变量）· layout · **select**（统一下拉 clos
 
 ## 硬规则（继承 L1 · 本层加严）
 
-1. **MVVM**：View 不写 Mode B / 开跑 / 混跑 / stall-failover / inspect 门禁策略；业务在 Rust Application。  
-2. **IPC 唯一出口**：新建代码必须经 `js/shared/gateway.js`；禁止在 `features/` 内直接 `invoke` / `__TAURI__`。  
-3. **主区 phase**：`author | split | run | result`（`AppViewModel`）；一屏主焦点；日志次级。  
-4. **禁止**在 JS 复制 `confirm_start` / optional / provider soft-fill / stall 策略。  
-5. **禁止** UI 旁路开跑（`start_run` 不得替代 Split 确认）；回补只经 `start_rework` / `resultApi.startRework`。  
-6. **禁止**往 classic facade（plan/chat/monitor/result/log/doctor）与 `state.js` **继续堆功能**（只抽离/删除/一行委托）；新功能进 `features/*`。S8 facade 已出业务巨石榜；`state.js` = **D9 桥/瘦**（~230 · 展示→`shared/statusUi`+`markdown` · 壳导航→`shared/shellUi`）。  
-7. 主路径文案人话；`VERDICT` / 引擎名 / run_id **不进第一句**。  
+1. **MVVM**：View 不写 Mode B / 开跑 / 混跑 / stall-failover / inspect 门禁策略；业务在 Rust Application。
+2. **IPC 唯一出口**：新建代码必须经 `js/shared/gateway.js`；禁止在 `features/` 内直接 `invoke` / `__TAURI__`。
+3. **主区 phase**：`author | split | run | result`（`AppViewModel`）；一屏主焦点；日志次级。
+4. **禁止**在 JS 复制 `confirm_start` / optional / provider soft-fill / stall 策略。
+5. **禁止** UI 旁路开跑（`start_run` 不得替代 Split 确认）；回补只经 `start_rework` / `resultApi.startRework`。
+6. **禁止**往 classic facade（plan/chat/monitor/result/log/doctor）与 `state.js` **继续堆功能**（只抽离/删除/一行委托）；新功能进 `features/*`。S8 facade 已出业务巨石榜；`state.js` = **D9 桥/瘦**（~230 · 展示→`shared/statusUi`+`markdown` · 壳导航→`shared/shellUi`）。
+7. 主路径文案人话；`VERDICT` / 引擎名 / run_id **不进第一句**。
 8. 文件体量：软 400 / 硬 600 行（与 L1 同；`check-arch.sh` GIANTS 业务榜已空 · LEGACY_THICK 对 state.js **D9 已 ≤400** 仅 info）。
 
 ## A2–A4 模块图（源码边界 · 非第二套阶段表）
@@ -86,8 +86,8 @@ invoke 散落 → gateway 方法表：见 `js/shared/gateway.js`（命令名 1:1
 
 ## A5-0 清单（调研 · 2026-07-21 · 不删代码）
 
-> 真源勾选：[`docs/architecture-redesign-2026-07-20.md`](../docs/architecture-redesign-2026-07-20.md) §11 A5-0 + **§16 附录 C**。  
-> 起点：A4 tip 工作树（分支名仍 `feat/arch-a3-split-desk`；A5-1+ 建议 `feat/arch-a5-…`）。  
+> 真源勾选：[`docs/architecture-redesign-2026-07-20.md`](../docs/architecture-redesign-2026-07-20.md) §11 A5-0 + **§16 附录 C**。
+> 起点：A4 tip 工作树（分支名仍 `feat/arch-a3-split-desk`；A5-1+ 建议 `feat/arch-a5-…`）。
 > **本刀零行为 diff**。
 
 ### 1) classic `js/*.js` 清单
