@@ -6,14 +6,27 @@ cd "$ROOT"
 
 # Fail fast: a single SyntaxError in features/* kills type=module main.js
 # (shell stuck on「就绪中…」, no icons / no project list).
-echo "[0/3] syntax-check web/js (node --check)"
+echo "[0/3] syntax-check web/js (ESM dynamic import)"
 if command -v node >/dev/null 2>&1; then
   while IFS= read -r -d '' f; do
-    node --check "$f" || {
+    NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--no-warnings" \
+      JS_FILE="$f" node --input-type=module <<'NODE' || {
+const file = process.env.JS_FILE;
+const url = new URL(`./${file}`, `file://${process.cwd()}/`);
+try {
+  await import(url.href);
+} catch (e) {
+  if (e?.name === "SyntaxError") {
+    console.error(e.stack || e.message || String(e));
+    process.exit(99);
+  }
+  // Browser-only modules may throw ReferenceError under Node; syntax already parsed.
+}
+NODE
       echo "SYNTAX_FAIL: $f" >&2
       exit 1
     }
-  done < <(find web/js -type f -name '*.js' -print0)
+  done < <(find web/js -type f -name '*.js' ! -name '*.bak' -print0)
   echo "SYNTAX_OK: web/js"
 else
   echo "SYNTAX_WARN: node not found; skip web/js syntax gate" >&2

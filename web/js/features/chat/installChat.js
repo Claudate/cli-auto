@@ -1,5 +1,5 @@
 /**
- * [INPUT]: all chat modules
+ * [INPUT]: all chat modules + planRail compatibility data API
  * [OUTPUT]: register host · public desk API for window.ccoChat
  * [POS]: A5-2a features/chat/installChat.js
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
@@ -8,13 +8,13 @@
 import { register, host } from "./host.js";
 import * as chatState from "./chatState.js";
 import * as planDir from "./planDir.js";
+import * as planRail from "./planRail.js";
 import * as plansMgmt from "./plansMgmt.js";
 import * as chatAttachments from "./chatAttachments.js";
 import * as chatFormat from "./chatFormat.js";
 import * as chatSessions from "./chatSessions.js";
 import * as chatSessionRename from "./chatSessionRename.js";
 import * as chatActions from "./chatActions.js";
-import * as planRail from "./planRail.js";
 import * as planFull from "./planFull.js";
 import * as chatApi from "./chatApi.js";
 import * as chatClarify from "./chatClarify.js";
@@ -32,7 +32,6 @@ export function installChatHost() {
     ...chatSessions,
     ...chatSessionRename,
     ...chatActions,
-    ...planRail,
     ...planFull,
     ...chatClarify,
     ...chatMsgEnhance,
@@ -97,6 +96,7 @@ export function createChatDesk(opts = {}) {
     renderChatPage: chatActions.renderChatPage,
     renderChatMessages: chatActions.renderChatMessages,
     sendChatMessage: chatActions.sendChatMessage,
+    cancelChatMessage: chatActions.cancelChatMessage,
     saveChatPlan: chatActions.saveChatPlan,
     assignFromChat: chatActions.assignFromChat,
     assignAndSplitFromChat: chatActions.assignAndSplitFromChat,
@@ -151,6 +151,7 @@ export function createChatDesk(opts = {}) {
     unfoldChatMessage: chatMsgEnhance.unfoldChatMessage,
     foldChatMessage: chatMsgEnhance.foldChatMessage,
     expandChatMsgBody: chatMsgEnhance.expandChatMsgBody,
+    collapseChatMsgBody: chatMsgEnhance.collapseChatMsgBody,
     toggleChatPlanExpand: chatFormat.toggleChatPlanExpand,
     adoptChatPlanFromCard: chatFormat.adoptChatPlanFromCard,
     dismissChatEnvBar: chatActions.dismissChatEnvBar,
@@ -172,8 +173,7 @@ export function createChatDesk(opts = {}) {
     assignFromPlansMgmt: plansMgmt.assignFromPlansMgmt,
     viewSplitFromPlansMgmt: plansMgmt.viewSplitFromPlansMgmt,
     viewSplitFromPlanRail: planRail.viewSplitFromPlanRail,
-    loadPlanRail: planRail.loadPlanRail,
-    renderPlanRail: planRail.renderPlanRail,
+    loadPlanItems: planRail.loadPlanItems,
     selectPlanRailItem: planRail.selectPlanRailItem,
     openPlanRailItem: planRail.openPlanRailItem,
     openPlanFullView: planFull.openPlanFullView,
@@ -237,6 +237,7 @@ export function createChatDesk(opts = {}) {
     window.unfoldChatMessage = chatMsgEnhance.unfoldChatMessage;
     window.foldChatMessage = chatMsgEnhance.foldChatMessage;
     window.expandChatMsgBody = chatMsgEnhance.expandChatMsgBody;
+    window.collapseChatMsgBody = chatMsgEnhance.collapseChatMsgBody;
   }
 
   return desk;
