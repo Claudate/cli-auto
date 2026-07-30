@@ -651,6 +651,7 @@ pub fn doctor(config: &Config, project: &Path) -> Result<Vec<GitDoctorLine>> {
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::PathBuf;
     use tempfile::tempdir;
 
     /// Create a temp git repo with an initial commit.
