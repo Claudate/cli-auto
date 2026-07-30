@@ -1,6 +1,6 @@
 /**
  * [INPUT]: legacy · chatApi · chatState · host.renderChatPage
- * [OUTPUT]: sessions · stream ticker
+ * [OUTPUT]: sessions · history panel pick binding · stream ticker
  * [POS]: A5-2a features/chat/chatSessions.js
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -214,6 +214,51 @@ export function collapseChatSessionMore() {
   if (el && el.tagName === "DETAILS") el.open = false;
 }
 
+function bindChatSessionPanelPick(panelList) {
+  if (!panelList || panelList.dataset.chatPickBound) return;
+  panelList.dataset.chatPickBound = "1";
+  const pick = (row) => {
+    const sid = row?.getAttribute?.("data-session-id") || "default";
+    if (!sid || row.classList.contains("is-renaming")) return;
+    Promise.resolve(switchChatSession(sid)).catch((err) =>
+      toast(String(err?.message || err))
+    );
+  };
+  panelList.addEventListener(
+    "click",
+    (e) => {
+      const t = e.target;
+      if (!t?.closest) return;
+      if (
+        t.closest(".chat-session-rename-input") ||
+        t.closest("[data-session-rename]") ||
+        t.closest("[data-session-del]")
+      ) {
+        return;
+      }
+      const row = t.closest("[data-session-id]");
+      if (!row) return;
+      e.preventDefault();
+      e.stopPropagation();
+      pick(row);
+    },
+    true
+  );
+  panelList.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.target?.classList?.contains("chat-session-rename-input")) return;
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const row = e.target?.closest?.("[data-session-id]");
+      if (!row) return;
+      e.preventDefault();
+      e.stopPropagation();
+      pick(row);
+    },
+    true
+  );
+}
+
 /**
  * History panel list (Claude for VS Code–style).
  * Also keeps legacy #chat-session-select in sync if still present.
@@ -252,6 +297,7 @@ export function renderChatSessionSelect() {
 
   const panelList = $("#chat-session-panel-list");
   if (panelList) {
+    bindChatSessionPanelPick(panelList);
     if (!state.selectedPath) {
       panelList.innerHTML =
         `<div class="chat-session-panel-empty muted">请先选择项目</div>`;
@@ -383,7 +429,7 @@ export async function switchChatSession(sessionId) {
   // Prefer cache for instant paint
   restoreChatSession(state.selectedPath, sid);
   host.renderChatPage();
-  await loadChatSession({ force: true });
+  await loadChatSession({ force: true, sessionId: sid });
   await loadChatSessionList();
   collapseChatSessionMore();
 }
@@ -496,6 +542,10 @@ export async function deleteChatSession(sessionId) {
 export async function loadChatSession(opts) {
   ensureChatState();
   const force = !!(opts && opts.force);
+  const requestedSid =
+    opts && opts.sessionId
+      ? String(opts.sessionId || "default").trim() || "default"
+      : null;
   if (!state.selectedPath) {
     state.chatSession = { session_id: "default", messages: [], draft_plan: null, title: null };
     state.chatDraftPlan = null;
@@ -522,7 +572,11 @@ export async function loadChatSession(opts) {
 
   // Page hop back to same project: restore cache first so UI is never empty,
   // then optionally refresh from disk if we have no local messages yet.
-  if (state.chatProjectPath === path && (state.chatSession?.messages || []).length) {
+  if (
+    !requestedSid &&
+    state.chatProjectPath === path &&
+    (state.chatSession?.messages || []).length
+  ) {
     stashChatSession(path);
     host.renderChatPage();
     // Background refresh only when idle and not forced skip.
@@ -531,7 +585,10 @@ export async function loadChatSession(opts) {
     } else {
       return;
     }
-  } else if (restoreChatSession(path) && (state.chatSession?.messages || []).length) {
+  } else if (
+    restoreChatSession(path, requestedSid || undefined) &&
+    (state.chatSession?.messages || []).length
+  ) {
     host.renderChatPage();
     if (state.chatBusy) startChatWaitTicker();
     // Fall through to soft disk refresh when idle so multi-device/disk edits land.
@@ -539,7 +596,7 @@ export async function loadChatSession(opts) {
   }
 
   const seq = ++state._chatLoadSeq;
-  const sid = state.chatSession?.session_id || "default";
+  const sid = requestedSid || state.chatSession?.session_id || "default";
   try {
     const sess = await chatApi.getSession(path, sid);
     // Stale or project switched mid-flight → drop.

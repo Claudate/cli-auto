@@ -21,11 +21,25 @@ import * as chatClarify from "./chatClarify.js";
 import * as chatMsgEnhance from "./chatMsgEnhance.js";
 import { createChatViewModel } from "./ChatViewModel.js";
 
+function renderPlanRailCompat() {
+  const s = typeof window !== "undefined" ? window.state : null;
+  if (s?.page === "plans" && typeof host.renderPlansMgmtPage === "function") {
+    host.renderPlansMgmtPage();
+  }
+}
+
+function loadPlanRailCompat() {
+  return planRail.loadPlanItems();
+}
+
 /** Wire host bag once (idempotent). */
 export function installChatHost() {
   register({
     ...chatState,
     ...planDir,
+    ...planRail,
+    loadPlanRail: loadPlanRailCompat,
+    renderPlanRail: renderPlanRailCompat,
     ...plansMgmt,
     ...chatAttachments,
     ...chatFormat,
@@ -174,6 +188,8 @@ export function createChatDesk(opts = {}) {
     viewSplitFromPlansMgmt: plansMgmt.viewSplitFromPlansMgmt,
     viewSplitFromPlanRail: planRail.viewSplitFromPlanRail,
     loadPlanItems: planRail.loadPlanItems,
+    loadPlanRail: loadPlanRailCompat,
+    renderPlanRail: renderPlanRailCompat,
     selectPlanRailItem: planRail.selectPlanRailItem,
     openPlanRailItem: planRail.openPlanRailItem,
     openPlanFullView: planFull.openPlanFullView,
@@ -231,6 +247,13 @@ export function createChatDesk(opts = {}) {
     window.reviseChatDraft = chatActions.reviseChatDraft;
     window.claimWaveBundle = chatActions.claimWaveBundle;
     window.handleLastSummaryAction = chatActions.handleLastSummaryAction;
+    window.loadChatSession = chatSessions.loadChatSession;
+    window.loadChatSessionList = chatSessions.loadChatSessionList;
+    window.switchChatSession = chatSessions.switchChatSession;
+    window.newChatSession = chatSessions.newChatSession;
+    window.deleteChatSession = chatSessions.deleteChatSession;
+    window.renderPlanRail = renderPlanRailCompat;
+    window.loadPlanRail = loadPlanRailCompat;
     window.pickChatQuizOption = chatMsgEnhance.pickChatQuizOption;
     window.fillChatQuizDraft = chatMsgEnhance.fillChatQuizDraft;
     window.sendChatQuizDraft = chatMsgEnhance.sendChatQuizDraft;
