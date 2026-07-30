@@ -1,9 +1,14 @@
 //! Global config: ~/.cco/config.toml + env overrides.
 //!
 //! [INPUT]: 磁盘 config · 环境变量
-//! [OUTPUT]: Config · AllowedProject · BrowserConfig · load/save · runs_dir · failover · post_* · browser
+//! [OUTPUT]: Config · AllowedProject · BrowserConfig · GitConfig · load/save · runs_dir · failover · post_* · browser
 //! [POS]: 全局配置真源；桌面项目白名单存此
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/config/CLAUDE.md
+
+mod git;
+pub use git::{
+    normalize_region, region_label, AutoCommitPolicy, GitConfig, GitIdentity, GitRegion, GitRemote,
+};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -23,6 +28,9 @@ pub struct Config {
     /// Browser MCP for workers (screenshot / scrape / smoke). Default **off**.
     #[serde(default)]
     pub browser: BrowserConfig,
+    /// Git remotes / identity / auto-commit policy. Default off.
+    #[serde(default)]
+    pub git: GitConfig,
     /// Allowed projects shown in the desktop sidebar (not a filesystem tree).
     #[serde(default)]
     pub projects: Vec<AllowedProject>,
@@ -471,6 +479,7 @@ impl Default for Config {
             tui: TuiConfig::default(),
             browser: BrowserConfig::default(),
             projects: Vec::new(),
+            git: GitConfig::default(),
             state_root: default_state_root(),
         }
     }
