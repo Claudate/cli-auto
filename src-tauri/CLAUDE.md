@@ -19,6 +19,7 @@ build.rs: tauri build 钩子
 | stop_run_cmd / stop_task_cmd / resume_run_cmd / **retry_task_cmd** / rework / residual | app::run::* |
 | get_runs / get_run / plan meta / preview / start_run（ParseOnly） | app::run::* |
 | chat_* / read_plan_md / **chat_read_image_data_url** / preview_start|stop|status | app::chat::* |
+| git_status / git_remote_* / git_set_identity / git_commit / git_push / git_doctor | services::git thin（host-level Git 操作） |
 | live / projects / settings / doctor | services thin（未建 app 模块） |
 
 ## 硬规则（继承 L1 · 本层加严）

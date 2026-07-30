@@ -37,7 +37,15 @@ use cco::services::{
     PlanJobView, PlanMeta, PlanPreview, PreviewStatus, ProjectLiveView, ProjectSummary,
     ReworkStartResponse, RunSummary, SanitizeDepsResult, SettingsUpdate, SettingsView,
     StartPlanJobRequest, StartRunRequest,
+    GitDoctorLine, GitStatusView,
+    CommitResult as GitCommitResult, PushResult as GitPushResult,
+    git_status as svc_git_status, git_doctor as svc_git_doctor,
+    git_commit as svc_git_commit, git_push as svc_git_push,
+    git_set_identity as svc_git_set_identity,
+    add_remote as svc_git_add_remote, remove_remote as svc_git_remove_remote,
+    apply_remotes as svc_git_apply_remotes,
 };
+use cco::config::normalize_region as cfg_normalize_region;
 use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -754,6 +762,120 @@ fn set_settings_cmd(
     Ok(get_settings(&config))
 }
 
+// ── Git (host-level: status / remote / identity / commit / push / doctor) ──
+
+#[tauri::command]
+fn git_status_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<GitStatusView, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    svc_git_status(&config, PathBuf::from(project).as_path()).map_err(map_err)
+}
+
+#[tauri::command]
+fn git_remote_add_cmd(
+    state: tauri::State<'_, AppState>,
+    name: String,
+    url: String,
+    region: String,
+    note: Option<String>,
+) -> Result<Value, String> {
+    let reg = cfg_normalize_region(&region)
+        .ok_or_else(|| format!("invalid region: {region} (use domestic|overseas)"))?;
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    svc_git_add_remote(&mut config, &name, &url, reg, note).map_err(map_err)?;
+    Ok(json!({ "ok": true, "name": name, "url": url, "region": region }))
+}
+
+#[tauri::command]
+fn git_remote_remove_cmd(
+    state: tauri::State<'_, AppState>,
+    name: String,
+) -> Result<Value, String> {
+    let mut config = state.config.lock().map_err(|e| e.to_string())?;
+    let removed = svc_git_remove_remote(&mut config, &name).map_err(map_err)?;
+    Ok(json!({ "ok": removed, "name": name }))
+}
+
+#[tauri::command]
+fn git_remote_apply_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<Value, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    let actions = svc_git_apply_remotes(&config, PathBuf::from(project).as_path()).map_err(map_err)?;
+    Ok(json!({ "ok": true, "actions": actions }))
+}
+
+#[tauri::command]
+fn git_set_identity_cmd(
+    project: String,
+    name: Option<String>,
+    email: Option<String>,
+) -> Result<Value, String> {
+    svc_git_set_identity(
+        PathBuf::from(project).as_path(),
+        name.as_deref(),
+        email.as_deref(),
+    )
+    .map_err(map_err)?;
+    Ok(json!({ "ok": true, "name": name, "email": email }))
+}
+
+#[tauri::command]
+fn git_commit_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    message: String,
+    dry_run: Option<bool>,
+    push: Option<bool>,
+    all: Option<bool>,
+    paths: Option<Vec<String>>,
+    force: Option<bool>,
+) -> Result<GitCommitResult, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    svc_git_commit(
+        &config,
+        PathBuf::from(project).as_path(),
+        &message,
+        dry_run.unwrap_or(false),
+        push.unwrap_or(false),
+        all.unwrap_or(true),
+        &paths.unwrap_or_default(),
+        force.unwrap_or(false),
+    )
+    .map_err(map_err)
+}
+
+#[tauri::command]
+fn git_push_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    remote: Option<String>,
+    branch: Option<String>,
+    force: Option<bool>,
+) -> Result<GitPushResult, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    svc_git_push(
+        &config,
+        PathBuf::from(project).as_path(),
+        remote.as_deref(),
+        branch.as_deref(),
+        force.unwrap_or(false),
+    )
+    .map_err(map_err)
+}
+
+#[tauri::command]
+fn git_doctor_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<Vec<GitDoctorLine>, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    svc_git_doctor(&config, PathBuf::from(project).as_path()).map_err(map_err)
+}
+
 // ── Chat (app::chat only · no open-run) ──────────────────────────────
 
 #[tauri::command]
@@ -1052,6 +1174,15 @@ pub fn run() {
             chat_save_attachment_cmd,
             chat_read_image_data_url_cmd,
             read_plan_md_cmd,
+            // git host-level commands
+            git_status_cmd,
+            git_remote_add_cmd,
+            git_remote_remove_cmd,
+            git_remote_apply_cmd,
+            git_set_identity_cmd,
+            git_commit_cmd,
+            git_push_cmd,
+            git_doctor_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
