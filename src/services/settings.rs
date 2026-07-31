@@ -62,6 +62,14 @@ pub struct SettingsView {
     pub cost_intent_enabled: bool,
     /// 设置页只读：费用优选说明。
     pub cost_route_note: String,
+    // ── Git (host-level auto-commit policy) ──
+    pub git_auto_commit_enabled: bool,
+    pub git_push_after_commit: bool,
+    /// domestic | overseas
+    pub git_default_region: String,
+    pub git_allow_force: bool,
+    /// 设置页只读说明：身份只设本仓库；密钥/.env 不自动 add。
+    pub git_note: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -93,6 +101,12 @@ pub struct SettingsUpdate {
     pub cost_route_enabled: Option<bool>,
     pub cost_escalate_enabled: Option<bool>,
     pub cost_intent_enabled: Option<bool>,
+    // ── Git (host-level auto-commit policy) ──
+    pub git_auto_commit_enabled: Option<bool>,
+    pub git_push_after_commit: Option<bool>,
+    /// domestic | overseas
+    pub git_default_region: Option<String>,
+    pub git_allow_force: Option<bool>,
 }
 
 fn failover_order_note(order: &[String]) -> String {
@@ -156,6 +170,23 @@ pub fn get_settings(config: &Config) -> SettingsView {
             config.default.cost_escalate_enabled,
             config.default.cost_intent_enabled,
         ),
+        git_auto_commit_enabled: config.git.auto_commit.enabled,
+        git_push_after_commit: config.git.auto_commit.push_after_commit,
+        git_default_region: format!("{:?}", config.git.default_region).to_ascii_lowercase(),
+        git_allow_force: config.git.auto_commit.allow_force,
+        git_note: git_note(&config.git),
+    }
+}
+
+fn git_note(git: &crate::config::GitConfig) -> String {
+    if git.auto_commit.enabled {
+        let region = crate::config::region_label(&git.default_region);
+        let push = if git.auto_commit.push_after_commit { "提交后自动 push" } else { "仅提交不 push" };
+        let force = if git.auto_commit.allow_force { " · 允许 force-push" } else { "" };
+        format!("已开：{push} · 默认区域 {region}{force}。身份只设本仓库；密钥/.env 不自动 add。")
+    } else {
+        "默认关。开启后 `cco git commit` 可按策略自动提交（可选 push）。身份只设本仓库 --local；密钥/.env 不自动 add；force-push 需显式 --force 且 allow_force。"
+            .into()
     }
 }
 
@@ -278,6 +309,20 @@ pub fn set_settings(config: &mut Config, update: SettingsUpdate) -> Result<()> {
     if let Some(v) = update.cost_intent_enabled {
         config.default.cost_intent_enabled = v;
     }
+    if let Some(v) = update.git_auto_commit_enabled {
+        config.git.auto_commit.enabled = v;
+    }
+    if let Some(v) = update.git_push_after_commit {
+        config.git.auto_commit.push_after_commit = v;
+    }
+    if let Some(r) = update.git_default_region {
+        if let Some(reg) = crate::config::normalize_region(&r) {
+            config.git.default_region = reg;
+        }
+    }
+    if let Some(v) = update.git_allow_force {
+        config.git.auto_commit.allow_force = v;
+    }
     config.save()?;
     Ok(())
 }
@@ -332,6 +377,10 @@ mod tests {
                 cost_route_enabled: None,
                 cost_escalate_enabled: None,
                 cost_intent_enabled: Some(true),
+                git_auto_commit_enabled: None,
+                git_push_after_commit: None,
+                git_default_region: None,
+                git_allow_force: None,
             },
         )
         .unwrap();
@@ -371,6 +420,10 @@ mod tests {
                 cost_route_enabled: Some(false),
                 cost_escalate_enabled: Some(false),
                 cost_intent_enabled: Some(true),
+                git_auto_commit_enabled: None,
+                git_push_after_commit: None,
+                git_default_region: None,
+                git_allow_force: None,
             },
         )
         .unwrap();
@@ -416,6 +469,10 @@ mod tests {
                 cost_route_enabled: None,
                 cost_escalate_enabled: None,
                 cost_intent_enabled: None,
+                git_auto_commit_enabled: None,
+                git_push_after_commit: None,
+                git_default_region: None,
+                git_allow_force: None,
             },
         )
         .unwrap();
@@ -451,6 +508,10 @@ mod tests {
                 cost_route_enabled: None,
                 cost_escalate_enabled: None,
                 cost_intent_enabled: None,
+                git_auto_commit_enabled: None,
+                git_push_after_commit: None,
+                git_default_region: None,
+                git_allow_force: None,
             },
         )
         .unwrap();
