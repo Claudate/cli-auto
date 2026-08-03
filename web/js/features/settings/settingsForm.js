@@ -1,6 +1,6 @@
 /**
- * [INPUT]: settingsApi · gateway pins · DOM #s-* · local prefs (flowFun / chatAssignDirect)
- * [OUTPUT]: loadSettings / saveSettings / pin CRUD（P2-2）
+ * [INPUT]: settingsApi · gateway pins/gitDoctor · DOM #s-* · local prefs (flowFun / chatAssignDirect)
+ * [OUTPUT]: loadSettings / saveSettings / GitHub 发布状态 / 自动提交粒度表单 / pin CRUD（P2-2）
  * [POS]: A5-2d features/settings
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -22,6 +22,14 @@ function $(sel) {
 
 function state() {
   return typeof window !== "undefined" ? window.state : null;
+}
+
+function escHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 const PERMISSION_MODES = [
@@ -150,6 +158,84 @@ export async function restoreRecommendedPermission() {
   return updated;
 }
 
+function lineMap(lines) {
+  const map = new Map();
+  for (const line of Array.isArray(lines) ? lines : []) {
+    if (line?.name) map.set(String(line.name), line);
+  }
+  return map;
+}
+
+function paintGithubStatus(lines, err) {
+  const box = $("#s-github-status");
+  if (!box) return;
+  if (err) {
+    box.dataset.state = "bad";
+    box.innerHTML =
+      `<div class="settings-status-title">GitHub 状态检查失败</div>` +
+      `<p class="field-hint">${escHtml(err)}</p>`;
+    return;
+  }
+  if (lines == null) {
+    box.dataset.state = "idle";
+    box.innerHTML =
+      `<div class="settings-status-title">正在检查 GitHub 发布状态</div>` +
+      `<p class="field-hint">正在读取 Git 仓库、远端、提交身份和 gh 登录状态。</p>`;
+    return;
+  }
+  const st = state();
+  if (!st?.selectedPath) {
+    box.dataset.state = "warn";
+    box.innerHTML =
+      `<div class="settings-status-title">请先在左侧选中项目</div>` +
+      `<p class="field-hint">选中项目后才能检查 Git 仓库、远端和 gh 登录。</p>`;
+    return;
+  }
+  const byName = lineMap(lines);
+  const repo = byName.get("git_repo");
+  const branch = byName.get("git_branch");
+  const remote = byName.get("git_remotes");
+  const identity = byName.get("git_identity");
+  const ghBin = byName.get("gh_bin");
+  const ghAuth = byName.get("gh_auth");
+  const blockers = [repo, remote, identity, ghBin, ghAuth].filter(
+    (x) => !x || !x.ok
+  );
+  const ready = blockers.length === 0;
+  box.dataset.state = ready ? "ok" : "warn";
+  const title = ready
+    ? "GitHub 发布已准备好"
+    : `GitHub 发布还差 ${blockers.length} 项`;
+  const branchText = branch?.detail ? `当前分支：${branch.detail}` : "当前分支：未识别";
+  const remoteText = remote?.ok ? `远端：${remote.detail}` : "远端：未配置";
+  const ghText = ghAuth?.ok
+    ? `gh：${ghAuth.detail}`
+    : ghBin?.ok
+      ? "gh：未登录"
+      : "gh：未安装或不在 PATH";
+  const identityText = identity?.ok
+    ? `提交身份：${identity.detail}`
+    : "提交身份：未配置 user.name / user.email";
+  box.innerHTML =
+    `<div class="settings-status-title">${escHtml(title)}</div>` +
+    `<p class="field-hint">${escHtml(branchText)} · ${escHtml(remoteText)} · ${escHtml(identityText)} · ${escHtml(ghText)}</p>`;
+}
+
+export async function refreshGithubStatus() {
+  const st = state();
+  const project = st?.selectedPath || "";
+  paintGithubStatus(null, null);
+  if (!project) return [];
+  try {
+    const lines = await settingsApi.gitDoctor(project);
+    paintGithubStatus(lines, null);
+    return lines;
+  } catch (e) {
+    paintGithubStatus(null, String(e?.message || e));
+    return [];
+  }
+}
+
 /**
  * Fill settings page from backend DTO (+ local-only prefs).
  */
@@ -224,8 +310,21 @@ export async function loadSettings() {
     if ($("#s-post-inspect")) {
       $("#s-post-inspect").checked = !!s.post_inspect_enabled;
     }
-    if ($("#s-post-git-push")) {
-      $("#s-post-git-push").checked = !!s.post_git_push_enabled;
+    if ($("#s-git-auto-commit-granularity")) {
+      const granularity = String(
+        s.git_auto_commit_granularity ||
+          (s.post_git_push_enabled ? "per_plan" : "off")
+      ).toLowerCase();
+      $("#s-git-auto-commit-granularity").value = [
+        "off",
+        "per_plan",
+        "per_task",
+      ].includes(granularity)
+        ? granularity
+        : "off";
+    }
+    if ($("#s-git-push-after-commit")) {
+      $("#s-git-push-after-commit").checked = !!s.git_push_after_commit;
     }
     if ($("#s-post-open-pr")) {
       $("#s-post-open-pr").checked = !!s.post_open_pr_enabled;
@@ -284,6 +383,9 @@ export async function loadSettings() {
     // P2-2: load pins for selected project (best-effort)
     try {
       await loadProjectPins();
+    } catch (_) {}
+    try {
+      await refreshGithubStatus();
     } catch (_) {}
     return s;
   } catch (_) {
@@ -431,10 +533,16 @@ export async function saveSettings() {
   const failoverEl = $("#s-failover-enabled");
   const failoverEnabled = failoverEl ? !!failoverEl.checked : undefined;
   const postInspectEl = $("#s-post-inspect");
-  const postGitPushEl = $("#s-post-git-push");
+  const gitAutoCommitGranularityEl = $("#s-git-auto-commit-granularity");
+  const gitPushAfterCommitEl = $("#s-git-push-after-commit");
   const postOpenPrEl = $("#s-post-open-pr");
   const postInspectEnabled = postInspectEl ? !!postInspectEl.checked : undefined;
-  const postGitPushEnabled = postGitPushEl ? !!postGitPushEl.checked : undefined;
+  const gitAutoCommitGranularity = gitAutoCommitGranularityEl
+    ? String(gitAutoCommitGranularityEl.value || "").trim()
+    : undefined;
+  const gitPushAfterCommit = gitPushAfterCommitEl
+    ? !!gitPushAfterCommitEl.checked
+    : undefined;
   const postOpenPrEnabled = postOpenPrEl ? !!postOpenPrEl.checked : undefined;
   const plannerCriticEl = $("#s-planner-critic");
   const plannerCriticEnabled = plannerCriticEl
@@ -515,8 +623,11 @@ export async function saveSettings() {
     if (postInspectEnabled !== undefined) {
       update.post_inspect_enabled = postInspectEnabled;
     }
-    if (postGitPushEnabled !== undefined) {
-      update.post_git_push_enabled = postGitPushEnabled;
+    if (["off", "per_plan", "per_task"].includes(gitAutoCommitGranularity)) {
+      update.git_auto_commit_granularity = gitAutoCommitGranularity;
+    }
+    if (gitPushAfterCommit !== undefined) {
+      update.git_push_after_commit = gitPushAfterCommit;
     }
     if (postOpenPrEnabled !== undefined) {
       update.post_open_pr_enabled = postOpenPrEnabled;
@@ -629,10 +740,19 @@ export async function saveSettings() {
       $("#s-browser-note").textContent = String(updated.browser_note);
     }
     if (
-      $("#s-post-git-push") &&
-      typeof updated.post_git_push_enabled === "boolean"
+      $("#s-git-auto-commit-granularity") &&
+      ["off", "per_plan", "per_task"].includes(
+        String(updated?.git_auto_commit_granularity || "")
+      )
     ) {
-      $("#s-post-git-push").checked = updated.post_git_push_enabled;
+      $("#s-git-auto-commit-granularity").value =
+        updated.git_auto_commit_granularity;
+    }
+    if (
+      $("#s-git-push-after-commit") &&
+      typeof updated?.git_push_after_commit === "boolean"
+    ) {
+      $("#s-git-push-after-commit").checked = updated.git_push_after_commit;
     }
     if (
       $("#s-post-open-pr") &&

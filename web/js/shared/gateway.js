@@ -1,6 +1,6 @@
 /**
  * [INPUT]: Tauri invoke surface (A1-7 command names, 1:1)
- * [OUTPUT]: typed async API for ViewModels / features
+ * [OUTPUT]: typed async API for ViewModels / features（含 gitDoctor 发布状态）
  * [POS]: A2-1 唯一 IPC 出口；feature 内禁止散落 __TAURI__/invoke
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
@@ -188,6 +188,7 @@ export const getSettings = () => raw("get_settings_cmd");
 export const setSettings = (update) => raw("set_settings_cmd", { update });
 export const doctor = (project) =>
   raw("doctor_cmd", { project: project || null });
+export const gitDoctor = (project) => raw("git_doctor_cmd", { project });
 export const meta = () => raw("meta");
 export const openPath = (path) => raw("open_path", { path });
 export const openMonitorWindow = (args) =>
@@ -258,6 +259,7 @@ export const gateway = {
   getSettings,
   setSettings,
   doctor,
+  gitDoctor,
   meta,
   openPath,
   openMonitorWindow,

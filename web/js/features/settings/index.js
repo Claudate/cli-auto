@@ -5,8 +5,8 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
  * 模块图:
- *   settingsApi   → gateway（get/set settings · doctor · meta · open_monitor）
- *   settingsForm  → 设置页 load/save
+ *   settingsApi   → gateway（get/set settings · doctor · gitDoctor · meta · open_monitor）
+ *   settingsForm  → 设置页 load/save + GitHub 发布状态
  *   doctorPage    → 环境检查页 + warn bar
  *   shellBoot     → 冷启动 / 轮询 / 监视窗
  *   uiActions      → 事件表只绑意图
@@ -20,6 +20,7 @@ export {
   loadSettings,
   saveSettings,
   restoreRecommendedPermission,
+  refreshGithubStatus,
   paintPermissionUi,
 } from "./settingsForm.js";
 export {

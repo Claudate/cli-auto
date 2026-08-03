@@ -1,6 +1,6 @@
 /**
  * [INPUT]: gateway only（禁止 __TAURI__/invoke）
- * [OUTPUT]: settings / doctor / meta / open_monitor 薄封装
+ * [OUTPUT]: settings / doctor / gitDoctor / meta / open_monitor 薄封装
  * [POS]: A5-2d features/settings；策略在 Rust services/settings · doctor
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
@@ -28,6 +28,14 @@ export function setSettings(update) {
  */
 export function runDoctor(project) {
   return gateway.doctor(project || null);
+}
+
+/**
+ * Git/GitHub publish readiness for the selected project.
+ * @param {string} project
+ */
+export function gitDoctor(project) {
+  return gateway.gitDoctor(project);
 }
 
 /** Desktop meta (version, …). */

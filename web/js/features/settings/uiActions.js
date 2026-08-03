@@ -381,6 +381,14 @@ export function createUiActions() {
       window.ccoSettings?.restoreRecommendedPermission
         ? window.ccoSettings.restoreRecommendedPermission()
         : call("restoreRecommendedPermission"),
+    "btn-github-status-refresh": async () => {
+      if (window.ccoSettings?.refreshGithubStatus) {
+        await window.ccoSettings.refreshGithubStatus();
+      } else {
+        await call("refreshGithubStatus");
+      }
+      toast("已重新检查 GitHub 发布状态");
+    },
     "btn-settings-back": () =>
       window.ccoSettings?.backFromSubpage
         ? window.ccoSettings.backFromSubpage()

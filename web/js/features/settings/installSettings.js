@@ -12,6 +12,7 @@ import {
   loadProjectPins,
   addProjectPin,
   deleteProjectPin,
+  refreshGithubStatus,
   restoreRecommendedPermission,
   paintPermissionUi,
 } from "./settingsForm.js";
@@ -45,6 +46,7 @@ export function createSettingsDesk() {
     loadProjectPins,
     addProjectPin,
     deleteProjectPin,
+    refreshGithubStatus,
     loadDoctor,
     ensureDoctor,
     renderDoctorWarn,
@@ -80,6 +82,7 @@ export function installSettingsHost(opts = {}) {
   window.loadProjectPins = loadProjectPins;
   window.addProjectPin = addProjectPin;
   window.deleteProjectPin = deleteProjectPin;
+  window.refreshGithubStatus = refreshGithubStatus;
   window.loadDoctor = loadDoctor;
   window.ensureDoctor = ensureDoctor;
   window.renderDoctorWarn = renderDoctorWarn;

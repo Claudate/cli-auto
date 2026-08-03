@@ -1,7 +1,7 @@
 //! Git service: host-level git operations (status / remote / config / commit / push / doctor).
 //!
 //! [INPUT]: Config.git · project path · CLI args
-//! [OUTPUT]: GitStatusView · GitRemoteView · commit/push results · doctor lines
+//! [OUTPUT]: GitStatusView · GitRemoteView · commit/commit_with_git_config/push results · doctor lines
 //! [POS]: services 子模块；薄封装 `git` CLI，无业务策略
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/services/CLAUDE.md
 //!
@@ -17,7 +17,7 @@ use std::process::Command;
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 
-use crate::config::{region_label, Config, GitRegion, GitRemote};
+use crate::config::{region_label, Config, GitConfig, GitRegion, GitRemote};
 
 /// Whether `project_root` is a git work tree.
 pub fn is_git_repo(project_root: &Path) -> bool {
@@ -101,6 +101,7 @@ pub struct CommitResult {
     pub ok: bool,
     pub message: String,
     pub commit_hash: Option<String>,
+    pub branch: Option<String>,
     pub files: Vec<String>,
     pub pushed: bool,
     pub push_output: Option<String>,
@@ -157,10 +158,12 @@ pub fn status(config: &Config, project: &Path) -> Result<GitStatusView> {
     for r in &mut actual_remotes {
         r.configured = configured_names.contains(r.name.as_str());
     }
-    let user_name =
-        git_run(project, &["config", "user.name"]).ok().filter(|s| !s.is_empty());
-    let user_email =
-        git_run(project, &["config", "user.email"]).ok().filter(|s| !s.is_empty());
+    let user_name = git_run(project, &["config", "user.name"])
+        .ok()
+        .filter(|s| !s.is_empty());
+    let user_email = git_run(project, &["config", "user.email"])
+        .ok()
+        .filter(|s| !s.is_empty());
 
     Ok(GitStatusView {
         is_repo: true,
@@ -384,6 +387,29 @@ pub fn commit(
     paths: &[String],
     force: bool,
 ) -> Result<CommitResult> {
+    commit_with_git_config(
+        &config.git,
+        project,
+        message,
+        dry_run,
+        push,
+        all,
+        paths,
+        force,
+    )
+}
+
+/// Commit using a Git policy snapshot without loading the global Config.
+pub fn commit_with_git_config(
+    git: &GitConfig,
+    project: &Path,
+    message: &str,
+    dry_run: bool,
+    push: bool,
+    all: bool,
+    paths: &[String],
+    force: bool,
+) -> Result<CommitResult> {
     if !is_git_repo(project) {
         bail!("not a git repository: {}", project.display());
     }
@@ -398,6 +424,7 @@ pub fn commit(
         paths.to_vec()
     };
     let (allowed, rejected) = filter_forbidden(&candidates);
+    let branch = git_run(project, &["rev-parse", "--abbrev-ref", "HEAD"]).ok();
 
     if dry_run {
         return Ok(CommitResult {
@@ -408,6 +435,7 @@ pub fn commit(
                 rejected.len()
             ),
             commit_hash: None,
+            branch,
             files: allowed,
             pushed: false,
             push_output: None,
@@ -419,6 +447,7 @@ pub fn commit(
             ok: true,
             message: "no changes to commit (allowed files empty)".into(),
             commit_hash: None,
+            branch,
             files: vec![],
             pushed: false,
             push_output: None,
@@ -438,8 +467,18 @@ pub fn commit(
     let mut pushed = false;
     let mut push_output: Option<String> = None;
     if push {
-        let force_allowed = config.git.auto_commit.allow_force && force;
-        match push_internal(config, project, None, None, force_allowed) {
+        let force_allowed = git.auto_commit.allow_force && force;
+        let explicit_remote = (!git.auto_commit.push_remote.trim().is_empty())
+            .then_some(git.auto_commit.push_remote.as_str());
+        let explicit_branch = (!git.auto_commit.push_branch.trim().is_empty())
+            .then_some(git.auto_commit.push_branch.as_str());
+        match push_internal(
+            git,
+            project,
+            explicit_remote,
+            explicit_branch,
+            force_allowed,
+        ) {
             Ok(pr) => {
                 pushed = pr.ok;
                 push_output = Some(pr.message);
@@ -463,6 +502,7 @@ pub fn commit(
             }
         ),
         commit_hash: hash,
+        branch,
         files: allowed,
         pushed,
         push_output,
@@ -482,11 +522,17 @@ pub fn push(
     force: bool,
 ) -> Result<PushResult> {
     let force_allowed = config.git.auto_commit.allow_force && force;
-    push_internal(config, project, explicit_remote, explicit_branch, force_allowed)
+    push_internal(
+        &config.git,
+        project,
+        explicit_remote,
+        explicit_branch,
+        force_allowed,
+    )
 }
 
 fn push_internal(
-    config: &Config,
+    git: &GitConfig,
     project: &Path,
     explicit_remote: Option<&str>,
     explicit_branch: Option<&str>,
@@ -501,19 +547,20 @@ fn push_internal(
     };
 
     // Pick remote: explicit → config pick → actual first.
-    let remote_name = if let Some(name) = explicit_remote.map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        name.to_string()
-    } else if let Some(r) = config.git.pick_push_remote(None) {
-        r.name.clone()
-    } else {
-        // fall back to first actual remote
-        let actual = list_actual_remotes(project)?;
-        if let Some(first) = actual.first() {
-            first.name.clone()
+    let remote_name =
+        if let Some(name) = explicit_remote.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            name.to_string()
+        } else if let Some(r) = git.pick_push_remote(None) {
+            r.name.clone()
         } else {
-            bail!("no remote configured (set config.git.remotes or pass --remote)");
-        }
-    };
+            // fall back to first actual remote
+            let actual = list_actual_remotes(project)?;
+            if let Some(first) = actual.first() {
+                first.name.clone()
+            } else {
+                bail!("no remote configured (set config.git.remotes or pass --remote)");
+            }
+        };
 
     let mut args: Vec<String> = vec!["push".into()];
     if force_allowed {
@@ -607,13 +654,21 @@ pub fn doctor(config: &Config, project: &Path) -> Result<Vec<GitDoctorLine>> {
         detail: if actual.is_empty() {
             "no remotes configured".into()
         } else {
-            actual.iter().map(|r| r.name.clone()).collect::<Vec<_>>().join(", ")
+            actual
+                .iter()
+                .map(|r| r.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ")
         },
     });
 
     // identity
-    let name = git_run(project, &["config", "user.name"]).ok().filter(|s| !s.is_empty());
-    let email = git_run(project, &["config", "user.email"]).ok().filter(|s| !s.is_empty());
+    let name = git_run(project, &["config", "user.name"])
+        .ok()
+        .filter(|s| !s.is_empty());
+    let email = git_run(project, &["config", "user.email"])
+        .ok()
+        .filter(|s| !s.is_empty());
     let identity_ok = name.is_some() && email.is_some();
     lines.push(GitDoctorLine {
         name: "git_identity".into(),
@@ -644,6 +699,45 @@ pub fn doctor(config: &Config, project: &Path) -> Result<Vec<GitDoctorLine>> {
         });
     }
 
+    match which::which("gh") {
+        Ok(p) => {
+            lines.push(GitDoctorLine {
+                name: "gh_bin".into(),
+                ok: true,
+                detail: p.display().to_string(),
+            });
+            let out = Command::new("gh")
+                .args(["auth", "status"])
+                .output()
+                .context("gh auth status")?;
+            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            let detail = if stderr.is_empty() { stdout } else { stderr };
+            lines.push(GitDoctorLine {
+                name: "gh_auth".into(),
+                ok: out.status.success(),
+                detail: if detail.is_empty() {
+                    if out.status.success() {
+                        "authenticated".into()
+                    } else {
+                        "not authenticated; run gh auth login".into()
+                    }
+                } else {
+                    detail
+                        .lines()
+                        .next()
+                        .unwrap_or("gh auth status")
+                        .to_string()
+                },
+            });
+        }
+        Err(_) => lines.push(GitDoctorLine {
+            name: "gh_bin".into(),
+            ok: false,
+            detail: "gh not in PATH; install GitHub CLI".into(),
+        }),
+    }
+
     Ok(lines)
 }
 
@@ -661,7 +755,10 @@ mod tests {
         // git init + identity + initial commit
         git_run(&root, &["init", "--initial-branch=main"])?;
         git_run(&root, &["config", "--local", "user.name", "test"])?;
-        git_run(&root, &["config", "--local", "user.email", "test@example.com"])?;
+        git_run(
+            &root,
+            &["config", "--local", "user.email", "test@example.com"],
+        )?;
         fs::write(root.join("README.md"), "# test\n")?;
         git_run(&root, &["add", "README.md"])?;
         git_run(&root, &["commit", "-m", "init"])?;
@@ -697,10 +794,24 @@ mod tests {
     #[test]
     fn add_remote_persists_and_updates() {
         let mut cfg = Config::default();
-        add_remote(&mut cfg, "gitee", "https://gitee.com/u/r.git", GitRegion::Domestic, None).unwrap();
+        add_remote(
+            &mut cfg,
+            "gitee",
+            "https://gitee.com/u/r.git",
+            GitRegion::Domestic,
+            None,
+        )
+        .unwrap();
         assert_eq!(cfg.git.remotes.len(), 1);
         // update same name
-        add_remote(&mut cfg, "gitee", "https://gitee.com/u/r2.git", GitRegion::Domestic, Some("镜像".into())).unwrap();
+        add_remote(
+            &mut cfg,
+            "gitee",
+            "https://gitee.com/u/r2.git",
+            GitRegion::Domestic,
+            Some("镜像".into()),
+        )
+        .unwrap();
         assert_eq!(cfg.git.remotes.len(), 1);
         assert_eq!(cfg.git.remotes[0].url, "https://gitee.com/u/r2.git");
         assert_eq!(cfg.git.remotes[0].note.as_deref(), Some("镜像"));
@@ -764,6 +875,36 @@ mod tests {
         assert!(!r.pushed);
         let log = git_run(&root, &["log", "--oneline"]).unwrap();
         assert!(log.contains("add c"));
+    }
+
+    #[test]
+    fn commit_push_uses_auto_commit_remote_and_branch() {
+        let (_d, root) = make_repo().unwrap();
+        let bare = tempdir().unwrap();
+        git_run(bare.path(), &["init", "--bare"]).unwrap();
+        let remote_path = bare.path().to_str().unwrap();
+        git_run(&root, &["remote", "add", "mirror", remote_path]).unwrap();
+        fs::write(root.join("pushed.txt"), "pushed\n").unwrap();
+
+        let mut cfg = Config::default();
+        cfg.git.auto_commit.push_remote = "mirror".into();
+        cfg.git.auto_commit.push_branch = "main".into();
+        let result = commit_with_git_config(
+            &cfg.git,
+            &root,
+            "push configured target",
+            false,
+            true,
+            true,
+            &[],
+            false,
+        )
+        .unwrap();
+
+        assert!(result.pushed, "{}", result.push_output.unwrap_or_default());
+        let local_hash = result.commit_hash.unwrap();
+        let remote_hash = git_run(bare.path(), &["rev-parse", "refs/heads/main"]).unwrap();
+        assert_eq!(remote_hash, local_hash);
     }
 
     #[test]

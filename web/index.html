@@ -3,8 +3,8 @@
 <head>
 <!--
 [INPUT]: 无静态依赖；由 Tauri 加载 app.css + web/js/*（D4）+ A2/A3 js/main.js module
-[OUTPUT]: DOM 结构：sidebar · welcome · workspace(plan/monitor) · chat · modals
-[POS]: 桌面壳结构真源；规划相位 spinner · 合并选计划弹窗 · task-dash · 执行看板 · 聊天建计划
+[OUTPUT]: DOM 结构：sidebar · welcome · workspace(plan/monitor) · chat · settings GitHub 发布大区 · modals
+[POS]: 桌面壳结构真源；规划相位 spinner · 合并选计划弹窗 · task-dash · 执行看板 · 聊天建计划 · 设置分区
 [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
 note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高级选项
 note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|split|run|result
@@ -328,6 +328,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
               </div>
               <!-- H1-3: app 下发人话状态句（不写策略） -->
               <p class="status-one-liner muted" id="status-one-liner" hidden></p>
+              <p class="status-one-liner muted" id="git-auto-commit-status" hidden></p>
               <div class="task-dash-kpis">
                 <span id="run-status-badge" hidden></span>
                 <div class="kpi-card done"><div class="kpi-n" id="stat-done-n">0</div><div class="kpi-l">已完成</div></div>
@@ -779,32 +780,79 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
               </div>
             </section>
 
-            <section class="settings-group" aria-labelledby="sg-post">
-              <h3 class="settings-group-title" id="sg-post">拆分后附加</h3>
-              <p class="settings-group-note field-hint" id="s-post-tasks-note">
-                可选步骤，默认关；开启后在拆分台仍可取消。
-              </p>
-              <label class="settings-row" title="开启后每次拆分追加「任务巡检」">
-                <span class="settings-row-text">
-                  <span class="settings-label">任务巡检</span>
-                  <span class="field-hint">对照计划写完成/遗漏</span>
-                </span>
-                <input id="s-post-inspect" type="checkbox" />
-              </label>
-              <label class="settings-row" title="开启后每次拆分追加「代码提交 Push」">
-                <span class="settings-row-text">
-                  <span class="settings-label">代码提交 Push</span>
-                  <span class="field-hint">巡检通过后才 commit + push</span>
-                </span>
-                <input id="s-post-git-push" type="checkbox" />
-              </label>
-              <label class="settings-row" title="开启后每次拆分追加「自动开 PR」（需本机 gh 已登录）">
-                <span class="settings-row-text">
-                  <span class="settings-label">自动开 PR</span>
-                  <span class="field-hint">需 GitHub CLI 已登录</span>
-                </span>
-                <input id="s-post-open-pr" type="checkbox" />
-              </label>
+            <section class="settings-group settings-major" aria-labelledby="sg-post">
+              <div class="settings-section-head">
+                <h3 class="settings-group-title" id="sg-post">质量收尾</h3>
+                <p class="settings-group-note field-hint" id="s-post-tasks-note">
+                  执行完之后追加的检查项；默认关，拆分台仍可取消。
+                </p>
+              </div>
+              <div class="settings-subsection">
+                <h4 class="settings-subtitle">完成检查</h4>
+                <label class="settings-row" title="开启后每次拆分追加「任务巡检」">
+                  <span class="settings-row-text">
+                    <span class="settings-label">任务巡检</span>
+                    <span class="field-hint">对照计划写完成/遗漏</span>
+                  </span>
+                  <input id="s-post-inspect" type="checkbox" />
+                </label>
+              </div>
+            </section>
+
+            <section class="settings-group settings-major" aria-labelledby="sg-github">
+              <div class="settings-section-head">
+                <h3 class="settings-group-title" id="sg-github">GitHub 发布</h3>
+                <p class="settings-group-note field-hint">
+                  自动提交、Push、开 PR 都依赖当前项目是 Git 仓库，并且本机 GitHub CLI 已登录。
+                </p>
+              </div>
+              <div class="settings-subsection settings-status-panel" id="s-github-status" data-state="idle" role="status" aria-live="polite">
+                <div class="settings-status-title">等待检查 GitHub 状态</div>
+                <p class="field-hint">打开设置页后会读取左侧选中项目。</p>
+              </div>
+              <div class="settings-subsection">
+                <h4 class="settings-subtitle">本机准备</h4>
+                <div class="settings-command-grid" aria-label="GitHub CLI 配置命令">
+                  <code>gh auth login</code>
+                  <code>gh auth status</code>
+                  <code>git remote -v</code>
+                  <code>git push -u origin HEAD</code>
+                </div>
+                <p class="settings-group-note field-hint">
+                  没有远端时，先在 GitHub 创建仓库，再给当前项目添加 origin；这里不会自动 force-push 或自动 merge。
+                </p>
+              </div>
+              <div class="settings-subsection">
+                <h4 class="settings-subtitle">自动留痕</h4>
+                <label class="settings-row" title="选择自动提交发生在整个计划完成后，还是每个拆分任务完成后">
+                  <span class="settings-row-text">
+                    <span class="settings-label">自动提交粒度</span>
+                    <span class="field-hint">按计划串行提交；按任务提交到独立分支</span>
+                  </span>
+                  <select id="s-git-auto-commit-granularity" class="settings-select">
+                    <option value="off">关闭</option>
+                    <option value="per_plan">按计划提交</option>
+                    <option value="per_task">按拆分任务提交</option>
+                  </select>
+                </label>
+                <label class="settings-row" title="每次自动提交成功后是否推送当前分支">
+                  <span class="settings-row-text">
+                    <span class="settings-label">提交后自动 Push</span>
+                    <span class="field-hint">失败会记录原因，不会重试或 force-push</span>
+                  </span>
+                  <input id="s-git-push-after-commit" type="checkbox" />
+                </label>
+                <label class="settings-row" title="开启后每次拆分追加「自动开 PR」（需本机 gh 已登录）">
+                  <span class="settings-row-text">
+                    <span class="settings-label">自动开 PR</span>
+                    <span class="field-hint">需 gh 已登录，且当前分支可推送到 GitHub</span>
+                  </span>
+                  <input id="s-post-open-pr" type="checkbox" />
+                </label>
+              </div>
+              <div class="settings-tool-row">
+                <button class="btn ghost sm" id="btn-github-status-refresh" type="button">重新检查 GitHub</button>
+              </div>
             </section>
 
             <details class="settings-advanced">
