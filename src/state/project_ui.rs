@@ -168,11 +168,31 @@ mod tests {
         assert!(should_hide_run_as_current(Some("run-1"), "run-1", "failed"));
         // paused after 结束计划 must hide (stop_task residual desk)
         assert!(should_hide_run_as_current(Some("run-1"), "run-1", "paused"));
-        assert!(should_hide_run_as_current(Some("run-1"), "run-1", "completed"));
-        assert!(!should_hide_run_as_current(Some("run-1"), "run-1", "running"));
-        assert!(!should_hide_run_as_current(Some("run-1"), "run-1", "starting"));
-        assert!(!should_hide_run_as_current(Some("run-1"), "run-2", "failed"));
-        assert!(!should_hide_run_as_current(Some("run-1"), "run-2", "paused"));
+        assert!(should_hide_run_as_current(
+            Some("run-1"),
+            "run-1",
+            "completed"
+        ));
+        assert!(!should_hide_run_as_current(
+            Some("run-1"),
+            "run-1",
+            "running"
+        ));
+        assert!(!should_hide_run_as_current(
+            Some("run-1"),
+            "run-1",
+            "starting"
+        ));
+        assert!(!should_hide_run_as_current(
+            Some("run-1"),
+            "run-2",
+            "failed"
+        ));
+        assert!(!should_hide_run_as_current(
+            Some("run-1"),
+            "run-2",
+            "paused"
+        ));
         clear_dismissed_run_id(&cfg, proj).unwrap();
         assert!(get_dismissed_run_id(&cfg, proj).unwrap().is_none());
     }

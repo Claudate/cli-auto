@@ -232,12 +232,14 @@ fn task_to_ir(t: &CcoSplitTask, default_provider: &str, default_mode: &str) -> T
             forbid,
         })
     };
-    let role = t.role.as_deref().and_then(TaskRole::parse).or_else(|| {
-        match t.kind {
+    let role = t
+        .role
+        .as_deref()
+        .and_then(TaskRole::parse)
+        .or_else(|| match t.kind {
             CcoTaskKind::Check => Some(TaskRole::Inspect),
             _ => None,
-        }
-    });
+        });
     let provider = t
         .provider
         .clone()

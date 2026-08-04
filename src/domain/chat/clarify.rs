@@ -62,11 +62,17 @@ impl ClarifyEntry {
             return None;
         }
         match s {
-            "think_first" | "think-first" | "想清楚再说" | "想清楚" => Some(Self::ThinkFirst),
-            "idea_to_plan" | "idea-to-plan" | "从想法到计划" | "default" => Some(Self::IdeaToPlan),
-            "plan_only" | "plan-only" | "已想清直接写计划" | "已想清，直接写计划" | "直接写计划" => {
-                Some(Self::PlanOnly)
+            "think_first" | "think-first" | "想清楚再说" | "想清楚" => {
+                Some(Self::ThinkFirst)
             }
+            "idea_to_plan" | "idea-to-plan" | "从想法到计划" | "default" => {
+                Some(Self::IdeaToPlan)
+            }
+            "plan_only"
+            | "plan-only"
+            | "已想清直接写计划"
+            | "已想清，直接写计划"
+            | "直接写计划" => Some(Self::PlanOnly),
             _ => None,
         }
     }
@@ -377,7 +383,11 @@ pub fn apply_skip_with_assumptions(state: &mut ClarifyState, user_note: Option<&
 
     for id in report.missing_required {
         let text = match note {
-            Some(n) => format!("假设（用户跳过·{}）：待写计划时补全「{}」", n, id.label_zh()),
+            Some(n) => format!(
+                "假设（用户跳过·{}）：待写计划时补全「{}」",
+                n,
+                id.label_zh()
+            ),
             None => format!("假设（用户跳过）：待写计划时补全「{}」", id.label_zh()),
         };
         // Assumed fill: present for gap list, never Explicit fact.
@@ -497,7 +507,10 @@ mod tests {
             );
         }
         assert!(
-            state.assumptions.iter().any(|a| a.text.contains("直接出计划")),
+            state
+                .assumptions
+                .iter()
+                .any(|a| a.text.contains("直接出计划")),
             "assumptions audit: {:?}",
             state.assumptions
         );
@@ -531,7 +544,9 @@ mod tests {
         );
         assert!(!changed);
         assert_eq!(
-            state.slot(ClarifySlotId::DoneWhen).map(|s| s.value.as_str()),
+            state
+                .slot(ClarifySlotId::DoneWhen)
+                .map(|s| s.value.as_str()),
             Some("用户写的验收")
         );
         assert_eq!(
@@ -617,7 +632,13 @@ mod tests {
         let labels: Vec<_> = REQUIRED_SLOTS.iter().map(|s| s.label_zh()).collect();
         assert_eq!(
             labels,
-            vec!["目标对象", "痛苦时刻", "可观察结果", "明确不做", "怎样算做完"]
+            vec![
+                "目标对象",
+                "痛苦时刻",
+                "可观察结果",
+                "明确不做",
+                "怎样算做完"
+            ]
         );
     }
 }

@@ -31,12 +31,7 @@ pub trait SdkBackend: Send + Sync {
     }
 
     /// Run one task in-process. Write `stdout_path` (NDJSON) and return exit code.
-    async fn execute(
-        &self,
-        task: &TaskIR,
-        ctx: &StartCtx,
-        stdout_path: &PathBuf,
-    ) -> Result<i32>;
+    async fn execute(&self, task: &TaskIR, ctx: &StartCtx, stdout_path: &PathBuf) -> Result<i32>;
 }
 
 /// In-process stub: no network, no CLI. Proves WorkerPort without process spawn.
@@ -48,12 +43,7 @@ impl SdkBackend for InlineSdkBackend {
         "inline"
     }
 
-    async fn execute(
-        &self,
-        task: &TaskIR,
-        _ctx: &StartCtx,
-        stdout_path: &PathBuf,
-    ) -> Result<i32> {
+    async fn execute(&self, task: &TaskIR, _ctx: &StartCtx, stdout_path: &PathBuf) -> Result<i32> {
         // Tiny yield so start/poll interleaving is realistic under load.
         tokio::task::yield_now().await;
 
@@ -348,10 +338,7 @@ mod tests {
         let result = provider.collect(&handle).await.unwrap();
         assert_eq!(result.status, TaskStatus::Done);
         assert_eq!(result.exit_code, Some(0));
-        assert_eq!(
-            result.session_id.as_deref(),
-            Some("sdk-session-t1")
-        );
+        assert_eq!(result.session_id.as_deref(), Some("sdk-session-t1"));
         let stdout = std::fs::read_to_string(&handle.stdout_path).unwrap();
         assert!(stdout.contains("CCO_DONE"), "stdout: {stdout}");
         assert!(stdout.contains("sdk ok for t1"));

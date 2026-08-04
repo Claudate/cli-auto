@@ -42,7 +42,9 @@ pub fn extract_path_hints(plan_md: &str) -> Vec<String> {
                     | '）'
             )
     }) {
-        let t = raw.trim().trim_matches(|c| matches!(c, '*' | '`' | '"' | '\''));
+        let t = raw
+            .trim()
+            .trim_matches(|c| matches!(c, '*' | '`' | '"' | '\''));
         if t.len() < 3 || t.len() > 120 {
             continue;
         }
@@ -230,7 +232,11 @@ mod tests {
         let md = "# x\n改 `src/app/split.rs` 与 web/js/features/result/** 以及 docs/foo.md\n";
         let h = extract_path_hints(md);
         assert!(h.iter().any(|p| p.contains("src/app")), "{h:?}");
-        assert!(h.iter().any(|p| p.contains("web/js") || p.contains("result")), "{h:?}");
+        assert!(
+            h.iter()
+                .any(|p| p.contains("web/js") || p.contains("result")),
+            "{h:?}"
+        );
     }
 
     #[test]

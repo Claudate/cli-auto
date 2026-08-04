@@ -75,11 +75,7 @@ pub fn is_git_repo(project_root: &Path) -> bool {
 ///
 /// Layout: `{project}/.cco-worktrees/cco-{run}-{task}/`
 /// Branch: `cco/{run_id}/{task_id}`
-pub fn ensure_worktree(
-    project_root: &Path,
-    run_id: &str,
-    task_id: &str,
-) -> Result<WorktreeInfo> {
+pub fn ensure_worktree(project_root: &Path, run_id: &str, task_id: &str) -> Result<WorktreeInfo> {
     if which::which("git").is_err() {
         bail!("git not found; cannot create worktree");
     }
@@ -92,11 +88,23 @@ pub fn ensure_worktree(
 
     let safe_run: String = run_id
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     let safe_task: String = task_id
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
 
     let branch = format!("cco/{safe_run}/{safe_task}");
@@ -196,7 +204,10 @@ fn ensure_gitignore_entry(project_root: &Path, entry: &str) -> Result<()> {
         return Ok(());
     }
     let text = std::fs::read_to_string(&gi).unwrap_or_default();
-    if text.lines().any(|l| l.trim() == entry || l.trim() == entry.trim_end_matches('/')) {
+    if text
+        .lines()
+        .any(|l| l.trim() == entry || l.trim() == entry.trim_end_matches('/'))
+    {
         return Ok(());
     }
     // Do not auto-modify user gitignore in M2 — only log

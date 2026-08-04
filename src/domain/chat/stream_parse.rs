@@ -54,14 +54,12 @@ pub fn extract_assistant_text(raw: &str) -> String {
             continue;
         }
         let is_err = v.get("is_error").and_then(|x| x.as_bool()).unwrap_or(false)
-            || v.get("subtype")
-                .and_then(|s| s.as_str())
-                .is_some_and(|s| {
-                    s.eq_ignore_ascii_case("error")
-                        || s.starts_with("error_")
-                        || s.eq_ignore_ascii_case("error_max_turns")
-                        || s.eq_ignore_ascii_case("error_max_budget_usd")
-                });
+            || v.get("subtype").and_then(|s| s.as_str()).is_some_and(|s| {
+                s.eq_ignore_ascii_case("error")
+                    || s.starts_with("error_")
+                    || s.eq_ignore_ascii_case("error_max_turns")
+                    || s.eq_ignore_ascii_case("error_max_budget_usd")
+            });
         if let Some(s) = v.get("result").and_then(|r| r.as_str()) {
             if !s.trim().is_empty() {
                 return s.to_string();

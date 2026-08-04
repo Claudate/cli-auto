@@ -55,7 +55,9 @@ pub(super) fn build_plan_digest(text: &str) -> PlanDigest {
         .lines()
         .take(40)
         .map(str::trim)
-        .find(|l| l.contains("状态") && (l.contains("已") || l.contains("未") || l.contains("定稿")))
+        .find(|l| {
+            l.contains("状态") && (l.contains("已") || l.contains("未") || l.contains("定稿"))
+        })
         .unwrap_or("")
         .to_string();
     let status_open = !status_line.is_empty()
@@ -100,7 +102,9 @@ pub(super) fn build_plan_digest(text: &str) -> PlanDigest {
         if t.starts_with("## ") {
             let h = t.trim_start_matches('#').trim();
             in_non_goals = h.contains("非目标") || h.to_ascii_lowercase().contains("non-goal");
-            in_success = h.contains("成功") || h.contains("验收") || h.starts_with("S") && h.contains("标准");
+            in_success = h.contains("成功")
+                || h.contains("验收")
+                || h.starts_with("S") && h.contains("标准");
             if h.starts_with('H')
                 || h.contains("阶段")
                 || h.starts_with("### H")
@@ -119,7 +123,10 @@ pub(super) fn build_plan_digest(text: &str) -> PlanDigest {
             continue;
         }
         // checklist lines that look like phase ids
-        if (t.starts_with("- [") || t.starts_with("* [") || t.starts_with("- [x]") || t.starts_with("- [X]"))
+        if (t.starts_with("- [")
+            || t.starts_with("* [")
+            || t.starts_with("- [x]")
+            || t.starts_with("- [X]"))
             && (t.contains("H0")
                 || t.contains("H1")
                 || t.contains("H2")
@@ -136,7 +143,8 @@ pub(super) fn build_plan_digest(text: &str) -> PlanDigest {
         if in_non_goals && (t.starts_with('-') || t.starts_with('*')) && non_goal_lines.len() < 8 {
             non_goal_lines.push(t.chars().take(100).collect());
         }
-        if in_success && (t.starts_with('-') || t.starts_with('*') || t.starts_with('|'))
+        if in_success
+            && (t.starts_with('-') || t.starts_with('*') || t.starts_with('|'))
             && success_lines.len() < 10
         {
             success_lines.push(t.chars().take(100).collect());
@@ -148,13 +156,11 @@ pub(super) fn build_plan_digest(text: &str) -> PlanDigest {
         .iter()
         .filter(|l| l.contains("[x]") || l.contains("[X]"))
         .count();
-    let unchecked = phase_lines
-        .iter()
-        .filter(|l| l.contains("[ ]"))
-        .count();
+    let unchecked = phase_lines.iter().filter(|l| l.contains("[ ]")).count();
     let mostly_checked = checked >= 3 && checked > unchecked;
 
-    let mode = if head.contains("只读") && (head.contains("检验") || head.contains("巡检") || head.contains("audit"))
+    let mode = if head.contains("只读")
+        && (head.contains("检验") || head.contains("巡检") || head.contains("audit"))
     {
         PlanModeKind::Audit
     } else if status_open {
@@ -299,7 +305,10 @@ impl CriticReport {
             parts.push(format!("钉入 {} 条只读提示", self.prompts_tagged));
         }
         for n in &self.notes {
-            if !parts.iter().any(|p| p.contains(n.as_str()) || n.contains(p.as_str())) {
+            if !parts
+                .iter()
+                .any(|p| p.contains(n.as_str()) || n.contains(p.as_str()))
+            {
                 parts.push(n.clone());
             }
         }
@@ -571,7 +580,7 @@ mod tests {
                 role: None,
                 scope: None,
                 outputs: vec![],
-            tags: vec![],
+                tags: vec![],
             },
             TaskIR {
                 id: "t2".into(),
@@ -592,7 +601,7 @@ mod tests {
                 role: None,
                 scope: None,
                 outputs: vec![],
-            tags: vec![],
+                tags: vec![],
             },
         ];
         sanitize_task_deps(&mut tasks);
@@ -620,7 +629,7 @@ mod tests {
                 role: None,
                 scope: None,
                 outputs: vec![],
-            tags: vec![],
+                tags: vec![],
             },
             TaskIR {
                 id: "t2".into(),
@@ -640,7 +649,7 @@ mod tests {
                 role: None,
                 scope: None,
                 outputs: vec![],
-            tags: vec![],
+                tags: vec![],
             },
         ];
         sanitize_task_deps(&mut tasks);
@@ -666,14 +675,19 @@ mod tests {
             role: None,
             scope: None,
             outputs: vec![],
-        tags: vec![],
+            tags: vec![],
         }
     }
 
     #[test]
     fn critic_regression_rewrites_implement_title_and_tags_prompt() {
         let mut tasks = vec![
-            sample_task("t1", "实现 H0 入口路由", &[], "改 web/js/plan.js\nCCO_DONE ok"),
+            sample_task(
+                "t1",
+                "实现 H0 入口路由",
+                &[],
+                "改 web/js/plan.js\nCCO_DONE ok",
+            ),
             // prompt must not contain the substring "t1" (sanitize keeps edges that cite dep id)
             sample_task(
                 "t2",
@@ -683,7 +697,11 @@ mod tests {
             ),
         ];
         let r = critic_plan_tasks(&mut tasks, PlanModeKind::Regression);
-        assert!(r.titles_rewritten >= 1, "title rewrite: {:?}", tasks[0].title);
+        assert!(
+            r.titles_rewritten >= 1,
+            "title rewrite: {:?}",
+            tasks[0].title
+        );
         assert!(
             tasks[0].title.contains("回归验证"),
             "got {}",
@@ -736,7 +754,11 @@ mod tests {
 - 不新建 Scheduler
 "#;
         let d = build_plan_digest(md);
-        assert_eq!(d.mode, PlanModeKind::Regression, "landed header → regression");
+        assert_eq!(
+            d.mode,
+            PlanModeKind::Regression,
+            "landed header → regression"
+        );
         assert!(d.landed_hint);
     }
 

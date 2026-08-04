@@ -17,10 +17,10 @@ use tracing::{info, warn};
 use super::profiles::{PromptPlacement, ShellProfile};
 use super::scope::with_scope_prefix;
 use super::stream::{process_alive, stop_pid, stream_child};
+use crate::plan::TaskIR;
 use crate::ports::worker::{
     Capabilities, StartCtx, TaskResult, TaskStatus, WorkerHandle, WorkerPort, WorkerStatus,
 };
-use crate::plan::TaskIR;
 use crate::runtime::provider::{
     ensure_done_marker, finalize_stream_exit, parse_claude_result_json, resolve_exit_code,
     task_status_from_exit, worker_status_from_exit,

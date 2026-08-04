@@ -285,23 +285,14 @@ mod tests {
         );
         stamp_route_fill(&mut state, &ir, &report);
 
-        assert_eq!(
-            state.tasks["t1"].route_source,
-            Some(RouteSource::SoftFill)
-        );
-        assert_eq!(
-            state.tasks["t2"].route_source,
-            Some(RouteSource::Explicit)
-        );
+        assert_eq!(state.tasks["t1"].route_source, Some(RouteSource::SoftFill));
+        assert_eq!(state.tasks["t2"].route_source, Some(RouteSource::Explicit));
         // kept + tag-implied match → tag_routing
         assert_eq!(
             state.tasks["t3"].route_source,
             Some(RouteSource::TagRouting)
         );
-        assert_eq!(
-            state.tasks["t4"].route_source,
-            Some(RouteSource::SoftFill)
-        );
+        assert_eq!(state.tasks["t4"].route_source, Some(RouteSource::SoftFill));
     }
 
     #[test]
@@ -333,18 +324,12 @@ mod tests {
             PathBuf::from("/tmp/run"),
         );
         stamp_route_fill(&mut state, &ir, &report);
-        assert_eq!(
-            state.tasks["t2"].route_source,
-            Some(RouteSource::Explicit)
-        );
+        assert_eq!(state.tasks["t2"].route_source, Some(RouteSource::Explicit));
         assert_eq!(
             state.tasks["t3"].route_source,
             Some(RouteSource::TagRouting)
         );
-        assert_eq!(
-            state.tasks["t1"].route_source,
-            Some(RouteSource::SoftFill)
-        );
+        assert_eq!(state.tasks["t1"].route_source, Some(RouteSource::SoftFill));
     }
 
     #[test]
@@ -380,11 +365,7 @@ mod tests {
 
     #[test]
     fn route_label_failover_mentions_previous_product() {
-        let label = compose_route_label(
-            "codex",
-            Some(RouteSource::Failover),
-            Some("claude"),
-        );
+        let label = compose_route_label("codex", Some(RouteSource::Failover), Some("claude"));
         assert!(label.contains("故障切换"), "{label}");
         assert!(label.contains("Claude"), "{label}");
         assert!(label.contains("Codex"), "{label}");
@@ -429,11 +410,7 @@ mod tests {
 
     #[test]
     fn route_label_cost_escalate() {
-        let label = compose_route_label(
-            "claude",
-            Some(RouteSource::CostEscalate),
-            Some("codex"),
-        );
+        let label = compose_route_label("claude", Some(RouteSource::CostEscalate), Some("codex"));
         assert!(label.contains("升档"), "{label}");
         assert!(label.contains("Codex"), "{label}");
         assert!(label.contains("Claude"), "{label}");
@@ -441,11 +418,7 @@ mod tests {
 
     #[test]
     fn route_label_cost_budget() {
-        let label = compose_route_label(
-            "codex",
-            Some(RouteSource::CostBudget),
-            Some("claude"),
-        );
+        let label = compose_route_label("codex", Some(RouteSource::CostBudget), Some("claude"));
         assert!(label.contains("预算收紧"), "{label}");
         assert!(label.contains("Claude"), "{label}");
         assert!(label.contains("Codex"), "{label}");

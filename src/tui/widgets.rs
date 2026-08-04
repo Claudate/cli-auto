@@ -33,18 +33,15 @@ pub fn status_color_run(s: &RunStatus) -> Color {
 }
 
 pub fn page_tabs(selected: usize) -> Tabs<'static> {
-    let titles = vec![
-        "1:Dash",
-        "2:Graph",
-        "3:Task",
-        "4:Logs",
-        "5:Term",
-        "6:Help",
-    ];
+    let titles = vec!["1:Dash", "2:Graph", "3:Task", "4:Logs", "5:Term", "6:Help"];
     Tabs::new(titles)
         .select(selected)
         .block(Block::default().borders(Borders::BOTTOM))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
         .divider(" ")
 }
 

@@ -51,8 +51,7 @@ pub fn list_projects(config: &Config) -> Result<Vec<ProjectSummary>> {
             .collect();
         // already newest-first from list_runs
         let last = for_proj.first().copied();
-        let dismissed =
-            crate::state::project_ui::try_get_dismissed_run_id(config, &p.path);
+        let dismissed = crate::state::project_ui::try_get_dismissed_run_id(config, &p.path);
         let last_dismissed = match (last, dismissed.as_deref()) {
             (Some(l), Some(d)) if l.run_id == d => true,
             _ => false,
@@ -107,7 +106,11 @@ pub fn list_projects(config: &Config) -> Result<Vec<ProjectSummary>> {
     Ok(out)
 }
 
-pub fn add_project(config: &mut Config, path: PathBuf, name: Option<String>) -> Result<AllowedProject> {
+pub fn add_project(
+    config: &mut Config,
+    path: PathBuf,
+    name: Option<String>,
+) -> Result<AllowedProject> {
     if !path.is_dir() {
         bail!("不是有效目录: {}", path.display());
     }

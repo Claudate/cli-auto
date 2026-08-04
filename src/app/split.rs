@@ -27,8 +27,8 @@ use crate::plan::planner::{
     load_proposed_for_exec, mark_confirmed, remove_proposed_task, sanitize_proposed_deps,
     start_plan_job, update_proposed_task, PlanJobView, SanitizeDepsResult, StartPlanJobRequest,
 };
-use crate::state::sqlite::PlanSplitIndexRow;
 use crate::plan::PlanIR;
+use crate::state::sqlite::PlanSplitIndexRow;
 use crate::state::RunState;
 
 /// Freeze proposed plan and start the run (background) — **sole business open-run entry**.
@@ -137,7 +137,10 @@ pub fn get_job(config: &Config, job_id: &str) -> Result<PlanJobView> {
 }
 
 /// Latest job for a project (desktop attach).
-pub fn latest_job_for_project(config: &Config, project: &std::path::Path) -> Result<Option<PlanJobView>> {
+pub fn latest_job_for_project(
+    config: &Config,
+    project: &std::path::Path,
+) -> Result<Option<PlanJobView>> {
     latest_plan_job_for_project(config, project)
 }
 
@@ -346,15 +349,9 @@ mod tests {
             ],
         };
         // Soft job defaults (fake) then materialize with report.
-        let report =
-            crate::domain::worker::apply_worker_defaults(&mut ir, "fake", "print");
-        let (_run_id, st, _out, _) = crate::app::run::materialize_run_with_route(
-            &cfg,
-            project,
-            &ir,
-            Some(&report),
-        )
-        .unwrap();
+        let report = crate::domain::worker::apply_worker_defaults(&mut ir, "fake", "print");
+        let (_run_id, st, _out, _) =
+            crate::app::run::materialize_run_with_route(&cfg, project, &ir, Some(&report)).unwrap();
         assert_eq!(st.tasks["a"].route_source, Some(RouteSource::SoftFill));
         assert_eq!(st.tasks["b"].route_source, Some(RouteSource::Explicit));
         assert_eq!(st.tasks["b"].provider, "codex");

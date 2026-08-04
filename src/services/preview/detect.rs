@@ -91,9 +91,7 @@ fn try_npm_cmd(project: &Path) -> Result<Option<PreviewCmd>> {
     let npm_q = shell_single_quote(&npm.display().to_string());
     let script_q = shell_single_quote(&name);
     Ok(Some(PreviewCmd {
-        exec_body: format!(
-            "export BROWSER=none\nexport CI=true\nexec {npm_q} run {script_q}\n"
-        ),
+        exec_body: format!("export BROWSER=none\nexport CI=true\nexec {npm_q} run {script_q}\n"),
         label: format!("{} run {name}", npm.display()),
         hint_url: None,
         is_static: false,
@@ -168,7 +166,10 @@ fn try_static_cmd(project: &Path) -> Result<Option<PreviewCmd>> {
     // Bind loopback only; fixed port → hint_url matches what we wait for.
     Ok(Some(PreviewCmd {
         exec_body: format!("exec {py_q} -m http.server {port} --bind 127.0.0.1\n"),
-        label: format!("{} -m http.server {port} --bind 127.0.0.1", python.display()),
+        label: format!(
+            "{} -m http.server {port} --bind 127.0.0.1",
+            python.display()
+        ),
         hint_url: Some(format!("http://127.0.0.1:{port}/")),
         is_static: true,
     }))
@@ -235,7 +236,11 @@ mod tests {
             r#"{"scripts":{"dev":"npx serve","start":"npx serve ."}}"#,
         )
         .unwrap();
-        fs::write(dir.path().join("index.html"), "<!doctype html><title>t</title>").unwrap();
+        fs::write(
+            dir.path().join("index.html"),
+            "<!doctype html><title>t</title>",
+        )
+        .unwrap();
         let cmd = detect_preview_cmd(dir.path()).unwrap();
         assert!(
             cmd.is_static && cmd.label.contains("http.server"),
@@ -259,20 +264,22 @@ mod tests {
         assert!(npm_script_probe_friendly("npx serve -l 5173"));
         assert!(!npm_script_probe_friendly("npx serve"));
         assert!(!npm_script_probe_friendly("python3 -m http.server"));
-        assert!(npm_script_probe_friendly("python3 -m http.server 5173 --bind 127.0.0.1"));
+        assert!(npm_script_probe_friendly(
+            "python3 -m http.server 5173 --bind 127.0.0.1"
+        ));
         assert!(npm_script_probe_friendly("vite"));
     }
 
     #[test]
     fn static_index_without_package_json() {
         let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("index.html"), "<!doctype html><title>t</title>").unwrap();
+        fs::write(
+            dir.path().join("index.html"),
+            "<!doctype html><title>t</title>",
+        )
+        .unwrap();
         let cmd = detect_preview_cmd(dir.path()).unwrap();
-        assert!(
-            cmd.label.contains("http.server"),
-            "label={}",
-            cmd.label
-        );
+        assert!(cmd.label.contains("http.server"), "label={}", cmd.label);
         let url = cmd.hint_url.expect("hint_url");
         assert!(url.starts_with("http://127.0.0.1:"), "{url}");
         assert!(cmd.exec_body.contains("http.server"));

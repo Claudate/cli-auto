@@ -12,21 +12,20 @@ pub mod system_post;
 
 // Domain pure model (A1 extraction + CcoSplit SoT shape).
 pub use crate::domain::plan::{
-    apply_tag_routing, assign_closeout_owners, build_host_checklist, format_checklist_for_prompt,
-    from_plan_ir, inject_closeout_task, is_runnable_verify, is_system_closeout_task,
-    is_system_ensure_task, is_system_post_task, looks_like_inspect_gate, looks_like_shell_acceptance,
-    looks_like_work_task_id, materialize_role_defaults, materialize_selected_tasks,
-    classify_task_risk, classify_task_risk_wire, classify_task_risk_wire_with_tags,
-    classify_task_risk_with_tags, normalize_optional_title, parse_role_input, recompute_waves,
+    apply_tag_routing, assign_closeout_owners, build_host_checklist, classify_task_risk,
+    classify_task_risk_wire, classify_task_risk_wire_with_tags, classify_task_risk_with_tags,
+    format_checklist_for_prompt, from_plan_ir, inject_closeout_task, is_runnable_verify,
+    is_system_closeout_task, is_system_ensure_task, is_system_post_task, looks_like_inspect_gate,
+    looks_like_shell_acceptance, looks_like_work_task_id, materialize_role_defaults,
+    materialize_selected_tasks, normalize_optional_title, parse_role_input, recompute_waves,
     run_gate_ok, sanitize_cco_split_deps, soft_accept_split, soften_plan_for_accept,
     split_topo_layers, task_has_browser_tag, task_has_scrape_tag, task_has_ui_smoke_tag,
-    task_has_ui_verify_tag, title_is_meta_heading,
-    title_looks_optional, to_plan_ir, CcoSplitJob, CcoSplitSource, RiskClass, CcoSplitStatus,
-    CcoSplitTask, CcoTaskKind, CcoTaskStatus, ChecklistKind, HostChecklist, HostChecklistItem,
-    OnFailure, PlanIR, TaskIR, TaskRole, TaskScope, BROWSER_SYSTEM_PROMPT,
-    BROWSER_SYSTEM_PROMPT_MARKER, CCO_SPLIT_SCHEMA, CHECKLIST_SCHEMA_VERSION,
-    CLOSEOUT_DEFAULT_FORBID, CLOSEOUT_DEFAULT_WRITE_SCOPE, CLOSEOUT_SYSTEM_PROMPT,
-    CLOSEOUT_SYSTEM_PROMPT_MARKER, IMPLEMENT_USABILITY_SYSTEM_PROMPT,
+    task_has_ui_verify_tag, title_is_meta_heading, title_looks_optional, to_plan_ir, CcoSplitJob,
+    CcoSplitSource, CcoSplitStatus, CcoSplitTask, CcoTaskKind, CcoTaskStatus, ChecklistKind,
+    HostChecklist, HostChecklistItem, OnFailure, PlanIR, RiskClass, TaskIR, TaskRole, TaskScope,
+    BROWSER_SYSTEM_PROMPT, BROWSER_SYSTEM_PROMPT_MARKER, CCO_SPLIT_SCHEMA,
+    CHECKLIST_SCHEMA_VERSION, CLOSEOUT_DEFAULT_FORBID, CLOSEOUT_DEFAULT_WRITE_SCOPE,
+    CLOSEOUT_SYSTEM_PROMPT, CLOSEOUT_SYSTEM_PROMPT_MARKER, IMPLEMENT_USABILITY_SYSTEM_PROMPT,
     IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER, INSPECT_DEFAULT_ALLOWED_TOOLS,
     INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_SYSTEM_PROMPT, INSPECT_SYSTEM_PROMPT_MARKER,
     MAX_PROMPT_CHARS, MAX_TASKS, MAX_TIMEOUT_SECS, PLANNER_MAX_BUDGET_USD, PLANNER_MAX_TASKS,
@@ -49,8 +48,8 @@ pub fn is_structured_adapter(adapter: &str) -> bool {
 /// Peek adapter without full PlanIR parse (for CLI `run` routing).
 pub fn peek_adapter(project_root: &Path, plan_path: &Path) -> Result<String> {
     let abs = resolve_plan_path(project_root, plan_path)?;
-    let text = std::fs::read_to_string(&abs)
-        .with_context(|| format!("read plan {}", abs.display()))?;
+    let text =
+        std::fs::read_to_string(&abs).with_context(|| format!("read plan {}", abs.display()))?;
     Ok(detect_adapter(&abs, &text))
 }
 
@@ -62,8 +61,8 @@ pub fn load_plan(
     config: &Config,
 ) -> Result<PlanIR> {
     let abs = resolve_plan_path(project_root, plan_path)?;
-    let text = std::fs::read_to_string(&abs)
-        .with_context(|| format!("read plan {}", abs.display()))?;
+    let text =
+        std::fs::read_to_string(&abs).with_context(|| format!("read plan {}", abs.display()))?;
 
     let adapter = adapter_hint
         .map(|s| s.to_string())
@@ -204,19 +203,17 @@ pub fn list_plans(project_root: &Path) -> Result<Vec<PathBuf>> {
     out.dedup();
     // Prefer markdown plan documents first; yaml/json are optional structured forms.
     out.sort_by(|a, b| {
-        let rank = |p: &Path| {
-            match p
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("")
-                .to_ascii_lowercase()
-                .as_str()
-            {
-                "md" => 0,
-                "yaml" | "yml" => 1,
-                "json" => 2,
-                _ => 3,
-            }
+        let rank = |p: &Path| match p
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "md" => 0,
+            "yaml" | "yml" => 1,
+            "json" => 2,
+            _ => 3,
         };
         rank(a).cmp(&rank(b)).then_with(|| a.cmp(b))
     });
@@ -243,7 +240,6 @@ fn walkdir_shallow(root: &Path, max_depth: usize) -> Result<Vec<PathBuf>> {
     rec(root, 1, max_depth, &mut out)?;
     Ok(out)
 }
-
 
 #[cfg(test)]
 mod tests {

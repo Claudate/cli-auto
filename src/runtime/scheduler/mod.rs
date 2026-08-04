@@ -244,6 +244,7 @@ impl Scheduler {
         };
         self.state.status = status;
         self.state.finished_at = Some(chrono::Utc::now());
+        self.auto_commit_plan(status);
         self.state.save()?;
         self.state.event(
             "run_end",

@@ -24,28 +24,16 @@ pub fn tag_implied_provider(tags: &[String]) -> Option<&'static str> {
     {
         return Some("codex");
     }
-    if tags_lower
-        .iter()
-        .any(|x| x == "claude" || x == "anthropic")
-    {
+    if tags_lower.iter().any(|x| x == "claude" || x == "anthropic") {
         return Some("claude");
     }
-    if tags_lower
-        .iter()
-        .any(|x| x == "gemini" || x == "google")
-    {
+    if tags_lower.iter().any(|x| x == "gemini" || x == "google") {
         return Some("gemini");
     }
-    if tags_lower
-        .iter()
-        .any(|x| x == "qwen" || x == "tongyi")
-    {
+    if tags_lower.iter().any(|x| x == "qwen" || x == "tongyi") {
         return Some("qwen");
     }
-    if tags_lower
-        .iter()
-        .any(|x| x == "kimi" || x == "moonshot")
-    {
+    if tags_lower.iter().any(|x| x == "kimi" || x == "moonshot") {
         return Some("kimi");
     }
     if tags_lower.iter().any(|x| x == "deepseek") {

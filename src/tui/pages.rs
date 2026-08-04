@@ -93,7 +93,8 @@ fn render_dashboard(frame: &mut Frame, app: &App, area: Rect) {
         };
         Row::new(vec![
             Cell::from(id.as_str()),
-            Cell::from(format!("{:?}", t.status)).style(Style::default().fg(status_color_task(&t.status))),
+            Cell::from(format!("{:?}", t.status))
+                .style(Style::default().fg(status_color_task(&t.status))),
             Cell::from(t.provider.as_str()),
             Cell::from(t.mode.as_str()),
             Cell::from(
@@ -176,27 +177,26 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
 fn render_task(frame: &mut Frame, app: &App, area: Rect) {
     let Some(id) = app.selected_task_id() else {
         frame.render_widget(
-            Paragraph::new("no task selected").block(
-                Block::default()
-                    .title(" Task ")
-                    .borders(Borders::ALL),
-            ),
+            Paragraph::new("no task selected")
+                .block(Block::default().title(" Task ").borders(Borders::ALL)),
             area,
         );
         return;
     };
     let t = &app.state.tasks[&id];
-    let prompt = app
-        .state
-        .task_dir(&id)
-        .join("prompt.md");
-    let prompt_text = std::fs::read_to_string(prompt).unwrap_or_else(|_| "(no prompt snapshot)".into());
+    let prompt = app.state.task_dir(&id).join("prompt.md");
+    let prompt_text =
+        std::fs::read_to_string(prompt).unwrap_or_else(|_| "(no prompt snapshot)".into());
     let meta = std::fs::read_to_string(app.state.task_dir(&id).join("meta.json"))
         .unwrap_or_else(|_| "{}".into());
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(8), Constraint::Percentage(45), Constraint::Min(3)])
+        .constraints([
+            Constraint::Length(8),
+            Constraint::Percentage(45),
+            Constraint::Min(3),
+        ])
         .split(area);
 
     let head = format!(
@@ -254,7 +254,9 @@ fn render_logs(frame: &mut Frame, app: &App, area: Rect) {
     };
     // show tail
     let lines: Vec<&str> = text.lines().collect();
-    let start = lines.len().saturating_sub(area.height.saturating_sub(2) as usize);
+    let start = lines
+        .len()
+        .saturating_sub(area.height.saturating_sub(2) as usize);
     let body = lines[start..].join("\n");
     let title = app
         .selected_task_id()
@@ -357,9 +359,7 @@ fn render_term_pane(
         Block::default().title(title).borders(Borders::ALL)
     };
     frame.render_widget(
-        Paragraph::new(body)
-            .block(block)
-            .wrap(Wrap { trim: false }),
+        Paragraph::new(body).block(block).wrap(Wrap { trim: false }),
         area,
     );
 }

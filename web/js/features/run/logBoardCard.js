@@ -1,6 +1,6 @@
 /**
  * [INPUT]: live task · logContent · logVirtual · logHost
- * [OUTPUT]: stallStripText · upsertCliWindowCard（单窗 chrome + body）
+ * [OUTPUT]: stallStripText · upsertCliWindowCard（单窗 chrome + body + 任务级自动提交状态）
  * [POS]: A5-2c features/run；自 logBoard 纵切（P-ship-D）· P1-3 失败卡执行方式
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -96,6 +96,16 @@ export function stallStripText(t) {
   return "";
 }
 
+function autoCommitSummary(commit) {
+  if (!commit) return "";
+  if (!commit.ok) return `自动提交失败：${String(commit.message || "未知错误").slice(0, 100)}`;
+  if (!commit.commit_hash) return "自动提交：无变更可提交";
+  const hash = String(commit.commit_hash).slice(0, 8);
+  const files = Array.isArray(commit.files) ? commit.files.length : 0;
+  const push = commit.pushed ? " · 已 Push" : "";
+  return `自动提交 ${hash}${files ? ` · ${files} 个文件` : ""}${push}`;
+}
+
 /**
  * Create or patch one CLI window card on the board.
  * @returns {HTMLElement} card
@@ -114,6 +124,8 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
   const title = t.title || t.task_id;
   const elapsed = callG("formatElapsed", t.started_at, t.finished_at) || "";
   const sum = callG("taskErrorSummary", t) || "";
+  const autoCommit = t.auto_commit || t.autoCommit || null;
+  const autoCommitText = autoCommitSummary(autoCommit);
   if (!S().panelPos) S().panelPos = {};
   const pos = S().panelPos[t.task_id];
   let card = canPatch
@@ -173,6 +185,7 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
     isLiveStatus(st) ? 1 : 0,
     t.attempt || 0,
     t.last_retry_reason || "",
+    autoCommitText,
     // presence of stall strip (not the ticking idle seconds)
     stallStripText(t) ? 1 : 0,
     S().cliLogExpanded?.[t.task_id] === true ? 1 : 0,
@@ -286,6 +299,13 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
           ? `<div class="cli-window-err" title="${esc(sum)}">${esc(sum)}</div>`
           : ""
       }
+      ${
+        autoCommitText
+          ? `<div class="cli-window-git ${autoCommit?.ok ? "ok" : "err"}" title="${esc(
+              String(autoCommit?.message || autoCommitText)
+            )}">${esc(autoCommitText)}</div>`
+          : ""
+      }
       ${(() => {
         // C2: human progress blurb (3–5 lines max) before raw log body
         const lines = [];
@@ -326,6 +346,9 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
         if (sum) lines.push(String(sum).slice(0, 120));
         if (t.attempt && t.attempt > 1) {
           lines.push(`第 ${t.attempt} 次尝试`);
+        }
+        if (autoCommitText) {
+          lines.push(autoCommitText);
         }
         const body = lines
           .filter(Boolean)

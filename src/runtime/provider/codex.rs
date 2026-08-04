@@ -49,9 +49,8 @@ mod tests {
             forbid: vec!["src/module_b/**".into(), "~".into()],
         };
         let prefix = build_scope_prefix(&work, Some(&scope));
-        assert!(prefix.contains(
-            "Writable whitelist (scope.paths): src/module_a/**, .cco-out/feat-a/**"
-        ));
+        assert!(prefix
+            .contains("Writable whitelist (scope.paths): src/module_a/**, .cco-out/feat-a/**"));
         assert!(prefix.contains("Extra readonly ranges (scope.readonly): docs/**"));
         assert!(prefix.contains("Hard forbid (scope.forbid): src/module_b/**, ~"));
     }

@@ -18,7 +18,7 @@ use serde::Deserialize;
 
 use crate::config::Config;
 use crate::plan::adapters::raw_single::default_provider_opts;
-use crate::plan::{OnFailure, PlanIR, TaskIR, PLANNER_MAX_TASKS, PLANNER_MAX_BUDGET_USD};
+use crate::plan::{OnFailure, PlanIR, TaskIR, PLANNER_MAX_BUDGET_USD, PLANNER_MAX_TASKS};
 
 use super::job::{append_log, apply_worker_defaults, job_dir, PlanJob, PlanJobStatus};
 // PlanJob used when persisting digest_mode mid-plan
@@ -30,8 +30,8 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
     };
 
     let abs = crate::plan::resolve_plan_path(&job.project, &job.plan_path)?;
-    let source_text = std::fs::read_to_string(&abs)
-        .with_context(|| format!("read plan {}", abs.display()))?;
+    let source_text =
+        std::fs::read_to_string(&abs).with_context(|| format!("read plan {}", abs.display()))?;
     // Cap source size for prompt budget
     let source_text = if source_text.len() > 40_000 {
         format!(
@@ -54,11 +54,7 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
         .map(|p| p.extra_args.clone())
         .unwrap_or_default();
     let provider = ClaudeProvider::new(bin.clone(), extra);
-    append_log(
-        config,
-        &job.job_id,
-        &format!("planner CLI bin = {bin}"),
-    );
+    append_log(config, &job.job_id, &format!("planner CLI bin = {bin}"));
 
     let work = job_dir(config, &job.job_id).join("llm_work");
     let task_dir = work.join("tasks").join("__planner__");
@@ -88,8 +84,13 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
         j.updated_at = Utc::now();
         let _ = j.save(config);
     }
-    let prompt =
-        planner_system_prompt_with_memory(Some(config), &job.project, &source_text, max_parallel, &digest);
+    let prompt = planner_system_prompt_with_memory(
+        Some(config),
+        &job.project,
+        &source_text,
+        max_parallel,
+        &digest,
+    );
     std::fs::write(task_dir.join("prompt.md"), &prompt)?;
     append_log(config, &job.job_id, "starting intelligent planner…");
 
@@ -116,7 +117,7 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
         role: None,
         scope: None,
         outputs: vec![],
-    tags: vec![],
+        tags: vec![],
     };
 
     let ctx = StartCtx {
@@ -187,7 +188,9 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
             .and_then(|p| std::fs::read_to_string(p).ok())
             .unwrap_or_default();
         if !matches!(result.status, crate::runtime::provider::TaskStatus::Done) {
-            let err = result.error.unwrap_or_else(|| "planner worker failed".into());
+            let err = result
+                .error
+                .unwrap_or_else(|| "planner worker failed".into());
             bail!("planner worker not done: {err}\n{stdout}");
         }
         Ok::<(String, Option<f64>), anyhow::Error>((stdout, cost))
@@ -317,11 +320,7 @@ pub(super) fn run_optional_llm_critic(
         return LlmCriticOutcome::default();
     }
     if job.provider.eq_ignore_ascii_case("fake") {
-        append_log(
-            config,
-            &job.job_id,
-            "LLM critic skipped (fake provider)",
-        );
+        append_log(config, &job.job_id, "LLM critic skipped (fake provider)");
         return LlmCriticOutcome::default();
     }
 
@@ -461,7 +460,7 @@ fn run_short_claude_print(
         role: None,
         scope: None,
         outputs: vec![],
-    tags: vec![],
+        tags: vec![],
     };
     let ctx = StartCtx {
         run_id: job.job_id.clone(),
@@ -517,7 +516,9 @@ fn run_short_claude_print(
         if !matches!(result.status, crate::runtime::provider::TaskStatus::Done) {
             // Failed/stopped workers may still leave a live child briefly — best-effort stop.
             let _ = provider.stop(&handle).await;
-            let err = result.error.unwrap_or_else(|| "critic worker failed".into());
+            let err = result
+                .error
+                .unwrap_or_else(|| "critic worker failed".into());
             bail!("critic worker not done: {err}");
         }
         Ok((stdout, cost))
@@ -727,7 +728,11 @@ pub(super) struct LlmTask {
     pub(super) tags: Vec<String>,
 }
 
-pub(super) fn parse_llm_plan_output(raw: &str, source_path: &Path, config: &Config) -> Result<PlanIR> {
+pub(super) fn parse_llm_plan_output(
+    raw: &str,
+    source_path: &Path,
+    config: &Config,
+) -> Result<PlanIR> {
     let json_str = extract_json_object(raw).context("LLM 输出中未找到 JSON 对象")?;
     let doc: LlmPlanDoc = serde_json::from_str(&json_str).with_context(|| {
         format!(
@@ -845,8 +850,7 @@ pub(super) fn parse_llm_plan_output(raw: &str, source_path: &Path, config: &Conf
         );
     }
     // Drop depends_on edges that pointed at removed meta tasks.
-    let keep: std::collections::HashSet<String> =
-        tasks.iter().map(|t| t.id.clone()).collect();
+    let keep: std::collections::HashSet<String> = tasks.iter().map(|t| t.id.clone()).collect();
     let mut tasks = tasks;
     for t in &mut tasks {
         t.depends_on.retain(|d| keep.contains(d));
@@ -1104,9 +1108,9 @@ pub(super) fn find_matching_brace(bytes: &[u8], start: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod llm_critic_gate_tests {
-    use super::{plan_mode_skips_llm_critic, run_optional_llm_critic};
     use super::super::digest::PlanModeKind;
     use super::super::job::{job_dir, PlanJob, PlanJobStatus};
+    use super::{plan_mode_skips_llm_critic, run_optional_llm_critic};
     use crate::config::Config;
     use crate::plan::{OnFailure, PlanIR, TaskIR};
     use chrono::Utc;
@@ -1115,7 +1119,15 @@ mod llm_critic_gate_tests {
 
     #[test]
     fn plan_mode_skips_llm_critic_for_local_modes() {
-        for m in ["fast", "heuristic", "parse", "fake", "direct", "FAST", " Parse "] {
+        for m in [
+            "fast",
+            "heuristic",
+            "parse",
+            "fake",
+            "direct",
+            "FAST",
+            " Parse ",
+        ] {
             assert!(plan_mode_skips_llm_critic(m), "mode={m}");
         }
         assert!(!plan_mode_skips_llm_critic("ai"));
@@ -1197,18 +1209,17 @@ mod llm_critic_gate_tests {
                 tags: vec![],
             }],
         };
-        let out = run_optional_llm_critic(
-            &cfg,
-            &job,
-            &mut ir,
-            PlanModeKind::Greenfield,
-        );
+        let out = run_optional_llm_critic(&cfg, &job, &mut ir, PlanModeKind::Greenfield);
         assert!(!out.used);
         assert!(out.duration_ms.is_none());
         // No __critic__ task dir should be created when skipped by plan_mode.
         let critic = job_dir(&cfg, job_id).join("llm_work/tasks/__critic__");
-        assert!(!critic.exists(), "critic dir should not be created on fast skip");
-        let log = std::fs::read_to_string(job_dir(&cfg, job_id).join("planner.log")).unwrap_or_default();
+        assert!(
+            !critic.exists(),
+            "critic dir should not be created on fast skip"
+        );
+        let log =
+            std::fs::read_to_string(job_dir(&cfg, job_id).join("planner.log")).unwrap_or_default();
         assert!(
             log.contains("LLM critic skipped") && log.contains("fast"),
             "log={log}"

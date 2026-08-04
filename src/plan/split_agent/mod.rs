@@ -30,8 +30,8 @@ use super::planner::{append_log, job_dir, PlanJob};
 /// Adapter tag: `split-agent-llm` (also recognizable as llm path).
 pub fn build_split_agent_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
     let abs = crate::plan::resolve_plan_path(&job.project, &job.plan_path)?;
-    let source_text = std::fs::read_to_string(&abs)
-        .with_context(|| format!("read plan {}", abs.display()))?;
+    let source_text =
+        std::fs::read_to_string(&abs).with_context(|| format!("read plan {}", abs.display()))?;
     let max_parallel = job
         .max_parallel
         .unwrap_or(config.default.max_parallel)
@@ -47,7 +47,7 @@ pub fn build_split_agent_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
         created_at: job.created_at.to_rfc3339(),
         updated_at: now.clone(),
         grain_hint: job.grain_hint.clone(),
-        clarify_depth: job.clarify_depth.clone(),  // new: clarify depth
+        clarify_depth: job.clarify_depth.clone(), // new: clarify depth
         revision_notes: job.revision_notes.clone(),
         effort: job.effort.clone(),
     };
@@ -72,9 +72,8 @@ pub fn build_split_agent_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
         }
     }
     {
-        let hints = repo_digest::extract_path_hints(
-            &std::fs::read_to_string(&abs).unwrap_or_default(),
-        );
+        let hints =
+            repo_digest::extract_path_hints(&std::fs::read_to_string(&abs).unwrap_or_default());
         if !hints.is_empty() {
             append_log(
                 config,
@@ -82,15 +81,15 @@ pub fn build_split_agent_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
                 &format!("ModelSplitAgent path_hints: {}", hints.join(", ")),
             );
         } else {
-            append_log(config, &job.job_id, "ModelSplitAgent repo_digest: shallow top-level only");
+            append_log(
+                config,
+                &job.job_id,
+                "ModelSplitAgent repo_digest: shallow top-level only",
+            );
         }
     }
     if let Some(ref e) = job.effort {
-        append_log(
-            config,
-            &job.job_id,
-            &format!("ModelSplitAgent effort: {e}"),
-        );
+        append_log(config, &job.job_id, &format!("ModelSplitAgent effort: {e}"));
     }
     append_log(
         config,
@@ -103,7 +102,11 @@ pub fn build_split_agent_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
     doc.updated_at = Utc::now().to_rfc3339();
     let notes = crate::domain::plan::soft_accept_split(&mut doc);
     for n in &notes {
-        append_log(config, &job.job_id, &format!("split_agent soft_accept: {n}"));
+        append_log(
+            config,
+            &job.job_id,
+            &format!("split_agent soft_accept: {n}"),
+        );
     }
 
     // Persist SoT early so desk can load even if later write_proposed races.
@@ -167,11 +170,7 @@ mod tests {
         let project = dir.path().to_path_buf();
         let plan = project.join("idea.md");
         // Prose plan (raw-single) so we don't short-circuit on structured parse.
-        std::fs::write(
-            &plan,
-            "做一个小发布：先写程序入口，再补单测，文档可选。\n",
-        )
-        .unwrap();
+        std::fs::write(&plan, "做一个小发布：先写程序入口，再补单测，文档可选。\n").unwrap();
         let mut cfg = Config::default();
         cfg.state_root = dir.path().join("state");
         std::fs::create_dir_all(&cfg.state_root).unwrap();
@@ -195,10 +194,10 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -214,7 +213,11 @@ mod tests {
         assert_eq!(view.status, "planned", "err={:?}", view.error);
         assert!(
             view.adapter.as_deref().unwrap_or("").contains("llm")
-                || view.adapter.as_deref().unwrap_or("").contains("split-agent"),
+                || view
+                    .adapter
+                    .as_deref()
+                    .unwrap_or("")
+                    .contains("split-agent"),
             "adapter={:?}",
             view.adapter
         );
@@ -253,10 +256,10 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -274,10 +277,7 @@ mod tests {
         let run_id = crate::app::split::confirm(cfg.clone(), &view.job_id, None).unwrap();
         assert!(!run_id.is_empty());
         let job = crate::plan::planner::PlanJob::load(&cfg, &view.job_id).unwrap();
-        assert_eq!(
-            job.status,
-            crate::plan::planner::PlanJobStatus::Confirmed
-        );
+        assert_eq!(job.status, crate::plan::planner::PlanJobStatus::Confirmed);
         let sot2 = crate::state::cco_split_store::load_cco_split(&cfg, &view.job_id)
             .unwrap()
             .expect("SoT after confirm");

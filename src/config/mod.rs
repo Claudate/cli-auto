@@ -1,13 +1,14 @@
 //! Global config: ~/.cco/config.toml + env overrides.
 //!
 //! [INPUT]: 磁盘 config · 环境变量
-//! [OUTPUT]: Config · AllowedProject · BrowserConfig · GitConfig · load/save · runs_dir · failover · post_* · browser
+//! [OUTPUT]: Config · AllowedProject · BrowserConfig · GitConfig · auto_commit_granularity · load/save · runs_dir · failover · post_* · browser
 //! [POS]: 全局配置真源；桌面项目白名单存此
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/config/CLAUDE.md
 
 mod git;
 pub use git::{
-    normalize_region, region_label, AutoCommitPolicy, GitConfig, GitIdentity, GitRegion, GitRemote,
+    normalize_auto_commit_granularity, normalize_region, region_label, AutoCommitGranularity,
+    AutoCommitPolicy, GitConfig, GitIdentity, GitRegion, GitRemote,
 };
 
 use std::collections::HashMap;
@@ -75,6 +76,28 @@ impl Default for BrowserConfig {
     }
 }
 
+impl Config {
+    /// Effective host auto-commit granularity.
+    ///
+    /// Legacy `default.post_git_push_enabled=true` still means per-plan
+    /// auto-commit so old configs keep their behavior.
+    pub fn auto_commit_granularity(&self) -> AutoCommitGranularity {
+        if self.git.auto_commit.enabled
+            && self.git.auto_commit.granularity != AutoCommitGranularity::Off
+        {
+            self.git.auto_commit.granularity
+        } else if self.default.post_git_push_enabled {
+            AutoCommitGranularity::PerPlan
+        } else if self.git.auto_commit.enabled {
+            // Previous `[git.auto_commit]` only had `enabled`; preserve the
+            // historical opt-in as a plan-level host commit.
+            AutoCommitGranularity::PerPlan
+        } else {
+            AutoCommitGranularity::Off
+        }
+    }
+}
+
 impl BrowserConfig {
     /// Effective enabled: config or `CCO_BROWSER_ENABLED=1|true|yes`.
     pub fn is_enabled(&self) -> bool {
@@ -120,16 +143,16 @@ impl BrowserConfig {
         self.engine = norm.clone();
         match norm.as_str() {
             "playwright_mcp" => {
-                let on_kite_stock = self.command == "npx"
-                    && self.args.iter().any(|a| a.contains("kitewright"));
+                let on_kite_stock =
+                    self.command == "npx" && self.args.iter().any(|a| a.contains("kitewright"));
                 if on_kite_stock || self.args.is_empty() {
                     self.command = "npx".into();
                     self.args = vec!["-y".into(), "@playwright/mcp".into()];
                 }
             }
             _ => {
-                let on_pw_stock = self.command == "npx"
-                    && self.args.iter().any(|a| a.contains("playwright"));
+                let on_pw_stock =
+                    self.command == "npx" && self.args.iter().any(|a| a.contains("playwright"));
                 if on_pw_stock || self.args.is_empty() {
                     self.command = "npx".into();
                     self.args = vec!["-y".into(), "@kitewright/mcp".into()];
@@ -696,6 +719,16 @@ args = ["-y", "@kitewright/mcp"]
 out_dir = ".cco-out/browser"
 require_preview = true
 strict_mcp = true
+
+[git]
+default_region = "overseas"
+
+[git.auto_commit]
+enabled = false
+# off | per_plan | per_task
+granularity = "off"
+push_after_commit = false
+allow_force = false
 "#;
         std::fs::write(path, template)
             .with_context(|| format!("write config template {}", path.display()))?;
@@ -717,10 +750,8 @@ strict_mcp = true
             std::fs::create_dir_all(parent)?;
         }
         // Serialize without state_root (skipped). Reconstruct a friendly toml.
-        let text = toml::to_string_pretty(self)
-            .with_context(|| "serialize config")?;
-        std::fs::write(&path, text)
-            .with_context(|| format!("write config {}", path.display()))?;
+        let text = toml::to_string_pretty(self).with_context(|| "serialize config")?;
+        std::fs::write(&path, text).with_context(|| format!("write config {}", path.display()))?;
         Ok(())
     }
 
@@ -730,11 +761,7 @@ strict_mcp = true
         } else {
             path
         };
-        if let Some(existing) = self
-            .projects
-            .iter()
-            .find(|p| paths_equal(&p.path, &canon))
-        {
+        if let Some(existing) = self.projects.iter().find(|p| paths_equal(&p.path, &canon)) {
             return Ok(existing.clone());
         }
         let entry = AllowedProject {
@@ -751,8 +778,7 @@ strict_mcp = true
 
     pub fn remove_project(&mut self, path: &Path) -> Result<bool> {
         let before = self.projects.len();
-        self.projects
-            .retain(|p| !paths_equal(&p.path, path));
+        self.projects.retain(|p| !paths_equal(&p.path, path));
         if self.projects.len() != before {
             self.save()?;
             Ok(true)

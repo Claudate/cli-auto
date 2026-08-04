@@ -65,10 +65,7 @@ impl MessagesHttpClient for ReqwestMessagesClient {
         }
         let resp = req.send().await.context("sdk messages HTTP request")?;
         let status = resp.status().as_u16();
-        let text = resp
-            .text()
-            .await
-            .context("sdk messages HTTP read body")?;
+        let text = resp.text().await.context("sdk messages HTTP read body")?;
         Ok((status, text))
     }
 }
@@ -157,12 +154,7 @@ impl<C: MessagesHttpClient> SdkBackend for AnthropicMessagesBackend<C> {
         Ok(())
     }
 
-    async fn execute(
-        &self,
-        task: &TaskIR,
-        _ctx: &StartCtx,
-        stdout_path: &PathBuf,
-    ) -> Result<i32> {
+    async fn execute(&self, task: &TaskIR, _ctx: &StartCtx, stdout_path: &PathBuf) -> Result<i32> {
         if self.api_key.trim().is_empty() {
             write_error_ndjson(
                 stdout_path,

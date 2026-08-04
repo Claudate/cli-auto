@@ -120,9 +120,7 @@ fn path_looks_like_docs(path: &str) -> bool {
         return false;
     }
     let lower = p.to_ascii_lowercase();
-    DOCS_CLOSEOUT_PATH_HINTS
-        .iter()
-        .any(|h| lower.contains(h))
+    DOCS_CLOSEOUT_PATH_HINTS.iter().any(|h| lower.contains(h))
         || lower.ends_with(".md")
         || lower.contains("readme")
 }

@@ -49,11 +49,7 @@ pub fn load_inspect_gate_doc(
 ///
 /// When ISSUES are residual-only after host demotion (handwalk / hygiene), force
 /// **Pass** so a mis-written FAIL does not pause a finished implement wave.
-pub fn read_inspect_verdict(
-    task: &TaskIR,
-    work_dir: &Path,
-    project_root: &Path,
-) -> InspectVerdict {
+pub fn read_inspect_verdict(task: &TaskIR, work_dir: &Path, project_root: &Path) -> InspectVerdict {
     let mut issues = load_parsed_inspect_issues(task, work_dir, project_root);
     demote_residual_evidence_issues(&mut issues);
     if !issues.is_empty() && effective_blocking_count(&issues) == 0 {
@@ -153,11 +149,7 @@ pub fn inspect_pass_blocked_by_issues(
 
 /// Read ISSUES product into short consumable lines (for Open risks / rework hook).
 /// Stable format: each risk line is `ISSUES[<task_id>]: severity=… <snippet>`.
-pub fn collect_inspect_issues(
-    task: &TaskIR,
-    work_dir: &Path,
-    project_root: &Path,
-) -> Vec<String> {
+pub fn collect_inspect_issues(task: &TaskIR, work_dir: &Path, project_root: &Path) -> Vec<String> {
     let parsed = load_parsed_inspect_issues(task, work_dir, project_root);
     if !parsed.is_empty() {
         return parsed
@@ -254,4 +246,3 @@ pub fn system_push_inspect_gate(
     let (blocked, blocking_n) = inspect_pass_blocked_by_issues(inspect, wd, project_root);
     push_inspect_gate_decision(true, verdict, blocked, blocking_n)
 }
-

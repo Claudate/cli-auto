@@ -12,7 +12,11 @@ use cco::runtime::provider::{ProviderRegistry, TaskStatus};
 use cco::runtime::Scheduler;
 use cco::state::{self, RunState, RunStatus};
 
-fn make_scheduler(ir: cco::plan::PlanIR, run_state: RunState, registry: ProviderRegistry) -> Scheduler {
+fn make_scheduler(
+    ir: cco::plan::PlanIR,
+    run_state: RunState,
+    registry: ProviderRegistry,
+) -> Scheduler {
     Scheduler {
         max_parallel: 2,
         plan: ir,
@@ -142,10 +146,7 @@ tasks:
         insp.title
     );
 
-    let checklist = config
-        .runs_dir()
-        .join(&run_id)
-        .join("plan.checklist.json");
+    let checklist = config.runs_dir().join(&run_id).join("plan.checklist.json");
     assert!(
         checklist.is_file(),
         "plan.checklist.json must be written under run_dir"
@@ -237,7 +238,11 @@ tasks:
     assert_eq!(resp.source_run_id, run_id);
     assert_eq!(resp.round, 1);
     assert!(
-        config.runs_dir().join(&resp.run_id).join("run.json").is_file(),
+        config
+            .runs_dir()
+            .join(&resp.run_id)
+            .join("run.json")
+            .is_file(),
         "new rework run dir must exist"
     );
     let marker = run_dir.join("auto_rework.json");
@@ -255,7 +260,11 @@ async fn business_blocking_docs_only_does_not_auto_rework() {
     let project = tmp.path().join("proj");
     std::fs::create_dir_all(project.join("docs/plans")).unwrap();
     std::fs::create_dir_all(project.join(".cco-out/inspect")).unwrap();
-    std::fs::write(project.join(".cco-out/inspect/VERDICT.md"), "FAIL\nengine\n").unwrap();
+    std::fs::write(
+        project.join(".cco-out/inspect/VERDICT.md"),
+        "FAIL\nengine\n",
+    )
+    .unwrap();
     std::fs::write(project.join(".cco-out/inspect/ISSUES.md"), BUSINESS_ISSUES).unwrap();
 
     let plan_path = project.join("docs/plans/ensure-biz-fail.cco.yaml");

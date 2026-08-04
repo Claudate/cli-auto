@@ -102,7 +102,7 @@ fn call_messages_http(req: &SplitRequest) -> Result<String> {
         req.max_parallel,
         &plan_md,
         req.grain_hint.as_deref(),
-        req.clarify_depth.as_deref(),  // new
+        req.clarify_depth.as_deref(), // new
         req.revision_notes.as_deref(),
         if digest.is_empty() {
             None
@@ -201,7 +201,7 @@ fn call_claude_cli_print(config: &Config, req: &SplitRequest) -> Result<String> 
         req.max_parallel,
         &plan_md,
         req.grain_hint.as_deref(),
-        req.clarify_depth.as_deref(),  // new
+        req.clarify_depth.as_deref(), // new
         req.revision_notes.as_deref(),
         if digest.is_empty() {
             None
@@ -286,7 +286,10 @@ fn call_claude_cli_print(config: &Config, req: &SplitRequest) -> Result<String> 
             let err = result
                 .error
                 .unwrap_or_else(|| "split agent worker failed".into());
-            bail!("split agent CLI not done: {err}\n{}", truncate_plan(&stdout, 500));
+            bail!(
+                "split agent CLI not done: {err}\n{}",
+                truncate_plan(&stdout, 500)
+            );
         }
         Ok::<String, anyhow::Error>(stdout)
     })?;
@@ -297,11 +300,7 @@ fn truncate_plan(s: &str, max: usize) -> String {
     if s.len() <= max {
         s.to_string()
     } else {
-        format!(
-            "{}…\n\n[truncated, {} bytes total]",
-            &s[..max],
-            s.len()
-        )
+        format!("{}…\n\n[truncated, {} bytes total]", &s[..max], s.len())
     }
 }
 
@@ -329,7 +328,7 @@ mod tests {
             created_at: "t0".into(),
             updated_at: "t0".into(),
             grain_hint: None,
-            clarify_depth: None,  // new
+            clarify_depth: None, // new
             revision_notes: None,
             effort: None,
         };

@@ -29,10 +29,7 @@ use crate::state::{RunState, RunStatus};
 /// 4. rework rounds < REWORK_MAX
 /// 5. no ACCEPTED_RESIDUAL
 /// 6. `auto_rework == true`
-pub fn maybe_auto_rework(
-    config: &Config,
-    run_id: &str,
-) -> Result<Option<ReworkStartResponse>> {
+pub fn maybe_auto_rework(config: &Config, run_id: &str) -> Result<Option<ReworkStartResponse>> {
     if !config.default.auto_rework {
         return Ok(None);
     }
@@ -109,11 +106,8 @@ pub fn maybe_auto_rework(
         })
         .unwrap_or(false);
     let rework_round = count_rework_rounds(&project, &dir);
-    let require_inspect = plan.require_inspect
-        || plan
-            .tasks
-            .iter()
-            .any(|t| t.role == Some(TaskRole::Inspect));
+    let require_inspect =
+        plan.require_inspect || plan.tasks.iter().any(|t| t.role == Some(TaskRole::Inspect));
     let verdict_label = match verdict {
         InspectVerdict::Pass => Some("PASS"),
         InspectVerdict::Fail => Some("FAIL"),

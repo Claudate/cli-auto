@@ -88,7 +88,12 @@ pub fn build_plan_compare(state: &RunState) -> PlanCompareSection {
 
     let view = handoff::inspect_loop_view(plan.as_ref(), state, &state.project_root);
     let mut section = fill_plan_compare(require_inspect, handoff_present, &view);
-    section.verification = Some(build_report_verification(state, plan.as_ref(), &view, &section));
+    section.verification = Some(build_report_verification(
+        state,
+        plan.as_ref(),
+        &view,
+        &section,
+    ));
     section
 }
 
@@ -257,12 +262,12 @@ fn build_report_verification(
     let task_items = plan
         .map(|p| {
             collect_task_acceptance_items(p.tasks.iter().map(|t| {
-                    let human = t
-                        .acceptance
-                        .as_deref()
-                        .filter(|s| !crate::domain::plan::is_runnable_verify(s));
-                    (t.id.as_str(), human)
-                }))
+                let human = t
+                    .acceptance
+                    .as_deref()
+                    .filter(|s| !crate::domain::plan::is_runnable_verify(s));
+                (t.id.as_str(), human)
+            }))
         })
         .unwrap_or_default();
 
@@ -495,9 +500,7 @@ mod tests {
 
     #[test]
     fn render_md_with_plan_only_verification() {
-        use crate::domain::chat::{
-            PlanChecklistItem, VerificationSource, VerificationView,
-        };
+        use crate::domain::chat::{PlanChecklistItem, VerificationSource, VerificationView};
         let mut s = fill_plan_compare(false, false, &InspectLoopView::default());
         s.verification = Some(VerificationView {
             source: VerificationSource::PlanOnly,

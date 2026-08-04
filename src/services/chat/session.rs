@@ -27,7 +27,12 @@ pub(crate) fn empty_session(project: &Path, session_id: &str) -> ChatSession {
 }
 
 fn preview_from_session(sess: &ChatSession) -> Option<String> {
-    if let Some(t) = sess.title.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(t) = sess
+        .title
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         return Some(truncate_chars(t, 48));
     }
     if let Some(dt) = sess
@@ -181,7 +186,10 @@ pub fn chat_list_sessions(project: &Path) -> Result<Vec<ChatSessionSummary>> {
     }
     // Ensure default is always present so the switcher has a home base.
     if !out.iter().any(|s| s.session_id == DEFAULT_SESSION) {
-        out.push(summary_from_session(&empty_session(project, DEFAULT_SESSION)));
+        out.push(summary_from_session(&empty_session(
+            project,
+            DEFAULT_SESSION,
+        )));
     }
     out.sort_by(|a, b| {
         // default first when both empty of times; else newest updated_at first
@@ -341,13 +349,13 @@ pub fn cleanup_expired_chat_sessions(project: &Path, hours: i64) -> Result<usize
 
 pub(crate) fn save_session(project: &Path, sess: &ChatSession) -> Result<()> {
     let dir = chat_dir(project);
-    std::fs::create_dir_all(&dir)
-        .with_context(|| format!("create chat dir {}", dir.display()))?;
+    std::fs::create_dir_all(&dir).with_context(|| format!("create chat dir {}", dir.display()))?;
     let path = session_path(project, &sess.session_id);
     let mut out = sess.clone();
     out.updated_at = Some(Utc::now().to_rfc3339());
     out.project = project.display().to_string();
     let json = serde_json::to_string_pretty(&out)?;
-    std::fs::write(&path, json).with_context(|| format!("write chat session {}", path.display()))?;
+    std::fs::write(&path, json)
+        .with_context(|| format!("write chat session {}", path.display()))?;
     Ok(())
 }

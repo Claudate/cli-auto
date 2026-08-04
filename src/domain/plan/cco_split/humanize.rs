@@ -84,7 +84,8 @@ pub fn strip_worker_scaffold(prompt: &str) -> String {
                 skipping = false;
             }
         }
-        if t.starts_with("全部完成后在最后一行") || t.starts_with("完成后输出一行") {
+        if t.starts_with("全部完成后在最后一行") || t.starts_with("完成后输出一行")
+        {
             break;
         }
         out.push_str(line);
@@ -243,9 +244,8 @@ pub fn resolve_deps_from_sections(sections: &[(String, String)]) -> (Vec<Vec<Str
             if !dep_cell_is_none(&cell) {
                 for wid in extract_work_ids(&cell) {
                     let key_up = wid.to_ascii_uppercase();
-                    if let Some(dep_tid) = work_to_task
-                        .get(&key_up)
-                        .or_else(|| work_to_task.get(&wid))
+                    if let Some(dep_tid) =
+                        work_to_task.get(&key_up).or_else(|| work_to_task.get(&wid))
                     {
                         if dep_tid != &tid && !d.contains(dep_tid) {
                             d.push(dep_tid.clone());
@@ -380,10 +380,7 @@ mod tests {
                 "P0-2 · b ☐".into(),
                 "| **依赖** | 无 |\n| **完成定义** | done2 |".into(),
             ),
-            (
-                "P0-4 · c ☐".into(),
-                "| **依赖** | P0-1 · P0-3 |\n".into(),
-            ),
+            ("P0-4 · c ☐".into(), "| **依赖** | P0-1 · P0-3 |\n".into()),
             (
                 "P0-3 · d ☐".into(),
                 "| **依赖** | P0-2 标题可同 PR |\n".into(),

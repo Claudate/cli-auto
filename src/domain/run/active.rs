@@ -70,7 +70,10 @@ mod tests {
             ("c".into(), vec!["b".into()]),
             ("d".into(), vec![]),
         ];
-        let all: HashSet<String> = edges.iter().map(|(id, _): &(String, Vec<String>)| id.clone()).collect();
+        let all: HashSet<String> = edges
+            .iter()
+            .map(|(id, _): &(String, Vec<String>)| id.clone())
+            .collect();
         (all, edges)
     }
 

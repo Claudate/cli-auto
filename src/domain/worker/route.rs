@@ -111,7 +111,11 @@ pub fn apply_route_fill(
 /// - Always sets `default_provider` / `default_mode` and each task's `mode`.
 /// - Provider is **soft**: only rewrite still-default routes (see [`is_still_default_route`]).
 /// - Returns a Soft [`RouteFillReport`] so app can stamp `route_source` (P1-2).
-pub fn apply_worker_defaults(plan: &mut PlanIR, provider: &str, exec_mode: &str) -> RouteFillReport {
+pub fn apply_worker_defaults(
+    plan: &mut PlanIR,
+    provider: &str,
+    exec_mode: &str,
+) -> RouteFillReport {
     let old_default = plan.default_provider.clone();
     plan.default_provider = provider.to_string();
     plan.default_mode = exec_mode.to_string();

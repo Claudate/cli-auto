@@ -87,9 +87,8 @@ mod tests {
         let prefix = build_scope_prefix(&work, Some(&scope));
         assert!(prefix.contains("CCO scope lock: work ONLY inside `/Users/me/project`"));
         assert!(
-            prefix.contains(
-                "Writable whitelist (scope.paths): src/module_a/**, .cco-out/feat-a/**"
-            ),
+            prefix
+                .contains("Writable whitelist (scope.paths): src/module_a/**, .cco-out/feat-a/**"),
             "missing paths whitelist: {prefix}"
         );
         assert!(

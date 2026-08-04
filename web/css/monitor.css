@@ -377,6 +377,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.cli-window-git {
+  margin: 0.25rem 0.55rem 0;
+  padding: 0.28rem 0.45rem;
+  border-radius: 8px;
+  background: #edf8f0;
+  color: #176b38;
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cli-window-git.err {
+  background: #fff1f1;
+  color: #a12626;
+}
 .cli-window-body {
   flex: 1;
   min-height: 120px;

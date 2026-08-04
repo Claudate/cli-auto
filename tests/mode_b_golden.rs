@@ -9,9 +9,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use cco::config::Config;
-use cco::plan::planner::{
-    get_plan_job, load_proposed, start_plan_job, StartPlanJobRequest,
-};
+use cco::plan::planner::{get_plan_job, load_proposed, start_plan_job, StartPlanJobRequest};
 use cco::plan::{is_structured_adapter, load_plan, peek_adapter, MAX_TASKS};
 use cco::report;
 use cco::services::{confirm_start, project_live_view};
@@ -127,8 +125,8 @@ async fn golden_serial_prompts_plan_confirm_exec() {
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path().join("proj");
     std::fs::create_dir_all(project.join("docs/plans")).unwrap();
-    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/serial-prompts-sample.md");
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/serial-prompts-sample.md");
     let plan_path = project.join("docs/plans/serial.md");
     std::fs::copy(&fixture, &plan_path).unwrap();
 
@@ -184,8 +182,7 @@ async fn golden_cco_v1_plan_confirm_exec() {
     let project = tmp.path().join("proj");
     std::fs::create_dir_all(project.join("docs/plans")).unwrap();
     let plan_path = project.join("docs/plans/hello.cco.yaml");
-    let example = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("examples/plans/hello.cco.yaml");
+    let example = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/plans/hello.cco.yaml");
     std::fs::copy(&example, &plan_path).unwrap();
 
     let cfg = test_config(tmp.path());
@@ -222,16 +219,16 @@ async fn golden_cco_v1_plan_confirm_exec() {
 
     // Inject planner cost file to exercise budget columns (P1-5).
     let job_dir = cfg.state_root.join("plan_jobs").join(&view.job_id);
-    std::fs::write(
-        job_dir.join("planner_cost.json"),
-        r#"{"cost_usd": 0.12}"#,
-    )
-    .unwrap();
+    std::fs::write(job_dir.join("planner_cost.json"), r#"{"cost_usd": 0.12}"#).unwrap();
     // Patch job.json so mark_confirmed copies cost.
     let mut job: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(job_dir.join("job.json")).unwrap()).unwrap();
     job["planner_cost_usd"] = serde_json::json!(0.12);
-    std::fs::write(job_dir.join("job.json"), serde_json::to_string_pretty(&job).unwrap()).unwrap();
+    std::fs::write(
+        job_dir.join("job.json"),
+        serde_json::to_string_pretty(&job).unwrap(),
+    )
+    .unwrap();
 
     let run_id = confirm_start(cfg.clone(), &view.job_id).unwrap();
     wait_run_terminal(&cfg, &run_id);
@@ -244,10 +241,16 @@ async fn golden_cco_v1_plan_confirm_exec() {
     );
     // Planner cost attached to run dir
     let cost_path = st.run_dir.join("planner_cost.json");
-    assert!(cost_path.exists(), "planner_cost.json should be copied on confirm");
+    assert!(
+        cost_path.exists(),
+        "planner_cost.json should be copied on confirm"
+    );
     report::write_reports(&st).unwrap();
     let md = std::fs::read_to_string(st.run_dir.join("report.md")).unwrap();
-    assert!(md.contains("## Budget") || md.contains("规划"), "report should split budget:\n{md}");
+    assert!(
+        md.contains("## Budget") || md.contains("规划"),
+        "report should split budget:\n{md}"
+    );
     assert!(md.contains("0.12") || md.contains("规划"), "{md}");
 
     let live = project_live_view(&cfg, &project, 4_000).unwrap();

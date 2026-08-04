@@ -86,60 +86,18 @@ fn line_looks_like_shell(s: &str) -> bool {
 
 fn has_shell_prefix(s: &str) -> bool {
     const PREFIXES: &[&str] = &[
-        "test ",
-        "cargo ",
-        "npm ",
-        "pnpm ",
-        "yarn ",
-        "make ",
-        "sh ",
-        "bash ",
-        "zsh ",
-        "git ",
-        "grep ",
-        "rg ",
-        "find ",
-        "ls ",
-        "cat ",
-        "echo ",
-        "printf ",
-        "which ",
-        "command ",
-        "python ",
-        "python3 ",
-        "node ",
-        "rustc ",
-        "go ",
-        "curl ",
-        "wget ",
-        "diff ",
-        "cmp ",
-        "stat ",
-        "wc ",
-        "xargs ",
-        "env ",
-        "cd ",
-        "mkdir ",
-        "rm ",
-        "cp ",
-        "mv ",
-        "chmod ",
-        "true",
-        "false",
-        "exit ",
-        "if ",
-        "for ",
-        "while ",
-        "set ",
-        "unset ",
-        "export ",
-        "source ",
-        ". ",
+        "test ", "cargo ", "npm ", "pnpm ", "yarn ", "make ", "sh ", "bash ", "zsh ", "git ",
+        "grep ", "rg ", "find ", "ls ", "cat ", "echo ", "printf ", "which ", "command ",
+        "python ", "python3 ", "node ", "rustc ", "go ", "curl ", "wget ", "diff ", "cmp ",
+        "stat ", "wc ", "xargs ", "env ", "cd ", "mkdir ", "rm ", "cp ", "mv ", "chmod ", "true",
+        "false", "exit ", "if ", "for ", "while ", "set ", "unset ", "export ", "source ", ". ",
     ];
     let lower = s.to_ascii_lowercase();
     PREFIXES.iter().any(|p| {
         if *p == "true" || *p == "false" {
-            lower == *p || lower.starts_with(&format!("{p} ")) || lower.starts_with(&format!("{p};"))
+            lower == *p
+                || lower.starts_with(&format!("{p} "))
+                || lower.starts_with(&format!("{p};"))
         } else {
             lower.starts_with(p)
         }

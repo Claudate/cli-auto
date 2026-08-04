@@ -1,14 +1,14 @@
 //! Desktop/CLI settings subset of Config.
 //!
 //! [INPUT]: Config · SettingsUpdate
-//! [OUTPUT]: get_settings · set_settings · SettingsView（H4 failover · 费用优选 cost_* · 系统收尾 · planner_critic · browser）
+//! [OUTPUT]: get_settings · set_settings · SettingsView（H4 failover · 费用优选 cost_* · 系统收尾 · 自动提交粒度 · planner_critic · browser）
 //! [POS]: services 子模块
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/services/CLAUDE.md
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::config::Config;
+use crate::config::{normalize_auto_commit_granularity, AutoCommitGranularity, Config};
 
 /// Subset of config exposed to the desktop UI for reading.
 #[derive(Debug, Clone, Serialize)]
@@ -34,6 +34,8 @@ pub struct SettingsView {
     pub post_inspect_enabled: bool,
     /// 拆分后附加系统任务「代码提交 Push」（可选，默认勾选）。总开关默认关。
     pub post_git_push_enabled: bool,
+    /// Git 自动提交粒度：off | per_plan | per_task。
+    pub git_auto_commit_granularity: String,
     /// 拆分后附加系统任务「自动开 PR」（可选，默认勾选）。总开关默认关。需本机 `gh` 已登录。
     pub post_open_pr_enabled: bool,
     /// 设置页只读说明：系统收尾不参与拆解。
@@ -86,6 +88,7 @@ pub struct SettingsUpdate {
     pub failover_order: Option<Vec<String>>,
     pub post_inspect_enabled: Option<bool>,
     pub post_git_push_enabled: Option<bool>,
+    pub git_auto_commit_granularity: Option<String>,
     pub post_open_pr_enabled: Option<bool>,
     pub planner_critic_enabled: Option<bool>,
     /// low | medium | high | xhigh | max | ultracode
@@ -135,7 +138,8 @@ pub fn get_settings(config: &Config) -> SettingsView {
         failover_order: order.clone(),
         failover_order_note: failover_order_note(&order),
         post_inspect_enabled: config.default.post_inspect_enabled,
-        post_git_push_enabled: config.default.post_git_push_enabled,
+        post_git_push_enabled: config.auto_commit_granularity() == AutoCommitGranularity::PerPlan,
+        git_auto_commit_granularity: config.auto_commit_granularity().as_str().into(),
         post_open_pr_enabled: config.default.post_open_pr_enabled,
         post_tasks_note:
             "系统收尾任务不参与 AI 拆解；开启后每次拆分末尾自动追加为「可选」且默认勾选，确认屏可取消。自动开 PR 需本机已安装并登录 GitHub CLI（gh）；禁止 force-push / 自动 merge。"
@@ -170,22 +174,36 @@ pub fn get_settings(config: &Config) -> SettingsView {
             config.default.cost_escalate_enabled,
             config.default.cost_intent_enabled,
         ),
-        git_auto_commit_enabled: config.git.auto_commit.enabled,
+        git_auto_commit_enabled: config.auto_commit_granularity() != AutoCommitGranularity::Off,
         git_push_after_commit: config.git.auto_commit.push_after_commit,
         git_default_region: format!("{:?}", config.git.default_region).to_ascii_lowercase(),
         git_allow_force: config.git.auto_commit.allow_force,
-        git_note: git_note(&config.git),
+        git_note: git_note(config),
     }
 }
 
-fn git_note(git: &crate::config::GitConfig) -> String {
-    if git.auto_commit.enabled {
-        let region = crate::config::region_label(&git.default_region);
-        let push = if git.auto_commit.push_after_commit { "提交后自动 push" } else { "仅提交不 push" };
-        let force = if git.auto_commit.allow_force { " · 允许 force-push" } else { "" };
-        format!("已开：{push} · 默认区域 {region}{force}。身份只设本仓库；密钥/.env 不自动 add。")
+fn git_note(config: &Config) -> String {
+    let granularity = config.auto_commit_granularity();
+    if granularity != AutoCommitGranularity::Off {
+        let region = crate::config::region_label(&config.git.default_region);
+        let push = if config.git.auto_commit.push_after_commit {
+            "提交后自动 push"
+        } else {
+            "仅提交不 push"
+        };
+        let force = if config.git.auto_commit.allow_force {
+            " · 允许 force-push"
+        } else {
+            ""
+        };
+        let grain = match granularity {
+            AutoCommitGranularity::Off => "关闭",
+            AutoCommitGranularity::PerPlan => "按计划提交",
+            AutoCommitGranularity::PerTask => "按拆分任务提交",
+        };
+        format!("已开：{grain} · {push} · 默认区域 {region}{force}。身份只设本仓库；密钥/.env 不自动 add。")
     } else {
-        "默认关。开启后 `cco git commit` 可按策略自动提交（可选 push）。身份只设本仓库 --local；密钥/.env 不自动 add；force-push 需显式 --force 且 allow_force。"
+        "默认关。可选择按计划提交或按拆分任务提交；身份只设本仓库 --local；密钥/.env 不自动 add；force-push 需显式 --force 且 allow_force。"
             .into()
     }
 }
@@ -274,6 +292,20 @@ pub fn set_settings(config: &mut Config, update: SettingsUpdate) -> Result<()> {
     }
     if let Some(v) = update.post_git_push_enabled {
         config.default.post_git_push_enabled = v;
+        if v {
+            config.git.auto_commit.enabled = true;
+            config.git.auto_commit.granularity = AutoCommitGranularity::PerPlan;
+        } else if !config.git.auto_commit.enabled {
+            config.git.auto_commit.granularity = AutoCommitGranularity::Off;
+        }
+    }
+    if let Some(raw) = update.git_auto_commit_granularity {
+        if let Some(granularity) = normalize_auto_commit_granularity(&raw) {
+            config.git.auto_commit.granularity = granularity;
+            config.git.auto_commit.enabled = granularity != AutoCommitGranularity::Off;
+            // New host-owned modes do not inject the legacy AI system task.
+            config.default.post_git_push_enabled = false;
+        }
     }
     if let Some(v) = update.post_open_pr_enabled {
         config.default.post_open_pr_enabled = v;
@@ -311,6 +343,13 @@ pub fn set_settings(config: &mut Config, update: SettingsUpdate) -> Result<()> {
     }
     if let Some(v) = update.git_auto_commit_enabled {
         config.git.auto_commit.enabled = v;
+        if !v {
+            config.git.auto_commit.granularity = AutoCommitGranularity::Off;
+            config.default.post_git_push_enabled = false;
+        } else if config.git.auto_commit.granularity == AutoCommitGranularity::Off {
+            config.git.auto_commit.granularity = AutoCommitGranularity::PerPlan;
+            config.default.post_git_push_enabled = false;
+        }
     }
     if let Some(v) = update.git_push_after_commit {
         config.git.auto_commit.push_after_commit = v;
@@ -342,7 +381,10 @@ mod tests {
     fn get_settings_includes_order() {
         let cfg = Config::default();
         let v = get_settings(&cfg);
-        assert_eq!(v.failover_order, vec!["claude".to_string(), "codex".to_string()]);
+        assert_eq!(
+            v.failover_order,
+            vec!["claude".to_string(), "codex".to_string()]
+        );
         assert!(v.failover_order_note.contains("claude"));
     }
 
@@ -367,6 +409,7 @@ mod tests {
                 failover_order: None,
                 post_inspect_enabled: None,
                 post_git_push_enabled: None,
+                git_auto_commit_granularity: Some("per_task".into()),
                 post_open_pr_enabled: None,
                 planner_critic_enabled: None,
                 effort: None,
@@ -386,6 +429,12 @@ mod tests {
         .unwrap();
         assert_eq!(cfg.default.permission_mode, "dontAsk");
         assert!(cfg.default.cost_intent_enabled);
+        assert_eq!(
+            cfg.git.auto_commit.granularity,
+            AutoCommitGranularity::PerTask
+        );
+        assert!(cfg.git.auto_commit.enabled);
+        assert_eq!(get_settings(&cfg).git_auto_commit_granularity, "per_task");
     }
 
     #[test]
@@ -410,6 +459,7 @@ mod tests {
                 failover_order: None,
                 post_inspect_enabled: None,
                 post_git_push_enabled: None,
+                git_auto_commit_granularity: None,
                 post_open_pr_enabled: None,
                 planner_critic_enabled: None,
                 effort: None,
@@ -459,6 +509,7 @@ mod tests {
                 failover_order: None,
                 post_inspect_enabled: None,
                 post_git_push_enabled: None,
+                git_auto_commit_granularity: None,
                 post_open_pr_enabled: None,
                 planner_critic_enabled: None,
                 effort: None,
@@ -478,7 +529,10 @@ mod tests {
         .unwrap();
         assert!(cfg.browser.enabled);
         assert!(get_settings(&cfg).browser_enabled);
-        assert!(get_settings(&cfg).browser_note.contains("已开") || get_settings(&cfg).browser_note.contains("引擎"));
+        assert!(
+            get_settings(&cfg).browser_note.contains("已开")
+                || get_settings(&cfg).browser_note.contains("引擎")
+        );
     }
 
     #[test]
@@ -498,6 +552,7 @@ mod tests {
                 failover_order: None,
                 post_inspect_enabled: None,
                 post_git_push_enabled: None,
+                git_auto_commit_granularity: None,
                 post_open_pr_enabled: None,
                 planner_critic_enabled: None,
                 effort: None,

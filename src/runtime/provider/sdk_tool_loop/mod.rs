@@ -28,9 +28,7 @@ use crate::plan::TaskIR;
 use ndjson::{
     push_line, truncate_chars, truncate_for_error, write_error_ndjson, write_full_result,
 };
-use tools::{
-    extract_text_blocks, extract_tool_uses, run_tool, tool_defs, MAX_TOOL_RESULT_CHARS,
-};
+use tools::{extract_text_blocks, extract_tool_uses, run_tool, tool_defs, MAX_TOOL_RESULT_CHARS};
 
 pub use tools::resolve_under;
 
@@ -133,9 +131,7 @@ impl<C: MessagesHttpClient> SdkBackend for AnthropicToolLoopBackend<C> {
 
     async fn preflight(&self) -> Result<()> {
         if self.api_key.trim().is_empty() {
-            bail!(
-                "sdk tools backend: missing API key (set CCO_SDK_API_KEY or ANTHROPIC_API_KEY)"
-            );
+            bail!("sdk tools backend: missing API key (set CCO_SDK_API_KEY or ANTHROPIC_API_KEY)");
         }
         if self.model.trim().is_empty() {
             bail!("sdk tools backend: empty model");
@@ -143,12 +139,7 @@ impl<C: MessagesHttpClient> SdkBackend for AnthropicToolLoopBackend<C> {
         Ok(())
     }
 
-    async fn execute(
-        &self,
-        task: &TaskIR,
-        ctx: &StartCtx,
-        stdout_path: &PathBuf,
-    ) -> Result<i32> {
+    async fn execute(&self, task: &TaskIR, ctx: &StartCtx, stdout_path: &PathBuf) -> Result<i32> {
         if self.api_key.trim().is_empty() {
             write_error_ndjson(
                 stdout_path,
@@ -226,7 +217,10 @@ impl<C: MessagesHttpClient> SdkBackend for AnthropicToolLoopBackend<C> {
                     session_id = id.to_string();
                 }
             }
-            if let Some(n) = parsed.pointer("/usage/input_tokens").and_then(|v| v.as_u64()) {
+            if let Some(n) = parsed
+                .pointer("/usage/input_tokens")
+                .and_then(|v| v.as_u64())
+            {
                 input_tokens = input_tokens.saturating_add(n);
             }
             if let Some(n) = parsed
@@ -236,10 +230,7 @@ impl<C: MessagesHttpClient> SdkBackend for AnthropicToolLoopBackend<C> {
                 output_tokens = output_tokens.saturating_add(n);
             }
 
-            let content = parsed
-                .get("content")
-                .cloned()
-                .unwrap_or_else(|| json!([]));
+            let content = parsed.get("content").cloned().unwrap_or_else(|| json!([]));
             let stop = parsed
                 .get("stop_reason")
                 .and_then(|v| v.as_str())

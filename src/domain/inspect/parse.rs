@@ -86,7 +86,14 @@ fn structured_verdict_on_line(line: &str) -> Option<InspectVerdict> {
     }
 
     // Keyed forms: Result / VERDICT (first key occurrence on the line).
-    for key in ["RESULT:", "RESULT =", "RESULT=", "VERDICT:", "VERDICT =", "VERDICT="] {
+    for key in [
+        "RESULT:",
+        "RESULT =",
+        "RESULT=",
+        "VERDICT:",
+        "VERDICT =",
+        "VERDICT=",
+    ] {
         if let Some(idx) = upper.find(key) {
             let after = upper[idx + key.len()..].trim_start();
             let token = after
@@ -103,7 +110,13 @@ fn structured_verdict_on_line(line: &str) -> Option<InspectVerdict> {
                 .next()
                 .unwrap_or("")
                 .trim_matches(|c: char| {
-                    c == '.' || c == '。' || c == ':' || c == '*' || c == '`' || c == '"' || c == '\''
+                    c == '.'
+                        || c == '。'
+                        || c == ':'
+                        || c == '*'
+                        || c == '`'
+                        || c == '"'
+                        || c == '\''
                 });
             if token == "FAIL" {
                 return Some(InspectVerdict::Fail);
@@ -159,7 +172,9 @@ pub fn parse_issues_text(text: &str) -> Vec<ParsedIssue> {
                 && (t[1..].trim_start().starts_with("I-")
                     || t[1..].trim_start().starts_with("R")
                     || t[1..].trim_start().starts_with("O"))
-                && is_issue_heading_token(t[1..].trim_start().split_whitespace().next().unwrap_or(""))
+                && is_issue_heading_token(
+                    t[1..].trim_start().split_whitespace().next().unwrap_or(""),
+                )
             || (t.starts_with('#') && is_issue_heading_line(t))
             || (t.starts_with('-')
                 && (t.contains("severity=") || t.contains("severity:"))
@@ -231,9 +246,7 @@ pub fn parse_issues_text(text: &str) -> Vec<ParsedIssue> {
                 .next()
                 .unwrap_or("")
                 .trim_end_matches(|c: char| c == '·' || c == ':' || c == ',');
-            is_issue_heading_token(first)
-                || bare.starts_with("id:")
-                || t.starts_with("- id:")
+            is_issue_heading_token(first) || bare.starts_with("id:") || t.starts_with("- id:")
         });
         let first = block
             .lines()
@@ -309,7 +322,8 @@ pub fn parse_issues_text(text: &str) -> Vec<ParsedIssue> {
 /// `- **blocking**: 无` / `- **map**: 无` empty-set footnotes under ISSUES.
 fn is_empty_set_confirmation_block(block: &str) -> bool {
     let lower = block.to_ascii_lowercase();
-    if lower.contains("## 空集") || lower.contains("empty-set") || lower.contains("空集确认") {
+    if lower.contains("## 空集") || lower.contains("empty-set") || lower.contains("空集确认")
+    {
         return true;
     }
     // Single-line "no blocking" confirmations without I-*.
@@ -400,7 +414,9 @@ fn extract_issue_id_from_heading_line(line: &str) -> Option<String> {
         .split_whitespace()
         .next()
         .unwrap_or("")
-        .trim_matches(|c: char| c == '`' || c == '*' || c == '"' || c == '\'' || c == '·' || c == ',' || c == ':');
+        .trim_matches(|c: char| {
+            c == '`' || c == '*' || c == '"' || c == '\'' || c == '·' || c == ',' || c == ':'
+        });
     if val.is_empty() {
         return None;
     }
@@ -433,16 +449,24 @@ fn is_issue_heading_token(token: &str) -> bool {
 /// Drop fullwidth/halfwidth parenthetical notes after a severity token.
 /// `out-of-scope（本波…）` / `residual (optional)` → bare grade.
 fn strip_severity_trailing_note(s: &str) -> &str {
-    let cut = s
-        .find(['（', '(', '【', '[', '—', '–'])
-        .unwrap_or(s.len());
+    let cut = s.find(['（', '(', '【', '[', '—', '–']).unwrap_or(s.len());
     s[..cut].trim()
 }
 
 fn severity_from_token(token: &str) -> Option<IssueSeverity> {
     let token = strip_severity_trailing_note(token)
         .trim()
-        .trim_matches(|c: char| c == '`' || c == '*' || c == '"' || c == '\'' || c == '_' || c == '。' || c == '.' || c == '；' || c == ';')
+        .trim_matches(|c: char| {
+            c == '`'
+                || c == '*'
+                || c == '"'
+                || c == '\''
+                || c == '_'
+                || c == '。'
+                || c == '.'
+                || c == '；'
+                || c == ';'
+        })
         .to_ascii_lowercase();
     // Collapse common separators so `out_of_scope` / `out-of-scope` share path.
     let compact = token.replace('_', "-");
@@ -598,10 +622,7 @@ mod tests {
             parse_verdict_text("**Result: FAIL**\n\n| plan_ref |"),
             InspectVerdict::Fail
         );
-        assert_eq!(
-            parse_verdict_text("Result: PASS\nok"),
-            InspectVerdict::Pass
-        );
+        assert_eq!(parse_verdict_text("Result: PASS\nok"), InspectVerdict::Pass);
         assert_eq!(
             parse_verdict_text("Result: **PASS**\n\n- role: inspect"),
             InspectVerdict::Pass
@@ -794,7 +815,13 @@ Result companion: VERDICT.md → **PASS**
         );
         let o1 = parsed.iter().find(|i| i.id.starts_with('O')).unwrap();
         assert_eq!(o1.severity, IssueSeverity::OutOfScope);
-        assert!(parsed.iter().filter(|i| i.severity == IssueSeverity::Residual).count() >= 3);
+        assert!(
+            parsed
+                .iter()
+                .filter(|i| i.severity == IssueSeverity::Residual)
+                .count()
+                >= 3
+        );
     }
 
     #[test]
@@ -811,7 +838,6 @@ Result companion: VERDICT.md → **PASS**
         assert_eq!(severity_from_token("mystery-grade"), None);
     }
 
-    
     /// Regression: reinspect used `### issue_id=R1` + prose mentioning severity=blocking
     /// in the preamble. Host used to merge the whole file into one Blocking issue.
     #[test]

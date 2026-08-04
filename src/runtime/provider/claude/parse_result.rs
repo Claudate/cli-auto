@@ -25,8 +25,6 @@ pub fn parse_agent_id(text: &str) -> Option<String> {
     None
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -10,9 +10,7 @@ use std::collections::{HashMap, HashSet};
 use anyhow::{bail, Result};
 
 use super::system_ids::is_system_post_task;
-use super::types::{
-    PlanIR, TaskIR, TaskRole, MAX_PROMPT_CHARS, MAX_TASKS, MAX_TIMEOUT_SECS,
-};
+use super::types::{PlanIR, TaskIR, TaskRole, MAX_PROMPT_CHARS, MAX_TASKS, MAX_TIMEOUT_SECS};
 
 impl PlanIR {
     pub fn task(&self, id: &str) -> Option<&TaskIR> {
@@ -66,7 +64,8 @@ impl PlanIR {
             }
         }
         // Cycle detection via Kahn
-        let mut indeg: HashMap<&str, usize> = self.tasks.iter().map(|t| (t.id.as_str(), 0)).collect();
+        let mut indeg: HashMap<&str, usize> =
+            self.tasks.iter().map(|t| (t.id.as_str(), 0)).collect();
         let mut adj: HashMap<&str, Vec<&str>> = HashMap::new();
         for t in &self.tasks {
             for dep in &t.depends_on {
@@ -141,11 +140,7 @@ impl PlanIR {
             .filter(|t| t.role == Some(TaskRole::Implement))
             .collect();
         for t in &implements {
-            let paths = t
-                .scope
-                .as_ref()
-                .map(|s| s.paths.as_slice())
-                .unwrap_or(&[]);
+            let paths = t.scope.as_ref().map(|s| s.paths.as_slice()).unwrap_or(&[]);
             if paths.is_empty() {
                 // Explicit role=implement without writable scope is a hard error (P1).
                 // role missing → not forced (legacy plans).
@@ -163,11 +158,7 @@ impl PlanIR {
             if !task_has_scrape_tag(&t.tags) || !task_has_browser_tag(&t.tags) {
                 continue;
             }
-            let paths = t
-                .scope
-                .as_ref()
-                .map(|s| s.paths.as_slice())
-                .unwrap_or(&[]);
+            let paths = t.scope.as_ref().map(|s| s.paths.as_slice()).unwrap_or(&[]);
             if paths.is_empty() {
                 bail!(
                     "task {}: browser+scrape 须填写 scope.paths（抓取结果写入的白名单路径）；见 docs/browser-automation-cco.md",
@@ -255,8 +246,9 @@ impl PlanIR {
                 successors
                     .get(id)
                     .map(|s| {
-                        s.iter()
-                            .all(|t| is_system_post_task(&t.id) || t.role == Some(TaskRole::Inspect))
+                        s.iter().all(|t| {
+                            is_system_post_task(&t.id) || t.role == Some(TaskRole::Inspect)
+                        })
                     })
                     .unwrap_or(true)
             });
@@ -285,14 +277,8 @@ pub(crate) fn dag_has_parallel_wave(tasks: &[TaskIR]) -> bool {
         for j in (i + 1)..tasks.len() {
             let a = tasks[i].id.as_str();
             let b = tasks[j].id.as_str();
-            let a_before_b = ancestors
-                .get(b)
-                .map(|s| s.contains(a))
-                .unwrap_or(false);
-            let b_before_a = ancestors
-                .get(a)
-                .map(|s| s.contains(b))
-                .unwrap_or(false);
+            let a_before_b = ancestors.get(b).map(|s| s.contains(a)).unwrap_or(false);
+            let b_before_a = ancestors.get(a).map(|s| s.contains(b)).unwrap_or(false);
             if !a_before_b && !b_before_a {
                 return true;
             }
@@ -382,4 +368,3 @@ pub(crate) fn first_overlapping_paths<'a>(
     }
     None
 }
-

@@ -169,10 +169,7 @@ impl WorkerProvider for ClaudeProvider {
                             let _ = std::fs::write(&done_flag, "0");
                             return Ok(WorkerStatus::Done);
                         }
-                        if matches!(
-                            norm.as_str(),
-                            "failed" | "error" | "crashed" | "dead"
-                        ) {
+                        if matches!(norm.as_str(), "failed" | "error" | "crashed" | "dead") {
                             let _ = std::fs::write(&done_flag, "1");
                             return Ok(WorkerStatus::Failed);
                         }
@@ -229,10 +226,7 @@ impl WorkerProvider for ClaudeProvider {
     async fn stop(&self, handle: &WorkerHandle) -> Result<()> {
         if handle.mode == "bg" {
             if let Some(id) = Self::agent_id_from_handle(handle) {
-                let _ = Command::new(&self.bin)
-                    .args(["stop", &id])
-                    .output()
-                    .await;
+                let _ = Command::new(&self.bin).args(["stop", &id]).output().await;
             }
             if let Some(parent) = handle.stdout_path.parent() {
                 let _ = std::fs::write(parent.join(".done"), "130");
@@ -361,4 +355,3 @@ impl WorkerProvider for ClaudeProvider {
         })
     }
 }
-

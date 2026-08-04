@@ -98,7 +98,10 @@ async fn a0_confirm_start_is_mode_b_run_entry() {
 
     let run_id = confirm_start(cfg.clone(), &view.job_id).unwrap();
     let run_dir = cfg.runs_dir().join(&run_id);
-    assert!(run_dir.join("run.json").exists(), "confirm must materialize run.json");
+    assert!(
+        run_dir.join("run.json").exists(),
+        "confirm must materialize run.json"
+    );
     assert!(
         run_dir.join("plan.resolved.json").exists(),
         "confirm must freeze plan.resolved.json"

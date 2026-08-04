@@ -181,15 +181,7 @@ pub fn open_window(
         }
         ExternalLauncher::WezTerm => {
             let status = Command::new("wezterm")
-                .args([
-                    "start",
-                    "--cwd",
-                    &cwd_s,
-                    "--",
-                    "sh",
-                    "-c",
-                    shell_cmd,
-                ])
+                .args(["start", "--cwd", &cwd_s, "--", "sh", "-c", shell_cmd])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -199,7 +191,12 @@ pub fn open_window(
         }
         ExternalLauncher::Ghostty => {
             let status = Command::new("ghostty")
-                .args(["-e", "sh", "-c", &format!("cd {} && {}", shell_escape(&cwd_s), shell_cmd)])
+                .args([
+                    "-e",
+                    "sh",
+                    "-c",
+                    &format!("cd {} && {}", shell_escape(&cwd_s), shell_cmd),
+                ])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -384,10 +381,7 @@ mod tests {
 
     #[test]
     fn prefer_windows_names() {
-        assert_eq!(
-            detect_launcher("wt"),
-            ExternalLauncher::WindowsTerminal
-        );
+        assert_eq!(detect_launcher("wt"), ExternalLauncher::WindowsTerminal);
         assert_eq!(
             detect_launcher("windows_terminal"),
             ExternalLauncher::WindowsTerminal

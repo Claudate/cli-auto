@@ -41,12 +41,7 @@ pub fn list_pins(config: &Config, project: &Path) -> Result<Vec<ProjectPin>> {
 }
 
 /// Upsert pin (hard cap 3).
-pub fn upsert_pin(
-    config: &Config,
-    project: &Path,
-    key: &str,
-    value: &str,
-) -> Result<ProjectPin> {
+pub fn upsert_pin(config: &Config, project: &Path, key: &str, value: &str) -> Result<ProjectPin> {
     let pid = project_id(project);
     project_memory::upsert_pin(config, &pid, key, value)
 }
@@ -91,10 +86,7 @@ pub fn prompt_context(config: &Config, project: &Path) -> String {
 }
 
 fn project_id(project: &Path) -> String {
-    project
-        .to_string_lossy()
-        .trim_end_matches('/')
-        .to_string()
+    project.to_string_lossy().trim_end_matches('/').to_string()
 }
 
 fn status_label(status: RunStatus) -> &'static str {
@@ -162,6 +154,7 @@ mod tests {
             finished_at: Some(Utc::now()),
             status: RunStatus::Completed,
             tasks,
+            auto_commits: vec![],
             run_dir: run_dir.clone(),
         };
         rs.save().unwrap();

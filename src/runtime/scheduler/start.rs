@@ -73,9 +73,8 @@ impl Scheduler {
 
         let want_wt = task.worktree.unwrap_or(self.plan.worktree);
         // A1-4: isolation policy from domain/worker (mix → FailClosed).
-        let on_fail = worktree::on_fail_for_providers(
-            self.plan.tasks.iter().map(|t| t.provider.as_str()),
-        );
+        let on_fail =
+            worktree::on_fail_for_providers(self.plan.tasks.iter().map(|t| t.provider.as_str()));
         let (work_dir, wt_info) = worktree::resolve_work_dir(
             &self.state.project_root,
             &self.state.run_id,

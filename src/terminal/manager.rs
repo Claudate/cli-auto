@@ -82,10 +82,7 @@ impl TerminalManager {
         if let Some(parent) = self.store_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::write(
-            &self.store_path,
-            serde_json::to_string_pretty(store)?,
-        )?;
+        std::fs::write(&self.store_path, serde_json::to_string_pretty(store)?)?;
         Ok(())
     }
 
@@ -116,10 +113,7 @@ impl TerminalManager {
             .filter(|s| matches!(s.kind, SessionKind::Embedded) && !s.closed)
             .count();
         if open_embedded >= self.max_embedded {
-            bail!(
-                "max embedded terminals reached ({})",
-                self.max_embedded
-            );
+            bail!("max embedded terminals reached ({})", self.max_embedded);
         }
 
         let session = TerminalSession {

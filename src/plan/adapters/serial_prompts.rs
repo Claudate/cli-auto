@@ -35,9 +35,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| id.clone());
         // skip document chrome (Board / Timeline / P0 勾选 / 表头…) — not work packages
-        if crate::plan::title_is_meta_heading(&id)
-            || crate::plan::title_is_meta_heading(&title)
-        {
+        if crate::plan::title_is_meta_heading(&id) || crate::plan::title_is_meta_heading(&title) {
             continue;
         }
         heads.push((whole.start(), id, title));
@@ -47,10 +45,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
 
     let mut tasks = Vec::new();
     for (i, (start, id, title)) in heads.iter().enumerate() {
-        let end = heads
-            .get(i + 1)
-            .map(|(s, _, _)| *s)
-            .unwrap_or(text.len());
+        let end = heads.get(i + 1).map(|(s, _, _)| *s).unwrap_or(text.len());
         let section = &text[*start..end];
         let prompt = fence_re
             .captures(section)
@@ -80,7 +75,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             role: None,
             scope: None,
             outputs: vec![],
-        tags: vec![],
+            tags: vec![],
         });
     }
 

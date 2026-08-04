@@ -1,6 +1,6 @@
 /**
  * [INPUT]: RunViewModel · 既有 DOM ids（result-card / stall / task-strip）
- * [OUTPUT]: 进度台绑定 + 意图转发；View 不写 stall 策略
+ * [OUTPUT]: 进度台绑定 + 计划级自动提交展示 + 意图转发；View 不写 stall 策略
  * [POS]: A4-1 RunView；禁止 invoke / start_run
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -172,6 +172,31 @@ export function bindRunView(vm, bridge = {}) {
       } else {
         oneLiner.hidden = true;
         oneLiner.textContent = "";
+      }
+    }
+
+    const gitStatus = $("git-auto-commit-status");
+    if (gitStatus) {
+      const commits = Array.isArray(live?.auto_commits)
+        ? live.auto_commits
+        : Array.isArray(live?.autoCommits)
+          ? live.autoCommits
+          : [];
+      const latest = commits[commits.length - 1];
+      if (!latest) {
+        gitStatus.hidden = true;
+        gitStatus.textContent = "";
+      } else if (!latest.ok) {
+        gitStatus.hidden = false;
+        gitStatus.textContent = `自动提交失败：${String(latest.message || "未知错误").slice(0, 140)}`;
+      } else if (latest.commit_hash || latest.commitHash) {
+        const hash = String(latest.commit_hash || latest.commitHash).slice(0, 8);
+        const files = Array.isArray(latest.files) ? latest.files.length : 0;
+        gitStatus.hidden = false;
+        gitStatus.textContent = `自动提交：${hash}${files ? ` · ${files} 个文件` : ""}${latest.pushed ? " · 已 Push" : ""}`;
+      } else {
+        gitStatus.hidden = false;
+        gitStatus.textContent = "自动提交：无变更可提交";
       }
     }
 

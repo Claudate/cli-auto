@@ -234,7 +234,10 @@ mod tests {
         assert_eq!(ir.tasks[0].provider, "codex");
         assert_eq!(ir.tasks[1].provider, "claude");
         assert_eq!(ir.tasks[2].provider, "gemini");
-        assert!(r.changed.iter().any(|c| c.task_id == "impl" && c.to == "codex"));
+        assert!(r
+            .changed
+            .iter()
+            .any(|c| c.task_id == "impl" && c.to == "codex"));
         assert!(r.summary_line().unwrap().contains("Codex"));
     }
 

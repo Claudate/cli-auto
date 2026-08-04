@@ -49,10 +49,7 @@ mod tests {
 
     #[test]
     fn isolation_policy_matches_mix() {
-        assert_eq!(
-            isolation_on_fail(true),
-            IsolationOnFail::FailClosed
-        );
+        assert_eq!(isolation_on_fail(true), IsolationOnFail::FailClosed);
         assert_eq!(
             isolation_on_fail(false),
             IsolationOnFail::FallbackSharedRoot

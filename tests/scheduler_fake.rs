@@ -1,12 +1,13 @@
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::Duration;
 
-use cco::config::Config;
+use cco::config::{AutoCommitGranularity, Config};
 use cco::plan::load_plan;
 use cco::report;
 use cco::runtime::provider::ProviderRegistry;
 use cco::runtime::Scheduler;
-use cco::state::{self, RunState, RunStatus};
+use cco::state::{self, AutoCommitPolicySnapshot, RunState, RunStatus};
 
 #[tokio::test]
 async fn fake_provider_runs_two_tasks() {
@@ -82,8 +83,14 @@ tasks:
     assert_eq!(status, RunStatus::Completed);
 
     let st = RunState::load(&run_dir).unwrap();
-    assert_eq!(st.tasks["a"].status, cco::runtime::provider::TaskStatus::Done);
-    assert_eq!(st.tasks["b"].status, cco::runtime::provider::TaskStatus::Done);
+    assert_eq!(
+        st.tasks["a"].status,
+        cco::runtime::provider::TaskStatus::Done
+    );
+    assert_eq!(
+        st.tasks["b"].status,
+        cco::runtime::provider::TaskStatus::Done
+    );
     report::write_reports(&st).unwrap();
     assert!(run_dir.join("report.md").exists());
     assert!(run_dir.join("events.jsonl").exists());
@@ -108,10 +115,22 @@ tasks:
     assert!(md.contains("## Instructions for next worker"));
     // P1-8: terminal report has per-provider columns + handoff path links
     let report_md = std::fs::read_to_string(run_dir.join("report.md")).unwrap();
-    assert!(report_md.contains("## By provider"), "report.md missing By provider:\n{report_md}");
-    assert!(report_md.contains("| fake |"), "report.md missing fake row:\n{report_md}");
-    assert!(report_md.contains("handoff.md"), "report.md missing handoff.md:\n{report_md}");
-    assert!(report_md.contains("handoff.json"), "report.md missing handoff.json:\n{report_md}");
+    assert!(
+        report_md.contains("## By provider"),
+        "report.md missing By provider:\n{report_md}"
+    );
+    assert!(
+        report_md.contains("| fake |"),
+        "report.md missing fake row:\n{report_md}"
+    );
+    assert!(
+        report_md.contains("handoff.md"),
+        "report.md missing handoff.md:\n{report_md}"
+    );
+    assert!(
+        report_md.contains("handoff.json"),
+        "report.md missing handoff.json:\n{report_md}"
+    );
     let report_json: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(run_dir.join("report.json")).unwrap())
             .unwrap();
@@ -123,6 +142,227 @@ tasks:
     assert_eq!(report_json["handoff"]["md_rel"], "handoff.md");
     assert_eq!(report_json["handoff"]["exists_md"], true);
     let _ = PathBuf::from(".");
+}
+
+#[tokio::test]
+async fn per_task_auto_commit_records_commit_hash() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().join("repo");
+    std::fs::create_dir_all(project.join("docs/plans")).unwrap();
+    for args in [
+        vec!["init"],
+        vec!["config", "user.name", "CCO Test"],
+        vec!["config", "user.email", "cco-test@example.com"],
+    ] {
+        assert!(Command::new("git")
+            .arg("-C")
+            .arg(&project)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    std::fs::write(project.join("README.md"), "initial\n").unwrap();
+    assert!(Command::new("git")
+        .arg("-C")
+        .arg(&project)
+        .args(["add", "README.md"])
+        .status()
+        .unwrap()
+        .success());
+    assert!(Command::new("git")
+        .arg("-C")
+        .arg(&project)
+        .args(["commit", "-m", "initial"])
+        .status()
+        .unwrap()
+        .success());
+
+    let plan_path = project.join("docs/plans/one.cco.yaml");
+    std::fs::write(
+        &plan_path,
+        r#"
+schema: cco-plan/v1
+name: auto-commit
+defaults:
+  provider: fake
+  mode: print
+  worktree: false
+tasks:
+  - id: write
+    title: write
+    prompt: "finish\nCCO_DONE ok"
+"#,
+    )
+    .unwrap();
+    std::fs::write(project.join("feature.txt"), "ready\n").unwrap();
+
+    let mut config = Config::default();
+    config.state_root = tmp.path().join("state");
+    config.default.default_provider = "fake".into();
+    config.git.auto_commit.enabled = true;
+    config.git.auto_commit.granularity = AutoCommitGranularity::PerTask;
+    std::fs::create_dir_all(config.runs_dir()).unwrap();
+
+    let ir = load_plan(&project, &plan_path, Some("cco-plan/v1"), &config).unwrap();
+    let run_id = state::new_run_id();
+    let run_dir = state::prepare_run_dir(&config.runs_dir(), &run_id).unwrap();
+    AutoCommitPolicySnapshot::from_config(&config)
+        .save(&run_dir)
+        .unwrap();
+    let run_state = RunState::new(
+        run_id,
+        project.canonicalize().unwrap(),
+        &ir,
+        run_dir.clone(),
+    );
+    let registry = ProviderRegistry::from_config(&config).unwrap();
+    let status = Scheduler {
+        max_parallel: 1,
+        plan: ir,
+        state: run_state,
+        registry,
+        poll_interval: Duration::from_millis(20),
+        yes: true,
+        only: None,
+        from_task: None,
+        dry_run: false,
+        mirror_state: None,
+        auto_open_terminal: false,
+        terminal_kind: cco::SessionKind::Embedded,
+        terminal_manager: None,
+        run_max_budget_usd: None,
+        provider_max_parallel: Default::default(),
+        retry_max: 0,
+        stall_secs: 600,
+        failover_enabled: false,
+        fallback_extra_attempts: 1,
+        failover_order: vec![],
+        cost_escalate_enabled: false,
+        browser: cco::config::BrowserConfig::default(),
+        provider_unhealthy: Vec::new(),
+    }
+    .run()
+    .await
+    .unwrap();
+
+    assert_eq!(status, RunStatus::Completed);
+    let st = RunState::load(&run_dir).unwrap();
+    let commit = st.tasks["write"].auto_commit.as_ref().unwrap();
+    assert!(commit.ok, "{}", commit.message);
+    assert!(commit.commit_hash.is_some(), "{}", commit.message);
+    assert!(commit.files.iter().any(|p| p == "feature.txt"));
+}
+
+#[tokio::test]
+async fn per_plan_auto_commit_records_commit_hash() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().join("repo");
+    std::fs::create_dir_all(project.join("docs/plans")).unwrap();
+    for args in [
+        vec!["init"],
+        vec!["config", "user.name", "CCO Test"],
+        vec!["config", "user.email", "cco-test@example.com"],
+    ] {
+        assert!(Command::new("git")
+            .arg("-C")
+            .arg(&project)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    std::fs::write(project.join("README.md"), "initial\n").unwrap();
+    assert!(Command::new("git")
+        .arg("-C")
+        .arg(&project)
+        .args(["add", "README.md"])
+        .status()
+        .unwrap()
+        .success());
+    assert!(Command::new("git")
+        .arg("-C")
+        .arg(&project)
+        .args(["commit", "-m", "initial"])
+        .status()
+        .unwrap()
+        .success());
+
+    let plan_path = project.join("docs/plans/one.cco.yaml");
+    std::fs::write(
+        &plan_path,
+        r#"
+schema: cco-plan/v1
+name: auto-commit-plan
+defaults:
+  provider: fake
+  mode: print
+  worktree: false
+tasks:
+  - id: write
+    title: write
+    prompt: "finish\nCCO_DONE ok"
+"#,
+    )
+    .unwrap();
+    std::fs::write(project.join("feature.txt"), "ready\n").unwrap();
+
+    let mut config = Config::default();
+    config.state_root = tmp.path().join("state");
+    config.default.default_provider = "fake".into();
+    config.git.auto_commit.enabled = true;
+    config.git.auto_commit.granularity = AutoCommitGranularity::PerPlan;
+    std::fs::create_dir_all(config.runs_dir()).unwrap();
+
+    let ir = load_plan(&project, &plan_path, Some("cco-plan/v1"), &config).unwrap();
+    let run_id = state::new_run_id();
+    let run_dir = state::prepare_run_dir(&config.runs_dir(), &run_id).unwrap();
+    AutoCommitPolicySnapshot::from_config(&config)
+        .save(&run_dir)
+        .unwrap();
+    let run_state = RunState::new(
+        run_id,
+        project.canonicalize().unwrap(),
+        &ir,
+        run_dir.clone(),
+    );
+    let registry = ProviderRegistry::from_config(&config).unwrap();
+    let status = Scheduler {
+        max_parallel: 1,
+        plan: ir,
+        state: run_state,
+        registry,
+        poll_interval: Duration::from_millis(20),
+        yes: true,
+        only: None,
+        from_task: None,
+        dry_run: false,
+        mirror_state: None,
+        auto_open_terminal: false,
+        terminal_kind: cco::SessionKind::Embedded,
+        terminal_manager: None,
+        run_max_budget_usd: None,
+        provider_max_parallel: Default::default(),
+        retry_max: 0,
+        stall_secs: 600,
+        failover_enabled: false,
+        fallback_extra_attempts: 1,
+        failover_order: vec![],
+        cost_escalate_enabled: false,
+        browser: cco::config::BrowserConfig::default(),
+        provider_unhealthy: Vec::new(),
+    }
+    .run()
+    .await
+    .unwrap();
+
+    assert_eq!(status, RunStatus::Completed);
+    let st = RunState::load(&run_dir).unwrap();
+    assert_eq!(st.auto_commits.len(), 1);
+    let commit = &st.auto_commits[0];
+    assert!(commit.ok, "{}", commit.message);
+    assert!(commit.commit_hash.is_some(), "{}", commit.message);
+    assert!(commit.files.iter().any(|p| p == "feature.txt"));
 }
 
 /// P1-4: declared outputs missing after Done → host flips Failed + handoff fragment.
@@ -161,7 +401,10 @@ tasks:
     std::fs::create_dir_all(config.runs_dir()).unwrap();
 
     let ir = load_plan(&project, &plan_path, Some("cco-plan/v1"), &config).unwrap();
-    assert_eq!(ir.tasks[0].outputs, vec![".cco-out/a/SUMMARY.md".to_string()]);
+    assert_eq!(
+        ir.tasks[0].outputs,
+        vec![".cco-out/a/SUMMARY.md".to_string()]
+    );
 
     let run_id = state::new_run_id();
     let run_dir = state::prepare_run_dir(&config.runs_dir(), &run_id).unwrap();
@@ -202,7 +445,10 @@ tasks:
     let status = sched.run().await.unwrap();
     // a failed (missing outputs); b skipped via on_failure=continue depends_on fail
     assert!(
-        matches!(status, RunStatus::Failed | RunStatus::Paused | RunStatus::Completed),
+        matches!(
+            status,
+            RunStatus::Failed | RunStatus::Paused | RunStatus::Completed
+        ),
         "unexpected run status {status:?}"
     );
 
@@ -231,7 +477,10 @@ tasks:
     assert_eq!(board_a["status"], "failed");
     assert!(handoff["fragments"].get("a").is_some());
     assert_eq!(handoff["fragments"]["a"]["status"], "failed");
-    let risks = handoff["open_risks"].as_array().cloned().unwrap_or_default();
+    let risks = handoff["open_risks"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     assert!(
         risks.iter().any(|r| r.as_str().unwrap_or("").contains("a")),
         "open_risks should mention task a: {risks:?}"
@@ -317,8 +566,14 @@ tasks:
     let status = sched.run().await.unwrap();
     assert_eq!(status, RunStatus::Completed);
     let st = RunState::load(&run_dir).unwrap();
-    assert_eq!(st.tasks["a"].status, cco::runtime::provider::TaskStatus::Done);
-    assert_eq!(st.tasks["b"].status, cco::runtime::provider::TaskStatus::Done);
+    assert_eq!(
+        st.tasks["a"].status,
+        cco::runtime::provider::TaskStatus::Done
+    );
+    assert_eq!(
+        st.tasks["b"].status,
+        cco::runtime::provider::TaskStatus::Done
+    );
 
     let handoff: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(run_dir.join("handoff.json")).unwrap())

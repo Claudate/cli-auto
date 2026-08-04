@@ -17,7 +17,10 @@ pub(crate) const MAX_ATTACHMENTS_PER_MSG: usize = 6;
 /// Blocked extensions (executables / scripts) even if mime lies.
 fn blocked_ext(ext: &str) -> bool {
     matches!(
-        ext.trim().trim_start_matches('.').to_ascii_lowercase().as_str(),
+        ext.trim()
+            .trim_start_matches('.')
+            .to_ascii_lowercase()
+            .as_str(),
         "exe"
             | "dll"
             | "so"
@@ -316,8 +319,7 @@ pub(crate) fn format_attachments_block(atts: &[ChatAttachment]) -> String {
     if atts.is_empty() {
         return String::new();
     }
-    let mut lines =
-        vec!["\n\n--- 附件（项目相对路径，请结合文件理解需求）---".to_string()];
+    let mut lines = vec!["\n\n--- 附件（项目相对路径，请结合文件理解需求）---".to_string()];
     for (i, a) in atts.iter().enumerate() {
         lines.push(format!("{}. {} ({}) → {}", i + 1, a.name, a.mime, a.path));
     }

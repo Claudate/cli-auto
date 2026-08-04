@@ -34,11 +34,7 @@ pub fn soften_plan_for_accept(ir: &mut PlanIR) -> Vec<String> {
         if t.role != Some(TaskRole::Implement) {
             continue;
         }
-        let empty = t
-            .scope
-            .as_ref()
-            .map(|s| s.paths.is_empty())
-            .unwrap_or(true);
+        let empty = t.scope.as_ref().map(|s| s.paths.is_empty()).unwrap_or(true);
         if empty {
             let path = format!(".cco-out/wp/{}/", t.id);
             let mut scope = t.scope.clone().unwrap_or(TaskScope {
@@ -48,16 +44,16 @@ pub fn soften_plan_for_accept(ir: &mut PlanIR) -> Vec<String> {
             });
             scope.paths = vec![path.clone()];
             t.scope = Some(scope);
-            notes.push(format!(
-                "task {}: empty implement scope → {}",
-                t.id, path
-            ));
+            notes.push(format!("task {}: empty implement scope → {}", t.id, path));
         }
     }
 
     // 3) multi-provider + parallel → force worktree on
-    let providers: std::collections::HashSet<_> =
-        ir.tasks.iter().map(|t| t.provider.to_ascii_lowercase()).collect();
+    let providers: std::collections::HashSet<_> = ir
+        .tasks
+        .iter()
+        .map(|t| t.provider.to_ascii_lowercase())
+        .collect();
     if providers.len() > 1 {
         for t in ir.tasks.iter_mut() {
             if t.worktree != Some(true) {
@@ -117,12 +113,10 @@ pub fn soften_plan_for_accept(ir: &mut PlanIR) -> Vec<String> {
     }
 
     // 5) drop unknown deps / self deps (display must not crash)
-    let ids: std::collections::HashSet<_> =
-        ir.tasks.iter().map(|t| t.id.clone()).collect();
+    let ids: std::collections::HashSet<_> = ir.tasks.iter().map(|t| t.id.clone()).collect();
     for t in ir.tasks.iter_mut() {
         let before = t.depends_on.len();
-        t.depends_on
-            .retain(|d| ids.contains(d) && d != &t.id);
+        t.depends_on.retain(|d| ids.contains(d) && d != &t.id);
         if t.depends_on.len() != before {
             notes.push(format!("task {}: pruned invalid depends_on", t.id));
         }
@@ -191,7 +185,9 @@ fn find_parallel_implement_overlap(ir: &PlanIR) -> Option<(String, String)> {
                 continue;
             }
             if first_overlapping_paths(pa, pb).is_some()
-                || pa.iter().any(|x| pb.iter().any(|y| scope_paths_overlap(x, y)))
+                || pa
+                    .iter()
+                    .any(|x| pb.iter().any(|y| scope_paths_overlap(x, y)))
             {
                 return Some((a.id.clone(), b.id.clone()));
             }

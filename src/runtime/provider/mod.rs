@@ -57,7 +57,10 @@ impl ProviderRegistry {
         if let Some(pc) = config.provider("claude") {
             if pc.enabled {
                 let bin = resolve_provider_bin(&pc.bin, "CCO_CLAUDE_BIN");
-                providers.push(Arc::new(claude::ClaudeProvider::new(bin, pc.extra_args.clone())));
+                providers.push(Arc::new(claude::ClaudeProvider::new(
+                    bin,
+                    pc.extra_args.clone(),
+                )));
             }
         }
         // Always register fake for tests / dry runs when enabled
@@ -250,10 +253,7 @@ pub fn worker_path_env() -> String {
 }
 
 /// Apply GUI-safe PATH + caller's env_extra to a worker process command.
-pub fn apply_worker_process_env(
-    cmd: &mut tokio::process::Command,
-    env_extra: &[(String, String)],
-) {
+pub fn apply_worker_process_env(cmd: &mut tokio::process::Command, env_extra: &[(String, String)]) {
     cmd.env("PATH", worker_path_env());
     for (k, v) in env_extra {
         cmd.env(k, v);
@@ -334,7 +334,13 @@ mod tests {
         assert!(names.contains(&"claude") || names.contains(&"fake") || names.contains(&"codex"));
         // Multi-CLI shell-print defaults enabled (missing bin → preflight/doctor, not omit).
         for id in [
-            "codex", "gemini", "qwen", "kimi", "deepseek", "copilot", "codebuddy",
+            "codex",
+            "gemini",
+            "qwen",
+            "kimi",
+            "deepseek",
+            "copilot",
+            "codebuddy",
         ] {
             assert!(
                 names.contains(&id),

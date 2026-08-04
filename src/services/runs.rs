@@ -432,10 +432,7 @@ pub fn stop_run(config: &Config, run_id: &str) -> Result<()> {
         // spawning later waves after the user hits "全部停止".
         if matches!(
             ts.status,
-            TaskStatus::Running
-                | TaskStatus::Starting
-                | TaskStatus::Queued
-                | TaskStatus::Pending
+            TaskStatus::Running | TaskStatus::Starting | TaskStatus::Queued | TaskStatus::Pending
         ) {
             if let Some(pid) = ts.pid {
                 kill_pid(pid);
@@ -639,7 +636,10 @@ pub struct ReworkStartResponse {
 pub fn start_rework_from_run(config: Config, source_run_id: &str) -> Result<ReworkStartResponse> {
     let dir = state::resolve_run_dir(&config.runs_dir(), Some(source_run_id))?;
     let rs = RunState::load(&dir)?;
-    if matches!(rs.status, RunStatus::Running | RunStatus::Validated | RunStatus::Init) {
+    if matches!(
+        rs.status,
+        RunStatus::Running | RunStatus::Validated | RunStatus::Init
+    ) {
         bail!("源 run 仍在进行中，请等待结束后再回补");
     }
     let plan_path = dir.join("plan.resolved.json");
@@ -695,9 +695,7 @@ pub fn start_rework_from_run(config: Config, source_run_id: &str) -> Result<Rewo
     let prior = count_rework_rounds(&project, &dir);
     let round = prior + 1;
     if round > REWORK_MAX_ROUNDS {
-        bail!(
-            "回补轮次已达上限 {REWORK_MAX_ROUNDS}；请人工处理或「接受残留」"
-        );
+        bail!("回补轮次已达上限 {REWORK_MAX_ROUNDS}；请人工处理或「接受残留」");
     }
 
     let rework_ir = build_rework_plan(&base, &issues, round, source_run_id)?;

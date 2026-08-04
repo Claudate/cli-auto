@@ -166,7 +166,11 @@ fn task_view(t: &TaskIR) -> PlanTaskView {
     };
     let verify = t.effective_verify_cmd().map(|s| s.to_string());
     let (paths, readonly, has_write) = match t.scope.as_ref() {
-        Some(s) => (s.paths.as_slice(), s.readonly.as_slice(), !s.paths.is_empty()),
+        Some(s) => (
+            s.paths.as_slice(),
+            s.readonly.as_slice(),
+            !s.paths.is_empty(),
+        ),
         None => (&[][..], &[][..], false),
     };
     let risk = crate::domain::plan::classify_task_risk_wire_with_tags(
@@ -260,10 +264,7 @@ fn task_view_from_cco(t: &crate::plan::CcoSplitTask) -> PlanTaskView {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
         }),
-        provider: t
-            .provider
-            .clone()
-            .unwrap_or_else(|| "claude".into()),
+        provider: t.provider.clone().unwrap_or_else(|| "claude".into()),
         role: t.role.clone(),
         scope,
         prompt: t.body.clone(),
@@ -304,7 +305,10 @@ fn plan_acceptance_fields(job: &PlanJob) -> (bool, Option<String>) {
 pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJobView> {
     let mut layers = Vec::new();
     let mut tasks = Vec::new();
-    if matches!(job.status, PlanJobStatus::Planned | PlanJobStatus::Confirmed) {
+    if matches!(
+        job.status,
+        PlanJobStatus::Planned | PlanJobStatus::Confirmed
+    ) {
         // Prefer cco split SoT (full desk fields: summary/wave/done_when/body).
         if let Ok(Some(doc)) = crate::state::cco_split_store::load_cco_split(config, &job.job_id) {
             layers = crate::plan::split_topo_layers(&doc);
@@ -413,7 +417,10 @@ fn annotate_cost_route_preview(
     if !config.default.cost_route_enabled {
         return (None, tasks);
     }
-    if !matches!(job.status, PlanJobStatus::Planned | PlanJobStatus::Confirmed) {
+    if !matches!(
+        job.status,
+        PlanJobStatus::Planned | PlanJobStatus::Confirmed
+    ) {
         return (None, tasks);
     }
     let Ok(ir) = load_proposed(config, &job.job_id) else {
@@ -796,18 +803,14 @@ pub fn apply_user_edits_to_ir(ir: &mut PlanIR, edits: &PlanUserEdits) -> (usize,
             }
         }
         if let Some(ref role_raw) = edit.role {
-            if let Ok(changed) =
-                super::task_edit::apply_role_patch(t, Some(role_raw.clone()))
-            {
+            if let Ok(changed) = super::task_edit::apply_role_patch(t, Some(role_raw.clone())) {
                 if changed {
                     applied += 1;
                 }
             }
         }
         if let Some(ref paths) = edit.scope_paths {
-            if let Ok(changed) =
-                super::task_edit::apply_scope_paths_patch(t, Some(paths.clone()))
-            {
+            if let Ok(changed) = super::task_edit::apply_scope_paths_patch(t, Some(paths.clone())) {
                 if changed {
                     applied += 1;
                 }
@@ -839,10 +842,10 @@ pub fn apply_user_edits_to_ir(ir: &mut PlanIR, edits: &PlanUserEdits) -> (usize,
 fn load_proposed_or_resolved(config: &Config, job_id: &str) -> Result<PlanIR> {
     load_proposed(config, job_id).or_else(|_| {
         let path = job_dir(config, job_id).join("plan.resolved.json");
-        let text = std::fs::read_to_string(&path)
-            .with_context(|| format!("read {}", path.display()))?;
-        let ir: PlanIR = serde_json::from_str(&text)
-            .with_context(|| format!("parse {}", path.display()))?;
+        let text =
+            std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+        let ir: PlanIR =
+            serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
         Ok::<PlanIR, anyhow::Error>(ir)
     })
 }
@@ -956,8 +959,7 @@ pub fn update_proposed_task(
     // Role=inspect defaults (tools/scope/prompt) — idempotent; only affects inspect.
     crate::plan::materialize_role_defaults(&mut ir);
     if let Some(deps) = depends_on {
-        let ids: std::collections::HashSet<_> =
-            ir.tasks.iter().map(|t| t.id.as_str()).collect();
+        let ids: std::collections::HashSet<_> = ir.tasks.iter().map(|t| t.id.as_str()).collect();
         let mut clean: Vec<String> = Vec::new();
         for d in deps {
             let d = d.trim().to_string();
@@ -1002,22 +1004,13 @@ pub fn update_proposed_task(
             .map(|(k, _)| k.clone())
             .unwrap_or(prev_title_key.clone())
     };
-    record_task_edit(
-        &mut edits,
-        &match_key,
-        &ir.tasks[task_idx],
-        &ir,
-        patch,
-    );
+    record_task_edit(&mut edits, &match_key, &ir.tasks[task_idx], &ir, patch);
     let _ = write_user_edits(config, job_id, &edits);
 
     touch_job_after_edit(&mut job, &ir);
     job.save(config)?;
     let provider_note = ir.tasks[task_idx].provider.as_str();
-    let role_note = ir.tasks[task_idx]
-        .role
-        .map(|r| r.as_str())
-        .unwrap_or("-");
+    let role_note = ir.tasks[task_idx].role.map(|r| r.as_str()).unwrap_or("-");
     let deps_n = ir.tasks[task_idx].depends_on.len();
     let scope_n = ir.tasks[task_idx]
         .scope
@@ -1036,11 +1029,7 @@ pub fn update_proposed_task(
 
 /// Remove a task from the proposed plan (P2-1). Rewrites other tasks' depends_on.
 /// Refuses if it would leave the plan empty.
-pub fn remove_proposed_task(
-    config: &Config,
-    job_id: &str,
-    task_id: &str,
-) -> Result<PlanJobView> {
+pub fn remove_proposed_task(config: &Config, job_id: &str, task_id: &str) -> Result<PlanJobView> {
     let mut job = PlanJob::load(config, job_id)?;
     if !matches!(
         job.status,
@@ -1093,10 +1082,7 @@ pub fn mark_confirmed(config: &Config, job_id: &str, run_id: &str, ir: &PlanIR) 
         job.status,
         PlanJobStatus::Planned | PlanJobStatus::Confirmed
     ) {
-        bail!(
-            "计划任务状态为 {}，无法绑定 run",
-            job.status.as_str()
-        );
+        bail!("计划任务状态为 {}，无法绑定 run", job.status.as_str());
     }
     job.status = PlanJobStatus::Confirmed;
     job.run_id = Some(run_id.to_string());
@@ -1117,9 +1103,7 @@ pub fn mark_confirmed(config: &Config, job_id: &str, run_id: &str, ir: &PlanIR) 
         job.plan_path.clone(),
         ir,
         crate::plan::CcoSplitSource::parse(
-            ir.adapter
-                .strip_prefix("cco-split/")
-                .unwrap_or("merge"),
+            ir.adapter.strip_prefix("cco-split/").unwrap_or("merge"),
         ),
         crate::plan::CcoSplitStatus::Confirmed,
         &job.created_at.to_rfc3339(),
@@ -1132,7 +1116,10 @@ pub fn mark_confirmed(config: &Config, job_id: &str, run_id: &str, ir: &PlanIR) 
         serde_json::to_string_pretty(ir)?,
     );
     // Attach planner cost to the exec run dir for report / live split (P1-5).
-    if let Some(c) = job.planner_cost_usd.or_else(|| read_planner_cost(config, job_id)) {
+    if let Some(c) = job
+        .planner_cost_usd
+        .or_else(|| read_planner_cost(config, job_id))
+    {
         if let Ok(run_dir) = crate::state::resolve_run_dir(&config.runs_dir(), Some(run_id)) {
             let _ = std::fs::write(
                 run_dir.join("planner_cost.json"),
@@ -1182,9 +1169,8 @@ pub fn load_proposed_for_exec(
     let mut ir = load_proposed(config, job_id).or_else(|_| {
         // 回落 resolved（确认后写的冻结图）
         let path = job_dir(config, job_id).join("plan.resolved.json");
-        let text = std::fs::read_to_string(&path).with_context(|| {
-            format!("missing plan.proposed/resolved for {job_id}")
-        })?;
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("missing plan.proposed/resolved for {job_id}"))?;
         let ir: PlanIR = serde_json::from_str(&text)
             .with_context(|| format!("parse plan.resolved.json for {job_id}"))?;
         Ok::<PlanIR, anyhow::Error>(ir)

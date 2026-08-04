@@ -32,8 +32,8 @@ pub use checklist::{
     HostChecklist, HostChecklistItem, CHECKLIST_SCHEMA_VERSION,
 };
 pub use closeout::{
-    inject_closeout_task, inspect_has_closeout_duty, looks_like_inspect_gate, should_inject_closeout,
-    strip_inspect_closeout_duty,
+    inject_closeout_task, inspect_has_closeout_duty, looks_like_inspect_gate,
+    should_inject_closeout, strip_inspect_closeout_duty,
 };
 pub use materialize::{materialize_role_defaults, materialize_selected_tasks};
 pub use merge_check::{
@@ -45,8 +45,8 @@ pub use optional::{
 };
 pub use risk::{
     classify_task_risk, classify_task_risk_wire, classify_task_risk_wire_with_tags,
-    classify_task_risk_with_tags, task_has_browser_tag, task_has_scrape_tag,
-    task_has_ui_smoke_tag, task_has_ui_verify_tag, RiskClass,
+    classify_task_risk_with_tags, task_has_browser_tag, task_has_scrape_tag, task_has_ui_smoke_tag,
+    task_has_ui_verify_tag, RiskClass,
 };
 pub use routing::{apply_tag_routing, tag_implied_provider};
 pub use soften::soften_plan_for_accept;

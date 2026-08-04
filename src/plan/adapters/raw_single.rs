@@ -28,11 +28,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
                 stem.clone()
             }
         });
-    let name = if stem.is_empty() {
-        title.clone()
-    } else {
-        stem
-    };
+    let name = if stem.is_empty() { title.clone() } else { stem };
 
     let provider = config.default.default_provider.clone();
     let opts = default_provider_opts(config, &provider);

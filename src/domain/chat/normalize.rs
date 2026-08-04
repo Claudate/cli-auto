@@ -435,9 +435,7 @@ fn extract_acceptance_body(md: &str) -> Option<String> {
     for (j, line) in lines.iter().enumerate().skip(start) {
         let t = line.trim();
         // Next H2 (not H3) ends the section.
-        if t.starts_with("## ")
-            || (t.starts_with("##") && !t.starts_with("###") && t.len() > 2)
-        {
+        if t.starts_with("## ") || (t.starts_with("##") && !t.starts_with("###") && t.len() > 2) {
             end = j;
             break;
         }
@@ -633,7 +631,10 @@ mod acceptance_quality_tests {
         let out = structure_plan_markdown(thin);
         // Must not append a second stub 验收 section.
         let n_acc = out.matches("## 验收").count();
-        assert_eq!(n_acc, 0, "should not inject ## 验收 when 成功标准 present:\n{out}");
+        assert_eq!(
+            n_acc, 0,
+            "should not inject ## 验收 when 成功标准 present:\n{out}"
+        );
         assert!(out.contains("## 成功标准"), "got:\n{out}");
         assert_eq!(acceptance_quality(&out), AcceptanceQuality::Filled);
     }
@@ -719,9 +720,8 @@ mod checklist_verification_tests {
 
     #[test]
     fn build_verification_inspect_authoritative() {
-        let plan_items = parse_acceptance_checklist(
-            "## 验收\n- [ ] 主 CTA 清晰\n- [ ] 至少 3 个利益点\n",
-        );
+        let plan_items =
+            parse_acceptance_checklist("## 验收\n- [ ] 主 CTA 清晰\n- [ ] 至少 3 个利益点\n");
         let v = build_verification(VerificationInputs {
             plan_items,
             task_items: vec![],
@@ -736,10 +736,7 @@ mod checklist_verification_tests {
         assert_eq!(v.items.len(), 1);
         assert_eq!(v.items[0].status, VerificationItemStatus::Fail);
         assert!(
-            v.plan_note
-                .as_deref()
-                .unwrap_or("")
-                .contains("巡检为准"),
+            v.plan_note.as_deref().unwrap_or("").contains("巡检为准"),
             "got: {:?}",
             v.plan_note
         );

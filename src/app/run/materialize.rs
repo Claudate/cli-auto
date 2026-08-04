@@ -1,7 +1,7 @@
 //! Run disk materialization (A5-1 · S-run extract).
 //!
 //! [INPUT]: Config · project · PlanIR / plan path + adapter · optional RouteFillReport
-//! [OUTPUT]: (run_id, RunState, PlanIR) · ParseOnly also loads then materializes
+//! [OUTPUT]: (run_id, RunState, PlanIR) · auto_commit.json · ParseOnly also loads then materializes
 //! [POS]: app::run sub-module; does **not** spawn scheduler
 //! [PROTOCOL]: Mode B IR only via split::confirm_materialize; ParseOnly is documented
 //!   non–Mode B **but still** drops `optional && !include` (A0-R4 · D-T3-1) — same
@@ -14,8 +14,8 @@ use anyhow::{bail, Context, Result};
 
 use crate::config::Config;
 use crate::domain::plan::{
-    assign_closeout_owners, build_host_checklist, format_checklist_for_prompt, inject_closeout_task,
-    SYS_CLOSEOUT_ID,
+    assign_closeout_owners, build_host_checklist, format_checklist_for_prompt,
+    inject_closeout_task, SYS_CLOSEOUT_ID,
 };
 use crate::domain::worker::{
     apply_cost_aware_routing_with_opts, CostRouteOpts, CostRouteReport, RouteFillReport,
@@ -93,6 +93,31 @@ pub fn materialize_run_with_route_opts(
     }
     // Drop optional && !include before any disk write or scheduler handoff.
     let mut ir = materialize_selected_tasks(ir.clone())?;
+    match config.auto_commit_granularity() {
+        crate::config::AutoCommitGranularity::PerPlan => {
+            // A single plan commit needs one checkout. Keep business work
+            // serial so concurrent workers never share an index/worktree.
+            ir.worktree = false;
+            ir.max_parallel = 1;
+            for task in &mut ir.tasks {
+                if !crate::plan::is_system_ensure_task(&task.id) {
+                    task.worktree = Some(false);
+                }
+            }
+        }
+        crate::config::AutoCommitGranularity::PerTask => {
+            // Per-task commits must never share the main checkout: each task
+            // gets an isolated branch/worktree so parallel work cannot commit
+            // one another's files.
+            ir.worktree = true;
+            for task in &mut ir.tasks {
+                if !crate::plan::is_system_ensure_task(&task.id) {
+                    task.worktree = Some(true);
+                }
+            }
+        }
+        crate::config::AutoCommitGranularity::Off => {}
+    }
     // Ensure E1/E2: host checklist + optional sys-closeout before soft-fill.
     let plan_md = std::fs::read_to_string(&ir.source_path).ok();
     let mut checklist = build_host_checklist(&ir, plan_md.as_deref());
@@ -154,6 +179,7 @@ pub fn materialize_run_with_route_opts(
         }
     }
     run_state.save()?;
+    state::AutoCommitPolicySnapshot::from_config(config).save(&run_dir)?;
     let resolved = run_dir.join("plan.resolved.json");
     std::fs::write(&resolved, serde_json::to_string_pretty(&ir)?)?;
     // Host checklist for E1/E3 prompts and report compare.
@@ -169,10 +195,9 @@ pub fn materialize_run_with_route_opts(
 /// - `override_effort` set → force all claude/fake tasks to that level (UI/CLI pick).
 /// - else soft-fill from `config.default.effort` only when the key is missing/empty.
 pub fn apply_effort(ir: &mut PlanIR, config: &Config, override_effort: Option<&str>) {
-    let force = override_effort
-        .and_then(crate::config::normalize_effort);
-    let soft = crate::config::normalize_effort(&config.default.effort)
-        .unwrap_or_else(|| "high".into());
+    let force = override_effort.and_then(crate::config::normalize_effort);
+    let soft =
+        crate::config::normalize_effort(&config.default.effort).unwrap_or_else(|| "high".into());
     for t in &mut ir.tasks {
         let p = t.provider.to_ascii_lowercase();
         if p != "claude" && p != "fake" {
@@ -249,6 +274,7 @@ pub fn materialize_parse_only(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::AutoCommitGranularity;
     use crate::domain::plan::{OnFailure, TaskIR};
     use crate::plan::PlanIR;
 
@@ -423,6 +449,37 @@ mod tests {
         // P1-2: new runs stamp route_source (inferred soft_fill when provider==default).
         assert!(st.tasks["must"].route_source.is_some());
         assert!(st.tasks["maybe_on"].route_source.is_some());
+    }
+
+    #[test]
+    fn materialize_applies_auto_commit_checkout_policy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        std::fs::create_dir_all(project.join("docs/plans")).unwrap();
+        let ir = sample_ir(&project);
+
+        let mut per_plan = test_cfg(tmp.path());
+        per_plan.git.auto_commit.enabled = true;
+        per_plan.git.auto_commit.granularity = AutoCommitGranularity::PerPlan;
+        let (_, _, plan_ir) = materialize_run(&per_plan, project.clone(), &ir).unwrap();
+        assert!(!plan_ir.worktree);
+        assert_eq!(plan_ir.max_parallel, 1);
+        assert!(plan_ir
+            .tasks
+            .iter()
+            .filter(|task| !crate::plan::is_system_ensure_task(&task.id))
+            .all(|task| task.worktree == Some(false)));
+
+        let mut per_task = test_cfg(tmp.path());
+        per_task.git.auto_commit.enabled = true;
+        per_task.git.auto_commit.granularity = AutoCommitGranularity::PerTask;
+        let (_, _, task_ir) = materialize_run(&per_task, project, &ir).unwrap();
+        assert!(task_ir.worktree);
+        assert!(task_ir
+            .tasks
+            .iter()
+            .filter(|task| !crate::plan::is_system_ensure_task(&task.id))
+            .all(|task| task.worktree == Some(true)));
     }
 
     /// P1-2: soft fill report → filled soft_fill, kept explicit in run.json.

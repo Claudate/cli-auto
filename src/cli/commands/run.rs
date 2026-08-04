@@ -14,9 +14,7 @@ use anyhow::Result;
 
 use crate::app::run as run_uc;
 use crate::app::split as split_uc;
-use crate::cli::commands::common::{
-    plan_then_load_ir, resolve_term_kind, run_scheduler_loop,
-};
+use crate::cli::commands::common::{plan_then_load_ir, resolve_term_kind, run_scheduler_loop};
 use crate::cli::interactive;
 use crate::cli::TermKindArg;
 use crate::config::Config;
@@ -82,9 +80,7 @@ pub async fn run(
         }
         None
     } else {
-        println!(
-            "planning… (adapter={adapter_name} is not structured; Mode B plan job)"
-        );
+        println!("planning… (adapter={adapter_name} is not structured; Mode B plan job)");
         let (preview_ir, job_id) = plan_then_load_ir(
             config,
             &project,
@@ -140,8 +136,7 @@ pub async fn run(
             effort: Some(config.default.effort.clone()),
         };
         // Sole Mode B open-run (optional drop + soft defaults + materialize + mark).
-        let (run_id, st, ir, route_line) =
-            split_uc::confirm_materialize(config, &job_id, patches)?;
+        let (run_id, st, ir, route_line) = split_uc::confirm_materialize(config, &job_id, patches)?;
         (run_id, st, ir, route_line)
     } else {
         let (ir, report) = parse_only
@@ -149,12 +144,8 @@ pub async fn run(
             .expect("ParseOnly path always loads IR before confirm");
         // Documented ParseOnly — not Mode B; still drops optional && !include (A0-R4).
         // Use **returned** IR for the scheduler (D-T3-1). Stamp route_source from report.
-        let (run_id, st, ir, cost_line) = run_uc::materialize_run_with_route(
-            config,
-            project.clone(),
-            &ir,
-            report.as_ref(),
-        )?;
+        let (run_id, st, ir, cost_line) =
+            run_uc::materialize_run_with_route(config, project.clone(), &ir, report.as_ref())?;
         (run_id, st, ir, cost_line)
     };
 

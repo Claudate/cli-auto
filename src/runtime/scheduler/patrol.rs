@@ -146,10 +146,9 @@ impl Scheduler {
             return;
         }
         self.provider_unhealthy.push(n.to_ascii_lowercase());
-        let _ = self.state.event(
-            "provider_unhealthy",
-            serde_json::json!({ "provider": n }),
-        );
+        let _ = self
+            .state
+            .event("provider_unhealthy", serde_json::json!({ "provider": n }));
     }
 
     /// Attempt budget for this task: after failover, only `fallback_extra_attempts`.
@@ -174,10 +173,12 @@ impl Scheduler {
     ) -> Result<Option<StallAction>> {
         let bytes = stdout_len(&handle.stdout_path);
         let now = chrono::Utc::now();
-        let entry = progress.entry(id.to_string()).or_insert_with(|| ProgressWatch {
-            last_bytes: bytes,
-            last_change: now,
-        });
+        let entry = progress
+            .entry(id.to_string())
+            .or_insert_with(|| ProgressWatch {
+                last_bytes: bytes,
+                last_change: now,
+            });
         if bytes > entry.last_bytes {
             entry.last_bytes = bytes;
             entry.last_change = now;

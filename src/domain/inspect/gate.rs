@@ -78,8 +78,7 @@ pub fn issues_candidate_paths(task: &TaskIR) -> Vec<String> {
 
 /// Whether this task should run VERDICT gate after Done (role=inspect or declared VERDICT output).
 pub fn task_has_verdict_gate(task: &TaskIR) -> bool {
-    task.role == Some(TaskRole::Inspect)
-        || task.outputs.iter().any(|o| looks_like_verdict_path(o))
+    task.role == Some(TaskRole::Inspect) || task.outputs.iter().any(|o| looks_like_verdict_path(o))
 }
 
 /// Count ISSUES that block plan-loop success (blocking + map).

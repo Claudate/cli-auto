@@ -35,7 +35,10 @@ pub fn inject_system_post_tasks(ir: &mut PlanIR, config: &Config) {
 
     let want_pr = config.default.post_open_pr_enabled;
     // Open-PR needs a pushed branch; force Push when PR is on.
-    let want_push = config.default.post_git_push_enabled || want_pr;
+    // Host-owned auto-commit modes run in Scheduler. Keep this legacy system
+    // task only for old `post_git_push_enabled` configs and PR's push chain.
+    let want_push =
+        (config.default.post_git_push_enabled && !config.git.auto_commit.enabled) || want_pr;
     // Push (or PR) forces inspect gate — 先巡检通过才提交 / 开 PR
     let want_inspect = config.default.post_inspect_enabled || want_push;
     if !want_inspect && !want_push && !want_pr {
@@ -65,9 +68,7 @@ pub fn inject_system_post_tasks(ir: &mut PlanIR, config: &Config) {
     if want_push && budget > 0 {
         // After inspect if present (inspect already waits on all business);
         // otherwise after all business tasks.
-        let deps = if want_inspect
-            || ir.tasks.iter().any(|t| t.id == SYS_POST_INSPECT_ID)
-        {
+        let deps = if want_inspect || ir.tasks.iter().any(|t| t.id == SYS_POST_INSPECT_ID) {
             vec![SYS_POST_INSPECT_ID.to_string()]
         } else {
             business_deps.clone()
@@ -206,11 +207,7 @@ fn make_git_push_task(ir: &PlanIR, depends_on: &[String]) -> TaskIR {
 计划名：{name}
 "#,
         name = ir.name,
-        inspect_note = if after_inspect {
-            "与巡检"
-        } else {
-            ""
-        },
+        inspect_note = if after_inspect { "与巡检" } else { "" },
         gate = gate_block,
     );
     TaskIR {
@@ -382,7 +379,10 @@ mod tests {
         assert!(ir.tasks[1].optional && ir.tasks[1].include);
         assert!(ir.tasks[2].optional && ir.tasks[2].include);
         assert_eq!(ir.tasks[1].depends_on, vec!["t1".to_string()]);
-        assert_eq!(ir.tasks[2].depends_on, vec![SYS_POST_INSPECT_ID.to_string()]);
+        assert_eq!(
+            ir.tasks[2].depends_on,
+            vec![SYS_POST_INSPECT_ID.to_string()]
+        );
         assert!(ir.require_inspect);
         assert!(ir.tasks[1].role == Some(TaskRole::Inspect));
         // H0-3A: no Chinese (or any) acceptance string that would fake-shell
@@ -396,12 +396,11 @@ mod tests {
         assert!(
             ir.tasks[2].prompt.contains("PASS")
                 && ir.tasks[2].prompt.contains("VERDICT")
-                && ir.tasks[2]
-                    .prompt
-                    .contains("CCO_PUSH_SKIPPED"),
+                && ir.tasks[2].prompt.contains("CCO_PUSH_SKIPPED"),
             "push must require inspect pass before commit"
         );
-        ir.validate().expect("inspect→sys-post-push allowed by collab rules");
+        ir.validate()
+            .expect("inspect→sys-post-push allowed by collab rules");
     }
 
     #[test]
@@ -456,7 +455,10 @@ mod tests {
         inject_system_post_tasks(&mut ir, &cfg);
         inject_system_post_tasks(&mut ir, &cfg);
         assert_eq!(
-            ir.tasks.iter().filter(|t| t.id == SYS_POST_INSPECT_ID).count(),
+            ir.tasks
+                .iter()
+                .filter(|t| t.id == SYS_POST_INSPECT_ID)
+                .count(),
             1
         );
         assert_eq!(

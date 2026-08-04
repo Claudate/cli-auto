@@ -125,10 +125,7 @@ fn norm(s: &str) -> String {
     s.trim().to_ascii_lowercase()
 }
 
-fn entry_for<'a>(
-    catalog: &'a [ProviderCostEntry],
-    name: &str,
-) -> Option<&'a ProviderCostEntry> {
+fn entry_for<'a>(catalog: &'a [ProviderCostEntry], name: &str) -> Option<&'a ProviderCostEntry> {
     let n = norm(name);
     catalog.iter().find(|e| e.id == n)
 }
@@ -321,7 +318,9 @@ pub fn filter_auto_available(names: impl IntoIterator<Item = impl AsRef<str>>) -
         .into_iter()
         .map(|s| norm(s.as_ref()))
         .filter(|s| !is_non_auto_provider(s))
-        .filter(|s| ProviderId::parse(s).is_some() || entry_for(default_cost_catalog(), s).is_some())
+        .filter(|s| {
+            ProviderId::parse(s).is_some() || entry_for(default_cost_catalog(), s).is_some()
+        })
         .collect()
 }
 
@@ -334,7 +333,10 @@ mod tests {
         assert_eq!(role_default_tier(Some(TaskRole::Scout)), CostTier::Cheap);
         assert_eq!(role_default_tier(Some(TaskRole::Implement)), CostTier::Mid);
         assert_eq!(role_default_tier(None), CostTier::Mid);
-        assert_eq!(role_default_tier(Some(TaskRole::Inspect)), CostTier::Flagship);
+        assert_eq!(
+            role_default_tier(Some(TaskRole::Inspect)),
+            CostTier::Flagship
+        );
         assert_eq!(
             role_default_tier(Some(TaskRole::Integrate)),
             CostTier::Flagship

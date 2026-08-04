@@ -29,7 +29,9 @@ use serde::Serialize;
 use std::collections::HashMap;
 
 use crate::config::Config;
-use crate::state::project_memory::{delete_pin, upsert_pin, list_pins, MAX_PIN_KEY_CHARS, MAX_PIN_VALUE_CHARS};
+use crate::state::project_memory::{
+    delete_pin, list_pins, upsert_pin, MAX_PIN_KEY_CHARS, MAX_PIN_VALUE_CHARS,
+};
 
 /// Normalize string value (trim + truncate). Returns None if empty.
 fn normalize_value(s: &str, max_chars: usize) -> Option<String> {
@@ -109,7 +111,11 @@ pub fn get_project_persona(config: &Config, project_id: &str) -> Result<Option<P
 /// Set persona preferences for a project.
 /// All three fields can be set at once or individually via Option.
 /// Passing None for a field deletes it from storage.
-pub fn set_project_persona(config: &Config, project_id: &str, persona: &ProjectPersona) -> Result<()> {
+pub fn set_project_persona(
+    config: &Config,
+    project_id: &str,
+    persona: &ProjectPersona,
+) -> Result<()> {
     let pid = project_id.trim();
     if pid.is_empty() {
         bail!("project_id empty");

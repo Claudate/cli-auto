@@ -91,7 +91,11 @@ pub fn compose_last_summary(
 }
 
 /// Upsert last summary for a project.
-pub fn set_last_summary(config: &Config, project_id: &str, text: &str) -> Result<ProjectLastSummary> {
+pub fn set_last_summary(
+    config: &Config,
+    project_id: &str,
+    text: &str,
+) -> Result<ProjectLastSummary> {
     let pid = normalize_project_id(project_id);
     if pid.is_empty() {
         bail!("project_id empty");
@@ -266,14 +270,14 @@ pub fn format_memory_context(view: &ProjectMemoryView) -> String {
             lines.push(format!("上次摘要：{t}"));
         }
     }
-    
+
     // P0-B: Inject persona preferences from pins into prompt context
     for pin in &view.pins {
         if pin.key == "persona" && !pin.value.is_empty() {
             lines.push(format!("上次选择的角色：{}", pin.value));
         }
     }
-    
+
     if !view.pins.is_empty() {
         lines.push("项目 pin（仅上下文，勿改路由/勿自动确认）：".into());
         for p in &view.pins {
@@ -307,7 +311,11 @@ pub fn set_project_pin(config: &Config, project_id: &str, key: &str, value: &str
 }
 
 /// Get all pins for a project filtered by provided keys (or all if keys is empty).
-pub fn get_project_pins(config: &Config, project_id: &str, keys: &[&str]) -> Result<HashMap<String, String>> {
+pub fn get_project_pins(
+    config: &Config,
+    project_id: &str,
+    keys: &[&str],
+) -> Result<HashMap<String, String>> {
     let pins = list_pins(config, project_id)?;
     let mut result = HashMap::new();
 
@@ -365,10 +373,7 @@ mod tests {
         assert_eq!(got.project_id, pid);
         // overwrite
         set_last_summary(&cfg, pid, "second").unwrap();
-        assert_eq!(
-            get_last_summary(&cfg, pid).unwrap().unwrap().text,
-            "second"
-        );
+        assert_eq!(get_last_summary(&cfg, pid).unwrap().unwrap().text, "second");
     }
 
     #[test]

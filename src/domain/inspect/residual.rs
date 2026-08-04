@@ -262,7 +262,14 @@ pub fn is_residual_evidence_gap(issue: &ParsedIssue) -> bool {
     if hay_hits(&hay, RESIDUAL_HYGIENE_TOKENS) {
         // Hygiene on business src path can still be residual (commit later);
         // only demote when not a hard runtime failure signal.
-        let hard = ["panic", "compile", "tsc error", "test fail", "断言失败", "红测"];
+        let hard = [
+            "panic",
+            "compile",
+            "tsc error",
+            "test fail",
+            "断言失败",
+            "红测",
+        ];
         if hard.iter().any(|t| hay_l.contains(t) || hay.contains(t)) {
             return false;
         }

@@ -25,10 +25,6 @@ pub use classify::{
     all_blocking_are_docs_closeout, classify_kind, is_docs_closeout_issue, GapKind,
     DOCS_CLOSEOUT_PATH_HINTS,
 };
-pub use residual::{
-    demote_residual_evidence_issues, effective_blocking_count, gate_counts_after_residual_demote,
-    is_residual_evidence_gap, is_usability_blocking_issue,
-};
 pub use gate::{
     can_start_rework, count_blocking_issues, count_residual_issues, gate_candidate_paths,
     inspect_gate_fail_reason, inspect_pass_blocked, issues_candidate_paths, looks_like_issues_path,
@@ -37,6 +33,10 @@ pub use gate::{
 };
 pub use gate_doc::{parse_gate_json, InspectGateDoc, INSPECT_GATE_SCHEMA};
 pub use parse::{parse_issues_text, parse_verdict_text};
+pub use residual::{
+    demote_residual_evidence_issues, effective_blocking_count, gate_counts_after_residual_demote,
+    is_residual_evidence_gap, is_usability_blocking_issue,
+};
 pub use types::{
     InspectVerdict, IssueSeverity, ParsedIssue, INSPECT_GATE_REL, INSPECT_ISSUES_REL,
     INSPECT_VERDICT_REL, MAP_REWORK_PATH_WHITELIST, REWORK_MAX_ROUNDS,

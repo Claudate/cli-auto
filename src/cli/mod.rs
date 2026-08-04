@@ -15,7 +15,11 @@ use std::path::PathBuf;
 use crate::config::Config;
 
 #[derive(Debug, Parser)]
-#[command(name = "cco", version, about = "CLI orchestrator for agent CLIs (Claude first)")]
+#[command(
+    name = "cco",
+    version,
+    about = "CLI orchestrator for agent CLIs (Claude first)"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -144,9 +148,7 @@ pub enum Commands {
         max_budget: Option<f64>,
     },
     /// Show run status
-    Status {
-        run_id: Option<String>,
-    },
+    Status { run_id: Option<String> },
     /// Stop a run or task (kills worker pid when known)
     Stop {
         run_id: Option<String>,
@@ -154,9 +156,7 @@ pub enum Commands {
         task: Option<String>,
     },
     /// Print report.md
-    Report {
-        run_id: Option<String>,
-    },
+    Report { run_id: Option<String> },
     /// Tail / show logs
     Logs {
         run_id: Option<String>,
@@ -171,10 +171,8 @@ pub enum Commands {
         cmd: TermCommands,
     },
     /// Attach multi-page TUI to a run (or latest)
-    Tui {
-        run_id: Option<String>,
-    },
-    /// Git operations: status / remote (国内·国外) / identity / commit / push / doctor
+    Tui { run_id: Option<String> },
+    /// Git operations: status / remote / identity / commit / push / pull / fetch / diff / log / stash / branch / doctor
     Git {
         #[command(subcommand)]
         cmd: GitCommands,
@@ -241,6 +239,96 @@ pub enum GitCommands {
         #[arg(long)]
         project: Option<PathBuf>,
     },
+    /// Pull from a remote (fetch + rebase/merge)
+    Pull {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        #[arg(long)]
+        remote: Option<String>,
+        #[arg(long)]
+        branch: Option<String>,
+        /// merge | rebase | fail (default: rebase)
+        #[arg(long, default_value = "rebase")]
+        strategy: String,
+    },
+    /// Fetch from a remote
+    Fetch {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        #[arg(long)]
+        remote: Option<String>,
+        #[arg(long)]
+        prune: bool,
+    },
+    /// Show commit log
+    Log {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        /// Number of entries (default 20, max 200)
+        #[arg(long, default_value = "20")]
+        n: usize,
+        #[arg(long)]
+        oneline: bool,
+    },
+    /// Show diff of working tree
+    Diff {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        #[arg(long)]
+        staged: bool,
+        #[arg(long)]
+        stat: bool,
+        /// Changed files only
+        #[arg(long)]
+        name_only: bool,
+    },
+    /// Stash changes
+    Stash {
+        #[command(subcommand)]
+        cmd: GitStashCommands,
+    },
+    /// Manage branches (list / create / switch / delete)
+    Branch {
+        #[command(subcommand)]
+        cmd: GitBranchCommands,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum GitBranchCommands {
+    /// List local branches
+    List {
+        #[arg(long)]
+        project: Option<PathBuf>,
+    },
+    /// Create a new branch
+    Create {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        name: String,
+        #[arg(long)]
+        base: Option<String>,
+    },
+    /// Switch to a branch
+    Switch {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        name: String,
+    },
+    /// Delete a local branch
+    Delete {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        name: String,
+        #[arg(long)]
+        force: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum GitStashCommands {
+    /// List stash entries
+    List,
 }
 
 #[derive(Debug, Subcommand)]
@@ -258,9 +346,7 @@ pub enum GitRemoteCommands {
         note: Option<String>,
     },
     /// Remove a remote from config (does not touch git itself)
-    Remove {
-        name: String,
-    },
+    Remove { name: String },
     /// Apply configured remotes to the actual git repo (git remote add/set-url)
     Apply {
         #[arg(long)]
@@ -300,9 +386,7 @@ pub enum TermCommands {
         shell: bool,
     },
     /// List terminal sessions
-    List {
-        run_id: Option<String>,
-    },
+    List { run_id: Option<String> },
     /// Close a session by id
     Close {
         run_id: Option<String>,
@@ -310,7 +394,6 @@ pub enum TermCommands {
         session: String,
     },
 }
-
 
 pub async fn execute(cli: Cli) -> Result<i32> {
     let config = Config::load()?;

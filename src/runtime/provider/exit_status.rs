@@ -72,9 +72,6 @@ mod tests {
         assert_eq!(task_status_from_exit(Some(-1)), TaskStatus::Stopped);
         assert_eq!(task_status_from_exit(Some(130)), TaskStatus::Stopped);
         assert_eq!(task_status_from_exit(Some(1)), TaskStatus::Failed);
-        assert!(matches!(
-            worker_status_from_exit(-1),
-            WorkerStatus::Stopped
-        ));
+        assert!(matches!(worker_status_from_exit(-1), WorkerStatus::Stopped));
     }
 }

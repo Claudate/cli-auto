@@ -49,7 +49,11 @@ fn write_reports_includes_by_provider_and_handoff_paths() {
     std::fs::create_dir_all(run_dir.join("tasks")).unwrap();
     // Pretend mid-run handoff already exists (host ledger).
     std::fs::write(run_dir.join("handoff.md"), "# handoff\n").unwrap();
-    std::fs::write(run_dir.join("handoff.json"), r#"{"schema":"cco-handoff/v1"}"#).unwrap();
+    std::fs::write(
+        run_dir.join("handoff.json"),
+        r#"{"schema":"cco-handoff/v1"}"#,
+    )
+    .unwrap();
 
     let mut tasks = HashMap::new();
     tasks.insert("a".into(), task("claude", TaskStatus::Done, Some(0.2)));
@@ -66,6 +70,7 @@ fn write_reports_includes_by_provider_and_handoff_paths() {
         finished_at: None,
         status: RunStatus::Running,
         tasks,
+        auto_commits: vec![],
         run_dir: run_dir.clone(),
     };
     write_reports(&state).unwrap();
@@ -78,8 +83,14 @@ fn write_reports_includes_by_provider_and_handoff_paths() {
     assert!(md.contains("| claude |"), "missing claude row:\n{md}");
     assert!(md.contains("| codex |"), "missing codex row:\n{md}");
     assert!(md.contains("handoff.md"), "missing handoff.md link:\n{md}");
-    assert!(md.contains("handoff.json"), "missing handoff.json link:\n{md}");
-    assert!(md.contains("## 对照计划"), "P0-3 skeleton missing 对照计划:\n{md}");
+    assert!(
+        md.contains("handoff.json"),
+        "missing handoff.json link:\n{md}"
+    );
+    assert!(
+        md.contains("## 对照计划"),
+        "P0-3 skeleton missing 对照计划:\n{md}"
+    );
 
     let json: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(run_dir.join("report.json")).unwrap())
@@ -96,12 +107,10 @@ fn write_reports_includes_by_provider_and_handoff_paths() {
     assert_eq!(json["handoff"]["md_rel"], "handoff.md");
     assert_eq!(json["handoff"]["json_rel"], "handoff.json");
     assert_eq!(json["handoff"]["exists_md"], true);
-    assert!(
-        json["handoff"]["md"]
-            .as_str()
-            .unwrap()
-            .ends_with("handoff.md")
-    );
+    assert!(json["handoff"]["md"]
+        .as_str()
+        .unwrap()
+        .ends_with("handoff.md"));
 
     let status_txt = format_status_by_provider(&state.tasks);
     assert!(status_txt.contains("claude:"));
@@ -142,6 +151,7 @@ fn write_reports_human_headline_and_notes_sink() {
         finished_at: Some(Utc::now()),
         status: RunStatus::Completed,
         tasks,
+        auto_commits: vec![],
         run_dir: run_dir.clone(),
     };
     write_reports(&state).unwrap();
@@ -169,7 +179,10 @@ fn write_reports_human_headline_and_notes_sink() {
         md.contains("## 花费与用时"),
         "cost/elapsed section must be present:\n{md}"
     );
-    assert!(md.contains("## 备注"), "metadata must sink to ## 备注:\n{md}");
+    assert!(
+        md.contains("## 备注"),
+        "metadata must sink to ## 备注:\n{md}"
+    );
     assert!(md.contains("## 对照计划"), "P0-3 对照计划 section:\n{md}");
     assert!(md.contains("## 步骤结果"), "P0-3 步骤结果 section:\n{md}");
     assert!(md.contains("## 后续"), "P0-3 后续 section:\n{md}");
@@ -232,6 +245,7 @@ fn write_reports_fallback_without_handoff() {
         finished_at: Some(Utc::now()),
         status: RunStatus::Completed,
         tasks,
+        auto_commits: vec![],
         run_dir: run_dir.clone(),
     };
     write_reports(&state).unwrap();
@@ -359,6 +373,7 @@ fn write_reports_with_mock_inspect_fail() {
         finished_at: Some(Utc::now()),
         status: RunStatus::Failed,
         tasks,
+        auto_commits: vec![],
         run_dir: run_dir.clone(),
     };
     write_reports(&state).unwrap();

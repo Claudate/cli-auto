@@ -420,7 +420,9 @@ impl ClaudeProvider {
         let _ = std::fs::write(&stderr_path, &err);
         let _ = std::fs::write(ctx.task_dir.join("bg_spawn.stdout"), &out);
 
-        if !output.status.success() && parse_agent_id(&out).is_none() && parse_agent_id(&err).is_none()
+        if !output.status.success()
+            && parse_agent_id(&out).is_none()
+            && parse_agent_id(&err).is_none()
         {
             bail!(
                 "claude --bg failed: {} {}",
@@ -586,7 +588,10 @@ mod tests {
     #[test]
     fn opt_limit_u32_null_or_zero_omits_flag() {
         let absent = serde_json::json!({});
-        assert_eq!(ClaudeProvider::opt_limit_u32(&absent, "max_turns", 40), Some(40));
+        assert_eq!(
+            ClaudeProvider::opt_limit_u32(&absent, "max_turns", 40),
+            Some(40)
+        );
 
         let null = serde_json::json!({ "max_turns": null });
         assert_eq!(ClaudeProvider::opt_limit_u32(&null, "max_turns", 40), None);
@@ -595,7 +600,10 @@ mod tests {
         assert_eq!(ClaudeProvider::opt_limit_u32(&zero, "max_turns", 40), None);
 
         let set = serde_json::json!({ "max_turns": 8 });
-        assert_eq!(ClaudeProvider::opt_limit_u32(&set, "max_turns", 40), Some(8));
+        assert_eq!(
+            ClaudeProvider::opt_limit_u32(&set, "max_turns", 40),
+            Some(8)
+        );
     }
 
     #[test]
@@ -666,7 +674,10 @@ mod tests {
             sys.contains("Writable whitelist (scope.paths): .cco-out/inspect/**"),
             "{sys}"
         );
-        assert!(sys.contains("Extra readonly ranges (scope.readonly): src/**"), "{sys}");
+        assert!(
+            sys.contains("Extra readonly ranges (scope.readonly): src/**"),
+            "{sys}"
+        );
         assert!(sys.contains("CCO role=inspect:"), "{sys}");
         assert!(sys.contains("READ-ONLY"), "{sys}");
     }
@@ -681,4 +692,3 @@ mod tests {
         assert!(!sys.contains("CCO role=inspect:"));
     }
 }
-

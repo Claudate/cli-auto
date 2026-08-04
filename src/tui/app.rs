@@ -92,12 +92,9 @@ impl App {
     pub fn load(opts: &TuiOptions) -> Result<Self> {
         let state = run_uc::load_by_dir(&opts.run_dir)?;
         let plan = run_uc::load_resolved_plan(&opts.run_dir);
-        let tm = TerminalManager::for_run(
-            &opts.run_dir,
-            &opts.launcher,
-            opts.custom_command.clone(),
-        )
-        .with_limits(opts.max_embedded, opts.max_external);
+        let tm =
+            TerminalManager::for_run(&opts.run_dir, &opts.launcher, opts.custom_command.clone())
+                .with_limits(opts.max_embedded, opts.max_external);
         let term_sessions = tm.list().unwrap_or_default();
         let mut app = Self {
             state,
@@ -130,10 +127,7 @@ impl App {
 
     /// Open (non-closed) sessions suitable for Terminals grid panes.
     pub fn open_term_panes(&self) -> Vec<&TerminalSession> {
-        self.term_sessions
-            .iter()
-            .filter(|s| !s.closed)
-            .collect()
+        self.term_sessions.iter().filter(|s| !s.closed).collect()
     }
 
     fn clamp_term_selection(&mut self) {
@@ -264,10 +258,7 @@ impl App {
         if !stderr.exists() {
             let _ = std::fs::write(&stderr, "");
         }
-        match self
-            .tm
-            .open_follow_logs(&id, &cwd, &stdout, &stderr, kind)
-        {
+        match self.tm.open_follow_logs(&id, &cwd, &stdout, &stderr, kind) {
             Ok(s) => {
                 if let Some(ts) = self.state.tasks.get_mut(&id) {
                     ts.terminals.push(s.id.clone());
@@ -279,11 +270,7 @@ impl App {
         }
         let _ = self.reload();
         // Focus the newest open pane for this task after reload.
-        if let Some(i) = self
-            .open_term_panes()
-            .iter()
-            .rposition(|s| s.task_id == id)
-        {
+        if let Some(i) = self.open_term_panes().iter().rposition(|s| s.task_id == id) {
             self.selected_term_idx = i;
         }
         if matches!(kind, SessionKind::Embedded) {

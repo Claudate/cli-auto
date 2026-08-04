@@ -44,10 +44,10 @@ pub fn sanitize_proposed_deps(config: &Config, job_id: &str) -> Result<SanitizeD
     // Legacy: PlanIR-only jobs (pre-SoT).
     let mut ir = load_proposed(config, job_id).or_else(|_| {
         let path = job_dir(config, job_id).join("plan.resolved.json");
-        let text = std::fs::read_to_string(&path)
-            .with_context(|| format!("read {}", path.display()))?;
-        let ir: PlanIR = serde_json::from_str(&text)
-            .with_context(|| format!("parse {}", path.display()))?;
+        let text =
+            std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+        let ir: PlanIR =
+            serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
         Ok::<PlanIR, anyhow::Error>(ir)
     })?;
 

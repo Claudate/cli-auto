@@ -18,9 +18,7 @@ use super::super::handoff;
 use super::super::provider::{TaskStatus, WorkerHandle, WorkerPort, WorkerStatus};
 use super::types::{stdout_len, ProgressWatch};
 use super::Scheduler;
-use crate::domain::worker::{
-    may_budget_downgrade, role_default_tier, suggest_budget_downgrade,
-};
+use crate::domain::worker::{may_budget_downgrade, role_default_tier, suggest_budget_downgrade};
 use crate::graph::ready_tasks;
 use crate::plan::OnFailure;
 use crate::state::{RouteSource, RunState, RunStatus};
@@ -168,9 +166,8 @@ impl Scheduler {
             let st = provider.poll(handle).await?;
             match st {
                 WorkerStatus::Running => {
-                    if let Some(action) = self
-                        .patrol_stall(&id, handle, progress, stall_for)
-                        .await?
+                    if let Some(action) =
+                        self.patrol_stall(&id, handle, progress, stall_for).await?
                     {
                         let (provider, handle, work_dir) = running.remove(&id).unwrap();
                         progress.remove(&id);
@@ -239,6 +236,7 @@ impl Scheduler {
                     };
                     if reason_code == "ok" && result.status == TaskStatus::Done {
                         self.apply_result(&id, &result)?;
+                        self.auto_commit_task(&id, &result);
                         done.insert(id.clone());
                         info!(task = %id, cost = ?result.cost_usd, "task done");
                         self.state.event(
@@ -467,6 +465,7 @@ impl Scheduler {
                         }
                         if result.status == TaskStatus::Done {
                             self.apply_result(&id, &result)?;
+                            self.auto_commit_task(&id, &result);
                             done.insert(id.clone());
                             self.state.event(
                                 "task_end",

@@ -68,7 +68,6 @@ pub const IMPLEMENT_USABILITY_SYSTEM_PROMPT: &str = "CCO role=implement-usabilit
 5. Do not weaken behavior or plant fake data just to pass acceptance.\n\
 6. Missing assets: search/download from a citable stock library (Unsplash/Pexels/Pixabay) or generate and save under the plan path, then update references. Do not pass \"real-feel product/hero photos\" with only geometric SVG illustrations, and do not rewrite the success criterion to \"no placehold host\" alone.";
 
-
 /// Fixed id for host-injected Ensure closeout task (E1).
 pub const SYS_CLOSEOUT_ID: &str = "sys-closeout";
 /// Marker injected into closeout `append_system_prompt` (idempotent).
@@ -86,8 +85,14 @@ pub const CLOSEOUT_DEFAULT_WRITE_SCOPE: &[&str] = &[
     "tests/**/README*",
 ];
 /// Hard forbid for closeout (business source).
-pub const CLOSEOUT_DEFAULT_FORBID: &[&str] =
-    &["**/src/**", "src/**", "src-tauri/**", "web/js/**", "web/css/**", "crates/**"];
+pub const CLOSEOUT_DEFAULT_FORBID: &[&str] = &[
+    "**/src/**",
+    "src/**",
+    "src-tauri/**",
+    "web/js/**",
+    "web/css/**",
+    "crates/**",
+];
 
 /// Marker injected when task tags include `browser` (idempotent).
 /// Host only injects when `config.browser.enabled` (see browser-automation-cco.md).
@@ -152,13 +157,11 @@ pub fn parse_role_input(raw: &str) -> Result<Option<TaskRole>, String> {
     {
         return Ok(None);
     }
-    TaskRole::parse(s)
-        .map(Some)
-        .ok_or_else(|| {
-            format!(
-                "不支持的角色: {s}（可选 scout / implement / integrate / inspect / closeout，或留空）"
-            )
-        })
+    TaskRole::parse(s).map(Some).ok_or_else(|| {
+        format!(
+            "不支持的角色: {s}（可选 scout / implement / integrate / inspect / closeout，或留空）"
+        )
+    })
 }
 
 #[cfg(test)]
@@ -307,4 +310,3 @@ impl Default for OnFailure {
         Self::Pause
     }
 }
-

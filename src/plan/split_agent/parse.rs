@@ -183,11 +183,7 @@ struct AgentTask {
     #[serde(default)]
     can_parallel: Option<bool>,
     /// File ownership for parallel waves (Q2).
-    #[serde(
-        default,
-        alias = "scope",
-        deserialize_with = "deserialize_string_vec"
-    )]
+    #[serde(default, alias = "scope", deserialize_with = "deserialize_string_vec")]
     scope_paths: Vec<String>,
 }
 
@@ -240,8 +236,7 @@ fn normalize_scope_paths(raw: Vec<String>) -> Vec<String> {
 /// Parse agent text into a soft-accepted CcoSplitJob.
 pub fn parse_agent_output(raw: &str, req: &SplitRequest) -> Result<CcoSplitJob> {
     let json = extract_json_object(raw)?;
-    let doc: AgentDoc =
-        serde_json::from_str(&json).with_context(|| "解析 cco-split JSON 失败")?;
+    let doc: AgentDoc = serde_json::from_str(&json).with_context(|| "解析 cco-split JSON 失败")?;
 
     if let Some(s) = doc.schema.as_deref() {
         let s = s.trim();
@@ -266,18 +261,14 @@ pub fn parse_agent_output(raw: &str, req: &SplitRequest) -> Result<CcoSplitJob> 
                 .unwrap_or("plan")
                 .to_string()
         });
-    let max_parallel = doc
-        .max_parallel
-        .unwrap_or(req.max_parallel)
-        .clamp(1, 32);
+    let max_parallel = doc.max_parallel.unwrap_or(req.max_parallel).clamp(1, 32);
 
     let mut tasks = Vec::with_capacity(doc.tasks.len());
     for (i, t) in doc.tasks.into_iter().enumerate() {
-        let task_id = t
-            .id
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| format!("t{}", i + 1));
+        let task_id =
+            t.id.map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| format!("t{}", i + 1));
         let title = t
             .title
             .map(|s| s.trim().to_string())
@@ -311,11 +302,7 @@ pub fn parse_agent_output(raw: &str, req: &SplitRequest) -> Result<CcoSplitJob> 
         let summary = if summary.is_empty()
             || crate::domain::plan::cco_split::is_worker_noise_line(&summary)
         {
-            crate::domain::plan::cco_split::human_summary(
-                &title,
-                &body,
-                t.done_when.as_deref(),
-            )
+            crate::domain::plan::cco_split::human_summary(&title, &body, t.done_when.as_deref())
         } else {
             summary
         };
@@ -385,7 +372,7 @@ mod tests {
             created_at: "t0".into(),
             updated_at: "t0".into(),
             grain_hint: None,
-            clarify_depth: None,  // new
+            clarify_depth: None, // new
             revision_notes: None,
             effort: None,
         }
@@ -499,7 +486,10 @@ Here is the plan:
         let raw = std::fs::read_to_string(path).expect("fixture");
         let job = parse_agent_output(&raw, &req()).unwrap();
         assert_eq!(job.tasks.len(), 4);
-        assert!(job.tasks[0].scope_paths.iter().any(|p| p.contains("result")));
+        assert!(job.tasks[0]
+            .scope_paths
+            .iter()
+            .any(|p| p.contains("result")));
         assert!(job.tasks[0].depends_on.is_empty());
         assert!(job.tasks[1].depends_on.is_empty());
         // t1∥t2 → wave 0 both; t3 waits t2
@@ -531,11 +521,7 @@ Here is the plan:
         let b1 = job.tasks.iter().find(|t| t.task_id == "b1").unwrap();
         assert!(a4.depends_on.iter().any(|d| d == "a3"));
         for t in [&a1, &a2, &a3, &a4, &a5, &b1] {
-            assert!(
-                !t.scope_paths.is_empty(),
-                "{} scope_paths empty",
-                t.task_id
-            );
+            assert!(!t.scope_paths.is_empty(), "{} scope_paths empty", t.task_id);
         }
         // W1-4: independent work packages must not chain each other.
         // (a1 may serialize with a4 via shared index.html — a4 is outside this set.)
@@ -554,7 +540,12 @@ Here is the plan:
             }
         }
         // a4 wave after a3
-        assert!(a4.wave > a3.wave, "a4 wave {} must be after a3 {}", a4.wave, a3.wave);
+        assert!(
+            a4.wave > a3.wave,
+            "a4 wave {} must be after a3 {}",
+            a4.wave,
+            a3.wave
+        );
         // body keeps work-order labels (no worker scaffold on golden)
         assert!(a1.body.contains("【做什么】") || a1.body.contains("去掉顶栏"));
     }
@@ -602,10 +593,7 @@ Here is the plan:
             "collapsed bar path, got {paths:?}"
         );
         // ../secrets escapes → dropped; foo.js deduped
-        assert_eq!(
-            paths.iter().filter(|p| *p == "web/js/foo.js").count(),
-            1
-        );
+        assert_eq!(paths.iter().filter(|p| *p == "web/js/foo.js").count(), 1);
         assert!(!paths.iter().any(|p| p.contains("secrets")));
     }
 

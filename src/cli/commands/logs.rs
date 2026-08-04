@@ -12,7 +12,12 @@ use anyhow::{bail, Result};
 use crate::config::Config;
 use crate::state;
 
-pub async fn run(config: &Config, run_id: Option<String>, task: Option<String>, follow: bool) -> Result<i32> {
+pub async fn run(
+    config: &Config,
+    run_id: Option<String>,
+    task: Option<String>,
+    follow: bool,
+) -> Result<i32> {
     let dir = state::resolve_run_dir(&config.runs_dir(), run_id.as_deref())?;
     if let Some(task) = task {
         let p = dir.join("tasks").join(&task).join("stdout.json");
@@ -28,9 +33,7 @@ pub async fn run(config: &Config, run_id: Option<String>, task: Option<String>, 
                     if text.len() < last_len {
                         last_len = 0;
                     }
-                    let from = crate::runtime::log_events::floor_char_boundary(
-                        &text, last_len,
-                    );
+                    let from = crate::runtime::log_events::floor_char_boundary(&text, last_len);
                     if text.len() > from {
                         print!("{}", &text[from..]);
                         last_len = text.len();

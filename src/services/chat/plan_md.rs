@@ -77,7 +77,9 @@ pub fn chat_save_plan(
         let dir_rel = dir_rel.trim_matches('/').trim_matches('\\');
         let plans_path = project.join(dir_rel);
         // Ensure under project
-        let project_canon = project.canonicalize().unwrap_or_else(|_| project.to_path_buf());
+        let project_canon = project
+            .canonicalize()
+            .unwrap_or_else(|_| project.to_path_buf());
         if let Ok(pc) = plans_path.canonicalize() {
             if !pc.starts_with(&project_canon) {
                 bail!("plans_dir escapes project root");
@@ -199,7 +201,9 @@ pub fn chat_save_wave_bundle(
     let wave_name = format!("wave-{stamp}");
     let wave_rel = format!("{}/{}", dir_rel.replace('\\', "/"), wave_name);
     let wave_abs = project.join(dir_rel).join(&wave_name);
-    let project_canon = project.canonicalize().unwrap_or_else(|_| project.to_path_buf());
+    let project_canon = project
+        .canonicalize()
+        .unwrap_or_else(|_| project.to_path_buf());
     if let Ok(pc) = wave_abs.canonicalize() {
         if !pc.starts_with(&project_canon) {
             bail!("wave dir escapes project root");
@@ -238,13 +242,9 @@ pub fn chat_save_wave_bundle(
         .cloned()
         .or_else(|| index_rel.clone())
         .unwrap_or_else(|| wave_rel.clone());
-    let primary_md = plans
-        .first()
-        .cloned()
-        .or(index_body)
-        .unwrap_or_default();
-    let primary_title = extract_title_from_md(&primary_md)
-        .or_else(|| Some(format!("本波 {stamp}")));
+    let primary_md = plans.first().cloned().or(index_body).unwrap_or_default();
+    let primary_title =
+        extract_title_from_md(&primary_md).or_else(|| Some(format!("本波 {stamp}")));
     sess.draft_plan = Some(ChatDraftPlan {
         path: primary,
         title: primary_title,

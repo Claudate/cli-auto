@@ -96,7 +96,12 @@ pub fn build_host_checklist(plan: &PlanIR, plan_md: Option<&str>) -> HostCheckli
         {
             continue;
         }
-        if let Some(acc) = t.acceptance.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(acc) = t
+            .acceptance
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             let key = acc.to_ascii_lowercase();
             if seen_text.insert(key) {
                 let kind = classify_checklist_text(acc);
@@ -104,14 +109,14 @@ pub fn build_host_checklist(plan: &PlanIR, plan_md: Option<&str>) -> HostCheckli
                     plan_ref: t.id.clone(),
                     text: acc.to_string(),
                     owner_task_id: Some(t.id.clone()),
-                    evidence_hint: t
-                        .verify_cmd
-                        .clone()
-                        .or_else(|| t.outputs.first().cloned()),
+                    evidence_hint: t.verify_cmd.clone().or_else(|| t.outputs.first().cloned()),
                     kind,
                 });
             }
-        } else if items.iter().all(|it| it.owner_task_id.as_deref() != Some(&t.id)) {
+        } else if items
+            .iter()
+            .all(|it| it.owner_task_id.as_deref() != Some(&t.id))
+        {
             // Title as weak feature row so every business task has a plan_ref owner.
             let text = t.title.trim();
             if !text.is_empty() {
@@ -121,10 +126,7 @@ pub fn build_host_checklist(plan: &PlanIR, plan_md: Option<&str>) -> HostCheckli
                         plan_ref: t.id.clone(),
                         text: text.to_string(),
                         owner_task_id: Some(t.id.clone()),
-                        evidence_hint: t
-                            .verify_cmd
-                            .clone()
-                            .or_else(|| t.outputs.first().cloned()),
+                        evidence_hint: t.verify_cmd.clone().or_else(|| t.outputs.first().cloned()),
                         kind: ChecklistKind::Feature,
                     });
                 }
@@ -296,7 +298,12 @@ mod tests {
     #[test]
     fn ledger_rows_unowned_until_assign() {
         let ir = plan(vec![
-            task("t1", "实现 API", Some(TaskRole::Implement), Some("API 可调用")),
+            task(
+                "t1",
+                "实现 API",
+                Some(TaskRole::Implement),
+                Some("API 可调用"),
+            ),
             task("t7", "巡检", Some(TaskRole::Inspect), None),
         ]);
         let md = "## 成功标准\n- [ ] P0-1 功能 smoke 绿\n- [ ] 台账 §9 回写完成\n";

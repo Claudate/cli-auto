@@ -262,10 +262,7 @@ fn spawn_and_wait(project: &Path, cmd: &PreviewCmd) -> Result<PreviewStatus> {
         .rev()
         .find_map(|l| l.trim().parse().ok())
         .ok_or_else(|| {
-            anyhow::anyhow!(
-                "启动失败：未能取得后台 pid（stdout={}）",
-                pid_str.trim()
-            )
+            anyhow::anyhow!("启动失败：未能取得后台 pid（stdout={}）", pid_str.trim())
         })?;
 
     let st = PreviewState {
@@ -605,11 +602,7 @@ mod tests {
         )
         .unwrap();
         let st = preview_start(dir.path()).expect("start");
-        assert!(
-            st.running && st.error.is_none(),
-            "start failed: {:?}",
-            st
-        );
+        assert!(st.running && st.error.is_none(), "start failed: {:?}", st);
         let url = st.url.expect("url");
         assert!(
             http_ready(&url),

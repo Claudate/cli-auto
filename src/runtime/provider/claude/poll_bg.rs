@@ -101,7 +101,6 @@ pub(crate) fn parse_json_lenient(text: &str) -> Result<serde_json::Value> {
     bail!("invalid agents json")
 }
 
-
 pub(crate) fn find_agent_state(v: &serde_json::Value, agent_id: &str) -> Option<String> {
     let arr = if let Some(a) = v.as_array() {
         a.clone()
@@ -121,10 +120,7 @@ pub(crate) fn find_agent_state(v: &serde_json::Value, agent_id: &str) -> Option<
             .and_then(|x| x.as_str())
             .unwrap_or("");
         // also match sessionId uuid prefix
-        let session_id = item
-            .get("sessionId")
-            .and_then(|x| x.as_str())
-            .unwrap_or("");
+        let session_id = item.get("sessionId").and_then(|x| x.as_str()).unwrap_or("");
         let matched = id == agent_id
             || (!id.is_empty() && (id.starts_with(agent_id) || agent_id.starts_with(id)))
             || session_id.starts_with(agent_id)
@@ -164,5 +160,3 @@ pub(crate) unsafe fn libc_kill(pid: i32, sig: i32) -> i32 {
     }
     kill(pid, sig)
 }
-
-

@@ -10,7 +10,7 @@
 mod fallback;
 
 pub use fallback::{
-    build_plan_compare, fill_plan_compare, format_elapsed_human, follow_up_lines,
+    build_plan_compare, fill_plan_compare, follow_up_lines, format_elapsed_human,
     load_plan_resolved, render_plan_compare_md, PlanCompareKind, PlanCompareSection,
 };
 
@@ -336,12 +336,18 @@ pub fn write_reports(state: &RunState) -> Result<()> {
         state.project_root.display()
     ));
     md.push_str(&format!("- **plan**: `{}`\n", state.plan_path.display()));
-    md.push_str(&format!("- **started**: {}\n", state.started_at.to_rfc3339()));
+    md.push_str(&format!(
+        "- **started**: {}\n",
+        state.started_at.to_rfc3339()
+    ));
     if let Some(f) = state.finished_at {
         md.push_str(&format!("- **finished**: {}\n", f.to_rfc3339()));
     }
     md.push_str(&format!("- **run dir**: `{}`\n", state.run_dir.display()));
-    md.push_str(&format!("- **events**: `{}`\n", state.events_path().display()));
+    md.push_str(&format!(
+        "- **events**: `{}`\n",
+        state.events_path().display()
+    ));
     md.push_str(&format!(
         "- handoff.md: [`{}`]({})\n",
         handoff.md_rel, handoff.md_rel

@@ -10,7 +10,11 @@ use std::collections::{HashMap, HashSet};
 use crate::plan::PlanIR;
 
 /// Task ids with all dependencies in `done`.
-pub fn ready_tasks(plan: &PlanIR, done: &HashSet<String>, started: &HashSet<String>) -> Vec<String> {
+pub fn ready_tasks(
+    plan: &PlanIR,
+    done: &HashSet<String>,
+    started: &HashSet<String>,
+) -> Vec<String> {
     let mut ready = Vec::new();
     for t in &plan.tasks {
         if done.contains(&t.id) || started.contains(&t.id) {
@@ -105,7 +109,10 @@ pub fn format_mermaid(plan: &PlanIR) -> String {
     out.push_str("```mermaid\n");
     out.push_str("flowchart TD\n");
     let safe_name = mermaid_escape(&plan.name);
-    out.push_str(&format!("  %% plan: {safe_name} · adapter: {}\n", plan.adapter));
+    out.push_str(&format!(
+        "  %% plan: {safe_name} · adapter: {}\n",
+        plan.adapter
+    ));
     for t in &plan.tasks {
         let nid = mermaid_node_id(&t.id);
         let title = short_label(&t.title, 40);
@@ -207,12 +214,7 @@ mod tests {
             require_inspect: false,
             tasks: vec![
                 task("t1", "First", "fake", vec![]),
-                task(
-                    "t2",
-                    "Second with \"quotes\"",
-                    "claude",
-                    vec!["t1".into()],
-                ),
+                task("t2", "Second with \"quotes\"", "claude", vec!["t1".into()]),
             ],
         }
     }

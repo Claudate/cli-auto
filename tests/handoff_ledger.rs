@@ -144,7 +144,10 @@ tasks:
     std::fs::create_dir_all(config.runs_dir()).unwrap();
 
     let ir = load_plan(&project, &plan_path, Some("cco-plan/v1"), &config).unwrap();
-    assert_eq!(ir.tasks[0].outputs, vec![".cco-out/a/SUMMARY.md".to_string()]);
+    assert_eq!(
+        ir.tasks[0].outputs,
+        vec![".cco-out/a/SUMMARY.md".to_string()]
+    );
 
     let run_id = state::new_run_id();
     let run_dir = state::prepare_run_dir(&config.runs_dir(), &run_id).unwrap();
@@ -159,7 +162,10 @@ tasks:
     let status = make_scheduler(ir, run_state, registry).run().await.unwrap();
     // a fails (missing outputs); b depends on a → skipped under continue
     assert!(
-        matches!(status, RunStatus::Failed | RunStatus::Paused | RunStatus::Completed),
+        matches!(
+            status,
+            RunStatus::Failed | RunStatus::Paused | RunStatus::Completed
+        ),
         "status={status:?}"
     );
 
@@ -177,7 +183,9 @@ tasks:
     assert!(h.fragments.contains_key("a"));
     assert_eq!(h.fragments["a"].status, "failed");
     assert!(
-        h.open_risks.iter().any(|r| r.contains("a") || r.contains("missing")),
+        h.open_risks
+            .iter()
+            .any(|r| r.contains("a") || r.contains("missing")),
         "open_risks={:?}",
         h.open_risks
     );
@@ -240,7 +248,10 @@ tasks:
 
     let h = Handoff::load(&run_dir).unwrap();
     assert_eq!(h.board.iter().find(|r| r.id == "a").unwrap().status, "done");
-    assert!(h.fragments["a"].artifacts.iter().any(|a| a.contains("SUMMARY")));
+    assert!(h.fragments["a"]
+        .artifacts
+        .iter()
+        .any(|a| a.contains("SUMMARY")));
     assert!(
         h.fragments["a"].summary.contains("a done") || !h.fragments["a"].summary.is_empty(),
         "summary={:?}",
@@ -316,7 +327,11 @@ tasks:
     let registry = ProviderRegistry::from_config(&config).unwrap();
 
     let status = make_scheduler(ir, run_state, registry).run().await.unwrap();
-    assert_eq!(status, RunStatus::Paused, "VERDICT=FAIL must pause under on_failure=pause");
+    assert_eq!(
+        status,
+        RunStatus::Paused,
+        "VERDICT=FAIL must pause under on_failure=pause"
+    );
 
     let st = RunState::load(&run_dir).unwrap();
     assert_eq!(st.tasks["implement"].status, TaskStatus::Done);
@@ -362,7 +377,11 @@ async fn inspect_verdict_pass_completes() {
     let project = tmp.path().join("proj");
     std::fs::create_dir_all(project.join("docs/plans")).unwrap();
     std::fs::create_dir_all(project.join(".cco-out/inspect")).unwrap();
-    std::fs::write(project.join(".cco-out/inspect/VERDICT.md"), "PASS\nall good\n").unwrap();
+    std::fs::write(
+        project.join(".cco-out/inspect/VERDICT.md"),
+        "PASS\nall good\n",
+    )
+    .unwrap();
     std::fs::write(project.join(".cco-out/inspect/ISSUES.md"), "无\n").unwrap();
 
     let plan_path = project.join("docs/plans/inspect-pass.cco.yaml");

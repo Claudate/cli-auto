@@ -116,8 +116,8 @@ impl Handoff {
 
     pub fn load(run_dir: &Path) -> Result<Self> {
         let path = Self::path_json(run_dir);
-        let text = std::fs::read_to_string(&path)
-            .with_context(|| format!("read {}", path.display()))?;
+        let text =
+            std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
         Ok(serde_json::from_str(&text)?)
     }
 
@@ -281,12 +281,7 @@ pub(super) fn scope_summary(task: &TaskIR) -> String {
     parts.join(" ")
 }
 
-fn board_row_from_task(
-    task: &TaskIR,
-    status: &str,
-    cost: Option<f64>,
-    notes: String,
-) -> BoardRow {
+fn board_row_from_task(task: &TaskIR, status: &str, cost: Option<f64>, notes: String) -> BoardRow {
     BoardRow {
         id: task.id.clone(),
         provider: task.provider.clone(),

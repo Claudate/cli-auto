@@ -159,6 +159,7 @@ mod tests {
                     route_source: None,
                     route_previous: None,
                     route_note: None,
+                    auto_commit: None,
                 },
             );
         }
@@ -172,6 +173,7 @@ mod tests {
             started_at: Utc::now(),
             finished_at: None,
             tasks: map,
+            auto_commits: vec![],
             run_dir: PathBuf::from("/tmp/r1"),
         }
     }

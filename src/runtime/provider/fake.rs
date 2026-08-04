@@ -102,10 +102,7 @@ impl WorkerProvider for FakeProvider {
     }
 
     async fn preflight(&self) -> Result<()> {
-        if which::which(&self.bin).is_err()
-            && self.bin != "inline"
-            && self.bin != "fake-inline"
-        {
+        if which::which(&self.bin).is_err() && self.bin != "inline" && self.bin != "fake-inline" {
             tracing::debug!(bin = %self.bin, "fake bin not in PATH; will use inline stub");
         }
         Ok(())
@@ -155,9 +152,8 @@ impl WorkerProvider for FakeProvider {
         let stop_now = task.prompt.contains("CCO_FAKE_STOP");
         let prior_fail = ctx.task_dir.join("attempt-1.stdout.json").exists()
             || ctx.task_dir.join("attempt-1.meta.json").exists();
-        let inlineish = self.bin == "inline"
-            || self.bin == "fake-inline"
-            || which::which(&self.bin).is_err();
+        let inlineish =
+            self.bin == "inline" || self.bin == "fake-inline" || which::which(&self.bin).is_err();
 
         if hang_until_failover && inlineish {
             // Hang only under the original house ("claude"); after H4 switches to "codex", succeed.
@@ -383,7 +379,7 @@ mod tests {
             role: None,
             scope: None,
             outputs: vec![],
-        tags: vec![],
+            tags: vec![],
         }
     }
 

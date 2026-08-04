@@ -39,9 +39,19 @@ impl IntentHint {
 }
 
 /// Tags that force hard (case-insensitive).
-const HARD_TAGS: &[&str] = &["hard", "arch", "architecture", "critical", "complex", "难", "架构"];
+const HARD_TAGS: &[&str] = &[
+    "hard",
+    "arch",
+    "architecture",
+    "critical",
+    "complex",
+    "难",
+    "架构",
+];
 /// Tags that force trivial.
-const TRIVIAL_TAGS: &[&str] = &["simple", "trivial", "docs", "chore", "typo", "easy", "简单", "文案"];
+const TRIVIAL_TAGS: &[&str] = &[
+    "simple", "trivial", "docs", "chore", "typo", "easy", "简单", "文案",
+];
 
 /// Substrings → hard (EN + CJK). Checked in title+prompt lowercased.
 const HARD_NEEDLES: &[&str] = &[
@@ -242,8 +252,7 @@ mod tests {
             kind: IntentKind::Trivial,
             reason: "typo".into(),
         };
-        let (t, note) =
-            apply_intent_to_tier(Some(TaskRole::Inspect), CostTier::Flagship, &hint);
+        let (t, note) = apply_intent_to_tier(Some(TaskRole::Inspect), CostTier::Flagship, &hint);
         assert_eq!(t, CostTier::Flagship);
         assert!(note.is_none());
     }
@@ -254,8 +263,7 @@ mod tests {
             kind: IntentKind::Hard,
             reason: "架构".into(),
         };
-        let (t, note) =
-            apply_intent_to_tier(Some(TaskRole::Implement), CostTier::Mid, &hint);
+        let (t, note) = apply_intent_to_tier(Some(TaskRole::Implement), CostTier::Mid, &hint);
         assert_eq!(t, CostTier::Flagship);
         assert!(note.unwrap().contains("偏难"));
     }
@@ -266,8 +274,7 @@ mod tests {
             kind: IntentKind::Trivial,
             reason: "typo".into(),
         };
-        let (t, note) =
-            apply_intent_to_tier(Some(TaskRole::Implement), CostTier::Mid, &hint);
+        let (t, note) = apply_intent_to_tier(Some(TaskRole::Implement), CostTier::Mid, &hint);
         assert_eq!(t, CostTier::Cheap);
         assert!(note.unwrap().contains("偏简"));
     }

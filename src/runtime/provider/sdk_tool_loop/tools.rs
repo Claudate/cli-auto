@@ -160,17 +160,13 @@ pub fn run_tool(name: &str, input: &Value, work_dir: &Path) -> Result<String> {
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .trim();
-            let content = input
-                .get("content")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let content = input.get("content").and_then(|v| v.as_str()).unwrap_or("");
             let full = resolve_under(work_dir, path)?;
             if let Some(parent) = full.parent() {
                 std::fs::create_dir_all(parent)
                     .map_err(|e| anyhow!("mkdir {}: {e}", parent.display()))?;
             }
-            std::fs::write(&full, content)
-                .map_err(|e| anyhow!("write {}: {e}", full.display()))?;
+            std::fs::write(&full, content).map_err(|e| anyhow!("write {}: {e}", full.display()))?;
             Ok(format!("wrote {} bytes to {path}", content.len()))
         }
         other => bail!("unknown tool: {other}"),

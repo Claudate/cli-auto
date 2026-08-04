@@ -30,10 +30,7 @@ pub(super) fn build_fake_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
         let dep_note = if deps.is_empty() {
             String::new()
         } else {
-            format!(
-                "\n依赖原因：等待产物来自 {}\n",
-                deps.join("、")
-            )
+            format!("\n依赖原因：等待产物来自 {}\n", deps.join("、"))
         };
         TaskIR {
             id: id.into(),
@@ -126,8 +123,8 @@ pub(super) fn build_fake_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
 /// Split markdown-ish text into tasks by `##` / `###` headings; sequential deps.
 pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
     let abs = crate::plan::resolve_plan_path(&job.project, &job.plan_path)?;
-    let raw = std::fs::read_to_string(&abs)
-        .with_context(|| format!("read plan {}", abs.display()))?;
+    let raw =
+        std::fs::read_to_string(&abs).with_context(|| format!("read plan {}", abs.display()))?;
     // Always drop prior split-summary write-back before any path — bare `### 波次 1`
     // junk must never compete with real #### P0-1 / A1 work packages.
     let text = strip_cco_split_summary_region(&raw);
@@ -417,8 +414,8 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
     }
 
     // P-loop L1: spec work-order / inspect tail → require_inspect so Unknown≡FAIL.
-    let require_inspect = last_is_inspect
-        || tasks.iter().any(|t| t.role == Some(TaskRole::Inspect));
+    let require_inspect =
+        last_is_inspect || tasks.iter().any(|t| t.role == Some(TaskRole::Inspect));
 
     let mut ir = PlanIR {
         schema: "cco-plan/v1".into(),
@@ -458,11 +455,7 @@ pub(super) fn split_sections_level(text: &str, include_h3: bool) -> Vec<(String,
             trimmed
                 .strip_prefix("### ")
                 .map(|r| r.trim().to_string())
-                .or_else(|| {
-                    trimmed
-                        .strip_prefix("## ")
-                        .map(|r| r.trim().to_string())
-                })
+                .or_else(|| trimmed.strip_prefix("## ").map(|r| r.trim().to_string()))
         } else {
             trimmed
                 .strip_prefix("## ")
@@ -542,7 +535,10 @@ pub(super) fn looks_like_spec_document(text: &str) -> bool {
         }
     }
     // Many ## headings + long body → catalog-like
-    let h2 = text.lines().filter(|l| l.trim_start().starts_with("## ")).count();
+    let h2 = text
+        .lines()
+        .filter(|l| l.trim_start().starts_with("## "))
+        .count();
     if h2 >= 8 {
         score += 2;
     }
@@ -610,7 +606,11 @@ fn diagnose_phase_extraction_miss(text: &str, leftover_heading_sections: usize) 
         bits.push(format!(
             "{} phase-like title(s) present but not selected: {}",
             phase_like.len(),
-            phase_like.into_iter().take(4).collect::<Vec<_>>().join(" · ")
+            phase_like
+                .into_iter()
+                .take(4)
+                .collect::<Vec<_>>()
+                .join(" · ")
         ));
     }
     if wave_like.is_empty() {
@@ -619,7 +619,11 @@ fn diagnose_phase_extraction_miss(text: &str, leftover_heading_sections: usize) 
         bits.push(format!(
             "{} wave-like title(s): {}",
             wave_like.len(),
-            wave_like.into_iter().take(3).collect::<Vec<_>>().join(" · ")
+            wave_like
+                .into_iter()
+                .take(3)
+                .collect::<Vec<_>>()
+                .join(" · ")
         ));
     }
     if non_meta_n > 0 {
@@ -681,10 +685,7 @@ fn section_body_looks_actionable(body: &str) -> bool {
     }
     // Pipe-heavy tables alone (Board / 勾选表) are not work packages.
     let lines: Vec<&str> = b.lines().filter(|l| !l.trim().is_empty()).collect();
-    let pipe_lines = lines
-        .iter()
-        .filter(|l| l.matches('|').count() >= 2)
-        .count();
+    let pipe_lines = lines.iter().filter(|l| l.matches('|').count() >= 2).count();
     if !lines.is_empty() && pipe_lines * 2 >= lines.len() {
         return false;
     }
@@ -1084,7 +1085,10 @@ fn regex_is_work_window(title: &str) -> bool {
         if is_w && chars[i + 1].is_ascii_digit() {
             let prev_ok = i == 0
                 || chars[i - 1].is_whitespace()
-                || matches!(chars[i - 1], '·' | '•' | '—' | '-' | '/' | '|' | '（' | '(' | '【' | '[');
+                || matches!(
+                    chars[i - 1],
+                    '·' | '•' | '—' | '-' | '/' | '|' | '（' | '(' | '【' | '['
+                );
             if prev_ok {
                 // consume digits
                 let mut j = i + 1;
@@ -1096,7 +1100,19 @@ fn regex_is_work_window(title: &str) -> bool {
                     || chars[j].is_whitespace()
                     || matches!(
                         chars[j],
-                        '·' | '•' | '—' | '-' | '/' | '|' | '）' | ')' | '】' | ']' | '：' | ':' | '，' | ','
+                        '·' | '•'
+                            | '—'
+                            | '-'
+                            | '/'
+                            | '|'
+                            | '）'
+                            | ')'
+                            | '】'
+                            | ']'
+                            | '：'
+                            | ':'
+                            | '，'
+                            | ','
                     )
                     || !chars[j].is_ascii_alphabetic();
                 if next_ok {
@@ -1124,9 +1140,7 @@ fn trim_phase_bodies(mut sections: Vec<(String, String)>) -> Vec<(String, String
     for (_, body) in sections.iter_mut() {
         if body.chars().count() > MAX_CHARS {
             let clipped: String = body.chars().take(MAX_CHARS).collect();
-            *body = format!(
-                "{clipped}\n\n…（正文已截断；请读计划全文对应章节，勿只依赖摘录）"
-            );
+            *body = format!("{clipped}\n\n…（正文已截断；请读计划全文对应章节，勿只依赖摘录）");
         }
         // Prepend a short host contract so workers implement the phase, not re-plan.
         let contract = "\

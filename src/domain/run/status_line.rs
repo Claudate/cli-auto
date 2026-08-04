@@ -101,10 +101,7 @@ pub fn resolve_status_one_liner(
 /// Project from run snapshot only.
 pub fn from_run(run_status: &str, tasks: &[TaskStatusSnap], stall_any: bool) -> StatusOneLiner {
     let total = tasks.len() as u32;
-    let done = tasks
-        .iter()
-        .filter(|t| t.status == "done")
-        .count() as u32;
+    let done = tasks.iter().filter(|t| t.status == "done").count() as u32;
     let current = tasks
         .iter()
         .find(|t| matches!(t.status.as_str(), "running" | "starting" | "queued"))
@@ -239,13 +236,7 @@ pub fn from_plan_job(job: &PlanJobSnap) -> StatusOneLiner {
 fn is_active_run(status: &str) -> bool {
     matches!(
         status,
-        "init"
-            | "validated"
-            | "running"
-            | "paused"
-            | "starting"
-            | "queued"
-            | "resuming"
+        "init" | "validated" | "running" | "paused" | "starting" | "queued" | "resuming"
     )
 }
 

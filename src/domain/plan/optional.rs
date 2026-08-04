@@ -136,9 +136,11 @@ pub fn title_is_meta_heading(title: &str) -> bool {
     }
     // "…（按需）" / "…(按需)" stage banners without a work verb
     if (lower.contains("按需") || lower.contains("可选增强"))
-        && !["实现", "落地", "修复", "新增", "编写", "接入", "改造", "测试", "验收"]
-            .iter()
-            .any(|c| lower.contains(c))
+        && ![
+            "实现", "落地", "修复", "新增", "编写", "接入", "改造", "测试", "验收",
+        ]
+        .iter()
+        .any(|c| lower.contains(c))
     {
         return true;
     }
@@ -223,7 +225,10 @@ fn looks_like_numbered_catalog_title(lower: &str) -> bool {
     // "0. 一句话" / "8. 非目标" / "10. 成功标准"
     let rest = if let Some(r) = t.strip_prefix(|c: char| c.is_ascii_digit()) {
         let r = r.trim_start_matches(|c: char| c.is_ascii_digit());
-        r.strip_prefix('.').or_else(|| r.strip_prefix('、')).unwrap_or(r).trim()
+        r.strip_prefix('.')
+            .or_else(|| r.strip_prefix('、'))
+            .unwrap_or(r)
+            .trim()
     } else {
         return false;
     };
@@ -255,7 +260,9 @@ fn looks_like_numbered_catalog_title(lower: &str) -> bool {
         "决策树",
         "决策默认",
     ];
-    CATALOG.iter().any(|c| rest.starts_with(c) || rest.contains(c))
+    CATALOG
+        .iter()
+        .any(|c| rest.starts_with(c) || rest.contains(c))
 }
 
 fn is_stage_catalog_title(lower: &str) -> bool {
@@ -295,4 +302,3 @@ fn is_stage_catalog_title(lower: &str) -> bool {
     // Short stage banners: "p0 — 协议与示例（文档 / 示例为主）"
     true
 }
-

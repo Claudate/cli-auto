@@ -115,8 +115,15 @@ pub fn events_to_plain(events: &[LogEvent]) -> String {
 
 /// 从全文抽一行错误摘要。
 pub fn error_summary_from(events: &[LogEvent], fallback: Option<&str>) -> Option<String> {
-    if let Some(e) = events.iter().rev().find(|e| e.level == "error" || e.kind == "error") {
-        return Some(truncate(&format!("{}: {}", e.title, e.summary), SUMMARY_CAP));
+    if let Some(e) = events
+        .iter()
+        .rev()
+        .find(|e| e.level == "error" || e.kind == "error")
+    {
+        return Some(truncate(
+            &format!("{}: {}", e.title, e.summary),
+            SUMMARY_CAP,
+        ));
     }
     fallback.map(|s| truncate(s, SUMMARY_CAP))
 }
@@ -195,15 +202,15 @@ fn event_from_json(id: String, v: &serde_json::Value, raw: &str) -> LogEvent {
                 // extract_tool_result also returns tool_use blocks from assistant content
                 let kind = if title.starts_with("结果") {
                     "tool_result"
-                } else if summary == "工具调用" || v
-                    .pointer("/message/content")
-                    .and_then(|c| c.as_array())
-                    .map(|a| {
-                        a.iter().any(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_use"))
-                    })
-                    .unwrap_or(false)
-                    || v
-                        .get("content")
+                } else if summary == "工具调用"
+                    || v.pointer("/message/content")
+                        .and_then(|c| c.as_array())
+                        .map(|a| {
+                            a.iter()
+                                .any(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_use"))
+                        })
+                        .unwrap_or(false)
+                    || v.get("content")
                         .and_then(|c| c.as_array())
                         .map(|a| {
                             a.iter()
@@ -313,7 +320,11 @@ fn event_from_json(id: String, v: &serde_json::Value, raw: &str) -> LogEvent {
                     title,
                     summary,
                     detail,
-                    level: if is_err { "error".into() } else { "success".into() },
+                    level: if is_err {
+                        "error".into()
+                    } else {
+                        "success".into()
+                    },
                 };
             }
             let text = extract_text_content(v);
@@ -376,10 +387,7 @@ fn event_from_json(id: String, v: &serde_json::Value, raw: &str) -> LogEvent {
                     }
                 })
                 .unwrap_or_default();
-            let is_err = v
-                .get("is_error")
-                .and_then(|x| x.as_bool())
-                .unwrap_or(false)
+            let is_err = v.get("is_error").and_then(|x| x.as_bool()).unwrap_or(false)
                 || looks_like_error(&content);
             LogEvent {
                 id,
@@ -392,7 +400,11 @@ fn event_from_json(id: String, v: &serde_json::Value, raw: &str) -> LogEvent {
                 } else {
                     None
                 },
-                level: if is_err { "error".into() } else { "success".into() },
+                level: if is_err {
+                    "error".into()
+                } else {
+                    "success".into()
+                },
             }
         }
         "result" => {
@@ -431,7 +443,11 @@ fn event_from_json(id: String, v: &serde_json::Value, raw: &str) -> LogEvent {
                 } else {
                     Some(truncate(&result_text, DETAIL_CAP))
                 },
-                level: if is_err { "error".into() } else { "success".into() },
+                level: if is_err {
+                    "error".into()
+                } else {
+                    "success".into()
+                },
             }
         }
         "error" => {
@@ -733,7 +749,8 @@ mod tests {
     fn fixture_stream_json() -> String {
         // Prefer repo fixture (tests/fixtures/claude-stream-json.ndjson); fall back to inline.
         let candidates = [
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/claude-stream-json.ndjson"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/claude-stream-json.ndjson"),
             PathBuf::from("tests/fixtures/claude-stream-json.ndjson"),
         ];
         for p in &candidates {
@@ -767,9 +784,13 @@ not-json-plain-line that should become raw_line
 "#;
         let events = parse_worker_logs(stdout, "", 50);
         assert!(events.iter().any(|e| e.kind == "message"));
-        assert!(events.iter().any(|e| e.kind == "tool_use" && e.title == "Read"));
+        assert!(events
+            .iter()
+            .any(|e| e.kind == "tool_use" && e.title == "Read"));
         assert!(events.iter().any(|e| e.kind == "tool_result"));
-        assert!(events.iter().any(|e| e.kind == "result" && e.level == "success"));
+        assert!(events
+            .iter()
+            .any(|e| e.kind == "result" && e.level == "success"));
     }
 
     #[test]
@@ -782,10 +803,16 @@ not-json-plain-line that should become raw_line
             "expected assistant message; got {:?}",
             events.iter().map(|e| &e.kind).collect::<Vec<_>>()
         );
-        assert!(events.iter().any(|e| e.kind == "tool_use" && e.title == "Read"));
-        assert!(events.iter().any(|e| e.kind == "tool_use" && e.title == "Bash"));
+        assert!(events
+            .iter()
+            .any(|e| e.kind == "tool_use" && e.title == "Read"));
+        assert!(events
+            .iter()
+            .any(|e| e.kind == "tool_use" && e.title == "Bash"));
         assert!(events.iter().any(|e| e.kind == "tool_result"));
-        assert!(events.iter().any(|e| e.kind == "result" && e.level == "success"));
+        assert!(events
+            .iter()
+            .any(|e| e.kind == "result" && e.level == "success"));
         // plain + unknown → raw_line (never drop lines)
         assert!(
             events.iter().any(|e| e.kind == "raw_line"),
@@ -799,7 +826,8 @@ not-json-plain-line that should become raw_line
             .find(|e| e.kind == "tool_use" && e.title == "Read")
             .expect("Read tool_use");
         assert!(
-            read.summary.contains("main.rs") || read.detail.as_deref().unwrap_or("").contains("main.rs"),
+            read.summary.contains("main.rs")
+                || read.detail.as_deref().unwrap_or("").contains("main.rs"),
             "Read summary/detail should mention path: {:?}",
             read
         );
@@ -877,7 +905,10 @@ not-json-plain-line that should become raw_line
     fn raw_lines_and_stderr() {
         let events = parse_worker_logs("hello plain\n", "boom error\n", 50);
         assert!(events.iter().any(|e| e.kind == "raw_line"));
-        let se = events.iter().find(|e| e.kind == "stderr").expect("stderr collapsed");
+        let se = events
+            .iter()
+            .find(|e| e.kind == "stderr")
+            .expect("stderr collapsed");
         assert!(se.title.contains("1 行"));
         assert_eq!(se.level, "warn");
     }
@@ -908,6 +939,8 @@ not-json-plain-line that should become raw_line
         let stdout = "{\"type\":\"totally_new\",\"x\":1}\nplain text line\n";
         let events = parse_worker_logs(stdout, "", 20);
         assert_eq!(events.len(), 2);
-        assert!(events.iter().all(|e| e.kind == "raw_line" || e.kind == "meta"));
+        assert!(events
+            .iter()
+            .all(|e| e.kind == "raw_line" || e.kind == "meta"));
     }
 }

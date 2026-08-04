@@ -1,7 +1,7 @@
 //! Live multi-CLI views, task logs, external terminal, stop task.
 //!
 //! [INPUT]: Config · run_id · task_id · log_max_bytes
-//! [OUTPUT]: ProjectLiveView · task_logs · open_task_terminal · stop_task
+//! [OUTPUT]: ProjectLiveView（含 task/plan auto_commit）· task_logs · open_task_terminal · stop_task
 //! [POS]: services 子模块；桌面 monitor / LogConsole 主数据源
 //! note: choose_current_run — hard-live 优先；paused 不盖更新终态（空台根因修复）
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/CLAUDE.md
@@ -26,7 +26,7 @@ use crate::plan::PlanIR;
 use crate::runtime::handoff::{self, InspectLoopView};
 use crate::runtime::log_events::{self, LogEvent};
 use crate::runtime::provider::TaskStatus;
-use crate::state::{self, RouteSource, RunState, RunStatus};
+use crate::state::{self, RouteSource, RunState, RunStatus, TaskAutoCommitResult};
 use crate::terminal::{SessionKind, TerminalManager};
 
 use super::runs::{list_runs, load_run, RunSummary};
@@ -83,6 +83,9 @@ pub struct TaskLiveView {
     /// App-composed human route story (P1-3). Always set; old runs → product label only.
     #[serde(default)]
     pub route_label: String,
+    /// Host auto-commit result for this completed task, when configured per task.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_commit: Option<TaskAutoCommitResult>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -107,6 +110,9 @@ pub struct ProjectLiveView {
     /// Sum of worker task costs (USD).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exec_cost_usd: Option<f64>,
+    /// Host auto-commit results for whole-plan granularity.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auto_commits: Vec<TaskAutoCommitResult>,
     /// P-loop: inspect VERDICT / blocking count / rework eligibility (desktop strip).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inspect_loop: Option<InspectLoopView>,
@@ -202,12 +208,7 @@ pub fn project_live_view(
     let done_ids: HashSet<String> = rs
         .tasks
         .iter()
-        .filter(|(_, ts)| {
-            matches!(
-                ts.status,
-                TaskStatus::Done | TaskStatus::Skipped
-            )
-        })
+        .filter(|(_, ts)| matches!(ts.status, TaskStatus::Done | TaskStatus::Skipped))
         .map(|(id, _)| id.clone())
         .collect();
 
@@ -286,6 +287,7 @@ pub fn project_live_view(
                     ts.route_source,
                     ts.route_previous.as_deref(),
                 ),
+                auto_commit: ts.auto_commit.clone(),
             }
         })
         .collect();
@@ -311,7 +313,10 @@ pub fn project_live_view(
         let mut cw = None;
         for (i, layer) in layers.iter().enumerate() {
             let any_open = layer.iter().any(|id| {
-                rs.tasks.get(id).map(|t| !t.status.is_terminal()).unwrap_or(false)
+                rs.tasks
+                    .get(id)
+                    .map(|t| !t.status.is_terminal())
+                    .unwrap_or(false)
             });
             if any_open {
                 cw = Some(i + 1);
@@ -360,17 +365,14 @@ pub fn project_live_view(
             h.board
                 .into_iter()
                 .map(|r| {
-                    let model = resolved
-                        .as_ref()
-                        .and_then(|p| p.task(&r.id))
-                        .and_then(|t| {
-                            t.provider_opts
-                                .get("model")
-                                .and_then(|v| v.as_str())
-                                .map(str::trim)
-                                .filter(|s| !s.is_empty())
-                                .map(|s| s.to_string())
-                        });
+                    let model = resolved.as_ref().and_then(|p| p.task(&r.id)).and_then(|t| {
+                        t.provider_opts
+                            .get("model")
+                            .and_then(|v| v.as_str())
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.to_string())
+                    });
                     HandoffBoardRowView {
                         id: r.id,
                         provider: r.provider,
@@ -407,6 +409,7 @@ pub fn project_live_view(
         max_parallel,
         planner_cost_usd,
         exec_cost_usd,
+        auto_commits: rs.auto_commits.clone(),
         inspect_loop,
         run_dir: Some(rs.run_dir.display().to_string()),
         handoff_md_path,
@@ -432,6 +435,7 @@ fn empty_live_view(project: &Path, name: &str, config: &Config) -> ProjectLiveVi
         max_parallel: None,
         planner_cost_usd: None,
         exec_cost_usd: None,
+        auto_commits: vec![],
         inspect_loop: None,
         run_dir: None,
         handoff_md_path: None,
@@ -759,10 +763,7 @@ pub fn stop_task(config: &Config, run_id: &str, task_id: Option<&str>) -> Result
 /// Approx seconds since stdout last grew — for H3 stall strip (not the patrol clock).
 /// Uses file mtime; falls back to time since `started_at` when the file is missing.
 fn stall_idle_secs_for(stdout: &Path, ts: &state::TaskState) -> Option<u64> {
-    if !matches!(
-        ts.status,
-        TaskStatus::Running | TaskStatus::Starting
-    ) {
+    if !matches!(ts.status, TaskStatus::Running | TaskStatus::Starting) {
         return None;
     }
     let now = std::time::SystemTime::now();

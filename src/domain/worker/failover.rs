@@ -28,11 +28,7 @@ impl FailoverPolicy {
         }
     }
 
-    pub fn with_order(
-        enabled: bool,
-        fallback_extra_attempts: u32,
-        order: Vec<String>,
-    ) -> Self {
+    pub fn with_order(enabled: bool, fallback_extra_attempts: u32, order: Vec<String>) -> Self {
         let order = if order.is_empty() {
             default_failover_order()
         } else {
@@ -70,13 +66,7 @@ impl FailoverPolicy {
         already_tried: &[String],
     ) -> RetryKind {
         let has_next = self.target_for(current, already_tried).is_some();
-        classify_retry(
-            reason_code,
-            attempt,
-            budget,
-            has_next,
-            self.enabled,
-        )
+        classify_retry(reason_code, attempt, budget, has_next, self.enabled)
     }
 }
 

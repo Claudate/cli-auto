@@ -63,25 +63,19 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use crate::config::Config;
-use crate::domain::run::{
-    classify_retry, resolve_final_run_status, FinalRunStatus, RetryKind,
-};
+use crate::domain::run::{classify_retry, resolve_final_run_status, FinalRunStatus, RetryKind};
 use crate::plan::PlanIR;
 use crate::report;
 use crate::services::{
-    accept_run_residual, list_plan_meta, list_plans, list_runs, load_run, pause_run,
-    preview_plan, resume_run_async, retry_task_async, start_rework_from_run, start_run_async,
+    accept_run_residual, list_plan_meta, list_plans, list_runs, load_run, pause_run, preview_plan,
+    resume_run_async, retry_task_async, start_rework_from_run, start_run_async,
     start_run_from_plan, stop_run, stop_task as services_stop_task, PlanMeta, PlanPreview,
     ReworkStartResponse, RunSummary, StartRunRequest,
 };
 use crate::state::{RunState, RunStatus};
 
 /// Map domain final status to wire `RunStatus` (cco-run/v1).
-pub fn wire_final_status(
-    any_stopped: bool,
-    has_failed: bool,
-    on_failure_pause: bool,
-) -> RunStatus {
+pub fn wire_final_status(any_stopped: bool, has_failed: bool, on_failure_pause: bool) -> RunStatus {
     match resolve_final_run_status(any_stopped, has_failed, on_failure_pause) {
         FinalRunStatus::Aborted => RunStatus::Aborted,
         FinalRunStatus::Paused => RunStatus::Paused,
@@ -210,16 +204,16 @@ pub fn accept_residual(config: &Config, run_id: &str, note: Option<&str>) -> Res
 
 /// Result-desk「完成并回写」: rule-template last_summary for the project (P2-2).
 /// Best-effort — never blocks ending the round.
-pub fn writeback_memory(config: &Config, run_id: &str) -> Result<Option<crate::state::ProjectLastSummary>> {
+pub fn writeback_memory(
+    config: &Config,
+    run_id: &str,
+) -> Result<Option<crate::state::ProjectLastSummary>> {
     super::memory::writeback_from_run(config, run_id, None)
 }
 
 /// Handoff file paths for status / observe (no Handoff type leak to CLI).
 pub fn handoff_paths(run_dir: &Path) -> (PathBuf, PathBuf) {
-    (
-        run_dir.join("handoff.md"),
-        run_dir.join("handoff.json"),
-    )
+    (run_dir.join("handoff.md"), run_dir.join("handoff.json"))
 }
 
 /// Provider rollup text for `cco status` (report helper; not a second strategy).
@@ -234,10 +228,7 @@ mod tests {
 
     #[test]
     fn stop_is_aborted_not_completed() {
-        assert_eq!(
-            wire_final_status(true, true, true),
-            RunStatus::Aborted
-        );
+        assert_eq!(wire_final_status(true, true, true), RunStatus::Aborted);
     }
 
     #[test]
@@ -306,11 +297,7 @@ mod tests {
     #[test]
     fn force_provider_wins_over_soft() {
         let mut ir = mixed_plan();
-        let report = apply_provider_override(
-            &mut ir,
-            Some("claude".into()),
-            Some("fake".into()),
-        );
+        let report = apply_provider_override(&mut ir, Some("claude".into()), Some("fake".into()));
         let msg = report.as_ref().map(|r| r.summary_line()).unwrap();
         assert!(msg.contains("force-provider"));
         assert!(ir.tasks.iter().all(|t| t.provider == "fake"));

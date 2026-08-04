@@ -97,13 +97,7 @@ tasks:
 
     // failover off: pure same-provider retry path (must not break existing semantics)
     let status = sched(
-        ir,
-        run_state,
-        registry,
-        /*retry_max*/ 2,
-        600,
-        /*failover*/ false,
-        1,
+        ir, run_state, registry, /*retry_max*/ 2, 600, /*failover*/ false, 1,
     )
     .run()
     .await
@@ -166,13 +160,7 @@ tasks:
     // stall_secs=1 → detect quickly; retry_max=1 → 2 total attempts then pause
     // failover off (fake is not a production failover source)
     let status = sched(
-        ir,
-        run_state,
-        registry,
-        /*retry_max*/ 1,
-        /*stall*/ 1,
-        /*failover*/ false,
-        1,
+        ir, run_state, registry, /*retry_max*/ 1, /*stall*/ 1, /*failover*/ false, 1,
     )
     .run()
     .await
@@ -195,10 +183,7 @@ tasks:
         "stall should have retried, attempt={}",
         st.tasks["hang"].attempt
     );
-    assert_eq!(
-        st.tasks["hang"].last_retry_reason.as_deref(),
-        Some("stall")
-    );
+    assert_eq!(st.tasks["hang"].last_retry_reason.as_deref(), Some("stall"));
 }
 
 /// H4: hang under claude alias → same-house retries → switch to codex → succeed.
@@ -254,12 +239,7 @@ tasks:
 
     // retry_max=1 → 2 same-house attempts; then failover to codex (1 extra).
     let status = sched(
-        ir,
-        run_state,
-        registry,
-        /*retry_max*/ 1,
-        /*stall*/ 1,
-        /*failover*/ true,
+        ir, run_state, registry, /*retry_max*/ 1, /*stall*/ 1, /*failover*/ true,
         /*fallback_extra*/ 1,
     )
     .run()
@@ -284,7 +264,10 @@ tasks:
         switched[0].get("from").and_then(|v| v.as_str()),
         Some("claude")
     );
-    assert_eq!(switched[0].get("to").and_then(|v| v.as_str()), Some("codex"));
+    assert_eq!(
+        switched[0].get("to").and_then(|v| v.as_str()),
+        Some("codex")
+    );
 
     let retries: Vec<_> = events
         .iter()
@@ -350,13 +333,7 @@ tasks:
     .unwrap();
 
     let status = sched(
-        ir,
-        run_state,
-        registry,
-        /*retry_max*/ 1,
-        /*stall*/ 1,
-        /*failover*/ false,
-        1,
+        ir, run_state, registry, /*retry_max*/ 1, /*stall*/ 1, /*failover*/ false, 1,
     )
     .run()
     .await
@@ -427,13 +404,7 @@ tasks:
 
     // Even with failover on + retry budget, stop must be terminal on first collect.
     let status = sched(
-        ir,
-        run_state,
-        registry,
-        /*retry_max*/ 2,
-        600,
-        /*failover*/ true,
-        1,
+        ir, run_state, registry, /*retry_max*/ 2, 600, /*failover*/ true, 1,
     )
     .run()
     .await

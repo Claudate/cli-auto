@@ -119,7 +119,11 @@ mod tests {
 
     #[test]
     fn integrate_with_outputs_names_path() {
-        let t = task("i", Some(TaskRole::Integrate), &[".cco-out/join/summary.md"]);
+        let t = task(
+            "i",
+            Some(TaskRole::Integrate),
+            &[".cco-out/join/summary.md"],
+        );
         let s = merge_check_for_integrate(&t);
         assert!(s.contains(".cco-out/join/summary.md"));
         assert!(!s.contains("MERGE.md"));

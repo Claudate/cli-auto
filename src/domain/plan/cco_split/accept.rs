@@ -61,14 +61,13 @@ pub fn soft_accept_split(doc: &mut CcoSplitJob) -> Vec<String> {
         let stripped = super::humanize::strip_worker_scaffold(&t.body);
         if !stripped.trim().is_empty() && stripped != t.body {
             t.body = stripped;
-            notes.push(format!("task {}: stripped worker scaffold from body", t.task_id));
+            notes.push(format!(
+                "task {}: stripped worker scaffold from body",
+                t.task_id
+            ));
         }
         // Always prefer human one-liner (worker scaffold must not win).
-        let hum = super::humanize::human_summary(
-            &t.title,
-            &t.body,
-            t.done_when.as_deref(),
-        );
+        let hum = super::humanize::human_summary(&t.title, &t.body, t.done_when.as_deref());
         if t.summary.trim().is_empty()
             || super::humanize::is_worker_noise_line(t.summary.trim())
             || t.summary.contains("的 worker")
@@ -92,8 +91,7 @@ pub fn soft_accept_split(doc: &mut CcoSplitJob) -> Vec<String> {
     let ids: HashSet<String> = doc.tasks.iter().map(|t| t.task_id.clone()).collect();
     for t in doc.tasks.iter_mut() {
         let before = t.depends_on.len();
-        t.depends_on
-            .retain(|d| d != &t.task_id && ids.contains(d));
+        t.depends_on.retain(|d| d != &t.task_id && ids.contains(d));
         if t.depends_on.len() != before {
             notes.push(format!(
                 "task {}: pruned {} bad depends_on",

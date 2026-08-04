@@ -79,7 +79,11 @@ pub fn user_prompt(
         .map(|s| format!("粒度偏好：{s}\n"))
         .unwrap_or_default();
     // Map clarify depth to Chinese instructions.
-    let clarify_line = match clarify_depth.map(str::trim).filter(|s| !s.is_empty()).as_deref() {
+    let clarify_line = match clarify_depth
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .as_deref()
+    {
         Some("soft1") => "拆分前如信息不足，最多提一个软澄清问题（不阻塞）\n".to_string(),
         Some("soft2") => "拆分前如信息不足，可列至多两个软澄清问题（不阻塞）\n".to_string(),
         Some("full_opt") => "可列出完整的可选澄清问题（范围/假设），但不得阻塞拆分\n".to_string(),
@@ -89,9 +93,7 @@ pub fn user_prompt(
     let revision_block = revision_notes
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .map(|s| {
-            format!("用户对上次拆分的反馈（优先满足；与硬约束冲突时仍守硬约束）：\n{s}\n\n")
-        })
+        .map(|s| format!("用户对上次拆分的反馈（优先满足；与硬约束冲突时仍守硬约束）：\n{s}\n\n"))
         .unwrap_or_default();
     let digest_block = repo_digest
         .map(str::trim)
@@ -132,7 +134,10 @@ mod tests {
             !s.contains("不要输出 provider/role/scope"),
             "old forbid-scope line must be gone"
         );
-        assert!(s.contains("你是 worker") || s.contains("worker"), "ban worker tone");
+        assert!(
+            s.contains("你是 worker") || s.contains("worker"),
+            "ban worker tone"
+        );
         assert!(
             s.contains("western-saas") || s.contains("色系"),
             "color systems guidance must append"
@@ -195,7 +200,10 @@ mod tests {
     fn user_includes_grain_when_set() {
         let u = user_prompt("/proj", 2, "# hi", Some("偏细：步骤拆开"), None, None, None);
         assert!(u.contains("粒度偏好：偏细"));
-        assert!(u.contains("拆分前如信息不足，最多提一个软澄清问题（不阻塞）") || !u.contains("soft1"), "clarify should be omitted for soft1 unless set");
+        assert!(
+            u.contains("拆分前如信息不足，最多提一个软澄清问题（不阻塞）") || !u.contains("soft1"),
+            "clarify should be omitted for soft1 unless set"
+        );
     }
 
     #[test]

@@ -65,7 +65,10 @@ pub async fn run_doctor(config: &Config, project_root: Option<&Path>) -> Result<
     // state root
     let state = &config.state_root;
     match std::fs::create_dir_all(state) {
-        Ok(()) => lines.push(CheckLine::ok_line("state_root", state.display().to_string())),
+        Ok(()) => lines.push(CheckLine::ok_line(
+            "state_root",
+            state.display().to_string(),
+        )),
         Err(e) => {
             ok = false;
             lines.push(CheckLine::fail_line(
@@ -198,12 +201,8 @@ mod tests {
 
     #[test]
     fn provider_help_urls_known() {
-        assert!(provider_help_url("gemini")
-            .unwrap()
-            .contains("gemini-cli"));
-        assert!(provider_help_url("claude")
-            .unwrap()
-            .contains("claude-code"));
+        assert!(provider_help_url("gemini").unwrap().contains("gemini-cli"));
+        assert!(provider_help_url("claude").unwrap().contains("claude-code"));
         assert!(provider_help_url("codebuddy").is_some());
         assert!(provider_help_url("unknown-x").is_none());
     }

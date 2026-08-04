@@ -223,8 +223,14 @@ async fn tool_loop_max_rounds_fails() {
 
 #[tokio::test]
 async fn tool_loop_preflight_requires_key() {
-    let backend =
-        AnthropicToolLoopBackend::new(ScriptedClient::new(vec![]), "", "m", "https://api.example.test", 64, 2);
+    let backend = AnthropicToolLoopBackend::new(
+        ScriptedClient::new(vec![]),
+        "",
+        "m",
+        "https://api.example.test",
+        64,
+        2,
+    );
     let err = backend.preflight().await.unwrap_err().to_string();
     assert!(err.contains("API key"), "err: {err}");
 }
@@ -266,10 +272,7 @@ async fn tool_loop_request_includes_tools() {
     let bodies = client.last_bodies.lock().unwrap();
     assert_eq!(bodies.len(), 1);
     let tools = bodies[0]["tools"].as_array().unwrap();
-    let names: Vec<&str> = tools
-        .iter()
-        .filter_map(|t| t["name"].as_str())
-        .collect();
+    let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
     assert!(names.contains(&"read_file"));
     assert!(names.contains(&"list_dir"));
     assert!(names.contains(&"write_file"));

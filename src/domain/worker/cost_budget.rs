@@ -109,17 +109,16 @@ pub fn sticky_cohort_ids(plan: &PlanIR, task_id: &str) -> Vec<String> {
     let Some(me) = plan.task(task_id) else {
         return vec![];
     };
-    if let Some(g) = me.group.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(g) = me
+        .group
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         return plan
             .tasks
             .iter()
-            .filter(|t| {
-                t.id != task_id
-                    && t.group
-                        .as_ref()
-                        .map(|x| x.trim() == g)
-                        .unwrap_or(false)
-            })
+            .filter(|t| t.id != task_id && t.group.as_ref().map(|x| x.trim() == g).unwrap_or(false))
             .map(|t| t.id.clone())
             .collect();
     }
@@ -152,11 +151,7 @@ pub fn sticky_provider(
         .as_ref()
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
-    let source = if has_group {
-        committed
-    } else {
-        auto_committed
-    };
+    let source = if has_group { committed } else { auto_committed };
     let cohort: HashSet<String> = sticky_cohort_ids(plan, task_id).into_iter().collect();
     if cohort.is_empty() {
         return None;
@@ -226,7 +221,10 @@ pub fn select_with_sticky(
 ///
 /// Explicit / tag / force / escalate stay. Soft + cost_auto may shrink.
 pub fn may_budget_downgrade(route_source: Option<&str>) -> bool {
-    match route_source.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+    match route_source
+        .map(|s| s.trim().to_ascii_lowercase())
+        .as_deref()
+    {
         None | Some("") | Some("soft_fill") | Some("cost_auto") => true,
         Some("explicit")
         | Some("tag_routing")
@@ -329,14 +327,8 @@ mod tests {
 
     #[test]
     fn ceiling_mid_then_cheap() {
-        assert_eq!(
-            budget_tier_ceiling(7.0, Some(10.0)),
-            Some(CostTier::Mid)
-        );
-        assert_eq!(
-            budget_tier_ceiling(9.0, Some(10.0)),
-            Some(CostTier::Cheap)
-        );
+        assert_eq!(budget_tier_ceiling(7.0, Some(10.0)), Some(CostTier::Mid));
+        assert_eq!(budget_tier_ceiling(9.0, Some(10.0)), Some(CostTier::Cheap));
     }
 
     #[test]
@@ -345,7 +337,10 @@ mod tests {
             clamp_tier(CostTier::Flagship, Some(CostTier::Mid)),
             CostTier::Mid
         );
-        assert_eq!(clamp_tier(CostTier::Cheap, Some(CostTier::Mid)), CostTier::Cheap);
+        assert_eq!(
+            clamp_tier(CostTier::Cheap, Some(CostTier::Mid)),
+            CostTier::Cheap
+        );
     }
 
     #[test]
@@ -386,12 +381,7 @@ mod tests {
             task("kept", &[], None, None),
         ]);
         // Explicit gemini seeded in committed but not auto_committed.
-        let sticky = sticky_provider(
-            &ir,
-            "impl",
-            &[("kept".into(), "gemini".into())],
-            &[],
-        );
+        let sticky = sticky_provider(&ir, "impl", &[("kept".into(), "gemini".into())], &[]);
         assert!(sticky.is_none());
     }
 
@@ -426,30 +416,19 @@ mod tests {
     #[test]
     fn suggest_downgrade_flagship_when_over_mid() {
         let avail = vec!["claude".into(), "codex".into()];
-        let pick = suggest_budget_downgrade(
-            "claude",
-            CostTier::Flagship,
-            8.0,
-            Some(10.0),
-            &avail,
-            &[],
-        )
-        .unwrap();
+        let pick =
+            suggest_budget_downgrade("claude", CostTier::Flagship, 8.0, Some(10.0), &avail, &[])
+                .unwrap();
         assert_eq!(pick.provider, "codex");
     }
 
     #[test]
     fn no_downgrade_when_already_cheap_enough() {
         let avail = vec!["codex".into(), "claude".into()];
-        assert!(suggest_budget_downgrade(
-            "codex",
-            CostTier::Mid,
-            8.0,
-            Some(10.0),
-            &avail,
-            &[],
-        )
-        .is_none());
+        assert!(
+            suggest_budget_downgrade("codex", CostTier::Mid, 8.0, Some(10.0), &avail, &[],)
+                .is_none()
+        );
     }
 
     #[test]

@@ -11,13 +11,8 @@ fn serial_prompts_golden_fixture() {
     config.default.default_provider = "fake".into();
     config.default.worktree = false;
 
-    let plan = load_plan(
-        root.as_path(),
-        &fixture,
-        Some("serial-prompts/v0"),
-        &config,
-    )
-    .expect("parse serial-prompts");
+    let plan = load_plan(root.as_path(), &fixture, Some("serial-prompts/v0"), &config)
+        .expect("parse serial-prompts");
 
     assert_eq!(plan.adapter, "serial-prompts/v0");
     let ids: Vec<_> = plan.tasks.iter().map(|t| t.id.as_str()).collect();

@@ -14,9 +14,7 @@ pub const SYS_POST_OPEN_PR_ID: &str = "sys-post-open-pr";
 /// Note: `sys-closeout` is host-injected Ensure closeout but **not** a post-feature
 /// toggle task — use [`is_system_ensure_task`] for closeout too.
 pub fn is_system_post_task(id: &str) -> bool {
-    id == SYS_POST_INSPECT_ID
-        || id == SYS_POST_GIT_PUSH_ID
-        || id == SYS_POST_OPEN_PR_ID
+    id == SYS_POST_INSPECT_ID || id == SYS_POST_GIT_PUSH_ID || id == SYS_POST_OPEN_PR_ID
 }
 
 /// True for host Ensure closeout id.

@@ -75,8 +75,7 @@ pub fn write_mcp_config(cfg: &BrowserConfig, task_dir: &Path) -> Result<PathBuf>
     let path = task_dir.join(MCP_BROWSER_FILE);
     let body = build_mcp_servers_json(cfg);
     let text = serde_json::to_string_pretty(&body).context("serialize mcp-browser.json")?;
-    std::fs::write(&path, text)
-        .with_context(|| format!("write {}", path.display()))?;
+    std::fs::write(&path, text).with_context(|| format!("write {}", path.display()))?;
     info!(path = %path.display(), engine = %cfg.effective_engine(), "browser mcp config written");
     Ok(path)
 }
@@ -91,14 +90,8 @@ pub fn browser_env_pairs(
     let out = browser_out_dir(cfg, project_root, task_id);
     let _ = std::fs::create_dir_all(&out);
     let mut env = vec![
-        (
-            "CCO_BROWSER_OUT".into(),
-            out.to_string_lossy().into_owned(),
-        ),
-        (
-            "CCO_BROWSER_ENGINE".into(),
-            cfg.effective_engine(),
-        ),
+        ("CCO_BROWSER_OUT".into(), out.to_string_lossy().into_owned()),
+        ("CCO_BROWSER_ENGINE".into(), cfg.effective_engine()),
     ];
     if let Some(url) = preview_url.map(str::trim).filter(|s| !s.is_empty()) {
         env.push(("CCO_PREVIEW_URL".into(), url.to_string()));
@@ -120,7 +113,10 @@ pub fn preview_required_missing(
     if !task_has_browser_tag(&task.tags) || !task_has_ui_verify_tag(&task.tags) {
         return None;
     }
-    let has = preview_url.map(str::trim).filter(|s| !s.is_empty()).is_some();
+    let has = preview_url
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .is_some();
     if has {
         return None;
     }
@@ -245,8 +241,8 @@ pub fn doctor_browser_line(cfg: &BrowserConfig) -> (bool, String, Option<String>
     }
     let engine = cfg.effective_engine();
     let chrome_ok = chrome_on_path();
-    let launcher = which::which(&cfg.command).is_ok()
-        || cfg.command == "npx" && which::which("npx").is_ok();
+    let launcher =
+        which::which(&cfg.command).is_ok() || cfg.command == "npx" && which::which("npx").is_ok();
     let detail = format!(
         "enabled engine={engine} command={} chrome={}",
         cfg.command,
@@ -535,8 +531,6 @@ mod tests {
         assert!(preview_required_missing(&cfg, &task, None).is_none());
     }
 
-
-
     #[test]
     fn collect_finds_shot_and_report() {
         let dir = tempfile::tempdir().unwrap();
@@ -545,17 +539,21 @@ mod tests {
         std::fs::create_dir_all(&task_dir).unwrap();
         // minimal 1x1 PNG
         let png: &[u8] = &[
-            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
-            0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90,
-            0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0xd7, 0x63, 0xf8,
-            0xcf, 0xc0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x01, 0x00, 0x05, 0xfe, 0xd4, 0xef, 0x00, 0x00,
-            0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x08,
+            0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x01, 0x00, 0x05, 0xfe,
+            0xd4, 0xef, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
         ];
         std::fs::write(task_dir.join("shot.png"), png).unwrap();
         std::fs::write(task_dir.join("report.md"), "# ok\n主 CTA 可见\n").unwrap();
         let items = collect_browser_evidence(root, ".cco-out/browser");
-        assert!(items.iter().any(|i| i.kind == "shot" && i.preview_data_url.is_some()));
-        assert!(items.iter().any(|i| i.kind == "report" && i.excerpt.as_deref().unwrap_or("").contains("主 CTA")));
+        assert!(items
+            .iter()
+            .any(|i| i.kind == "shot" && i.preview_data_url.is_some()));
+        assert!(items
+            .iter()
+            .any(|i| i.kind == "report" && i.excerpt.as_deref().unwrap_or("").contains("主 CTA")));
     }
 
     #[test]

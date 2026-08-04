@@ -58,8 +58,8 @@ impl Scheduler {
         let (blocked, blocking_n) =
             handoff::inspect_pass_blocked_by_issues(task, work_dir, &self.state.project_root);
         let _ = blocked; // folded into domain fail_reason via blocking_n
-        let treat_unknown_as_fail = self.plan.require_inspect
-            || task.role == Some(crate::plan::TaskRole::Inspect);
+        let treat_unknown_as_fail =
+            self.plan.require_inspect || task.role == Some(crate::plan::TaskRole::Inspect);
 
         let fail_reason = handoff::inspect_gate_fail_reason(
             verdict,

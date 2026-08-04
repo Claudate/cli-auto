@@ -97,47 +97,58 @@ fn load_cached(file_name: &'static str, embedded: &'static str) -> &'static str 
     match file_name {
         FILE_CHAT_PLAN_WRITING => {
             static CELL: OnceLock<String> = OnceLock::new();
-            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
         }
         FILE_SPLIT_AGENT_DELIVERY => {
             static CELL: OnceLock<String> = OnceLock::new();
-            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
         }
         FILE_PLANNER_GREENFIELD => {
             static CELL: OnceLock<String> = OnceLock::new();
-            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
         }
         FILE_UI_DELIVERY_RECIPES => {
             static CELL: OnceLock<String> = OnceLock::new();
-            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
         }
         FILE_UI_LAYOUT => {
             static CELL: OnceLock<String> = OnceLock::new();
-            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
         }
         FILE_UI_COLOR_SYSTEMS => {
             static CELL: OnceLock<String> = OnceLock::new();
-            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
         }
         FILE_UI_TYPOGRAPHY => {
             static CELL: OnceLock<String> = OnceLock::new();
-            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
         }
         FILE_UI_MOTION => {
             static CELL: OnceLock<String> = OnceLock::new();
-            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
         }
         FILE_UI_COPY => {
             static CELL: OnceLock<String> = OnceLock::new();
-            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
         }
         FILE_BACKEND_ARCHITECTURE => {
             static CELL: OnceLock<String> = OnceLock::new();
-            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
         }
         FILE_CHAT_VISUAL_REVIEW => {
             static CELL: OnceLock<String> = OnceLock::new();
-            CELL.get_or_init(|| resolve_text(file_name, embedded)).as_str()
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
         }
         _ => embedded,
     }
@@ -266,7 +277,10 @@ mod tests {
             g.contains("≤5") || g.contains("<=5") || g.contains("不超过 5") || g.contains("至多 5"),
             "max 5 questions"
         );
-        assert!(g.contains("A/B/C") || g.contains("A. ") || g.contains("A．"), "A/B/C options");
+        assert!(
+            g.contains("A/B/C") || g.contains("A. ") || g.contains("A．"),
+            "A/B/C options"
+        );
         assert!(
             g.contains("你定") || g.contains("直接出计划"),
             "skip phrase"
@@ -277,7 +291,9 @@ mod tests {
             assert!(g.contains(needle), "Brief field missing: {needle}");
         }
         assert!(
-            g.contains("得") && g.contains("失") || g.contains("得 / 失") || g.contains("会失去什么"),
+            g.contains("得") && g.contains("失")
+                || g.contains("得 / 失")
+                || g.contains("会失去什么"),
             "gain/loss"
         );
         assert!(g.contains("未决"), "open items");
@@ -290,7 +306,10 @@ mod tests {
             g.contains("非目标") || g.contains("不做"),
             "non-goals chapter"
         );
-        assert!(g.contains("会失去什么") || g.contains("得 / 失"), "loss chapter");
+        assert!(
+            g.contains("会失去什么") || g.contains("得 / 失"),
+            "loss chapter"
+        );
         assert!(g.contains("风险"), "risks chapter");
         assert!(
             g.contains("V2") || g.contains("Later"),
@@ -324,9 +343,7 @@ mod tests {
             "iterate / understanding"
         );
         assert!(
-            g.contains("按我说的改")
-                || g.contains("按反馈改")
-                || g.contains("换个方向"),
+            g.contains("按我说的改") || g.contains("按反馈改") || g.contains("换个方向"),
             "feedback revise path"
         );
         assert!(
@@ -370,7 +387,10 @@ mod tests {
     #[test]
     fn chat_visual_review_requires_embed_and_honest_shots() {
         let g = chat_visual_review_guidance();
-        assert!(g.contains("![") || g.contains("![]"), "require markdown image embed");
+        assert!(
+            g.contains("![") || g.contains("![]"),
+            "require markdown image embed"
+        );
         assert!(
             g.contains("截图") || g.contains("screenshot"),
             "screenshot flow"
@@ -438,7 +458,10 @@ mod tests {
             "must ban placeholder images"
         );
         assert!(
-            g.contains("图库") || g.contains("生成") || g.contains("Unsplash") || g.contains("Pexels"),
+            g.contains("图库")
+                || g.contains("生成")
+                || g.contains("Unsplash")
+                || g.contains("Pexels"),
             "must allow stock or generated art"
         );
     }

@@ -22,9 +22,7 @@ pub fn http_ready(url: &str) -> bool {
     };
     let _ = stream.set_read_timeout(Some(Duration::from_millis(600)));
     let _ = stream.set_write_timeout(Some(Duration::from_millis(400)));
-    let req = format!(
-        "GET {path} HTTP/1.0\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
-    );
+    let req = format!("GET {path} HTTP/1.0\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
     if stream.write_all(req.as_bytes()).is_err() {
         return false;
     }

@@ -251,7 +251,10 @@ mod tests {
             tasks: vec![t],
         };
         let ir = to_plan_ir(&doc, "claude", "print");
-        assert_eq!(ir.tasks[0].verify_cmd.as_deref(), Some("test -f MARKER.txt"));
+        assert_eq!(
+            ir.tasks[0].verify_cmd.as_deref(),
+            Some("test -f MARKER.txt")
+        );
         assert_eq!(
             ir.tasks[0].effective_verify_cmd(),
             Some("test -f MARKER.txt")

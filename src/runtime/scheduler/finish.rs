@@ -1,19 +1,22 @@
 //! finish_or_retry · apply_result · attempt log archive (domain RetryKind).
 //!
-//! [INPUT]: TaskResult · reason_code · retry budget
-//! [OUTPUT]: re-queued (true) or permanent terminal (false)
+//! [INPUT]: TaskResult · reason_code · retry budget · auto_commit.json
+//! [OUTPUT]: re-queued (true) or permanent terminal (false) · task/plan auto-commit records
 //! [POS]: runtime/scheduler
-//! [PROTOCOL]: stop never retries; A1-4 may move provider switch to Worker policy
+//! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/CLAUDE.md
 
 use std::collections::HashSet;
 use std::path::PathBuf;
 
 use anyhow::Result;
+use chrono::Utc;
 use tracing::{info, warn};
 
 use super::super::provider::{TaskResult, TaskStatus};
 use super::Scheduler;
+use crate::config::AutoCommitGranularity;
 use crate::domain::run::RetryKind;
+use crate::state::{AutoCommitPolicySnapshot, RunStatus, TaskAutoCommitResult};
 
 impl Scheduler {
     /// Apply terminal failure. If attempts remain, reset to Pending and clear `started`
@@ -200,6 +203,7 @@ impl Scheduler {
 
         // Exhausted or non-retryable → permanent fail / timeout / user stop.
         self.apply_result(id, &result)?;
+        self.auto_commit_task(id, &result);
         self.handoff_task_end(id, &result, _work_dir);
         if let Some(ts) = self.state.tasks.get_mut(id) {
             ts.last_retry_reason = Some(reason_code.to_string());
@@ -307,5 +311,155 @@ impl Scheduler {
             serde_json::to_string_pretty(result)?,
         )?;
         Ok(())
+    }
+
+    /// Commit a completed business task in its own worktree when per-task mode is active.
+    /// Git failures are recorded but never turn a successful worker into a failed task.
+    pub(super) fn auto_commit_task(&mut self, id: &str, result: &TaskResult) {
+        if result.status != TaskStatus::Done {
+            return;
+        }
+        let Ok(policy) = AutoCommitPolicySnapshot::load(&self.state.run_dir) else {
+            return;
+        };
+        if policy.granularity != AutoCommitGranularity::PerTask {
+            return;
+        }
+        let Some(_task) = self.plan.task(id) else {
+            return;
+        };
+        if crate::plan::is_system_ensure_task(id) {
+            return;
+        }
+        let Some(work_dir) = self.state.tasks.get(id).and_then(|t| t.work_dir.clone()) else {
+            return;
+        };
+        let date = Utc::now().format("%Y-%m-%d").to_string();
+        let message =
+            policy
+                .git
+                .render_message_for_task(&self.plan.name, id, &self.state.run_id, &date);
+        let push_requested = policy.git.auto_commit.push_after_commit;
+        let record = match crate::services::git::commit_with_git_config(
+            &policy.git,
+            &work_dir,
+            &message,
+            false,
+            push_requested,
+            true,
+            &[],
+            false,
+        ) {
+            Ok(r) => auto_commit_record(
+                AutoCommitGranularity::PerTask,
+                work_dir.clone(),
+                push_requested,
+                r,
+            ),
+            Err(e) => TaskAutoCommitResult {
+                granularity: AutoCommitGranularity::PerTask.as_str().into(),
+                ok: false,
+                message: format!("auto-commit failed: {e:#}"),
+                commit_hash: None,
+                files: vec![],
+                pushed: false,
+                push_output: None,
+                branch: None,
+                work_dir: Some(work_dir),
+                created_at: Utc::now(),
+            },
+        };
+        if let Some(ts) = self.state.tasks.get_mut(id) {
+            ts.auto_commit = Some(record.clone());
+        }
+        let _ = self.state.event(
+            "auto_commit",
+            serde_json::json!({"task_id": id, "result": record}),
+        );
+        let _ = self.state.save();
+    }
+
+    /// Commit the project checkout once after a successful plan.
+    pub(super) fn auto_commit_plan(&mut self, status: RunStatus) {
+        if status != RunStatus::Completed {
+            return;
+        }
+        let Ok(policy) = AutoCommitPolicySnapshot::load(&self.state.run_dir) else {
+            return;
+        };
+        if policy.granularity != AutoCommitGranularity::PerPlan || !policy.git.auto_commit.enabled {
+            return;
+        }
+        let date = Utc::now().format("%Y-%m-%d").to_string();
+        let message = policy
+            .git
+            .render_message(&self.plan.name, &self.state.run_id, &date);
+        let push_requested = policy.git.auto_commit.push_after_commit;
+        let record = match crate::services::git::commit_with_git_config(
+            &policy.git,
+            &self.state.project_root,
+            &message,
+            false,
+            push_requested,
+            true,
+            &[],
+            false,
+        ) {
+            Ok(r) => auto_commit_record(
+                AutoCommitGranularity::PerPlan,
+                self.state.project_root.clone(),
+                push_requested,
+                r,
+            ),
+            Err(e) => TaskAutoCommitResult {
+                granularity: AutoCommitGranularity::PerPlan.as_str().into(),
+                ok: false,
+                message: format!("auto-commit failed: {e:#}"),
+                commit_hash: None,
+                files: vec![],
+                pushed: false,
+                push_output: None,
+                branch: None,
+                work_dir: Some(self.state.project_root.clone()),
+                created_at: Utc::now(),
+            },
+        };
+        let _ = self.state.event(
+            "auto_commit",
+            serde_json::json!({"scope": "plan", "result": record}),
+        );
+        self.state.auto_commits.push(record);
+        let _ = self.state.save();
+    }
+}
+
+fn auto_commit_record(
+    granularity: AutoCommitGranularity,
+    work_dir: PathBuf,
+    push_requested: bool,
+    result: crate::services::git::CommitResult,
+) -> TaskAutoCommitResult {
+    let push_failed_after_commit = push_requested && result.commit_hash.is_some() && !result.pushed;
+    let message = if push_failed_after_commit {
+        match result.push_output.as_deref() {
+            Some(output) if !output.trim().is_empty() => {
+                format!("{}; {}", result.message, output)
+            }
+            _ => format!("{}; push failed", result.message),
+        }
+    } else {
+        result.message
+    };
+    TaskAutoCommitResult {
+        granularity: granularity.as_str().into(),
+        ok: result.ok && !push_failed_after_commit,
+        message,
+        commit_hash: result.commit_hash,
+        files: result.files,
+        pushed: result.pushed,
+        push_output: result.push_output,
+        branch: result.branch,
+        work_dir: Some(work_dir),
+        created_at: Utc::now(),
     }
 }

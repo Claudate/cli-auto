@@ -84,12 +84,7 @@ pub fn on_task_end(
 
     let wd = work_dir
         .map(|p| p.to_path_buf())
-        .or_else(|| {
-            state
-                .tasks
-                .get(&task.id)
-                .and_then(|t| t.work_dir.clone())
-        })
+        .or_else(|| state.tasks.get(&task.id).and_then(|t| t.work_dir.clone()))
         .unwrap_or_else(|| state.project_root.clone());
 
     let branch = state

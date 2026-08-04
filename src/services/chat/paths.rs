@@ -16,7 +16,10 @@ pub(crate) fn session_path(project: &Path, session_id: &str) -> PathBuf {
 }
 
 /// Resolve a project-relative plan path; reject `..` / absolute escape.
-pub(crate) fn resolve_project_plan_file(project: &Path, plan_rel: &str) -> Result<(String, PathBuf)> {
+pub(crate) fn resolve_project_plan_file(
+    project: &Path,
+    plan_rel: &str,
+) -> Result<(String, PathBuf)> {
     let rel = plan_rel.trim().trim_start_matches('/');
     if rel.is_empty() {
         bail!("empty plan path");

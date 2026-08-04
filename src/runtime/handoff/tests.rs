@@ -9,7 +9,6 @@ use tempfile::tempdir;
 
 use super::*;
 
-
 fn sample_plan(outputs_a: Vec<String>) -> PlanIR {
     PlanIR {
         schema: "cco-plan/v1".into(),
@@ -42,7 +41,7 @@ fn sample_plan(outputs_a: Vec<String>) -> PlanIR {
                 role: None,
                 scope: None,
                 outputs: outputs_a,
-            tags: vec![],
+                tags: vec![],
             },
             TaskIR {
                 id: "b".into(),
@@ -62,7 +61,7 @@ fn sample_plan(outputs_a: Vec<String>) -> PlanIR {
                 role: None,
                 scope: None,
                 outputs: vec![],
-            tags: vec![],
+                tags: vec![],
             },
         ],
     }
@@ -90,7 +89,10 @@ fn shell_and_task_lifecycle() {
 
     on_task_start(&plan, &state, "a").unwrap();
     let h = Handoff::load(&run_dir).unwrap();
-    assert_eq!(h.board.iter().find(|r| r.id == "a").unwrap().status, "running");
+    assert_eq!(
+        h.board.iter().find(|r| r.id == "a").unwrap().status,
+        "running"
+    );
 
     let out = tmp.path().join(".cco-out/a");
     std::fs::create_dir_all(&out).unwrap();
@@ -203,10 +205,7 @@ fn parse_verdict_fail_and_pass() {
         parse_verdict_text("VERDICT: FAIL — scope leak"),
         InspectVerdict::Fail
     );
-    assert_eq!(
-        parse_verdict_text("VERDICT=PASS"),
-        InspectVerdict::Pass
-    );
+    assert_eq!(parse_verdict_text("VERDICT=PASS"), InspectVerdict::Pass);
     assert_eq!(parse_verdict_text("maybe later"), InspectVerdict::Unknown);
     // FAIL wins when both present in body
     assert_eq!(
@@ -222,7 +221,11 @@ fn on_task_end_folds_issues_on_verdict_fail() {
     std::fs::create_dir_all(&run_dir).unwrap();
     let inspect_dir = tmp.path().join(".cco-out/inspect");
     std::fs::create_dir_all(&inspect_dir).unwrap();
-    std::fs::write(inspect_dir.join("VERDICT.md"), "FAIL\nscope leak in feat-a\n").unwrap();
+    std::fs::write(
+        inspect_dir.join("VERDICT.md"),
+        "FAIL\nscope leak in feat-a\n",
+    )
+    .unwrap();
     std::fs::write(
         inspect_dir.join("ISSUES.md"),
         "- file: examples/demo_a/x.rs\n- symptom: wrote outside scope\n- suggestion: revert + narrow edit\n",
@@ -332,10 +335,7 @@ fn parse_verdict_result_prefix() {
         parse_verdict_text("**Result: FAIL**\n\n| plan_ref |"),
         InspectVerdict::Fail
     );
-    assert_eq!(
-        parse_verdict_text("Result: PASS\nok"),
-        InspectVerdict::Pass
-    );
+    assert_eq!(parse_verdict_text("Result: PASS\nok"), InspectVerdict::Pass);
 }
 
 #[test]
@@ -388,7 +388,10 @@ fn map_only_rework_uses_whitelist_scope() {
     let ir = build_rework_plan(&base, &issues, 1, "r1").unwrap();
     let scope = ir.tasks[0].scope.as_ref().unwrap();
     assert!(
-        scope.paths.iter().any(|p| p.contains("CLAUDE") || p.contains("docs")),
+        scope
+            .paths
+            .iter()
+            .any(|p| p.contains("CLAUDE") || p.contains("docs")),
         "paths={:?}",
         scope.paths
     );
@@ -422,7 +425,7 @@ fn system_push_gate_blocks_without_verdict() {
         role: Some(TaskRole::Inspect),
         scope: None,
         outputs: vec![INSPECT_VERDICT_REL.into()],
-    tags: vec![],
+        tags: vec![],
     });
     plan.tasks.push(TaskIR {
         id: SYS_POST_GIT_PUSH_ID.into(),
@@ -442,12 +445,15 @@ fn system_push_gate_blocks_without_verdict() {
         role: Some(TaskRole::Integrate),
         scope: None,
         outputs: vec![],
-    tags: vec![],
+        tags: vec![],
     });
     let push = plan.task(SYS_POST_GIT_PUSH_ID).unwrap();
     let err = system_push_inspect_gate(&plan, push, root).unwrap_err();
     assert!(err.contains("CCO_PUSH_SKIPPED"), "{err}");
-    assert!(err.contains("inspect_unknown") || err.contains("inspect_not_pass"), "{err}");
+    assert!(
+        err.contains("inspect_unknown") || err.contains("inspect_not_pass"),
+        "{err}"
+    );
 
     // PASS file → Ok
     let vdir = root.join(".cco-out/inspect");
@@ -492,7 +498,7 @@ fn write_task_diff_lists_outputs_without_git() {
         role: Some(TaskRole::Implement),
         scope: None,
         outputs: vec![".cco-out/t1/SUMMARY.md".into()],
-    tags: vec![],
+        tags: vec![],
     };
     let rel = write_task_diff(&task, &wd, root)
         .unwrap()
@@ -629,7 +635,10 @@ fn handwalk_gate_fail_demoted_pass() {
         "residual-only handwalk must host-Pass"
     );
     let (blocked, n) = inspect_pass_blocked_by_issues(&task, root, root);
-    assert!(!blocked && n == 0, "must not block, got blocked={blocked} n={n}");
+    assert!(
+        !blocked && n == 0,
+        "must not block, got blocked={blocked} n={n}"
+    );
     let issues = load_parsed_inspect_issues(&task, root, root);
     let reason = inspect_gate_fail_reason(
         read_inspect_verdict(&task, root, root),

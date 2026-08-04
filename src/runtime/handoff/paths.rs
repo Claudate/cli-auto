@@ -64,8 +64,7 @@ pub fn write_task_diff(
         }
     };
     if let Some(parent) = out_path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("mkdir {}", parent.display()))?;
+        std::fs::create_dir_all(parent).with_context(|| format!("mkdir {}", parent.display()))?;
     }
 
     let mut body = String::new();

@@ -67,8 +67,7 @@ pub fn task_has_browser_tag(tags: &[String]) -> bool {
 
 /// Tag `scrape` — outbound fetch intent for desk risk chip.
 pub fn task_has_scrape_tag(tags: &[String]) -> bool {
-    tags.iter()
-        .any(|t| t.trim().eq_ignore_ascii_case("scrape"))
+    tags.iter().any(|t| t.trim().eq_ignore_ascii_case("scrape"))
 }
 
 /// Tag `ui-verify` — screenshot / page verify (needs local preview when require_preview).
@@ -96,7 +95,15 @@ pub fn classify_task_risk(
     verify_cmd: Option<&str>,
     kind: Option<&str>,
 ) -> RiskClass {
-    classify_task_risk_with_tags(id, role, scope_paths, scope_readonly_only, verify_cmd, kind, &[])
+    classify_task_risk_with_tags(
+        id,
+        role,
+        scope_paths,
+        scope_readonly_only,
+        verify_cmd,
+        kind,
+        &[],
+    )
 }
 
 /// Same as [`classify_task_risk`] with tags (scrape → External).
@@ -143,7 +150,9 @@ pub fn classify_task_risk_with_tags(
     if matches!(role, Some(TaskRole::Inspect) | Some(TaskRole::Scout)) {
         return RiskClass::Read;
     }
-    if kind.map(|k| k.eq_ignore_ascii_case("check")).unwrap_or(false)
+    if kind
+        .map(|k| k.eq_ignore_ascii_case("check"))
+        .unwrap_or(false)
         && scope_paths.is_empty()
         && scope_readonly_only
     {
@@ -206,15 +215,7 @@ pub fn classify_task_risk_wire_with_tags(
     } else {
         &[][..]
     };
-    classify_task_risk_with_tags(
-        id,
-        role,
-        paths,
-        scope_readonly_only,
-        verify_cmd,
-        kind,
-        tags,
-    )
+    classify_task_risk_with_tags(id, role, paths, scope_readonly_only, verify_cmd, kind, tags)
 }
 
 #[cfg(test)]

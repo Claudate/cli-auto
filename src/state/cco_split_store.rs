@@ -64,8 +64,7 @@ pub fn save_cco_split(config: &Config, doc: &CcoSplitJob) -> Result<()> {
             )?;
             for t in &doc.tasks {
                 let deps = serde_json::to_string(&t.depends_on).unwrap_or_else(|_| "[]".into());
-                let scope =
-                    serde_json::to_string(&t.scope_paths).unwrap_or_else(|_| "[]".into());
+                let scope = serde_json::to_string(&t.scope_paths).unwrap_or_else(|_| "[]".into());
                 let meta = t
                     .meta_json
                     .as_ref()
@@ -153,13 +152,9 @@ pub fn load_cco_split(config: &Config, job_id: &str) -> Result<Option<CcoSplitJo
                 let deps_s: String = r.get(5)?;
                 let scope_s: String = r.get(16)?;
                 let meta_s: Option<String> = r.get(17)?;
-                let depends_on: Vec<String> =
-                    serde_json::from_str(&deps_s).unwrap_or_default();
-                let scope_paths: Vec<String> =
-                    serde_json::from_str(&scope_s).unwrap_or_default();
-                let meta_json = meta_s
-                    .as_deref()
-                    .and_then(|s| serde_json::from_str(s).ok());
+                let depends_on: Vec<String> = serde_json::from_str(&deps_s).unwrap_or_default();
+                let scope_paths: Vec<String> = serde_json::from_str(&scope_s).unwrap_or_default();
+                let meta_json = meta_s.as_deref().and_then(|s| serde_json::from_str(s).ok());
                 Ok(CcoSplitTask {
                     task_id: r.get(0)?,
                     ord: r.get::<_, i64>(1)? as i32,

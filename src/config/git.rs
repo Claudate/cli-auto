@@ -1,17 +1,53 @@
 //! Git configuration: remotes (国内/国外), identity, auto-commit policy.
 //!
 //! [INPUT]: config.toml `[git]` section
-//! [OUTPUT]: GitConfig · GitRemote · GitIdentity · AutoCommitPolicy
+//! [OUTPUT]: GitConfig · GitRemote · GitIdentity · AutoCommitPolicy · AutoCommitGranularity
 //! [POS]: config 子模块；纯数据，无 IO
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/config/CLAUDE.md
 //!
 //! 设计：
 //! - remotes: 命名 remote 列表（origin/gitee/github/…），每个含 url + region 标签
 //! - identity: 可选 user.name / user.email（不强制覆盖本机全局）
-//! - auto_commit: 自动提交策略（开关 + message 模板 + 是否 push）
+//! - auto_commit: 自动提交策略（开关 + 粒度 + message 模板 + 是否 push）
 //! - 所有字段 serde(default)，旧 config.toml 无 [git] 段时走默认值
 
 use serde::{Deserialize, Serialize};
+
+/// Host auto-commit granularity.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AutoCommitGranularity {
+    /// Do not auto-commit after run/task completion.
+    #[default]
+    Off,
+    /// Commit once at the end of the whole plan.
+    PerPlan,
+    /// Commit after each split task reaches Done.
+    PerTask,
+}
+
+impl AutoCommitGranularity {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::PerPlan => "per_plan",
+            Self::PerTask => "per_task",
+        }
+    }
+}
+
+pub fn normalize_auto_commit_granularity(raw: &str) -> Option<AutoCommitGranularity> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "" | "off" | "none" | "false" | "0" | "关闭" => Some(AutoCommitGranularity::Off),
+        "per_plan" | "plan" | "after_plan" | "按计划" | "按计划提交" => {
+            Some(AutoCommitGranularity::PerPlan)
+        }
+        "per_task" | "task" | "after_task" | "按任务" | "按拆分任务" | "按拆分任务提交" => {
+            Some(AutoCommitGranularity::PerTask)
+        }
+        _ => None,
+    }
+}
 
 /// Region tag for a remote: domestic (国内) or overseas (国外).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -78,7 +114,10 @@ impl Default for GitIdentity {
 pub struct AutoCommitPolicy {
     /// Master switch. Default false — host never auto-commits unless opted in.
     pub enabled: bool,
-    /// Commit message template; `{plan}` = plan name, `{run}` = run_id, `{date}` = today.
+    /// Commit granularity: off / per_plan / per_task.
+    pub granularity: AutoCommitGranularity,
+    /// Commit message template; `{plan}` = plan name, `{task}` = task id,
+    /// `{run}` = run_id, `{date}` = today.
     pub message_template: String,
     /// Whether to `git push` after a successful commit.
     pub push_after_commit: bool,
@@ -94,6 +133,7 @@ impl Default for AutoCommitPolicy {
     fn default() -> Self {
         Self {
             enabled: false,
+            granularity: AutoCommitGranularity::Off,
             message_template: "cco: {plan} ({run})".into(),
             push_after_commit: false,
             push_remote: String::new(),
@@ -163,8 +203,23 @@ impl GitConfig {
         self.auto_commit
             .message_template
             .replace("{plan}", plan)
+            .replace("{task}", "")
             .replace("{run}", run)
             .replace("{date}", date)
+    }
+
+    pub fn render_message_for_task(&self, plan: &str, task: &str, run: &str, date: &str) -> String {
+        let template = self.auto_commit.message_template.as_str();
+        let rendered = template
+            .replace("{plan}", plan)
+            .replace("{task}", task)
+            .replace("{run}", run)
+            .replace("{date}", date);
+        if task.trim().is_empty() || template.contains("{task}") {
+            rendered
+        } else {
+            format!("{rendered} [task:{task}]")
+        }
     }
 }
 
@@ -250,6 +305,10 @@ mod tests {
             c.render_message("demo", "r1", "2026-07-30"),
             "[2026-07-30] demo · r1"
         );
+        assert_eq!(
+            c.render_message_for_task("demo", "t1", "r1", "2026-07-30"),
+            "[2026-07-30] demo · r1 [task:t1]"
+        );
     }
 
     #[test]
@@ -271,9 +330,27 @@ mod tests {
     fn default_off() {
         let c = GitConfig::default();
         assert!(!c.auto_commit.enabled);
+        assert_eq!(c.auto_commit.granularity, AutoCommitGranularity::Off);
         assert!(!c.auto_commit.push_after_commit);
         assert!(!c.auto_commit.allow_force);
         assert!(c.remotes.is_empty());
+    }
+
+    #[test]
+    fn normalize_granularity_aliases() {
+        assert_eq!(
+            normalize_auto_commit_granularity("per_plan"),
+            Some(AutoCommitGranularity::PerPlan)
+        );
+        assert_eq!(
+            normalize_auto_commit_granularity("按拆分任务提交"),
+            Some(AutoCommitGranularity::PerTask)
+        );
+        assert_eq!(
+            normalize_auto_commit_granularity("off"),
+            Some(AutoCommitGranularity::Off)
+        );
+        assert_eq!(normalize_auto_commit_granularity("later"), None);
     }
 
     #[test]

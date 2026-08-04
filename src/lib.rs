@@ -15,9 +15,9 @@
 pub mod app;
 pub mod cli;
 pub mod config;
+pub mod doctor;
 /// Domain models (A0 skeleton → A1 pure models).
 pub mod domain;
-pub mod doctor;
 pub mod graph;
 pub mod plan;
 /// Port traits only (A0 skeleton → A1 WorkerPort/Store/…).
@@ -32,8 +32,8 @@ pub mod tui;
 pub use config::Config;
 pub use plan::{PlanIR, TaskIR, TaskRole, TaskScope};
 pub use runtime::provider::{
-    Capabilities, ProviderRegistry, StartCtx, TaskResult, TaskStatus, WorkerHandle,
-    WorkerPort, WorkerProvider, WorkerStatus,
+    Capabilities, ProviderRegistry, StartCtx, TaskResult, TaskStatus, WorkerHandle, WorkerPort,
+    WorkerProvider, WorkerStatus,
 };
 pub use services::{
     add_project, chat_save_plan, chat_send, chat_session_get, confirm_start, get_plan_job,

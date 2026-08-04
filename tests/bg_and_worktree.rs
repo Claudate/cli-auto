@@ -233,11 +233,7 @@ tasks:
     config.state_root = tmp.path().join("state");
     config.default.default_provider = "fake".into();
     // Point codex at a harmless binary so registry builds; task should fail before spawn.
-    config
-        .providers
-        .entry("codex".into())
-        .or_default()
-        .bin = "true".into();
+    config.providers.entry("codex".into()).or_default().bin = "true".into();
     std::fs::create_dir_all(config.runs_dir()).unwrap();
 
     let ir = load_plan(&project, &plan_path, Some("cco-plan/v1"), &config).unwrap();

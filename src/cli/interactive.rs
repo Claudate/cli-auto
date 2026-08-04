@@ -34,7 +34,10 @@ pub fn confirm(question: &str, default_yes: bool) -> Result<bool> {
 }
 
 /// Resolve project path: explicit, or interactive prompt.
-pub fn resolve_project(explicit: Option<PathBuf>, require_explicit_noninteractive: bool) -> Result<PathBuf> {
+pub fn resolve_project(
+    explicit: Option<PathBuf>,
+    require_explicit_noninteractive: bool,
+) -> Result<PathBuf> {
     if let Some(p) = explicit {
         return Ok(p);
     }

@@ -9,14 +9,14 @@ use std::collections::HashSet;
 
 use anyhow::{bail, Result};
 
+use super::optional::normalize_optional_title;
 use super::system_ids::is_system_post_task;
 use super::types::{
     PlanIR, TaskIR, TaskRole, IMPLEMENT_USABILITY_SYSTEM_PROMPT,
     IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER, INSPECT_DEFAULT_ALLOWED_TOOLS,
-    INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_SYSTEM_PROMPT, INSPECT_SYSTEM_PROMPT_MARKER,
-    INSPECT_STRIP_TOOLS,
+    INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_STRIP_TOOLS, INSPECT_SYSTEM_PROMPT,
+    INSPECT_SYSTEM_PROMPT_MARKER,
 };
-use super::optional::normalize_optional_title;
 
 /// Drop unselected optional tasks and rewrite depends_on for execution.
 pub fn materialize_selected_tasks(mut ir: PlanIR) -> Result<PlanIR> {
@@ -129,7 +129,11 @@ pub(crate) fn ensure_browser_evidence_outputs(task: &mut TaskIR) {
     // Ensure evidence dir is writable in scope when scope exists or role=implement.
     if let Some(scope) = task.scope.as_mut() {
         let glob = format!("{base}/**");
-        if !scope.paths.iter().any(|p| p == &glob || p == ".cco-out/browser/**") {
+        if !scope
+            .paths
+            .iter()
+            .any(|p| p == &glob || p == ".cco-out/browser/**")
+        {
             scope.paths.push(glob);
         }
     }
@@ -290,7 +294,10 @@ pub(crate) fn normalize_inspect_allowed_tools(raw: Option<&serde_json::Value>) -
     tools
 }
 
-pub(crate) fn inject_inspect_system_prompt(opts: &mut serde_json::Value, allow_business_write: bool) {
+pub(crate) fn inject_inspect_system_prompt(
+    opts: &mut serde_json::Value,
+    allow_business_write: bool,
+) {
     let existing = opts
         .get("append_system_prompt")
         .and_then(|v| v.as_str())
@@ -437,7 +444,11 @@ mod tests {
         // Real failure shape: t7-inspect [] raced t1-inventory at run start.
         let mut ir = plan(vec![
             task("t1-inventory", Some(TaskRole::Scout), &[]),
-            task("t2-delete-one", Some(TaskRole::Implement), &["t1-inventory"]),
+            task(
+                "t2-delete-one",
+                Some(TaskRole::Implement),
+                &["t1-inventory"],
+            ),
             task("t3-archive-b", Some(TaskRole::Implement), &["t1-inventory"]),
             task(
                 "t4-c1-split-merge",
@@ -458,8 +469,12 @@ mod tests {
         ]);
         materialize_role_defaults(&mut ir);
         let insp = ir.tasks.iter().find(|t| t.id == "t7-inspect").unwrap();
-        for leaf in ["t2-delete-one", "t4-c1-split-merge", "t5-c2c3c4-light", "t6-index-refresh"]
-        {
+        for leaf in [
+            "t2-delete-one",
+            "t4-c1-split-merge",
+            "t5-c2c3c4-light",
+            "t6-index-refresh",
+        ] {
             assert!(
                 insp.depends_on.iter().any(|d| d == leaf),
                 "missing leaf {leaf}; deps={:?}",
@@ -528,7 +543,8 @@ mod tests {
         materialize_role_defaults(&mut ir);
         let sys = sys_of(ir.tasks.iter().find(|t| t.id == "t1").unwrap());
         assert_eq!(
-            sys.matches(IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER).count(),
+            sys.matches(IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER)
+                .count(),
             1,
             "usability marker duplicated: {sys}"
         );
@@ -608,10 +624,7 @@ mod tests {
             .iter()
             .any(|o| o == ".cco-out/browser/sm/smoke.md"));
         let sc = ir.tasks.iter().find(|x| x.id == "sc").unwrap();
-        assert!(sc
-            .outputs
-            .iter()
-            .any(|o| o == ".cco-out/browser/sc/raw.md"));
+        assert!(sc.outputs.iter().any(|o| o == ".cco-out/browser/sc/raw.md"));
         // author content/** preserved + evidence glob
         let paths = &sc.scope.as_ref().unwrap().paths;
         assert!(paths.iter().any(|p| p == "content/**"));

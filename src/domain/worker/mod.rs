@@ -22,8 +22,8 @@ pub use cost_apply::{
 };
 pub use cost_budget::{
     budget_tier_ceiling, clamp_tier, may_budget_downgrade, route_pass_order, select_with_sticky,
-    sticky_cohort_ids, sticky_provider, suggest_budget_downgrade, task_wave_depth, BUDGET_CHEAP_RATIO,
-    BUDGET_MID_RATIO,
+    sticky_cohort_ids, sticky_provider, suggest_budget_downgrade, task_wave_depth,
+    BUDGET_CHEAP_RATIO, BUDGET_MID_RATIO,
 };
 pub use cost_intent::{
     apply_intent_to_tier, classify_intent, effective_tier, IntentHint, IntentKind,

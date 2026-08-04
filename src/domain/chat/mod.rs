@@ -37,12 +37,6 @@ pub use fence::{
     extract_session_digest_fence, extract_tagged_fence, extract_wave_index_fence,
     strip_session_digest_fences,
 };
-pub use plan_writing_guidance::{
-    backend_architecture_guidance, chat_plan_writing_guidance, chat_visual_review_guidance,
-    planner_greenfield_stack_blurb, split_agent_delivery_guidance, ui_color_systems_guidance,
-    ui_copy_systems_guidance, ui_delivery_recipes_guidance, ui_layout_systems_guidance,
-    ui_motion_effects_guidance, ui_typography_systems_guidance,
-};
 pub use id::{sanitize_session_id, DEFAULT_SESSION};
 pub use normalize::{
     acceptance_hint, acceptance_is_stub, acceptance_quality, build_verification,
@@ -50,6 +44,12 @@ pub use normalize::{
     structure_plan_markdown, AcceptanceQuality, PlanChecklistItem, TaskAcceptanceItem,
     VerificationInputs, VerificationItem, VerificationItemStatus, VerificationSource,
     VerificationView,
+};
+pub use plan_writing_guidance::{
+    backend_architecture_guidance, chat_plan_writing_guidance, chat_visual_review_guidance,
+    planner_greenfield_stack_blurb, split_agent_delivery_guidance, ui_color_systems_guidance,
+    ui_copy_systems_guidance, ui_delivery_recipes_guidance, ui_layout_systems_guidance,
+    ui_motion_effects_guidance, ui_typography_systems_guidance,
 };
 pub use session_digest::{
     format_session_digest_prompt_block, session_digest_looks_valid, session_digest_reject_reason,
@@ -283,9 +283,13 @@ mod tests {
 
     #[test]
     fn extract_title_cuts_jammed_single_line_wall() {
-        let wall = "# cco 全局体验优化：简单主路径 · 计划管理## 目标把桌面端收成一条## 任务大纲1. 做";
+        let wall =
+            "# cco 全局体验优化：简单主路径 · 计划管理## 目标把桌面端收成一条## 任务大纲1. 做";
         let t = extract_title_from_md(wall).expect("title");
-        assert!(t.contains("全局体验优化") || t.contains("简单主路径"), "got: {t}");
+        assert!(
+            t.contains("全局体验优化") || t.contains("简单主路径"),
+            "got: {t}"
+        );
         assert!(!t.contains("##"), "title must not include ##: {t}");
         assert!(!t.contains("目标把"), "title must stop before body: {t}");
         assert!(
@@ -328,7 +332,10 @@ mod tests {
     #[test]
     fn sanitize_session_id_strips_unsafe() {
         assert_eq!(sanitize_session_id("default"), "default");
-        assert_eq!(sanitize_session_id("s-20260720-120000"), "s-20260720-120000");
+        assert_eq!(
+            sanitize_session_id("s-20260720-120000"),
+            "s-20260720-120000"
+        );
         assert_eq!(sanitize_session_id("../evil"), "___evil");
         assert_eq!(sanitize_session_id(""), "default");
     }
@@ -340,6 +347,9 @@ mod tests {
         assert!(report.missing_required.len() >= 1);
         assert_eq!(ClarifyEntry::default(), ClarifyEntry::IdeaToPlan);
         assert_eq!(REQUIRED_SLOTS.len(), 5);
-        assert_eq!(ClarifyEntry::parse("从想法到计划"), Some(ClarifyEntry::IdeaToPlan));
+        assert_eq!(
+            ClarifyEntry::parse("从想法到计划"),
+            Some(ClarifyEntry::IdeaToPlan)
+        );
     }
 }

@@ -21,12 +21,12 @@ mod sanitize;
 mod task_edit;
 mod view;
 
+/// Crate-internal planner log (split_agent / llm).
+pub(crate) use job::append_log;
 pub use job::{
     get_plan_job, job_dir, latest_plan_job_for_plan_path, latest_plan_job_for_project,
     plan_jobs_dir, start_plan_job, PlanJob, PlanJobStatus, StartPlanJobRequest,
 };
-/// Crate-internal planner log (split_agent / llm).
-pub(crate) use job::append_log;
 pub use sanitize::{sanitize_proposed_deps, SanitizeDepsResult};
 pub use view::{
     apply_user_edits_to_ir, job_view, load_proposed, load_proposed_for_exec, load_user_edits,
@@ -64,10 +64,10 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -75,12 +75,9 @@ mod tests {
         assert!(view.task_count.unwrap() >= 3);
         assert!(!view.layers.is_empty());
         assert_eq!(view.layers[0].len(), 2); // t1,t2 parallel
-        // 默认系统收尾关：不应出现 sys-post-*
+                                             // 默认系统收尾关：不应出现 sys-post-*
         assert!(
-            !view
-                .tasks
-                .iter()
-                .any(|t| t.id.starts_with("sys-post-")),
+            !view.tasks.iter().any(|t| t.id.starts_with("sys-post-")),
             "system post should be off by default"
         );
     }
@@ -109,10 +106,10 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -122,10 +119,7 @@ mod tests {
             ids.contains(&SYS_POST_INSPECT_ID),
             "missing inspect: {ids:?}"
         );
-        assert!(
-            ids.contains(&SYS_POST_GIT_PUSH_ID),
-            "missing push: {ids:?}"
-        );
+        assert!(ids.contains(&SYS_POST_GIT_PUSH_ID), "missing push: {ids:?}");
         let inspect = view
             .tasks
             .iter()
@@ -136,7 +130,10 @@ mod tests {
             .iter()
             .find(|t| t.id == SYS_POST_GIT_PUSH_ID)
             .unwrap();
-        assert!(inspect.optional && inspect.include, "inspect default checked");
+        assert!(
+            inspect.optional && inspect.include,
+            "inspect default checked"
+        );
         assert!(push.optional && push.include, "push default checked");
         assert!(
             push.depends_on.iter().any(|d| d == SYS_POST_INSPECT_ID),
@@ -176,10 +173,10 @@ mod tests {
                 // Explicit concurrency: 3 sections → one parallel wave.
                 max_parallel: Some(3),
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -220,10 +217,10 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -269,10 +266,10 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -318,10 +315,10 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -367,10 +364,10 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: Some(4),
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -409,10 +406,10 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: Some(2),
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -582,8 +579,7 @@ mod tests {
         .to_string();
         let raw = format!(
             "{}\n{}\n",
-            r#"{"type":"system","subtype":"init","session_id":"s"}"#,
-            result_line
+            r#"{"type":"system","subtype":"init","session_id":"s"}"#, result_line
         );
         let ir = parse_llm_plan_output(&raw, &src, &cfg).unwrap();
         assert_eq!(ir.tasks.len(), 1);
@@ -681,10 +677,10 @@ mod tests {
                 mode: Some("print".into()),
                 max_parallel: Some(4),
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -899,7 +895,9 @@ t1
         let ir_r = build_heuristic_ai_plan(&cfg, &job_r).expect("recover heuristic");
         let titles_r: Vec<_> = ir_r.tasks.iter().map(|t| t.title.clone()).collect();
         assert!(
-            titles_r.iter().any(|t| t.contains("resolveEntryRoute") || t.contains("实现")),
+            titles_r
+                .iter()
+                .any(|t| t.contains("resolveEntryRoute") || t.contains("实现")),
             "must recover implement headings, got {titles_r:?}"
         );
         assert!(
@@ -968,11 +966,15 @@ t1
         let ir_d = build_heuristic_ai_plan(&cfg, &job_dispatch).expect("dispatch heuristic");
         let titles_d: Vec<_> = ir_d.tasks.iter().map(|t| t.title.clone()).collect();
         assert!(
-            titles_d.iter().any(|t| t.contains("A1") || t.contains("待确认")),
+            titles_d
+                .iter()
+                .any(|t| t.contains("A1") || t.contains("待确认")),
             "dispatch plan must split into #### A1… tasks, got {titles_d:?}"
         );
         assert!(
-            titles_d.iter().any(|t| t.contains("A2") || t.contains("执行选项")),
+            titles_d
+                .iter()
+                .any(|t| t.contains("A2") || t.contains("执行选项")),
             "expected A2 task, got {titles_d:?}"
         );
         assert!(
@@ -1070,11 +1072,15 @@ t1
         let ir_p = build_heuristic_ai_plan(&cfg, &job_p).expect("pilotdeck heuristic");
         let titles_p: Vec<_> = ir_p.tasks.iter().map(|t| t.title.clone()).collect();
         assert!(
-            titles_p.iter().any(|t| t.contains("P0-1") || t.contains("结果台消费")),
+            titles_p
+                .iter()
+                .any(|t| t.contains("P0-1") || t.contains("结果台消费")),
             "pilotdeck must yield #### P0-1 task, got {titles_p:?}"
         );
         assert!(
-            titles_p.iter().any(|t| t.contains("P0-2") || t.contains("report.md")),
+            titles_p
+                .iter()
+                .any(|t| t.contains("P0-2") || t.contains("report.md")),
             "expected P0-2, got {titles_p:?}"
         );
         assert!(
@@ -1089,9 +1095,21 @@ t1
             ir_p.tasks.len()
         );
         // S0/S2: 依赖 column → P0-1 & P0-2 no edge; P0-3 waits P0-2; acceptance filled
-        let t1 = ir_p.tasks.iter().find(|t| t.title.contains("P0-1")).expect("t P0-1");
-        let t2 = ir_p.tasks.iter().find(|t| t.title.contains("P0-2")).expect("t P0-2");
-        let t3 = ir_p.tasks.iter().find(|t| t.title.contains("P0-3")).expect("t P0-3");
+        let t1 = ir_p
+            .tasks
+            .iter()
+            .find(|t| t.title.contains("P0-1"))
+            .expect("t P0-1");
+        let t2 = ir_p
+            .tasks
+            .iter()
+            .find(|t| t.title.contains("P0-2"))
+            .expect("t P0-2");
+        let t3 = ir_p
+            .tasks
+            .iter()
+            .find(|t| t.title.contains("P0-3"))
+            .expect("t P0-3");
         assert!(
             t1.depends_on.is_empty(),
             "P0-1 依赖=无 → empty deps, got {:?}",
@@ -1108,7 +1126,10 @@ t1
             t3.depends_on
         );
         assert!(
-            t1.acceptance.as_ref().map(|a| a.contains("费用") || a.contains("未汇总")).unwrap_or(false),
+            t1.acceptance
+                .as_ref()
+                .map(|a| a.contains("费用") || a.contains("未汇总"))
+                .unwrap_or(false),
             "P0-1 acceptance from 完成定义, got {:?}",
             t1.acceptance
         );
@@ -1214,7 +1235,9 @@ t1
             "W-window split should not force meta inspect tail; got require_inspect=true titles={titles2:?}"
         );
         assert!(
-            ir2.tasks.iter().all(|t| t.role != Some(crate::plan::TaskRole::Inspect)),
+            ir2.tasks
+                .iter()
+                .all(|t| t.role != Some(crate::plan::TaskRole::Inspect)),
             "no forced inspect role on landing phases: {titles2:?}"
         );
         // Sequential deps: t2 waits t1
@@ -1237,10 +1260,10 @@ t1
                 mode: Some("print".into()),
                 max_parallel: Some(5),
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -1313,10 +1336,10 @@ t1
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -1359,10 +1382,10 @@ t1
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -1401,7 +1424,10 @@ t1
         )
         .unwrap_err()
         .to_string();
-        assert!(err.contains("自己") || err.contains("itself") || err.contains("依赖"), "{err}");
+        assert!(
+            err.contains("自己") || err.contains("itself") || err.contains("依赖"),
+            "{err}"
+        );
     }
 
     /// S-role: confirm-screen can patch role + scope.paths; DTO exposes them.
@@ -1428,10 +1454,10 @@ t1
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -1506,10 +1532,10 @@ t1
                 mode: Some("print".into()),
                 max_parallel: None,
                 preserve_from_job_id: None,
-            grain_hint: None,
-            clarify_depth: None,
-            revision_notes: None,
-            effort: None,
+                grain_hint: None,
+                clarify_depth: None,
+                revision_notes: None,
+                effort: None,
             },
         )
         .unwrap();
@@ -1587,10 +1613,11 @@ t1
         assert_eq!(patched.provider, "fake");
 
         // t2 should depend on the patched task if both still present.
-        if let Some(tb) = ir.tasks.iter().find(|t| {
-            normalize_or(&t.title) == normalize_or(&t2_title)
-                || t.title == t2_title
-        }) {
+        if let Some(tb) = ir
+            .tasks
+            .iter()
+            .find(|t| normalize_or(&t.title) == normalize_or(&t2_title) || t.title == t2_title)
+        {
             assert!(
                 tb.depends_on.iter().any(|d| d == &patched.id),
                 "t2 deps should include patched: {:?} patched={}",

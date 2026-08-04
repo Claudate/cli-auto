@@ -43,10 +43,7 @@ pub fn is_external_stop(run_status_snake: &str) -> bool {
 /// Live (non-terminal) task phases that external stop freezes to Stopped.
 /// Matches `TaskStatus::{Pending,Queued,Starting,Running}` snake_case serde.
 pub fn is_live_task_status(status_snake: &str) -> bool {
-    matches!(
-        status_snake,
-        "pending" | "queued" | "starting" | "running"
-    )
+    matches!(status_snake, "pending" | "queued" | "starting" | "running")
 }
 
 /// How a terminal task status from disk merges into in-memory done/failed sets.
@@ -130,8 +127,14 @@ mod tests {
 
     #[test]
     fn stall_and_budget() {
-        assert!(stall_triggered(Duration::from_secs(10), Duration::from_secs(5)));
-        assert!(!stall_triggered(Duration::from_secs(3), Duration::from_secs(5)));
+        assert!(stall_triggered(
+            Duration::from_secs(10),
+            Duration::from_secs(5)
+        ));
+        assert!(!stall_triggered(
+            Duration::from_secs(3),
+            Duration::from_secs(5)
+        ));
         assert!(budget_exceeded(10.1, 10.0));
         assert!(!budget_exceeded(9.9, 10.0));
     }

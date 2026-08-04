@@ -161,7 +161,10 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
     for g in &file.groups {
         for tid in &g.tasks {
             group_of.insert(tid.clone(), g.id.clone());
-            group_tasks.entry(g.id.clone()).or_default().push(tid.clone());
+            group_tasks
+                .entry(g.id.clone())
+                .or_default()
+                .push(tid.clone());
         }
     }
     // map group depends → task depends_on for tasks in dependent groups
@@ -215,10 +218,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             }
         }
 
-        let group = ft
-            .group
-            .clone()
-            .or_else(|| group_of.get(&ft.id).cloned());
+        let group = ft.group.clone().or_else(|| group_of.get(&ft.id).cloned());
 
         let mut opts = default_provider_opts(config, &provider);
         // merge defaults.providers.<name> and top-level providers and task opts

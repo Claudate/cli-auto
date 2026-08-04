@@ -161,9 +161,8 @@ pub const CODEBUDDY: ShellProfile = ShellProfile {
 };
 
 /// All shell-print production profiles (not claude / fake / sdk).
-pub const ALL_SHELL_PROFILES: &[ShellProfile] = &[
-    CODEX, GEMINI, QWEN, KIMI, DEEPSEEK, COPILOT, CODEBUDDY,
-];
+pub const ALL_SHELL_PROFILES: &[ShellProfile] =
+    &[CODEX, GEMINI, QWEN, KIMI, DEEPSEEK, COPILOT, CODEBUDDY];
 
 pub fn profile_by_name(name: &str) -> Option<ShellProfile> {
     let n = name.trim().to_ascii_lowercase();
@@ -172,10 +171,7 @@ pub fn profile_by_name(name: &str) -> Option<ShellProfile> {
         "codewhale" | "codew" | "deepseek-tui" => "deepseek".to_string(),
         other => other.to_string(),
     };
-    ALL_SHELL_PROFILES
-        .iter()
-        .copied()
-        .find(|p| p.name == n)
+    ALL_SHELL_PROFILES.iter().copied().find(|p| p.name == n)
 }
 
 /// Official docs / download URL for a provider id (shell profiles + claude).
@@ -207,7 +203,10 @@ mod tests {
 
     #[test]
     fn profile_by_name_lookup() {
-        assert_eq!(profile_by_name("gemini").map(|p| p.default_bin), Some("gemini"));
+        assert_eq!(
+            profile_by_name("gemini").map(|p| p.default_bin),
+            Some("gemini")
+        );
         assert_eq!(profile_by_name("CODEX").map(|p| p.name), Some("codex"));
         assert!(profile_by_name("claude").is_none());
     }

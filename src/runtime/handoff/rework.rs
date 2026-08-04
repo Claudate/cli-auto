@@ -33,8 +33,7 @@ pub fn count_rework_rounds(project_root: &Path, run_dir: &Path) -> u32 {
         if let Ok(rd) = std::fs::read_dir(&rework_dir) {
             for ent in rd.flatten() {
                 let name = ent.file_name().to_string_lossy().to_ascii_lowercase();
-                if name.starts_with("round") && (name.ends_with(".md") || name.ends_with(".json"))
-                {
+                if name.starts_with("round") && (name.ends_with(".md") || name.ends_with(".json")) {
                     n += 1;
                 }
             }
@@ -106,10 +105,8 @@ pub fn build_rework_plan(
             .map(|s| (*s).to_string())
             .collect()
     } else {
-        let mut paths: Vec<String> = vec![
-            ".cco-out/progress/**".into(),
-            ".cco-out/rework/**".into(),
-        ];
+        let mut paths: Vec<String> =
+            vec![".cco-out/progress/**".into(), ".cco-out/rework/**".into()];
         for i in &target {
             if i.path != "n/a" && !i.path.is_empty() {
                 paths.push(i.path.clone());
@@ -273,9 +270,8 @@ pub fn accept_residual_on_handoff(plan: &PlanIR, state: &RunState, note: &str) -
         Utc::now().to_rfc3339(),
         note.chars().take(80).collect::<String>()
     ));
-    h.instructions_for_next = format!(
-        "- {line}\n- blocking items were explicitly accepted; do not treat as pure PASS\n"
-    );
+    h.instructions_for_next =
+        format!("- {line}\n- blocking items were explicitly accepted; do not treat as pure PASS\n");
     h.save(&state.run_dir)
 }
 
@@ -407,8 +403,7 @@ pub fn inspect_loop_view(
         run_is_terminal,
         view.verdict.as_deref(),
     );
-    view.docs_closeout_only =
-        view.blocking_count > 0 && all_blocking_are_docs_closeout(&parsed);
+    view.docs_closeout_only = view.blocking_count > 0 && all_blocking_are_docs_closeout(&parsed);
 
     // Ensure E3 marker written by app::run::ensure_loop.
     let marker = state.run_dir.join("auto_rework.json");

@@ -263,7 +263,11 @@ tasks:
         .run()
         .await
         .unwrap();
-    assert_eq!(status, RunStatus::Completed, "parallel mixed run should complete");
+    assert_eq!(
+        status,
+        RunStatus::Completed,
+        "parallel mixed run should complete"
+    );
 
     let events = read_events(&run_dir);
     let starts: Vec<_> = events
@@ -363,12 +367,12 @@ tasks:
 /// Real CLI smoke is skipped when binaries are missing (no account / install required).
 #[test]
 fn real_cli_bins_optional_skip() {
-    let claude = which::which("claude").ok().or_else(|| {
-        std::env::var_os("CCO_CLAUDE_BIN").map(std::path::PathBuf::from)
-    });
-    let codex = which::which("codex").ok().or_else(|| {
-        std::env::var_os("CCO_CODEX_BIN").map(std::path::PathBuf::from)
-    });
+    let claude = which::which("claude")
+        .ok()
+        .or_else(|| std::env::var_os("CCO_CLAUDE_BIN").map(std::path::PathBuf::from));
+    let codex = which::which("codex")
+        .ok()
+        .or_else(|| std::env::var_os("CCO_CODEX_BIN").map(std::path::PathBuf::from));
     if claude.is_none() || codex.is_none() {
         eprintln!(
             "skip real multi-cli smoke: claude={claude:?} codex={codex:?} \

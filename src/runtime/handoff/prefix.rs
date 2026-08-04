@@ -24,7 +24,11 @@ pub fn build_prompt_prefix(task: &TaskIR, run_dir: &Path) -> String {
         None => (String::new(), String::new()),
     };
     let paths = if paths.is_empty() { "-".into() } else { paths };
-    let forbid = if forbid.is_empty() { "-".into() } else { forbid };
+    let forbid = if forbid.is_empty() {
+        "-".into()
+    } else {
+        forbid
+    };
     let deps = if task.depends_on.is_empty() {
         "-".into()
     } else {
@@ -60,7 +64,9 @@ pub fn build_prompt_prefix(task: &TaskIR, run_dir: &Path) -> String {
     if wants_step_progress(task) {
         body.push_str("\n## 进度标记（观察用 · 必遵守）\n");
         body.push_str("1. 开工先列 3–7 条短清单（来自【自测】/怎样算做完），每条一行：`CCO_STEP todo: 简述`\n");
-        body.push_str("2. 同一时刻只推进一条：开始时 `CCO_STEP start: 简述`，完成时 `CCO_STEP done: 简述`\n");
+        body.push_str(
+            "2. 同一时刻只推进一条：开始时 `CCO_STEP start: 简述`，完成时 `CCO_STEP done: 简述`\n",
+        );
         body.push_str("3. 标记写在 stdout 普通文本行即可；不要为此改业务代码结构\n");
         body.push_str("4. 全部小步完成后仍以最后一行 `CCO_DONE ok` 收尾\n");
     }
@@ -163,9 +169,9 @@ fn wants_step_progress(task: &TaskIR) -> bool {
         Some(crate::plan::TaskRole::Scout)
         | Some(crate::plan::TaskRole::Inspect)
         | Some(crate::plan::TaskRole::Closeout) => false,
-        Some(crate::plan::TaskRole::Implement)
-        | Some(crate::plan::TaskRole::Integrate)
-        | None => true,
+        Some(crate::plan::TaskRole::Implement) | Some(crate::plan::TaskRole::Integrate) | None => {
+            true
+        }
     }
 }
 

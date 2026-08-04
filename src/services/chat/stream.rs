@@ -69,7 +69,6 @@ pub fn chat_stream_partial(project: &Path, session_id: Option<&str>) -> Result<C
     })
 }
 
-
 /// Stop the in-flight chat Claude CLI (best-effort).
 /// Writes `.done=130` first so stream_child / poll treat it as orchestrator stop,
 /// then SIGTERM+SIGKILL the pid from `meta.json`.
@@ -93,14 +92,12 @@ pub fn chat_cancel(project: &Path) -> Result<bool> {
         .ok()
         .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
         .and_then(|v| {
-            v.get("pid")
-                .and_then(|p| p.as_u64())
-                .or_else(|| {
-                    v.get("opaque_id")
-                        .and_then(|o| o.as_str())
-                        .and_then(|s| s.strip_prefix("pid:"))
-                        .and_then(|n| n.parse::<u64>().ok())
-                })
+            v.get("pid").and_then(|p| p.as_u64()).or_else(|| {
+                v.get("opaque_id")
+                    .and_then(|o| o.as_str())
+                    .and_then(|s| s.strip_prefix("pid:"))
+                    .and_then(|n| n.parse::<u64>().ok())
+            })
         })
         .map(|p| p as u32)
         .filter(|&p| p > 1);

@@ -312,11 +312,7 @@ pub fn start_plan_job(config: &Config, req: StartPlanJobRequest) -> Result<PlanJ
                 &format!("preserve user_edits from {from} failed: {e:#}"),
             );
         } else {
-            append_log(
-                config,
-                &job_id,
-                &format!("preserve user_edits from {from}"),
-            );
+            append_log(config, &job_id, &format!("preserve user_edits from {from}"));
         }
     }
     job.save(config)?;
@@ -412,12 +408,7 @@ fn split_agent_can_run_without_cli() -> bool {
 ///
 /// W2-4: supersede is per `plan_path`, not whole-project — re-splitting plan A
 /// must not cancel plan B's still-planning job.
-fn supersede_planning_jobs(
-    config: &Config,
-    project: &Path,
-    plan_path: &Path,
-    keep_job_id: &str,
-) {
+fn supersede_planning_jobs(config: &Config, project: &Path, plan_path: &Path, keep_job_id: &str) {
     let root = plan_jobs_dir(config);
     if !root.is_dir() {
         return;
@@ -504,11 +495,7 @@ fn job_finish_aborted(config: &Config, job_id: &str) -> bool {
 pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
     let job_id = job.job_id.clone();
     if matches!(job.status, PlanJobStatus::Cancelled) || job_marked_cancelled(config, &job_id) {
-        append_log(
-            config,
-            &job_id,
-            "finish skipped: job cancelled/superseded",
-        );
+        append_log(config, &job_id, "finish skipped: job cancelled/superseded");
         return;
     }
     match run_planner(config, job) {
@@ -601,9 +588,7 @@ pub(super) fn finish_plan_job(config: &Config, job: &mut PlanJob) {
                 append_log(
                     config,
                     &job_id,
-                    &format!(
-                        "preserve user edits: applied={applied} removed_tasks={removed_n}"
-                    ),
+                    &format!("preserve user edits: applied={applied} removed_tasks={removed_n}"),
                 );
                 // Ensure DAG still valid after preserve (strip unknown deps as last resort).
                 if let Err(e) = ir.validate() {
@@ -742,10 +727,7 @@ pub fn latest_plan_job_for_plan_path(
         match get_plan_job(config, &job_id) {
             Ok(view) => {
                 let st = view.status.to_ascii_lowercase();
-                if matches!(
-                    st.as_str(),
-                    "planning" | "planned" | "confirmed"
-                ) {
+                if matches!(st.as_str(), "planning" | "planned" | "confirmed") {
                     return Ok(Some(view));
                 }
             }
@@ -819,7 +801,10 @@ pub fn latest_plan_job_for_plan_path(
                 continue;
             }
         }
-        if matches!(job.status, PlanJobStatus::Confirmed | PlanJobStatus::Planned) {
+        if matches!(
+            job.status,
+            PlanJobStatus::Confirmed | PlanJobStatus::Planned
+        ) {
             let dir = entry.path();
             if !dir.join("plan.proposed.json").is_file()
                 && !dir.join("plan.resolved.json").is_file()
@@ -887,10 +872,7 @@ const STALE_PLANNING_SECS: i64 = 6 * 60;
 /// **Do not** treat a normal CLI exit as zombie while finish still holds the IR:
 /// ModelSplitAgent / LLM writes `.done` + `exit_code` then parent converts → write_proposed.
 /// UI poll used to see dead pid and flip `plan_failed` in that window → desk "共 0 步".
-pub(super) fn try_reap_zombie_planning(
-    config: &Config,
-    job: &mut PlanJob,
-) -> Option<PlanJob> {
+pub(super) fn try_reap_zombie_planning(config: &Config, job: &mut PlanJob) -> Option<PlanJob> {
     if !matches!(job.status, PlanJobStatus::Planning) {
         return None;
     }
@@ -924,10 +906,7 @@ pub(super) fn try_reap_zombie_planning(
             "planning hard timeout ({}s since create; planner worker did not finish)",
             age_created
         ))
-    } else if meta_pid.is_some()
-        && pid_dead
-        && age_created > PLANNING_DEAD_PID_GRACE_SECS
-    {
+    } else if meta_pid.is_some() && pid_dead && age_created > PLANNING_DEAD_PID_GRACE_SECS {
         Some(format!(
             "planner process gone (pid={:?}); job left in planning",
             meta_pid
@@ -1009,7 +988,11 @@ fn has_recoverable_split_artifact(job_dir: &std::path::Path) -> bool {
     std::fs::read_to_string(&agent)
         .ok()
         .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .and_then(|v| v.get("tasks").and_then(|t| t.as_array()).map(|a| !a.is_empty()))
+        .and_then(|v| {
+            v.get("tasks")
+                .and_then(|t| t.as_array())
+                .map(|a| !a.is_empty())
+        })
         .unwrap_or(false)
 }
 
@@ -1021,7 +1004,8 @@ fn error_is_false_zombie_reap(err: Option<&str>) -> bool {
 fn is_false_zombie_reap(config: &Config, job_id: &str) -> bool {
     PlanJob::load(config, job_id)
         .map(|j| {
-            matches!(j.status, PlanJobStatus::PlanFailed) && error_is_false_zombie_reap(j.error.as_deref())
+            matches!(j.status, PlanJobStatus::PlanFailed)
+                && error_is_false_zombie_reap(j.error.as_deref())
         })
         .unwrap_or(false)
 }
@@ -1075,7 +1059,10 @@ fn finish_may_continue_with_ir(config: &Config, job_id: &str, job: &mut PlanJob)
 /// If job was plan_failed by false reap but `cco_split_agent.json` is ready → planned + proposed.
 /// Also salvages when proposed exists but status never flipped.
 fn try_salvage_plan_job(config: &Config, job: &mut PlanJob) -> bool {
-    if matches!(job.status, PlanJobStatus::Planned | PlanJobStatus::Confirmed) {
+    if matches!(
+        job.status,
+        PlanJobStatus::Planned | PlanJobStatus::Confirmed
+    ) {
         return false;
     }
     let dir = job_dir(config, &job.job_id);
@@ -1278,10 +1265,7 @@ fn process_alive(pid: u32) -> bool {
 /// 查找项目最近可恢复的规划会话（planning / planned / confirmed 且有任务图）。
 /// 用于进项目时接上「上次拆分结果」，避免每次重拆。
 /// 排序：仅 `updated_at` 最新；**跳过**超时仍 planning 的僵尸 job。
-pub fn latest_plan_job_for_project(
-    config: &Config,
-    project: &Path,
-) -> Result<Option<PlanJobView>> {
+pub fn latest_plan_job_for_project(config: &Config, project: &Path) -> Result<Option<PlanJobView>> {
     let root = plan_jobs_dir(config);
     if !root.is_dir() {
         return Ok(None);
@@ -1339,7 +1323,10 @@ pub fn latest_plan_job_for_project(
             }
         }
         // confirmed/planned 必须仍有图文件
-        if matches!(job.status, PlanJobStatus::Confirmed | PlanJobStatus::Planned) {
+        if matches!(
+            job.status,
+            PlanJobStatus::Confirmed | PlanJobStatus::Planned
+        ) {
             let dir = entry.path();
             if !dir.join("plan.proposed.json").is_file()
                 && !dir.join("plan.resolved.json").is_file()
@@ -1440,7 +1427,11 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
                         .count();
                     let meta_heavy = meta_n * 2 >= ir.tasks.len().max(1);
                     // serial-prompts without fenced worker prompts is almost always a false graph
-                    let unfenced = ir.tasks.iter().filter(|t| !t.prompt.contains("```")).count();
+                    let unfenced = ir
+                        .tasks
+                        .iter()
+                        .filter(|t| !t.prompt.contains("```"))
+                        .count();
                     let looks_like_false_graph = ir.adapter == "serial-prompts/v0"
                         && (is_spec || unfenced * 2 >= ir.tasks.len().max(1) || meta_heavy);
 
@@ -1480,7 +1471,9 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
                 .unwrap_or(false)
                 || job.provider == "fake";
             let skip_split_agent = std::env::var("CCO_SPLIT_AGENT")
-                .map(|v| v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off"))
+                .map(|v| {
+                    v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off")
+                })
                 .unwrap_or(false);
             if !force_heuristic && !skip_split_agent {
                 match crate::plan::split_agent::build_split_agent_plan(config, job) {
@@ -1488,10 +1481,7 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
                         append_log(
                             config,
                             &job.job_id,
-                            &format!(
-                                "ModelSplitAgent path ok (adapter={})",
-                                ir.adapter
-                            ),
+                            &format!("ModelSplitAgent path ok (adapter={})", ir.adapter),
                         );
                         return Ok(ir);
                     }
@@ -1519,11 +1509,7 @@ fn run_planner(config: &Config, job: &mut PlanJob) -> Result<PlanIR> {
                         return Ok(ir);
                     }
                     Err(e) => {
-                        append_log(
-                            config,
-                            &job.job_id,
-                            &format!("LLM planner failed ({e:#})"),
-                        );
+                        append_log(config, &job.job_id, &format!("LLM planner failed ({e:#})"));
                     }
                 }
             } else {
@@ -1744,7 +1730,7 @@ mod apply_worker_defaults_tests {
             role: None,
             scope: None,
             outputs: vec![],
-        tags: vec![],
+            tags: vec![],
         }
     }
 
@@ -1835,7 +1821,11 @@ mod reap_pid_scan_tests {
             r#"{"pid": 999999, "opaque_id": "pid:999999"}"#,
         )
         .unwrap();
-        std::fs::write(zombie_dir.join("planner.log"), "using fast local splitter\n").unwrap();
+        std::fs::write(
+            zombie_dir.join("planner.log"),
+            "using fast local splitter\n",
+        )
+        .unwrap();
         let zombie = PlanJob {
             job_id: zombie_id.into(),
             status: PlanJobStatus::Planning,
@@ -2051,11 +2041,9 @@ mod reap_pid_scan_tests {
 
         let view = get_plan_job(&cfg, job_id).unwrap();
         assert_eq!(
-            view.status,
-            "planned",
+            view.status, "planned",
             "err={:?} tasks={:?}",
-            view.error,
-            view.task_count
+            view.error, view.task_count
         );
         assert!(
             view.task_count.unwrap_or(0) >= 2,
@@ -2076,10 +2064,7 @@ mod reap_pid_scan_tests {
         let id = std::env::var("CCO_SALVAGE_JOB").expect("set CCO_SALVAGE_JOB");
         let cfg = Config::load().expect("Config::load");
         let before = PlanJob::load(&cfg, &id).expect("load job");
-        println!(
-            "before status={:?} err={:?}",
-            before.status, before.error
-        );
+        println!("before status={:?} err={:?}", before.status, before.error);
         let view = get_plan_job(&cfg, &id).expect("get_plan_job");
         println!(
             "after status={} tasks={:?} err={:?}",

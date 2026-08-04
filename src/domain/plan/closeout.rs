@@ -63,8 +63,7 @@ pub fn should_inject_closeout(plan: &PlanIR, auto_closeout: bool) -> bool {
     if business.is_empty() {
         return false;
     }
-    let has_gate = plan.require_inspect
-        || plan.tasks.iter().any(|t| looks_like_inspect_gate(t));
+    let has_gate = plan.require_inspect || plan.tasks.iter().any(|t| looks_like_inspect_gate(t));
     has_gate
 }
 
@@ -85,11 +84,7 @@ fn business_tasks(plan: &PlanIR) -> Vec<&TaskIR> {
 /// DAG: `[business…] → sys-closeout → [inspect / E3]`
 ///
 /// `checklist_paste` is optional host table text embedded into closeout/inspect prompts.
-pub fn inject_closeout_task(
-    plan: &mut PlanIR,
-    auto_closeout: bool,
-    checklist_paste: Option<&str>,
-) {
+pub fn inject_closeout_task(plan: &mut PlanIR, auto_closeout: bool, checklist_paste: Option<&str>) {
     if !should_inject_closeout(plan, auto_closeout) {
         // Still strip dual-duty wording when closeout already present or inject skipped
         // but inspect still carries ledger language.
@@ -186,9 +181,7 @@ pub fn inject_closeout_task(
 }
 
 fn strip_all_inspect_closeout_duty(plan: &mut PlanIR, checklist_paste: Option<&str>) {
-    let paste = checklist_paste
-        .map(|s| s.to_string())
-        .unwrap_or_default();
+    let paste = checklist_paste.map(|s| s.to_string()).unwrap_or_default();
     for t in &mut plan.tasks {
         if t.role == Some(TaskRole::Inspect) || looks_like_inspect_gate(t) {
             strip_inspect_closeout_duty(t, &paste);
@@ -323,7 +316,11 @@ mod tests {
         assert!(co.depends_on.iter().any(|d| d == "t2"));
         let insp = ir.tasks.iter().find(|t| t.id == "t7-p0-gates").unwrap();
         assert!(insp.depends_on.iter().any(|d| d == SYS_CLOSEOUT_ID));
-        assert!(!insp.title.contains("回写台账"), "title stripped: {}", insp.title);
+        assert!(
+            !insp.title.contains("回写台账"),
+            "title stripped: {}",
+            insp.title
+        );
         assert!(insp.prompt.contains("CCO ensure E1/E3:"));
     }
 
@@ -336,10 +333,7 @@ mod tests {
         inject_closeout_task(&mut ir, true, None);
         inject_closeout_task(&mut ir, true, None);
         assert_eq!(
-            ir.tasks
-                .iter()
-                .filter(|t| t.id == SYS_CLOSEOUT_ID)
-                .count(),
+            ir.tasks.iter().filter(|t| t.id == SYS_CLOSEOUT_ID).count(),
             1
         );
     }
