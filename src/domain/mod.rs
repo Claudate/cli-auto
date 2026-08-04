@@ -1,7 +1,7 @@
 //! Domain layer (A1 · P2-17).
 //!
 //! [INPUT]: 无 IO（适配器在 `plan` / `runtime` / `services/chat` / 未来 `adapters`）
-//! [OUTPUT]: 纯模型与纯函数 — `plan` · `run` · `worker` · `inspect` · `chat`
+//! [OUTPUT]: 纯模型与纯函数 — `plan` · `run` · `worker` · `inspect` · `chat` · `guide`
 //! [POS]: 六边形内核；**禁止**依赖 tauri / clap / UI / 具体 provider 实现
 //! [PROTOCOL]: 变更时更新此头部与 src/CLAUDE.md；扩 split 时增子模块
 
@@ -19,6 +19,9 @@ pub mod inspect;
 
 /// Chat pure rules: fence/title/normalize/stream parse (A1-6). **No** path join / fs.
 pub mod chat;
+
+/// Guide session/brief/pack types (G0-1 · contract shell). **No** IO / strategy yet.
+pub mod guide;
 
 /// A0 baseline marker (kept for skeleton smoke tests).
 pub const A0_BASELINE: &str = "domain-a0";

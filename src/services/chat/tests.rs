@@ -29,16 +29,12 @@ fn cleanup_expired_chat_sessions_removes_old() {
     let new_at = Utc::now().to_rfc3339();
     std::fs::write(
         &old_path,
-        format!(
-            r#"{{"session_id":"old","project":"p","messages":[],"updated_at":"{old_at}"}}"#
-        ),
+        format!(r#"{{"session_id":"old","project":"p","messages":[],"updated_at":"{old_at}"}}"#),
     )
     .unwrap();
     std::fs::write(
         &new_path,
-        format!(
-            r#"{{"session_id":"new","project":"p","messages":[],"updated_at":"{new_at}"}}"#
-        ),
+        format!(r#"{{"session_id":"new","project":"p","messages":[],"updated_at":"{new_at}"}}"#),
     )
     .unwrap();
     let n = cleanup_expired_chat_sessions(&project, 48).unwrap();
@@ -71,7 +67,16 @@ fn chat_list_new_delete_sessions_roundtrip() {
 
     // Seed default with a user msg so list preview works
     let cfg = fake_cfg();
-    let _ = chat_send(&cfg, &project, "默认会话第一条", Some("default"), None, None).unwrap();
+    let _ = chat_send(
+        &cfg,
+        &project,
+        "默认会话第一条",
+        Some("default"),
+        None,
+        None,
+        None,
+    )
+    .unwrap();
 
     let list = chat_list_sessions(&project).unwrap();
     assert!(list.len() >= 2, "got {list:?}");
@@ -191,7 +196,8 @@ fn chat_save_attachment_png_roundtrip() {
         0xcf, 0xc0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x01, 0x00, 0x05, 0xfe, 0xd4, 0xef, 0x00, 0x00,
         0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
     ];
-    let att = chat_save_attachment(&project, Some("default"), "shot.png", "image/png", png).unwrap();
+    let att =
+        chat_save_attachment(&project, Some("default"), "shot.png", "image/png", png).unwrap();
     assert!(att.path.contains(".cco/chat/attachments/default/"));
     assert!(att.path.ends_with(".png"));
     assert_eq!(att.mime, "image/png");
@@ -204,6 +210,7 @@ fn chat_save_attachment_png_roundtrip() {
         "看这张图优化登录",
         None,
         Some(vec![att.clone()]),
+        None,
         None,
     )
     .unwrap();
@@ -218,13 +225,10 @@ fn chat_save_attachment_rejects_exe() {
     let dir = tempdir().unwrap();
     let project = dir.path().join("proj");
     std::fs::create_dir_all(&project).unwrap();
-    let err =
-        chat_save_attachment(&project, None, "x.exe", "application/octet-stream", b"hi").unwrap_err();
+    let err = chat_save_attachment(&project, None, "x.exe", "application/octet-stream", b"hi")
+        .unwrap_err();
     let s = err.to_string();
-    assert!(
-        s.contains("blocked") || s.contains("unsupported"),
-        "{s}"
-    );
+    assert!(s.contains("blocked") || s.contains("unsupported"), "{s}");
 }
 
 #[test]
@@ -241,12 +245,14 @@ fn chat_read_image_data_url_png() {
         0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
     ];
     std::fs::write(shot_dir.join("index.png"), png).unwrap();
-    let url =
-        chat_read_image_data_url(&project, ".cco-out/screenshots/t1/index.png").unwrap();
+    let url = chat_read_image_data_url(&project, ".cco-out/screenshots/t1/index.png").unwrap();
     assert!(url.starts_with("data:image/png;base64,"), "{url}");
     // traversal rejected
     let err = chat_read_image_data_url(&project, "../outside.png").unwrap_err();
-    assert!(err.to_string().contains("escapes") || err.to_string().contains("empty"), "{err}");
+    assert!(
+        err.to_string().contains("escapes") || err.to_string().contains("empty"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -273,7 +279,7 @@ fn fake_send_persists_messages() {
     let project = dir.path().join("app");
     std::fs::create_dir_all(&project).unwrap();
     let cfg = fake_cfg();
-    let r = chat_send(&cfg, &project, "帮我写个登录页计划", None, None, None).unwrap();
+    let r = chat_send(&cfg, &project, "帮我写个登录页计划", None, None, None, None).unwrap();
     assert!(r.fake);
     assert!(!r.reply.is_empty());
     assert!(r.messages.len() >= 2);
@@ -331,7 +337,16 @@ fn new_fence_clears_saved_plan_path() {
     assert!(d0.saved);
     assert_eq!(d0.path, saved.plan_rel);
 
-    let r = chat_send(&cfg, &project, "另起一份 Markdown 清理计划", None, None, None).unwrap();
+    let r = chat_send(
+        &cfg,
+        &project,
+        "另起一份 Markdown 清理计划",
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
     let d = r
         .draft_plan
         .as_ref()
@@ -412,7 +427,11 @@ fn session_get_heals_stale_draft_path() {
     let sess = chat_session_get(&project, Some("default")).unwrap();
     let d = sess.draft_plan.as_ref().expect("draft");
     assert!(!d.saved, "stale binding must clear saved");
-    assert!(d.path.is_empty(), "stale binding must clear path, got {}", d.path);
+    assert!(
+        d.path.is_empty(),
+        "stale binding must clear path, got {}",
+        d.path
+    );
     assert!(
         d.markdown.as_ref().unwrap().contains("Markdown 清理"),
         "markdown body kept"
@@ -527,12 +546,12 @@ fn chat_stream_partial_reads_growing_stdout() {
 /// Clarify meta on session: entry + slots survive save/load; legacy JSON without clarify still loads.
 #[test]
 fn session_clarify_meta_roundtrip_and_legacy_compat() {
+    use super::session::save_session;
+    use super::types::{ChatMessage, ChatSession};
     use crate::domain::chat::{
         apply_skip_with_assumptions, detect_missing_slots, set_slot_fill, ClarifyEntry,
         ClarifyPhase, ClarifySlotId, ClarifyState, SlotFillKind,
     };
-    use super::session::save_session;
-    use super::types::{ChatMessage, ChatSession};
 
     let dir = tempdir().unwrap();
     let project = dir.path().join("proj");
@@ -547,7 +566,10 @@ fn session_clarify_meta_roundtrip_and_legacy_compat() {
     )
     .unwrap();
     let legacy = chat_session_get(&project, Some("legacy")).unwrap();
-    assert!(legacy.clarify.is_none(), "legacy sessions keep clarify=None");
+    assert!(
+        legacy.clarify.is_none(),
+        "legacy sessions keep clarify=None"
+    );
 
     // Fresh empty session: no clarify until set.
     let empty = chat_session_get(&project, Some("default")).unwrap();

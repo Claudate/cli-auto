@@ -1,4 +1,5 @@
-//! Claude CLI spawn for chat / normalize turns (adapter · reuses WorkerPort provider).
+//! Chat CLI spawn (claude default · cli_select dispatch for codex/shell-print).
+//! Normalize pass stays claude-only. (adapter · reuses WorkerPort provider).
 
 use std::path::Path;
 use std::time::Duration;
@@ -8,7 +9,7 @@ use anyhow::{bail, Context, Result};
 use crate::config::Config;
 use crate::domain::chat::{extract_assistant_text, stream_result_summary, truncate_chars};
 use crate::plan::TaskIR;
-use crate::runtime::provider::{claude::ClaudeProvider, StartCtx, WorkerProvider, WorkerStatus};
+use crate::runtime::provider::{StartCtx, WorkerPort, WorkerStatus};
 
 use super::paths::{chat_work_task_dir, normalize_work_task_dir};
 use super::types::ChatSession;
@@ -256,26 +257,14 @@ dont:
     )
 }
 
-fn make_claude_provider(config: &Config) -> ClaudeProvider {
-    let bin_cfg = config
-        .provider("claude")
-        .map(|p| p.bin.clone())
-        .unwrap_or_else(|| "claude".into());
-    let bin = crate::runtime::provider::resolve_provider_bin(&bin_cfg, "CCO_CLAUDE_BIN");
-    let extra = config
-        .provider("claude")
-        .map(|p| p.extra_args.clone())
-        .unwrap_or_default();
-    ClaudeProvider::new(bin, extra)
-}
-
-pub(crate) fn call_claude_chat(
+pub(crate) fn call_chat_provider(
     config: &Config,
     project: &Path,
     sess: &ChatSession,
     effort_override: Option<&str>,
+    cli: Option<&str>,
 ) -> Result<String> {
-    let provider = make_claude_provider(config);
+    let provider = super::cli_select::chat_provider(config, cli)?;
 
     let task_dir = chat_work_task_dir(project);
     // Defense-in-depth: send.rs already cleared; wipe again at spawn boundary.
@@ -296,7 +285,7 @@ pub(crate) fn call_claude_chat(
         title: "plan chat".into(),
         depends_on: vec![],
         group: None,
-        provider: "claude".into(),
+        provider: cli.unwrap_or("claude").to_string(),
         mode: "print".into(),
         prompt,
         verify_cmd: None,
@@ -305,20 +294,7 @@ pub(crate) fn call_claude_chat(
         // --max-budget-usd: null omits those flags so Claude is not turn-capped.
         timeout_secs: Some(600),
         worktree: Some(false),
-        provider_opts: serde_json::json!({
-            // null = omit CLI limit flags (see ClaudeProvider::opt_limit_*).
-            "max_turns": null,
-            "max_budget_usd": null,
-            // Desktop chat has no permission UI: dontAsk denied Bash (e.g. npm run dev).
-            // bypassPermissions + allow flag (spawn) lets install/start/preview run in-project.
-            // Scope still locked by --append-system-prompt (project dir only).
-            "permission_mode": "bypassPermissions",
-            // Reasoning depth → claude --effort (ultracode → xhigh + system hint).
-            "effort": effort,
-            // No allowed_tools key → CLI default tools (Read/Bash/Edit…), scope-locked
-            // via --append-system-prompt. Empty [] used to pass --allowedTools "" which
-            // Claude 2.1.x still seeds with defaults and then hits error_max_turns at 2.
-        }),
+        provider_opts: super::cli_select::chat_provider_opts(cli, &effort),
         optional: false,
         include: true,
         role: None,
@@ -460,7 +436,7 @@ pub(crate) fn call_claude_normalize(
     project: &Path,
     prompt: &str,
 ) -> Result<String> {
-    let provider = make_claude_provider(config);
+    let provider = super::cli_select::claude_provider(config);
 
     let task_dir = normalize_work_task_dir(project);
     std::fs::create_dir_all(&task_dir)?;

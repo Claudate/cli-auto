@@ -4,17 +4,17 @@
 成员清单（现状 → P2-17 目标见 [`docs/architecture-redesign-2026-07-20.md`](../docs/architecture-redesign-2026-07-20.md)）
 lib.rs: 库根；re-export plan/runtime/services/state/terminal/tui；挂载 **domain/app/ports**
 main.rs: cco 二进制入口；clap → cli::execute
-domain/: **A1** 纯模型 — [`domain/CLAUDE.md`](./domain/CLAUDE.md) · `plan/`（A1-1 ✅）· `run/`（A1-3 ✅）· `worker/`（A1-4 ✅）· `inspect/`（A1-5 ✅）· `chat/`（fence/title/normalize；A1-6 ✅）
+domain/: **A1** 纯模型 — [`domain/CLAUDE.md`](./domain/CLAUDE.md) · `plan/`（A1-1 ✅）· `run/`（A1-3 ✅）· `worker/`（A1-4 ✅）· `inspect/`（A1-5 ✅）· `chat/`（fence/title/normalize；A1-6 ✅）· `guide/`（**G0 ✅** 类型+金样）
 app/: **A1 ✅** 用例 — [`app/CLAUDE.md`](./app/CLAUDE.md) · `split`（confirm 唯一开跑；A1-2/A1-7）· `run/`（**S-run** 多文件 · list/stop/resume/materialize/foreground/route/**provenance**(P1-2/P1-3 route_label)；A1-3/A1-7）· `chat`（会话/send/save_plan；A1-6/A1-7）
 ports/: **WorkerPort ✅ A1-4 · HandoffStore ✅ A1-5** — [`ports/CLAUDE.md`](./ports/CLAUDE.md) · trait + DTO；ChatStore 未建（A1-6 free-fn）
 services/: **deprecated facade**（A1-7；Presentation → app；`confirm_start` → `app::split::confirm`；IO 仍住此）
 cli/: clap 命令面 + commands/（**A5-1** 1:1 表见 [`cli/CLAUDE.md`](./cli/CLAUDE.md)；Mode B `confirm_materialize`；ParseOnly `materialize_run`；soft-fill 真源 domain/worker）
 plan/: adapters + load_plan IO + planner + system_post inject（**类型真源已迁 domain::plan**；mod 已瘦身；测 `plan_tests.rs`）
-runtime/: **scheduler/** 多文件薄编排（A1-3 ✅ · 经 WorkerPort A1-4）· **handoff/** 多文件适配器（A1-5 ✅）· provider（port 适配器）· log_events · worktree · acceptance
+runtime/: **scheduler/** 多文件薄编排（A1-3 ✅ · 经 WorkerPort A1-4 · host 自动提交 task/plan 收口）· **handoff/** 多文件适配器（A1-5 ✅）· provider（port 适配器）· log_events · worktree · acceptance
 terminal/: TerminalManager + external launcher
 tui/: ratatui 多页**观察层**（**A5-3** load/stop 经 `app::run`；不做完整拆分台）
-config/: ~/.cco/config.toml + AllowedProject
-state/: run.json / events.jsonl / TaskState(+route_source|route_previous|route_note · RouteSource)
+config/: ~/.cco/config.toml + AllowedProject + Git 自动提交粒度 off/per_plan/per_task
+state/: run.json / events.jsonl / TaskState(+route_source|route_previous|route_note|auto_commit · RouteSource) + AutoCommitPolicySnapshot
 doctor/: 环境门禁 DoctorReport
 graph/: DAG ready_tasks / topo_layers / format_graph
 report/: report.md+json（人话 H1 · 对照计划 fallback · 花费与用时 · 备注下沉 run_id；见 report/CLAUDE.md）

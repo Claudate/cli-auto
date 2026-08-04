@@ -29,6 +29,9 @@ pub mod chat;
 /// Project light memory (P2-2): last_summary + pins ≤3; prompt context only.
 pub mod memory;
 
+/// Guide shell (G0): session list/start/get; no open-run, no strategy yet.
+pub mod guide;
+
 /// Project UI prefs (SQLite): dismissed_run_id · durable shell state.
 pub mod project_ui;
 

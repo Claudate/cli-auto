@@ -18,7 +18,7 @@
 //! | `chat_new_session_cmd` | [`new_session`] |
 //! | `chat_rename_session_cmd` | [`rename_session`] |
 //! | `chat_delete_session_cmd` | [`delete_session`] |
-//! | `chat_send_cmd` | [`send`] |
+//! | `chat_send_cmd` | [`send`] · [`available_clis`]（chat_clis_list_cmd） |
 //! | `chat_stream_partial_cmd` | [`stream_partial`] |
 //! | `preview_start_cmd` / `preview_stop_cmd` / `preview_status_cmd` | [`preview_start`] / [`preview_stop`] / [`preview_status`] |
 //! | `chat_save_plan_cmd` | [`save_plan`] |
@@ -33,15 +33,16 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::config::Config;
+use crate::services::{available_chat_clis, ChatCliInfo};
 use crate::services::{
-    chat_delete_session, chat_list_sessions, chat_new_session, chat_normalize_plan,
+    chat_cancel, chat_delete_session, chat_list_sessions, chat_new_session, chat_normalize_plan,
     chat_read_image_data_url, chat_rename_session, chat_save_attachment, chat_save_plan,
-    chat_save_wave_bundle, chat_cancel, chat_send, chat_session_get, chat_stream_partial,
+    chat_save_wave_bundle, chat_send, chat_session_get, chat_stream_partial,
     cleanup_expired_chat_sessions, preview_start as services_preview_start,
     preview_status as services_preview_status, preview_stop as services_preview_stop,
     read_plan_md as services_read_plan_md, ChatAttachment, ChatNormalizePlanResponse,
-    ChatSavePlanResponse, ChatSaveWaveResponse, ChatSendResponse, ChatSession,
-    ChatSessionSummary, ChatStreamPartial, PreviewStatus,
+    ChatSavePlanResponse, ChatSaveWaveResponse, ChatSendResponse, ChatSession, ChatSessionSummary,
+    ChatStreamPartial, PreviewStatus,
 };
 
 // --- session ---
@@ -82,8 +83,10 @@ pub fn cleanup_expired(project: &Path, hours: i64) -> Result<usize> {
 
 // --- send / stream ---
 
-/// One chat round-trip (fake or Claude print). Writes draft markdown only — **no** open-run.
+/// One chat round-trip (default claude print; `cli` overrides the CLI). Writes draft
+/// markdown only — **no** open-run.
 /// `effort`: optional per-send override (`low`…`max`|`ultracode`).
+/// `cli`: optional chat CLI provider id (None → claude; `fake` → template reply).
 pub fn send(
     config: &Config,
     project: &Path,
@@ -91,8 +94,14 @@ pub fn send(
     session_id: Option<&str>,
     attachments: Option<Vec<ChatAttachment>>,
     effort: Option<&str>,
+    cli: Option<&str>,
 ) -> Result<ChatSendResponse> {
-    chat_send(config, project, message, session_id, attachments, effort)
+    chat_send(config, project, message, session_id, attachments, effort, cli)
+}
+
+/// Chat-capable CLI list for the UI dropdown (claude default first, fake last).
+pub fn available_clis(config: &Config) -> Result<Vec<ChatCliInfo>> {
+    Ok(available_chat_clis(config))
 }
 
 /// Best-effort partial assistant text while send is in flight.
@@ -202,7 +211,7 @@ mod tests {
         std::fs::create_dir_all(&state).unwrap();
         let cfg = fake_cfg(&state);
 
-        let r = send(&cfg, &project, "帮我写个登录页计划", None, None, None).unwrap();
+        let r = send(&cfg, &project, "帮我写个登录页计划", None, None, None, None).unwrap();
         assert!(r.fake);
         assert!(r.reply.contains("```plan") || r.draft_plan.is_some());
 

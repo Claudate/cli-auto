@@ -136,6 +136,15 @@ export const projectPinUpsert = (project, key, value) =>
   raw("project_pin_upsert_cmd", { project, key, value });
 export const projectPinDelete = (project, key) =>
   raw("project_pin_delete_cmd", { project, key });
+/** Guide G0: list guided sessions for a project (newest first). */
+export const guideSessionsList = (project) =>
+  raw("guide_sessions_list_cmd", { project });
+/** Guide G0: start a guided session (mode/entry strings; role pack id). */
+export const guideSessionStart = (project, mode, entry, rolePack) =>
+  raw("guide_session_start_cmd", { project, mode, entry, rolePack });
+/** Guide G0: get one guided session by id. */
+export const guideSessionGet = (sessionId) =>
+  raw("guide_session_get_cmd", { sessionId });
 /** Get persona preferences (persona_id, clarify_depth, split_grain). best-effort, no project check -> null */
 export const getProjectPersona = (project) => raw("get_project_persona_cmd", { project });
 /** Set persona preferences (any of the three may be omitted). best-effort. */
@@ -166,6 +175,7 @@ export const chatRenameSession = (project, sessionId, title) =>
 export const chatSessionGet = (project, sessionId) =>
   raw("chat_session_get_cmd", { project, sessionId });
 export const chatSend = (args) => raw("chat_send_cmd", args);
+export const chatClisList = () => raw("chat_clis_list_cmd", {});
 export const chatStreamPartial = (args) => raw("chat_stream_partial_cmd", args);
 export const chatCancel = (project) => raw("chat_cancel_cmd", { project });
 export const chatSavePlan = (args) => raw("chat_save_plan_cmd", args);
@@ -236,6 +246,9 @@ export const gateway = {
   projectPinsList,
   projectPinUpsert,
   projectPinDelete,
+  guideSessionsList,
+  guideSessionStart,
+  guideSessionGet,
   getProjectPersona,
   setProjectPersona,
   projectDismissRun,
@@ -247,6 +260,7 @@ export const gateway = {
   chatDeleteSession,
   chatSessionGet,
   chatSend,
+  chatClisList,
   chatStreamPartial,
   chatCancel,
   chatSavePlan,

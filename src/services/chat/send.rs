@@ -16,7 +16,7 @@ use super::attachment::{
     allowed_attachment_mime, format_attachments_block, MAX_ATTACHMENTS_PER_MSG,
 };
 use super::cli_call::{
-    call_claude_chat, fake_chat_reply, soft_fallback_assistant_reply, soft_fallback_env_note,
+    call_chat_provider, fake_chat_reply, soft_fallback_assistant_reply, soft_fallback_env_note,
 };
 use super::normalize::chat_normalize_plan;
 use super::session::{chat_session_get, save_session};
@@ -29,6 +29,7 @@ const MAX_MSG_CHARS: usize = 12_000;
 /// One round-trip: append user message, call Claude print (or fake), append assistant.
 /// G4: `attachments` are project-relative paths already saved via `chat_save_attachment`.
 /// `effort`: optional per-send override (`low`…`max`|`ultracode`); else config default.
+/// `cli`: optional chat CLI (provider id; None → claude default; `fake` → template reply).
 pub fn chat_send(
     config: &Config,
     project: &Path,
@@ -36,6 +37,7 @@ pub fn chat_send(
     session_id: Option<&str>,
     attachments: Option<Vec<ChatAttachment>>,
     effort: Option<&str>,
+    cli: Option<&str>,
 ) -> Result<ChatSendResponse> {
     if !project.is_dir() {
         bail!("project path is not a directory: {}", project.display());
@@ -54,7 +56,9 @@ pub fn chat_send(
             bail!("attachment missing on disk: {}", a.path);
         }
         // Must stay under project
-        let canon_proj = project.canonicalize().unwrap_or_else(|_| project.to_path_buf());
+        let canon_proj = project
+            .canonicalize()
+            .unwrap_or_else(|_| project.to_path_buf());
         if let Ok(canon_f) = abs.canonicalize() {
             if !canon_f.starts_with(&canon_proj) {
                 bail!("attachment path escapes project: {}", a.path);
@@ -100,14 +104,15 @@ pub fn chat_send(
     let force_fake = std::env::var("CCO_CHAT_FAKE")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)
-        || config.default.default_provider.eq_ignore_ascii_case("fake");
+        || config.default.default_provider.eq_ignore_ascii_case("fake")
+        || cli == Some("fake");
 
     // force_fake (CCO_CHAT_FAKE / provider=fake): full template with ```plan for UI联调.
     // production soft-fallback: short human reply + env_note; **no** plan fence → 不点亮就绪分配.
     let (reply_raw, used_fake, env_note) = if force_fake {
         (fake_chat_reply(msg, project), true, None)
     } else {
-        match call_claude_chat(config, project, &sess, effort) {
+        match call_chat_provider(config, project, &sess, effort, cli) {
             Ok(r) => (r, false, None),
             Err(e) => {
                 let diagnostic = e.to_string();

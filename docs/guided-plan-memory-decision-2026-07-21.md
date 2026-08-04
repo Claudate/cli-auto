@@ -1,9 +1,9 @@
 # 引导成长计划 · 用户记忆 · 多视角对抗 · 与 cco 结合方案
 
 > 日期：2026-07-21  
-> **状态：全量未 ship · pilotdeck 已 archive**（G0–G4 草稿 ☐ 保留 · **不**因薄表提前勾 ✅）  
+> **状态：G0 ✅（2026-08-04）· G1–G4 草稿 ☐ 保留**（**不**因薄表提前勾 G1-5）  
 > 角色：**工程形状草稿**（引导写计划 + SQLite 会话记忆 + 有界对抗）——**产品本体以** [`archive/subjective-desire-decision-concept.md`](./archive/subjective-desire-decision-concept.md) **为准**  
-> 状态（详）：**设计稿 · 全量 Guide 未排期实施**（勾选 ☐ 见 §8 G0–G4；**不**平行第二套 A0–A5；心爱主线是「接近主观渴望」，本文偏 cco 嫁接想象）  
+> 状态（详）：**G0 契约与空壳已 ship（2026-08-04）** · G1–G4 设计稿未排期（勾选见 §8；**不**平行第二套 A0–A5）  
 > 产品方向：[`../PRODUCT.md`](../PRODUCT.md)  
 > 架构边界：[`architecture-redesign-2026-07-20.md`](./architecture-redesign-2026-07-20.md)（confirm 唯一开跑 · MVVM · 体积）  
 > 拆分 SoT：[`cco-split-format-sqlite-2026-07-21.md`](./cco-split-format-sqlite-2026-07-21.md)  
@@ -508,10 +508,10 @@ materialize_plan → 既有 app::chat::save_plan 或直接写 plans/guide-*.md
 
 | ID | 内容 | 状态 |
 |----|------|------|
-| G0-1 | Domain：`GuideBrief` · `RolePack` · `SessionMode` 类型 + 金样 JSON | ☐ |
-| G0-2 | SQLite schema：`user_profile` / 富 `project_memory` / `guide_*` + store 读写（**复用**已有 `project_last_summary` + `project_pins`，不平行双写） | ☐ |
-| G0-3 | `app::guide` 空用例 + Tauri/gateway 桩（list/start/get） | ☐ |
-| G0-4 | 本文 + docs L2 索引；PRODUCT「① 生成」加一句引导子相（不改五步序） | ☐ |
+| G0-1 | Domain：`GuideBrief` · `RolePack` · `SessionMode` 类型 + 金样 JSON | ✅ 2026-08-04（`src/domain/guide/mod.rs`） |
+| G0-2 | SQLite schema：`user_profile` / 富 `project_memory` / `guide_*` + store 读写（**复用**已有 `project_last_summary` + `project_pins`，不平行双写） | ✅ 2026-08-04（`src/state/guide_store.rs` · session CRUD + profile/memory get/upsert；rounds/utterances 读写待 G2） |
+| G0-3 | `app::guide` 空用例 + Tauri/gateway 桩（list/start/get） | ✅ 2026-08-04（`app::guide` · `guide_sessions_list_cmd` / `guide_session_start_cmd` / `guide_session_get_cmd` + gateway） |
+| G0-4 | 本文 + docs L2 索引；PRODUCT「① 生成」加一句引导子相（不改五步序） | ✅ 2026-08-04（PRODUCT §① + docs/CLAUDE.md 索引 + L2 成员清单） |
 
 ### 波次 G1 · 反问成 Brief（主价值 · 2–3 d）
 

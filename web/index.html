@@ -598,6 +598,19 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                         <option value="ultracode">ultracode</option>
                       </select>
                     </label>
+                    <label
+                      class="chat-effort-wrap"
+                      title="聊天使用的 CLI：默认 Claude；可选已配置的其他 CLI（实验性，失败会自动降级提示）"
+                    >
+                      <span class="sr-only">CLI</span>
+                      <select
+                        id="chat-cli"
+                        class="chat-effort-select"
+                        aria-label="聊天 CLI"
+                      >
+                        <option value="claude">Claude · 默认</option>
+                      </select>
+                    </label>
                     <button
                       class="btn primary icon-only chat-send-btn"
                       id="btn-chat-send"

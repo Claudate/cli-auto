@@ -34,6 +34,7 @@ export function sendMessage(args) {
     attachments: args.attachments ?? null,
   };
   if (args.effort) payload.effort = args.effort;
+  if (args.cli) payload.cli = args.cli;
   return gateway.chatSend(payload);
 }
 
@@ -42,6 +43,11 @@ export function sendMessage(args) {
  * Does NOT call confirm_start / start_run.
  * @param {Record<string, unknown>} args chat_save_plan_cmd payload
  */
+/** L1: chat-capable CLI list for the composer dropdown. */
+export function clisList() {
+  return gateway.chatClisList();
+}
+
 export function savePlan(args) {
   return gateway.chatSavePlan(args);
 }

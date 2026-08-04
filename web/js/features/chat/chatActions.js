@@ -11,6 +11,7 @@ import {
   showPage,
 } from "./legacy.js";
 import * as chatApi from "./chatApi.js";
+import { chatEsc } from "./chatFormat.js";
 import { host } from "./host.js";
 import {
   ensureChatState,
@@ -215,6 +216,26 @@ export function handleLastSummaryAction(action) {
 
 // Preview short-phrase intercept removed: chat always goes to Claude CLI.
 
+/** L1: fill the CLI dropdown once from backend (never blocks send). */
+async function ensureChatCliOptions() {
+  const sel = $("#chat-cli");
+  if (!sel || sel.dataset.loaded) return;
+  sel.dataset.loaded = "1";
+  try {
+    const list = await chatApi.clisList();
+    const saved = (() => {
+      try { return localStorage.getItem("cco.chatCli") || "claude"; } catch (_) { return "claude"; }
+    })();
+    const opts = (list || [])
+      .filter((c) => c.enabled || c.name === "claude")
+      .map(
+        (c) =>
+          `<option value="${chatEsc(c.name)}"${c.name === saved ? " selected" : ""}>${chatEsc(c.label)}${c.print_capable ? "" : " · 不可用"}</option>`
+      );
+    if (opts.length) sel.innerHTML = opts.join("");
+  } catch (_) { /* non-fatal */ }
+}
+
 export async function sendChatMessage() {
   ensureChatState();
   if (!state.selectedPath) {
@@ -290,7 +311,13 @@ export async function sendChatMessage() {
     }
     // Non-blocking for the webview: Tauri command is async + spawn_blocking.
     // User sees "思考中…" bubble; send is disabled only to avoid double-send.
-    const effortEl = $("#chat-effort");
+    await ensureChatCliOptions();
+  const cliSel = $("#chat-cli");
+  const cli = cliSel?.value || "claude";
+  try {
+    if (cli) localStorage.setItem("cco.chatCli", cli);
+  } catch (_) {}
+  const effortEl = $("#chat-effort");
     const effortRaw = (effortEl?.value || "").trim().toLowerCase();
     const effortOk = ["low", "medium", "high", "xhigh", "max", "ultracode"].includes(
       effortRaw
@@ -301,6 +328,7 @@ export async function sendChatMessage() {
       sessionId: state.chatSession.session_id || "default",
       attachments: attachments.length ? attachments : null,
       effort: effortOk ? effortRaw : null,
+      cli: cli === "claude" ? null : cli,
     };
     // Persist last chat pick so reopen keeps depth
     try {

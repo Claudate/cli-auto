@@ -1,24 +1,25 @@
 //! Run state on disk: run.json, events.jsonl, per-task files · SQLite dual-write.
 //!
 //! [INPUT]: runs_root · PlanIR（初始化）
-//! [OUTPUT]: RunState/TaskState(attempt/failover_used/route_*) · save/load · event append · sqlite
+//! [OUTPUT]: RunState/TaskState(attempt/failover_used/route_*/auto_commit) · AutoCommitPolicySnapshot · save/load · event append · sqlite
 //! [POS]: 运行状态落盘；scheduler 与 services 读写
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/state/CLAUDE.md
 
 pub mod cco_split_store;
-pub mod project_ui;
-pub mod project_memory;
+pub mod guide_store;
 pub mod persona_store;
+pub mod project_memory;
+pub mod project_ui;
 pub mod sqlite;
 
-pub use project_memory::{
-    compose_last_summary, format_memory_context, get_last_summary, get_memory, list_pins,
-    set_last_summary, try_format_memory_context, try_set_last_summary, upsert_pin, delete_pin,
-    ProjectLastSummary, ProjectMemoryView, ProjectPin, MAX_PINS_PER_PROJECT,
-};
 pub use persona_store::{
     get_project_persona, set_project_persona, try_get_project_persona, try_set_project_persona,
     ProjectPersona,
+};
+pub use project_memory::{
+    compose_last_summary, delete_pin, format_memory_context, get_last_summary, get_memory,
+    list_pins, set_last_summary, try_format_memory_context, try_set_last_summary, upsert_pin,
+    ProjectLastSummary, ProjectMemoryView, ProjectPin, MAX_PINS_PER_PROJECT,
 };
 
 use std::collections::HashMap;
@@ -28,6 +29,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::config::{AutoCommitGranularity, Config, GitConfig};
 use crate::plan::PlanIR;
 use crate::runtime::provider::TaskStatus;
 
@@ -65,6 +67,58 @@ pub enum RouteSource {
     CostEscalate,
     /// P2: mid-run budget threshold forced a cheaper tier.
     CostBudget,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskAutoCommitResult {
+    pub granularity: String,
+    pub ok: bool,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<String>,
+    #[serde(default)]
+    pub pushed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub push_output: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_dir: Option<PathBuf>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Git auto-commit policy captured when a run is materialized.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoCommitPolicySnapshot {
+    pub granularity: AutoCommitGranularity,
+    pub git: GitConfig,
+}
+
+impl AutoCommitPolicySnapshot {
+    pub fn from_config(config: &Config) -> Self {
+        Self {
+            granularity: config.auto_commit_granularity(),
+            git: config.git.clone(),
+        }
+    }
+
+    pub fn path(run_dir: &Path) -> PathBuf {
+        run_dir.join("auto_commit.json")
+    }
+
+    pub fn save(&self, run_dir: &Path) -> Result<()> {
+        std::fs::write(Self::path(run_dir), serde_json::to_string_pretty(self)?)?;
+        Ok(())
+    }
+
+    pub fn load(run_dir: &Path) -> Result<Self> {
+        let path = Self::path(run_dir);
+        let text =
+            std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+        Ok(serde_json::from_str(&text)?)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +169,9 @@ pub struct TaskState {
     /// Optional short note (e.g. fail reason code); UI may prefer a composed label.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route_note: Option<String>,
+    /// Host-owned Git auto-commit result for this task (per-task granularity).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_commit: Option<TaskAutoCommitResult>,
 }
 
 impl TaskState {
@@ -143,6 +200,7 @@ impl TaskState {
             route_source: None,
             route_previous: None,
             route_note: None,
+            auto_commit: None,
         }
     }
 }
@@ -159,18 +217,16 @@ pub struct RunState {
     pub finished_at: Option<DateTime<Utc>>,
     pub status: RunStatus,
     pub tasks: HashMap<String, TaskState>,
+    /// Host-owned Git auto-commit results for plan-level commits.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auto_commits: Vec<TaskAutoCommitResult>,
     /// Absolute path to this run directory
     #[serde(skip)]
     pub run_dir: PathBuf,
 }
 
 impl RunState {
-    pub fn new(
-        run_id: String,
-        project_root: PathBuf,
-        plan: &PlanIR,
-        run_dir: PathBuf,
-    ) -> Self {
+    pub fn new(run_id: String, project_root: PathBuf, plan: &PlanIR, run_dir: PathBuf) -> Self {
         let mut tasks = HashMap::new();
         for t in &plan.tasks {
             tasks.insert(t.id.clone(), TaskState::pending(&t.provider, &t.mode));
@@ -185,6 +241,7 @@ impl RunState {
             finished_at: None,
             status: RunStatus::Init,
             tasks,
+            auto_commits: vec![],
             run_dir,
         }
     }
@@ -215,8 +272,8 @@ impl RunState {
 
     pub fn load(run_dir: &Path) -> Result<Self> {
         let path = run_dir.join("run.json");
-        let text = std::fs::read_to_string(&path)
-            .with_context(|| format!("read {}", path.display()))?;
+        let text =
+            std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
         let mut s: RunState = serde_json::from_str(&text)?;
         s.run_dir = run_dir.to_path_buf();
         Ok(s)
@@ -250,6 +307,13 @@ pub fn new_run_id() -> String {
     let ts = Utc::now().format("%Y%m%dT%H%M%SZ");
     let short = &uuid::Uuid::new_v4().to_string()[..4];
     format!("{ts}-{short}")
+}
+
+/// Guide session id (same shape as run id; G0-2).
+pub fn new_session_id() -> String {
+    let ts = Utc::now().format("%Y%m%dT%H%M%SZ");
+    let short = &uuid::Uuid::new_v4().to_string()[..4];
+    format!("g{ts}-{short}")
 }
 
 pub fn prepare_run_dir(runs_root: &Path, run_id: &str) -> Result<PathBuf> {
@@ -295,10 +359,7 @@ impl RunState {
     pub fn prepare_for_resume(&mut self) -> usize {
         let mut n = 0;
         for ts in self.tasks.values_mut() {
-            if matches!(
-                ts.status,
-                TaskStatus::Done | TaskStatus::Skipped
-            ) {
+            if matches!(ts.status, TaskStatus::Done | TaskStatus::Skipped) {
                 continue;
             }
             ts.status = TaskStatus::Pending;
@@ -353,10 +414,7 @@ impl RunState {
     }
 
     pub fn total_cost_usd(&self) -> f64 {
-        self.tasks
-            .values()
-            .filter_map(|t| t.cost_usd)
-            .sum()
+        self.tasks.values().filter_map(|t| t.cost_usd).sum()
     }
 }
 

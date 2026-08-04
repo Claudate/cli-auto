@@ -27,6 +27,7 @@
 //! note: 聊天验收：call_claude_chat 可选 browser MCP + chat-visual-review（截图→![]→分析→优化）；显示靠 web markdown hydrate
 
 mod attachment;
+pub mod cli_select;
 mod cli_call;
 mod normalize;
 mod paths;
@@ -59,7 +60,6 @@ pub use types::{
 pub use crate::domain::chat::{
     apply_skip_with_assumptions, detect_missing_slots, extract_all_plan_fences, extract_plan_fence,
     extract_title_from_md, extract_wave_index_fence, normalize_plan_markdown, sanitize_plan_title,
-    set_slot_fill, structure_plan_markdown,
-    ClarifyEntry, ClarifyPhase, ClarifySlotId, ClarifyState, MissingSlotsReport, SlotFillKind,
-    REQUIRED_SLOTS,
+    set_slot_fill, structure_plan_markdown, ClarifyEntry, ClarifyPhase, ClarifySlotId,
+    ClarifyState, MissingSlotsReport, SlotFillKind, REQUIRED_SLOTS,
 };

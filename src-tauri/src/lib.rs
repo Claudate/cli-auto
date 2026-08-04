@@ -25,27 +25,27 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use cco::app::{
-    chat as chat_uc, memory as memory_uc, project_ui as project_ui_uc, run as run_uc, split as split_uc,
-};
-use cco::state::{ProjectLastSummary, ProjectMemoryView, ProjectPin};
-use cco::config::Config;
-use cco::services::{
-    add_project, get_settings, list_projects, open_task_terminal, project_live_view, remove_project,
-    run_doctor, set_settings, task_logs, ChatAttachment, ChatNormalizePlanResponse,
-    ChatSavePlanResponse, ChatSaveWaveResponse, ChatSendResponse, ChatSession,
-    ChatSessionSummary, ChatStreamPartial,
-    PlanJobView, PlanMeta, PlanPreview, PreviewStatus, ProjectLiveView, ProjectSummary,
-    ReworkStartResponse, RunSummary, SanitizeDepsResult, SettingsUpdate, SettingsView,
-    StartPlanJobRequest, StartRunRequest,
-    GitDoctorLine, GitStatusView,
-    CommitResult as GitCommitResult, PushResult as GitPushResult,
-    git_status as svc_git_status, git_doctor as svc_git_doctor,
-    git_commit as svc_git_commit, git_push as svc_git_push,
-    git_set_identity as svc_git_set_identity,
-    add_remote as svc_git_add_remote, remove_remote as svc_git_remove_remote,
-    apply_remotes as svc_git_apply_remotes,
+    chat as chat_uc, guide as guide_uc, memory as memory_uc, project_ui as project_ui_uc,
+    run as run_uc, split as split_uc,
 };
 use cco::config::normalize_region as cfg_normalize_region;
+use cco::config::Config;
+use cco::services::{
+    add_project, add_remote as svc_git_add_remote, apply_remotes as svc_git_apply_remotes,
+    get_settings, git_commit as svc_git_commit, git_doctor as svc_git_doctor,
+    git_push as svc_git_push, git_set_identity as svc_git_set_identity,
+    git_status as svc_git_status, list_projects, open_task_terminal, project_live_view,
+    remove_project, remove_remote as svc_git_remove_remote, run_doctor, set_settings, task_logs,
+    ChatAttachment, ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSaveWaveResponse,
+    ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
+    CommitResult as GitCommitResult, GitDoctorLine, GitStatusView, PlanJobView, PlanMeta,
+    PlanPreview, PreviewStatus, ProjectLiveView, ProjectSummary, PushResult as GitPushResult,
+    ReworkStartResponse, RunSummary, SanitizeDepsResult, SettingsUpdate, SettingsView,
+    StartPlanJobRequest, StartRunRequest,
+};
+use cco::domain::guide::GuideSession;
+use cco::services::ChatCliInfo;
+use cco::state::{ProjectLastSummary, ProjectMemoryView, ProjectPin};
 use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -115,8 +115,7 @@ fn get_run_status_cmd(run_id: String) -> Result<String, String> {
     let config = Config::load().unwrap_or_default();
     let dir = cco::state::resolve_run_dir(&config.runs_dir(), Some(&run_id))
         .map_err(|e| e.to_string())?;
-    let rs = cco::state::RunState::load(&dir)
-        .map_err(|e| e.to_string())?;
+    let rs = cco::state::RunState::load(&dir).map_err(|e| e.to_string())?;
     Ok(format!("{:?}", rs.status).to_ascii_lowercase())
 }
 
@@ -197,7 +196,8 @@ fn get_task_logs(
     max_bytes: Option<usize>,
 ) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    let view = task_logs(&config, &run_id, &task_id, max_bytes.unwrap_or(48_000)).map_err(map_err)?;
+    let view =
+        task_logs(&config, &run_id, &task_id, max_bytes.unwrap_or(48_000)).map_err(map_err)?;
     serde_json::to_value(view).map_err(|e| e.to_string())
 }
 
@@ -306,12 +306,8 @@ fn latest_plan_job_for_plan_cmd(
     #[allow(non_snake_case)] planPath: String,
 ) -> Result<Option<PlanJobView>, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    split_uc::latest_job_for_plan_path(
-        &config,
-        PathBuf::from(project).as_path(),
-        planPath.trim(),
-    )
-    .map_err(map_err)
+    split_uc::latest_job_for_plan_path(&config, PathBuf::from(project).as_path(), planPath.trim())
+        .map_err(map_err)
 }
 
 /// Plan list badge: which plan_paths already have a restorable split.
@@ -341,16 +337,7 @@ fn update_plan_task_cmd(
 ) -> Result<PlanJobView, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
     split_uc::edit_task(
-        &config,
-        &jobId,
-        &taskId,
-        title,
-        prompt,
-        include,
-        provider,
-        dependsOn,
-        role,
-        scopePaths,
+        &config, &jobId, &taskId, title, prompt, include, provider, dependsOn, role, scopePaths,
     )
     .map_err(map_err)
 }
@@ -394,8 +381,7 @@ fn confirm_start_cmd(
     }
     let cfg = config.clone();
     drop(config);
-    let run_id =
-        split_uc::confirm(cfg, &jobId, effort.as_deref()).map_err(map_err)?;
+    let run_id = split_uc::confirm(cfg, &jobId, effort.as_deref()).map_err(map_err)?;
     Ok(json!({
         "run_id": run_id,
         "status": "started",
@@ -518,8 +504,7 @@ fn project_pin_upsert_cmd(
     value: String,
 ) -> Result<ProjectPin, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    memory_uc::upsert_pin(&config, PathBuf::from(project).as_path(), &key, &value)
-        .map_err(map_err)
+    memory_uc::upsert_pin(&config, PathBuf::from(project).as_path(), &key, &value).map_err(map_err)
 }
 
 #[tauri::command]
@@ -532,6 +517,44 @@ fn project_pin_delete_cmd(
     let deleted =
         memory_uc::delete_pin(&config, PathBuf::from(project).as_path(), &key).map_err(map_err)?;
     Ok(json!({ "ok": true, "deleted": deleted, "key": key }))
+}
+
+/// G0-3: list guided sessions for a project.
+#[tauri::command]
+fn guide_sessions_list_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+) -> Result<Vec<GuideSession>, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    guide_uc::list(&config, PathBuf::from(project).as_path()).map_err(map_err)
+}
+
+/// G0-3: start a guided session (mode/entry strings; parse fails fast).
+#[tauri::command]
+fn guide_session_start_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    mode: String,
+    entry: String,
+    #[allow(non_snake_case)] rolePack: String,
+) -> Result<GuideSession, String> {
+    use cco::domain::guide::{SessionEntry, SessionMode};
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    let mode = SessionMode::parse(&mode).ok_or_else(|| format!("unknown guide mode: {mode}"))?;
+    let entry =
+        SessionEntry::parse(&entry).ok_or_else(|| format!("unknown guide entry: {entry}"))?;
+    guide_uc::start(&config, PathBuf::from(project).as_path(), mode, entry, &rolePack)
+        .map_err(map_err)
+}
+
+/// G0-3: get one guided session by id.
+#[tauri::command]
+fn guide_session_get_cmd(
+    state: tauri::State<'_, AppState>,
+    #[allow(non_snake_case)] sessionId: String,
+) -> Result<Option<GuideSession>, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    guide_uc::get(&config, &sessionId).map_err(map_err)
 }
 
 #[tauri::command]
@@ -579,12 +602,8 @@ fn project_dismiss_run_cmd(
     #[allow(non_snake_case)] runId: String,
 ) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    project_ui_uc::dismiss_run(
-        &config,
-        PathBuf::from(project).as_path(),
-        &runId,
-    )
-    .map_err(map_err)?;
+    project_ui_uc::dismiss_run(&config, PathBuf::from(project).as_path(), &runId)
+        .map_err(map_err)?;
     Ok(json!({ "ok": true, "run_id": runId, "dismissed": true }))
 }
 
@@ -606,8 +625,8 @@ fn project_get_dismissed_run_cmd(
     project: String,
 ) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    let rid =
-        project_ui_uc::get_dismissed_run(&config, PathBuf::from(project).as_path()).map_err(map_err)?;
+    let rid = project_ui_uc::get_dismissed_run(&config, PathBuf::from(project).as_path())
+        .map_err(map_err)?;
     Ok(json!({ "run_id": rid }))
 }
 
@@ -615,10 +634,7 @@ fn project_get_dismissed_run_cmd(
 fn open_path(path: String) -> Result<(), String> {
     let raw = path.trim();
     // Chat / markdown external links (http://localhost:4322/) — never mkdir as a path.
-    if raw.starts_with("http://")
-        || raw.starts_with("https://")
-        || raw.starts_with("mailto:")
-    {
+    if raw.starts_with("http://") || raw.starts_with("https://") || raw.starts_with("mailto:") {
         let status = std::process::Command::new("open")
             .arg(raw)
             .status()
@@ -632,9 +648,8 @@ fn open_path(path: String) -> Result<(), String> {
     // Normalize trailing slashes for existence checks (macOS open tolerates them).
     let trimmed = path.trim_end_matches(['/', '\\']);
     let p = std::path::PathBuf::from(if trimmed.is_empty() { &path } else { trimmed });
-    let want_dir = path.ends_with('/')
-        || path.ends_with('\\')
-        || (!p.exists() && p.extension().is_none());
+    let want_dir =
+        path.ends_with('/') || path.ends_with('\\') || (!p.exists() && p.extension().is_none());
     if want_dir {
         if !p.exists() {
             std::fs::create_dir_all(&p).map_err(map_err)?;
@@ -662,10 +677,7 @@ fn open_path(path: String) -> Result<(), String> {
 
 /// P2-4: open (or focus) a real OS window for the live CLI board.
 #[tauri::command]
-async fn open_monitor_window_cmd(
-    app: AppHandle,
-    project: Option<String>,
-) -> Result<Value, String> {
+async fn open_monitor_window_cmd(app: AppHandle, project: Option<String>) -> Result<Value, String> {
     let label = MONITOR_WINDOW_LABEL;
     if let Some(existing) = app.get_webview_window(label) {
         let _ = existing.set_focus();
@@ -679,11 +691,7 @@ async fn open_monitor_window_cmd(
     }
 
     let mut url_path = "index.html?cco_window=monitor".to_string();
-    if let Some(p) = project
-        .as_ref()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-    {
+    if let Some(p) = project.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
         let enc = p
             .replace('%', "%25")
             .replace('&', "%26")
@@ -789,10 +797,7 @@ fn git_remote_add_cmd(
 }
 
 #[tauri::command]
-fn git_remote_remove_cmd(
-    state: tauri::State<'_, AppState>,
-    name: String,
-) -> Result<Value, String> {
+fn git_remote_remove_cmd(state: tauri::State<'_, AppState>, name: String) -> Result<Value, String> {
     let mut config = state.config.lock().map_err(|e| e.to_string())?;
     let removed = svc_git_remove_remote(&mut config, &name).map_err(map_err)?;
     Ok(json!({ "ok": removed, "name": name }))
@@ -804,7 +809,8 @@ fn git_remote_apply_cmd(
     project: String,
 ) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?;
-    let actions = svc_git_apply_remotes(&config, PathBuf::from(project).as_path()).map_err(map_err)?;
+    let actions =
+        svc_git_apply_remotes(&config, PathBuf::from(project).as_path()).map_err(map_err)?;
     Ok(json!({ "ok": true, "actions": actions }))
 }
 
@@ -892,10 +898,7 @@ fn chat_list_sessions_cmd(project: String) -> Result<Vec<ChatSessionSummary>, St
 }
 
 #[tauri::command]
-fn chat_new_session_cmd(
-    project: String,
-    title: Option<String>,
-) -> Result<ChatSession, String> {
+fn chat_new_session_cmd(project: String, title: Option<String>) -> Result<ChatSession, String> {
     chat_uc::new_session(PathBuf::from(project).as_path(), title.as_deref()).map_err(map_err)
 }
 
@@ -930,6 +933,8 @@ async fn chat_send_cmd(
     attachments: Option<Vec<ChatAttachment>>,
     // Optional per-send: low|medium|high|xhigh|max|ultracode
     effort: Option<String>,
+    // Optional chat CLI provider id (None → claude default; fake → template reply)
+    cli: Option<String>,
 ) -> Result<ChatSendResponse, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
     tokio::task::spawn_blocking(move || {
@@ -940,11 +945,21 @@ async fn chat_send_cmd(
             sessionId.as_deref(),
             attachments,
             effort.as_deref(),
+            cli.as_deref(),
         )
         .map_err(map_err)
     })
     .await
     .map_err(|e| format!("chat_send join error: {e}"))?
+}
+
+/// L1: chat-capable CLI list for the composer dropdown.
+#[tauri::command]
+fn chat_clis_list_cmd(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<ChatCliInfo>, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    chat_uc::available_clis(&config).map_err(map_err)
 }
 
 #[tauri::command]
@@ -1013,10 +1028,7 @@ async fn chat_save_attachment_cmd(
 
 /// Project-relative image → data URL for chat markdown / attachment thumbs.
 #[tauri::command]
-async fn chat_read_image_data_url_cmd(
-    project: String,
-    path: String,
-) -> Result<String, String> {
+async fn chat_read_image_data_url_cmd(project: String, path: String) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
         chat_uc::read_image_data_url(PathBuf::from(project).as_path(), &path).map_err(map_err)
     })
@@ -1147,6 +1159,9 @@ pub fn run() {
             project_pins_list_cmd,
             project_pin_upsert_cmd,
             project_pin_delete_cmd,
+            guide_sessions_list_cmd,
+            guide_session_start_cmd,
+            guide_session_get_cmd,
             get_project_persona_cmd,
             set_project_persona_cmd,
             project_dismiss_run_cmd,
@@ -1163,6 +1178,7 @@ pub fn run() {
             chat_rename_session_cmd,
             chat_delete_session_cmd,
             chat_send_cmd,
+            chat_clis_list_cmd,
             chat_stream_partial_cmd,
             chat_cancel_cmd,
             preview_start_cmd,

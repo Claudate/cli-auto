@@ -82,7 +82,7 @@
 
 | 步 | 用户语言 | 产品规则（思路层） |
 |----|----------|-------------------|
-| 生成 | 「我想做 XXX，帮我写成计划」 | 产出人能读的计划文档；不在聊天里直接开干。模糊一句时可走**澄清相**（三入口 → Brief 认领 → plan；认领 ≠ 开跑）——边界见 [`docs/clarify-phase-vibe-check-subset.md`](./docs/clarify-phase-vibe-check-subset.md) |
+| 生成 | 「我想做 XXX，帮我写成计划」 | 产出人能读的计划文档；不在聊天里直接开干。模糊一句时可走**澄清相**（三入口 → Brief 认领 → plan；认领 ≠ 开跑）——边界见 [`docs/clarify-phase-vibe-check-subset.md`](./docs/clarify-phase-vibe-check-subset.md)；想不清楚时可走**引导相**（G0 地基已落：引导会话/记忆/角色组类型 · 追问交互随 G1+ 排期）——见 [`docs/guided-plan-memory-decision-2026-07-21.md`](./docs/guided-plan-memory-decision-2026-07-21.md) |
 | 核对 | 「对不对？改一句再定」 | 未执行过的可改；草稿和已跑过的要分得清 |
 | 拆分 | 「拆成能并行的步骤」 | AI 拆；人可微调；默认少打断，关键时可先看一眼 |
 | 并行 | 「几路一起干，我看进度」 | 排队 / 进行中 / 完成 / 卡住都可见；卡住要能醒 |

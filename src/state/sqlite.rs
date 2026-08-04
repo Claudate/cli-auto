@@ -1,7 +1,7 @@
 //! SQLite store for plan jobs + cco split SoT.
 //!
 //! [INPUT]: Config.state_root · PlanJob · PlanIR · CcoSplitJob
-//! [OUTPUT]: ~/.cco/cco.db — plan_jobs/plan_tasks + cco_split_* + project_last_summary/project_pins + project_ui_prefs
+//! [OUTPUT]: ~/.cco/cco.db — plan_jobs/plan_tasks + cco_split_* + project_last_summary/project_pins + project_ui_prefs + guide_*
 //! [POS]: state adapter
 //! [PROTOCOL]: 变更时更新此头部与 src/state/CLAUDE.md
 //!
@@ -139,6 +139,8 @@ pub(crate) fn ensure_schema(conn: &Connection) -> Result<()> {
     )?;
     // H2: additive columns on existing DBs (CREATE IF NOT EXISTS alone is not enough).
     ensure_column(conn, "cco_split_tasks", "verify_cmd", "TEXT")?;
+    // G0-2: guide schema (delegated to guide_store; one-line entry, no growth here).
+    super::guide_store::ensure_guide_schema(conn)?;
     Ok(())
 }
 
@@ -182,8 +184,8 @@ where
     if need_open {
         std::fs::create_dir_all(&config.state_root)
             .with_context(|| format!("mkdir {}", config.state_root.display()))?;
-        let conn = Connection::open(&path)
-            .with_context(|| format!("open sqlite {}", path.display()))?;
+        let conn =
+            Connection::open(&path).with_context(|| format!("open sqlite {}", path.display()))?;
         ensure_schema(&conn)?;
         *guard = Some(conn);
     }
@@ -492,10 +494,7 @@ pub fn latest_job_id_for_plan_path(
 
 /// All recoverable split index rows for a project (newest first).
 /// Status filter: planning | planned | confirmed (desk-restorable).
-pub fn list_plan_split_index(
-    config: &Config,
-    project: &Path,
-) -> Result<Vec<PlanSplitIndexRow>> {
+pub fn list_plan_split_index(config: &Config, project: &Path) -> Result<Vec<PlanSplitIndexRow>> {
     let proj = project_key(project);
     let proj_raw = project.to_string_lossy().to_string();
     with_conn(config, |conn| {
@@ -584,15 +583,10 @@ mod tests {
             q_ai8 > q_direct,
             "8-step AI ({q_ai8}) must beat direct 1 ({q_direct})"
         );
-        assert!(
-            q_ai8 > q_ai1,
-            "8-step AI must beat 1-step AI residual"
-        );
+        assert!(q_ai8 > q_ai1, "8-step AI must beat 1-step AI residual");
         // Confirmed vs planned is status rank, not quality — both multi-step AI close.
-        let q_confirmed7 =
-            split_graph_quality(Some("ai"), Some("planner-ai-llm"), Some(7));
-        let q_heur5 =
-            split_graph_quality(Some("ai"), Some("planner-ai-heuristic"), Some(5));
+        let q_confirmed7 = split_graph_quality(Some("ai"), Some("planner-ai-llm"), Some(7));
+        let q_heur5 = split_graph_quality(Some("ai"), Some("planner-ai-heuristic"), Some(5));
         assert!(
             q_confirmed7 > q_heur5,
             "larger LLM graph outranks smaller heuristic"

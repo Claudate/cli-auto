@@ -35,7 +35,7 @@ inspect-ensure-close-loop-2026-07-24.md: **巡检关账闭环 Ensure**（**E0–
 clarify-phase-vibe-check-subset.md: **澄清相 · 能力边界真源**（vibe-check 轻量子集 · 三入口/Brief 认领≠开跑 · 非 vibe-check/guided 全量 · ⊆ PRODUCT ①）
 chat-20260725-0402.md: **澄清相实施计划**（t1–t6 ✅ · inspect PASS · W0 冒烟绿 · **桌面 GUI 30s 目视 residual** · 成功标准见文末；证据 CLOSEOUT · VERDICT · clarify/claim smoke）
 subjective-desire-cco-subset-landing-2026-07-22.md: **主观渴望 · 对本仓有用子集落地**（**D0 ✅ · D1/D2 主路径由澄清吸收 ✅** · 残余 D1-2/D2-3 可选 · 无人生 Pack · **禁止 D3**；W1 对账 §0.4）
-guided-plan-memory-decision-2026-07-21.md: **引导/记忆/对抗工程草稿**（G0–G4 ☐ 全量未 ship；§5.6.1 可复用 pilotdeck 薄表；文首后置；**不**开第二套波次）
+guided-plan-memory-decision-2026-07-21.md: **引导/记忆/对抗工程草稿**（**G0 ✅ 2026-08-04** · G1–G4 ☐ 草稿；§5.6.1 可复用 pilotdeck 薄表；**不**开第二套波次）
 
 ### C4 + 活跃交互 / 总账
 
