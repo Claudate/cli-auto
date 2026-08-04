@@ -118,6 +118,8 @@ export async function openChatPage() {
   // Restore immediately so history is never blank while disk loads.
   restoreChatSession(state.selectedPath);
   applyPlanRailVisibility();
+  // L1: fill CLI dropdown on page open (non-blocking); send re-checks.
+  ensureChatCliOptions();
   // t3: install clarify click/styles once; ensure default entry
   installClarifyUi();
   ensureClarifyState();
