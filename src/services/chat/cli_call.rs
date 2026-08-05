@@ -176,20 +176,33 @@ pub(crate) fn build_user_prompt(config: &Config, sess: &ChatSession, project: &P
 }
 
 /// Production soft-fallback assistant body: short human note, **no** ```plan fence.
-pub(crate) fn soft_fallback_assistant_reply() -> String {
-    "暂时无法联系本机 Claude CLI。请到「环境检查」确认 CLI 与密钥后重试，或设置 CCO_CHAT_FAKE=1 仅作 UI 联调。"
-        .to_string()
+/// `cli` is the provider the user actually picked (claude/codex/…) so the note
+/// never blames Claude when a different CLI failed.
+pub(crate) fn soft_fallback_assistant_reply(cli: &str) -> String {
+    if cli == "claude" {
+        "暂时无法联系本机 Claude CLI。请到「环境检查」确认 CLI 与密钥后重试，或设置 CCO_CHAT_FAKE=1 仅作 UI 联调。"
+            .to_string()
+    } else {
+        format!(
+            "暂时无法联系 {cli} CLI。请到「环境检查」确认已安装并登录 {cli} 后重试，或切换回 Claude 默认通道。"
+        )
+    }
 }
 
 /// Short env note for UI system bar; full diagnostic stays in logs only.
-pub(crate) fn soft_fallback_env_note(diagnostic: &str) -> String {
+/// Names the actual CLI so a failed codex/gemini switch is not reported as Claude.
+pub(crate) fn soft_fallback_env_note(cli: &str, diagnostic: &str) -> String {
     let short = diagnostic.chars().take(160).collect::<String>();
     let short = if diagnostic.chars().count() > 160 {
         format!("{short}…")
     } else {
         short
     };
-    format!("本机 Claude CLI 暂不可用：{short}")
+    if cli == "claude" {
+        format!("本机 Claude CLI 暂不可用：{short}")
+    } else {
+        format!("{cli} CLI 启动失败：{short}")
+    }
 }
 
 /// Forced mock (CCO_CHAT_FAKE / provider=fake) — keeps ```plan for UI 联调就绪条.
@@ -278,6 +291,7 @@ pub(crate) fn call_chat_provider(
         .and_then(crate::config::normalize_effort)
         .or_else(|| crate::config::normalize_effort(&config.default.effort))
         .unwrap_or_else(|| "high".into());
+    let model = sess.model.as_deref();
     // tag browser so prepare_task_browser can inject MCP when config.browser.enabled
     // (no ui-verify → require_preview soft-fail does not block chat).
     let mut chat_task = TaskIR {
@@ -294,7 +308,7 @@ pub(crate) fn call_chat_provider(
         // --max-budget-usd: null omits those flags so Claude is not turn-capped.
         timeout_secs: Some(600),
         worktree: Some(false),
-        provider_opts: super::cli_select::chat_provider_opts(cli, &effort),
+        provider_opts: super::cli_select::chat_provider_opts(cli, &effort, model),
         optional: false,
         include: true,
         role: None,

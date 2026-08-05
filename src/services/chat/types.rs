@@ -55,6 +55,18 @@ pub struct ChatSession {
     /// Host extracts from ```session-digest fence; absent on legacy sessions.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_digest: Option<String>,
+    /// Chat CLI picked for this session (`/cli <name>` switch). The UI dropdown
+    /// stays authoritative per send; this persists the choice across reopen.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cli: Option<String>,
+    /// Default effort for this session (`/effort <level>`); per-send effort
+    /// override wins, this is the fallback when the UI passes none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
+    /// Chat model for this session (`/model <name>`); None → CLI default.
+    /// Claude channel passes it as `--model`; shell-print providers ignore it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 /// C3: lightweight row for multi-session list (no full messages).
@@ -87,6 +99,18 @@ pub struct ChatSendResponse {
     /// Short human-readable env/CLI fault for UI system bar (not assistant body).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub env_note: Option<String>,
+    /// CLI actually used for this turn (claude when None/unknown). Lets the UI
+    /// follow a `/cli` switch made inside the chat.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cli: Option<String>,
+    /// Effort used for this turn (explicit > session default). Lets the UI
+    /// follow a `/effort` change made inside the chat.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
+    /// Model used for this turn (`/model <name>`); None → CLI default. Lets the
+    /// UI follow a `/model` switch made inside the chat.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -126,4 +150,21 @@ pub struct ChatNormalizePlanResponse {
     pub title: Option<String>,
     /// true when CLI was used; false = local structure only
     pub used_cli: bool,
+}
+
+/// One slash command entry for the composer autocomplete catalog.
+/// [POS]: front-end renders only; the routing logic stays in `services/chat/commands`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlashCommandInfo {
+    /// Command without leading `/`, e.g. "compact".
+    pub cmd: String,
+    /// Argument hint, e.g. "<名称>" or "".
+    pub args: String,
+    /// One-line human description (no run_id / engine names).
+    pub desc: String,
+    /// Group label: 会话 · 通道与档位 · 计划 · 项目 · 透传 · 保留.
+    pub group: String,
+    /// `local` (cco answers) · `passthrough` (sent to CLI verbatim) · `reserved`
+    /// (never executed from chat — greyed out guidance).
+    pub scope: String,
 }

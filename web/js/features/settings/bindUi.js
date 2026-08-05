@@ -14,6 +14,12 @@ import {
   g,
 } from "./uiActions.js";
 import { attachDocumentClick } from "./bindUiClick.js";
+import {
+  ensureSlashCatalog,
+  handleSlashKeydown,
+  handleSlashInput,
+  bindSlashMenuDismiss,
+} from "../chat/chatSlash.js";
 
 let UI_ACTIONS = null;
 function actions() {
@@ -49,6 +55,10 @@ export function bindGlobalUI() {
         return;
       }
     }
+    // 斜杠命令联想：`/` 打开菜单；↑↓/Enter/Tab/Esc 由菜单优先消费。
+    if (e.target?.id === "chat-input") {
+      if (handleSlashKeydown(e)) return;
+    }
     // Enter 发送；Shift+Enter 换行。拼音/IME 组字时回车只是落字，不得发送。
     if (e.target?.id === "chat-input" && e.key === "Enter" && !e.shiftKey) {
       if (e.isComposing || e.keyCode === 229 || e.which === 229) return;
@@ -65,9 +75,18 @@ export function bindGlobalUI() {
       chatInput.style.height = "auto";
       chatInput.style.height = `${Math.min(chatInput.scrollHeight, 160)}px`;
     };
-    chatInput.addEventListener("input", resizeComposer);
+    const onInput = (e) => {
+      resizeComposer();
+      handleSlashInput(e);
+    };
+    chatInput.addEventListener("input", onInput);
     // Initial size once laid out
     requestAnimationFrame(resizeComposer);
+  }
+  // Slash catalog prefetch + menu dismissal (only if the composer exists).
+  if (chatInput) {
+    ensureSlashCatalog().catch(() => {});
+    bindSlashMenuDismiss();
   }
 
   document.addEventListener(

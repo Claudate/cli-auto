@@ -1252,6 +1252,7 @@ a.md-ext-link:hover {
   max-width: 40rem;
   margin-inline: auto;
   padding-top: 0.35rem;
+  position: relative;
 }
 /* 状态条与输入同宽，避免视觉比消息更宽 */
 .chat-env-bar,
@@ -2282,4 +2283,62 @@ a.md-ext-link:hover {
     max-width: 14rem;
     flex: 0 0 auto;
   }
+}
+
+/* ── chat slash-command autocomplete (chatSlash.js) ───────────────────── */
+.chat-slash-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 0.4rem);
+  z-index: 40;
+  max-height: min(18rem, 46vh);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0.3rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg, #fff);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+}
+.chat-slash-menu[hidden] {
+  display: none;
+}
+.chat-slash-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+.chat-slash-item:hover,
+.chat-slash-item.is-active {
+  background: color-mix(in srgb, var(--accent, #2563eb) 10%, transparent);
+}
+.chat-slash-item.is-reserved {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.chat-slash-cmd {
+  font-weight: 600;
+  color: var(--accent, #2563eb);
+  flex-shrink: 0;
+}
+.chat-slash-desc {
+  color: var(--muted, #6b7280);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-slash-scope {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--muted, #6b7280);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 0.3rem;
 }

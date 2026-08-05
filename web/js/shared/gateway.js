@@ -176,6 +176,9 @@ export const chatSessionGet = (project, sessionId) =>
   raw("chat_session_get_cmd", { project, sessionId });
 export const chatSend = (args) => raw("chat_send_cmd", args);
 export const chatClisList = () => raw("chat_clis_list_cmd", {});
+/** Per-CLI slash-command catalog for the composer autocomplete. */
+export const chatSlashCatalog = (cli) =>
+  raw("chat_slash_catalog_cmd", cli ? { cli } : {});
 export const chatStreamPartial = (args) => raw("chat_stream_partial_cmd", args);
 export const chatCancel = (project) => raw("chat_cancel_cmd", { project });
 export const chatSavePlan = (args) => raw("chat_save_plan_cmd", args);
@@ -261,6 +264,7 @@ export const gateway = {
   chatSessionGet,
   chatSend,
   chatClisList,
+  chatSlashCatalog,
   chatStreamPartial,
   chatCancel,
   chatSavePlan,

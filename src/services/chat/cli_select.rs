@@ -15,7 +15,9 @@ use serde::Serialize;
 use crate::config::Config;
 use crate::runtime::provider::claude::ClaudeProvider;
 use crate::runtime::provider::shell_print::{profile_by_name, ShellPrintProvider};
-use crate::runtime::provider::{resolve_provider_bin, ProviderRegistry, WorkerPort};
+use crate::runtime::provider::{
+    resolve_bin_on_disk, resolve_provider_bin, ProviderRegistry, WorkerPort,
+};
 
 /// Chat-capable CLI info for the UI dropdown.
 #[derive(Debug, Clone, Serialize)]
@@ -26,6 +28,8 @@ pub struct ChatCliInfo {
     pub enabled: bool,
     /// Supports print interaction (chat needs it).
     pub print_capable: bool,
+    /// Binary resolvable on this machine (PATH or disk); `fake` is always usable.
+    pub installed: bool,
 }
 
 /// List CLIs usable from chat: enabled print-capable providers (claude first).
@@ -50,12 +54,41 @@ pub fn available_chat_clis(config: &Config) -> Vec<ChatCliInfo> {
                 label: cli_label(name).to_string(),
                 enabled: config.provider(name).map(|p| p.enabled).unwrap_or(false),
                 print_capable,
+                installed: cli_installed(config, name),
             }
         })
         .collect();
     // Stable order: fake last, otherwise registry order (claude/codex first).
     infos.sort_by_key(|i| i.name == "fake");
     infos
+}
+
+/// Whether the provider binary is actually available on this machine.
+/// Mirrors `chat_provider` dispatch so the UI never offers a guaranteed-fail CLI.
+/// `fake` is a template reply path (no spawn) → always usable.
+fn cli_installed(config: &Config, name: &str) -> bool {
+    match name {
+        "fake" => true,
+        "claude" => {
+            let bin_cfg = config
+                .provider("claude")
+                .map(|p| p.bin.clone())
+                .unwrap_or_else(|| "claude".into());
+            let bin = resolve_provider_bin(&bin_cfg, "CCO_CLAUDE_BIN");
+            resolve_bin_on_disk(&bin).is_some()
+        }
+        other => {
+            let Some(profile) = profile_by_name(other) else {
+                return false;
+            };
+            let bin_cfg = config
+                .provider(other)
+                .map(|pc| pc.bin.clone())
+                .unwrap_or_else(|| profile.default_bin.into());
+            let bin = resolve_provider_bin(&bin_cfg, profile.bin_env);
+            resolve_bin_on_disk(&bin).is_some()
+        }
+    }
 }
 
 /// Build the chat provider for a CLI name (None → default claude).
@@ -88,7 +121,7 @@ pub fn chat_provider(config: &Config, cli: Option<&str>) -> Result<Box<dyn Worke
 
 /// Provider-opts for a chat turn: claude uses the full option set; shell-print
 /// providers only read `timeout_secs` (their CLI flags come from the profile).
-pub fn chat_provider_opts(cli: Option<&str>, effort: &str) -> serde_json::Value {
+pub fn chat_provider_opts(cli: Option<&str>, effort: &str, model: Option<&str>) -> serde_json::Value {
     if cli == Some("fake") || (cli.is_some() && cli != Some("claude")) {
         serde_json::json!({ "timeout_secs": 600 })
     } else {
@@ -102,6 +135,8 @@ pub fn chat_provider_opts(cli: Option<&str>, effort: &str) -> serde_json::Value 
             "permission_mode": "bypassPermissions",
             // Reasoning depth → claude --effort (ultracode → xhigh + system hint).
             "effort": effort,
+            // Chat model → claude --model; None/null → CLI default.
+            "model": model,
         })
     }
 }
@@ -182,14 +217,43 @@ mod tests {
         assert!(list.iter().any(|i| i.name == "fake"));
         let claude = list.iter().find(|i| i.name == "claude").unwrap();
         assert!(claude.enabled && claude.print_capable);
+        let fake = list.iter().find(|i| i.name == "fake").unwrap();
+        assert!(fake.installed, "fake is a template path, always usable");
+    }
+
+    #[test]
+    fn unavailable_bin_is_not_installed() {
+        let (_d, mut cfg) = test_cfg();
+        cfg.providers.insert(
+            "codex".into(),
+            crate::config::ProviderConfig {
+                enabled: true,
+                bin: "cco-definitely-not-a-real-bin-xyz".into(),
+                extra_args: vec![],
+                max_parallel: None,
+            },
+        );
+        let list = available_chat_clis(&cfg);
+        let codex = list.iter().find(|i| i.name == "codex").unwrap();
+        assert!(
+            !codex.installed,
+            "missing binary must not be offered as installed"
+        );
     }
 
     #[test]
     fn opts_are_minimal_for_shell_but_full_for_claude() {
-        let shell = chat_provider_opts(Some("codex"), "high");
-        assert_eq!(shell.get("timeout_secs").and_then(|v| v.as_u64()), Some(600));
+        let shell = chat_provider_opts(Some("codex"), "high", None);
+        assert_eq!(
+            shell.get("timeout_secs").and_then(|v| v.as_u64()),
+            Some(600)
+        );
         assert!(shell.get("effort").is_none());
-        let claude = chat_provider_opts(None, "high");
+        let claude = chat_provider_opts(None, "high", Some("sonnet"));
         assert_eq!(claude.get("effort").and_then(|v| v.as_str()), Some("high"));
+        assert_eq!(
+            claude.get("model").and_then(|v| v.as_str()),
+            Some("sonnet")
+        );
     }
 }

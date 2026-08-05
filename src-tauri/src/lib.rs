@@ -36,12 +36,13 @@ use cco::services::{
     git_push as svc_git_push, git_set_identity as svc_git_set_identity,
     git_status as svc_git_status, list_projects, open_task_terminal, project_live_view,
     remove_project, remove_remote as svc_git_remove_remote, run_doctor, set_settings, task_logs,
-    ChatAttachment, ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSaveWaveResponse,
-    ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
-    CommitResult as GitCommitResult, GitDoctorLine, GitStatusView, PlanJobView, PlanMeta,
-    PlanPreview, PreviewStatus, ProjectLiveView, ProjectSummary, PushResult as GitPushResult,
-    ReworkStartResponse, RunSummary, SanitizeDepsResult, SettingsUpdate, SettingsView,
-    StartPlanJobRequest, StartRunRequest,
+    BranchInfo as GitBranchInfo, ChatAttachment, ChatNormalizePlanResponse, ChatSavePlanResponse,
+    ChatSaveWaveResponse, ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
+    CommitResult as GitCommitResult, GitDoctorLine, GitStatusView, LogEntry,
+    PlanJobView, PlanMeta, PlanPreview, PreviewStatus, ProjectLiveView, ProjectSummary,
+    PullResult as GitPullResult, PushResult as GitPushResult, ReworkStartResponse, RunSummary,
+    SanitizeDepsResult, SettingsUpdate, SettingsView, SlashCommandInfo, StashEntry as GitStashEntry,
+    StartPlanJobRequest, StartRunRequest, TagInfo as GitTagInfo,
 };
 use cco::domain::guide::GuideSession;
 use cco::services::ChatCliInfo;
@@ -963,6 +964,11 @@ fn chat_clis_list_cmd(
 }
 
 #[tauri::command]
+fn chat_slash_catalog_cmd(cli: Option<String>) -> Result<Vec<SlashCommandInfo>, String> {
+    Ok(chat_uc::slash_catalog(cli.as_deref()))
+}
+
+#[tauri::command]
 fn chat_stream_partial_cmd(
     project: String,
     #[allow(non_snake_case)] sessionId: Option<String>,
@@ -1179,6 +1185,7 @@ pub fn run() {
             chat_delete_session_cmd,
             chat_send_cmd,
             chat_clis_list_cmd,
+            chat_slash_catalog_cmd,
             chat_stream_partial_cmd,
             chat_cancel_cmd,
             preview_start_cmd,

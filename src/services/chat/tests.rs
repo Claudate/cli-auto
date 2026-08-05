@@ -449,7 +449,7 @@ fn session_get_heals_stale_draft_path() {
 
 #[test]
 fn soft_fallback_reply_has_no_plan_fence() {
-    let reply = soft_fallback_assistant_reply();
+    let reply = soft_fallback_assistant_reply("claude");
     assert!(extract_plan_fence(&reply).is_none());
     assert!(!reply.contains("```plan"));
     assert!(reply.contains("Claude CLI") || reply.contains("环境检查"));
@@ -458,9 +458,279 @@ fn soft_fallback_reply_has_no_plan_fence() {
 #[test]
 fn soft_fallback_env_note_truncates() {
     let long = "x".repeat(300);
-    let n = soft_fallback_env_note(&long);
+    let n = soft_fallback_env_note("codex", &long);
     assert!(n.chars().count() < 220, "got len {}", n.chars().count());
-    assert!(n.contains("暂不可用"));
+    assert!(n.contains("codex CLI 启动失败"));
+    let claude_n = soft_fallback_env_note("claude", &long);
+    assert!(claude_n.contains("本机 Claude CLI 暂不可用"));
+}
+
+// --- slash commands (per-CLI routing) ---
+
+#[test]
+fn slash_help_answered_locally_without_ai() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    let r = chat_send(&cfg, &project, "/help", None, None, None, None).unwrap();
+    assert!(!r.fake, "local reply is not a fake template");
+    assert!(r.reply.contains("cco 聊天命令"), "got: {}", r.reply);
+    assert!(r.reply.contains("/clis"), "got: {}", r.reply);
+    assert!(
+        !r.reply.contains("```plan"),
+        "local reply must not fabricate a plan"
+    );
+    assert!(
+        r.draft_plan.is_none(),
+        "local reply must not touch draft plan"
+    );
+    assert_eq!(r.messages.len(), 2, "user /help + assistant reply only");
+    // Persisted on session like any turn.
+    let sess = chat_session_get(&project, Some("default")).unwrap();
+    assert_eq!(sess.messages.len(), 2);
+    assert_eq!(sess.messages[0].content, "/help");
+}
+
+#[test]
+fn slash_clis_lists_channels() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    let r = chat_send(&cfg, &project, "/clis", None, None, None, None).unwrap();
+    assert!(
+        r.reply.to_lowercase().contains("claude"),
+        "got: {}",
+        r.reply
+    );
+    assert!(r.reply.contains("fake"), "got: {}", r.reply);
+    assert!(!r.fake);
+}
+
+#[test]
+fn slash_unknown_on_fake_channel_gets_note() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    let r = chat_send(&cfg, &project, "/compact", None, None, None, None).unwrap();
+    assert!(!r.fake, "local note is not a fake template");
+    assert!(r.reply.contains("/compact"), "got: {}", r.reply);
+    assert!(r.reply.contains("fake"), "got: {}", r.reply);
+    assert!(!r.reply.contains("```plan"));
+    assert!(r.draft_plan.is_none());
+}
+
+#[test]
+fn slash_clear_drops_history_and_draft() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    // First a normal turn that produces a draft plan + digest.
+    let r1 = chat_send(&cfg, &project, "帮我写个登录页计划", None, None, None, None).unwrap();
+    assert!(r1
+        .draft_plan
+        .as_ref()
+        .and_then(|d| d.markdown.as_ref())
+        .is_some());
+    assert_eq!(r1.messages.len(), 2);
+
+    let r2 = chat_send(&cfg, &project, "/clear", None, None, None, None).unwrap();
+    assert!(r2.reply.contains("已清空"), "got: {}", r2.reply);
+    assert_eq!(r2.messages.len(), 2, "only the /clear turn survives");
+    assert_eq!(r2.messages[0].content, "/clear");
+    assert!(
+        r2.draft_plan.is_none(),
+        "draft plan dropped with the history"
+    );
+
+    let sess = chat_session_get(&project, Some("default")).unwrap();
+    assert_eq!(sess.messages.len(), 2);
+    assert!(sess.draft_plan.is_none());
+}
+
+#[test]
+fn slash_bare_or_space_is_plain_text() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    // "/" and "/ …" are not commands → normal fake template path.
+    let r = chat_send(&cfg, &project, "/", None, None, None, None).unwrap();
+    assert!(
+        r.fake,
+        "bare slash must go through the normal (fake) send path"
+    );
+    let r = chat_send(&cfg, &project, "/ 这是普通消息", None, None, None, None).unwrap();
+    assert!(
+        r.fake,
+        "slash-space must go through the normal (fake) send path"
+    );
+}
+
+#[test]
+fn slash_cli_without_args_reports_current_channel() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    let r = chat_send(&cfg, &project, "/cli", None, None, None, None).unwrap();
+    assert!(!r.fake);
+    assert!(r.reply.contains("当前聊天通道：claude"), "got: {}", r.reply);
+    assert!(r.reply.contains("codex"), "got: {}", r.reply);
+    assert_eq!(r.cli.as_deref(), Some("claude"), "no switch happened");
+    // No session mutation beyond the message turn.
+    let sess = chat_session_get(&project, Some("default")).unwrap();
+    assert!(sess.cli.is_none());
+}
+
+#[test]
+fn slash_cli_switch_persists_on_session() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    let r = chat_send(&cfg, &project, "/cli codex", None, None, None, None).unwrap();
+    assert!(!r.fake);
+    assert!(r.reply.contains("已切换"), "got: {}", r.reply);
+    assert_eq!(
+        r.cli.as_deref(),
+        Some("codex"),
+        "resp echoes the new channel"
+    );
+    // Persisted on the session so reopen keeps the pick.
+    let sess = chat_session_get(&project, Some("default")).unwrap();
+    assert_eq!(sess.cli.as_deref(), Some("codex"));
+    assert_eq!(sess.messages.len(), 2, "switch turn only");
+}
+
+#[test]
+fn slash_cli_unknown_name_is_rejected() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    let r = chat_send(&cfg, &project, "/cli nope", None, None, None, None).unwrap();
+    assert!(!r.fake);
+    assert!(r.reply.contains("未知 CLI"), "got: {}", r.reply);
+    assert_eq!(r.cli.as_deref(), Some("claude"), "channel unchanged");
+    let sess = chat_session_get(&project, Some("default")).unwrap();
+    assert!(sess.cli.is_none(), "no mutation on rejected switch");
+}
+
+#[test]
+fn slash_effort_persists_session_default() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    let r = chat_send(&cfg, &project, "/effort max", None, None, None, None).unwrap();
+    assert!(!r.fake);
+    assert!(r.reply.contains("max"), "got: {}", r.reply);
+    assert_eq!(r.effort.as_deref(), Some("max"), "resp echoes new effort");
+    let sess = chat_session_get(&project, Some("default")).unwrap();
+    assert_eq!(sess.effort.as_deref(), Some("max"));
+    // invalid level → hint, no mutation
+    let r = chat_send(&cfg, &project, "/effort turbo", None, None, None, None).unwrap();
+    assert!(r.reply.contains("未知档位"), "got: {}", r.reply);
+    assert_eq!(
+        r.effort.as_deref(),
+        Some("max"),
+        "echoes session default on reject"
+    );
+}
+
+#[test]
+fn slash_rename_titles_session() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    let r = chat_send(&cfg, &project, "/rename 登录页改造", None, None, None, None).unwrap();
+    assert!(r.reply.contains("登录页改造"), "got: {}", r.reply);
+    let sess = chat_session_get(&project, Some("default")).unwrap();
+    assert_eq!(sess.title.as_deref(), Some("登录页改造"));
+}
+
+#[test]
+fn slash_run_guides_instead_of_executing() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    let r = chat_send(&cfg, &project, "/run plans/foo.md", None, None, None, None).unwrap();
+    assert!(!r.fake);
+    assert!(r.reply.contains("拆分台"), "got: {}", r.reply);
+    assert!(r.draft_plan.is_none(), "no run artifacts in chat");
+}
+
+#[test]
+fn slash_plan_reports_draft_state() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    // no draft yet
+    let r = chat_send(&cfg, &project, "/plan", None, None, None, None).unwrap();
+    assert!(r.reply.contains("没有计划草稿"), "got: {}", r.reply);
+    // after a fake turn with a ```plan fence → unsaved draft exists
+    let r1 = chat_send(&cfg, &project, "帮我写个登录页计划", None, None, None, None).unwrap();
+    assert!(r1
+        .draft_plan
+        .as_ref()
+        .and_then(|d| d.markdown.as_ref())
+        .is_some());
+    let r2 = chat_send(&cfg, &project, "/plan", None, None, None, None).unwrap();
+    assert!(r2.reply.contains("还没保存"), "got: {}", r2.reply);
+    assert!(r2.reply.contains("/save"), "got: {}", r2.reply);
+}
+
+#[test]
+fn slash_save_writes_draft_to_plans() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    // no draft → guidance
+    let r = chat_send(&cfg, &project, "/save", None, None, None, None).unwrap();
+    assert!(r.reply.contains("没有可保存"), "got: {}", r.reply);
+    // with a draft → file written under plans/
+    chat_send(&cfg, &project, "帮我写个登录页计划", None, None, None, None).unwrap();
+    let r = chat_send(&cfg, &project, "/save", None, None, None, None).unwrap();
+    assert!(r.reply.contains("已保存计划草稿"), "got: {}", r.reply);
+    let sess = chat_session_get(&project, Some("default")).unwrap();
+    let d = sess.draft_plan.as_ref().expect("draft after save");
+    assert!(d.saved, "save must mark draft saved");
+    assert!(d.path.starts_with("plans/"), "got: {}", d.path);
+}
+
+#[test]
+fn slash_status_and_memory_readonly() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    let r = chat_send(&cfg, &project, "/status", None, None, None, None).unwrap();
+    assert!(
+        r.reply.contains("还没有运行记录") || r.reply.contains("最近一次运行"),
+        "got: {}",
+        r.reply
+    );
+    let r = chat_send(&cfg, &project, "/memory", None, None, None, None).unwrap();
+    assert!(r.reply.contains("项目记忆"), "got: {}", r.reply);
+}
+
+#[test]
+fn slash_sessions_lists_sessions() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    let r = chat_send(&cfg, &project, "/sessions", None, None, None, None).unwrap();
+    assert!(r.reply.contains("本项目会话"), "got: {}", r.reply);
+    assert!(r.reply.contains("default"), "got: {}", r.reply);
 }
 
 #[test]
@@ -603,6 +873,9 @@ fn session_clarify_meta_roundtrip_and_legacy_compat() {
         title: Some("浇水工具".into()),
         clarify: Some(clarify.clone()),
         session_digest: None,
+        cli: None,
+        effort: None,
+        model: None,
     };
     save_session(&project, &sess).unwrap();
 

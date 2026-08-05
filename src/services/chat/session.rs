@@ -23,6 +23,9 @@ pub(crate) fn empty_session(project: &Path, session_id: &str) -> ChatSession {
         title: None,
         clarify: None,
         session_digest: None,
+        cli: None,
+        effort: None,
+        model: None,
     }
 }
 

@@ -229,10 +229,12 @@ async function ensureChatCliOptions() {
       try { return localStorage.getItem("cco.chatCli") || "claude"; } catch (_) { return "claude"; }
     })();
     const opts = (list || [])
-      .filter((c) => c.enabled || c.name === "claude")
+      // Only offer CLIs actually installed on this machine (claude stays as the
+      // default channel so a missing claude still surfaces its own error).
+      .filter((c) => (c.enabled && c.installed) || c.name === "claude")
       .map(
         (c) =>
-          `<option value="${chatEsc(c.name)}"${c.name === saved ? " selected" : ""}>${chatEsc(c.label)}${c.print_capable ? "" : " · 不可用"}</option>`
+          `<option value="${chatEsc(c.name)}"${c.name === saved ? " selected" : ""}>${chatEsc(c.label)}${c.installed ? "" : " · 未安装"}</option>`
       );
     if (opts.length) sel.innerHTML = opts.join("");
   } catch (_) { /* non-fatal */ }
@@ -337,6 +339,34 @@ export async function sendChatMessage() {
       if (effortOk) localStorage.setItem("cco.chatEffort", effortRaw);
     } catch (_) {}
     const resp = await chatApi.sendMessage(sendArgs);
+    // `/cli <name>` 等命令可能在 Rust 侧切换通道：下拉与持久化跟随真实通道，
+    // 避免 UI 显示与实际发送的 CLI 不一致。
+    if (resp.cli) {
+      const sel = $("#chat-cli");
+      if (sel && sel.value !== resp.cli) {
+        sel.value = resp.cli;
+      }
+      try {
+        localStorage.setItem("cco.chatCli", resp.cli);
+      } catch (_) {}
+    }
+    // `/effort <档位>` 在 Rust 侧设置会话默认档位：顶部选择器跟随真实值。
+    if (resp.effort) {
+      const effortSel = $("#chat-effort");
+      if (effortSel && effortSel.value !== resp.effort) {
+        effortSel.value = resp.effort;
+      }
+      try {
+        localStorage.setItem("cco.chatEffort", resp.effort);
+      } catch (_) {}
+    }
+    // `/model <名称>` 在 Rust 侧设置会话默认模型：持久化跟随（无独立选择器，
+    // 会话恢复时 `/help` 与 `/models` 可复核当前值）。
+    if (resp.model) {
+      try {
+        localStorage.setItem("cco.chatModel", resp.model);
+      } catch (_) {}
+    }
     // If user switched project mid-send, still write into that project's cache.
     if (state.selectedPath !== projectPath) {
       const sid = resp.session_id || "default";

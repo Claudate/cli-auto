@@ -24,12 +24,15 @@
 //! note: C3 流式 partial：chat_stream_partial 读 stdout 增量；失败降级整段 reply（不 panic）
 //! note: chat_send 入口 clear_chat_stream_work，防新一轮 poll 把上一条整段当流式刷出
 //! note: Clarify 相：session.clarify 承载入口/槽位/假设；纯规则在 domain/chat/clarify；禁 confirm_start
+//! note: 斜杠命令：cco 自有命令本地回复（commands.rs 路由 + ops.rs 查询）；含 /model /models（会话模型）、/memory add|rm（固定事项）、/resume /report（运行状态指引）；/run /stop /start 保留引导；其余 /cmd 透传当前 CLI；fake 通道本地提示
 //! note: 聊天验收：call_claude_chat 可选 browser MCP + chat-visual-review（截图→![]→分析→优化）；显示靠 web markdown hydrate
 
 mod attachment;
-pub mod cli_select;
 mod cli_call;
+pub mod cli_select;
+mod commands;
 mod normalize;
+mod ops;
 mod paths;
 mod plan_md;
 mod send;
@@ -52,7 +55,14 @@ pub use stream::{chat_cancel, chat_stream_partial};
 pub use types::{
     ChatAttachment, ChatDraftPlan, ChatMessage, ChatNormalizePlanResponse, ChatSavePlanResponse,
     ChatSaveWaveResponse, ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial,
+    SlashCommandInfo,
 };
+
+/// Structured slash-command catalog for the composer autocomplete
+/// (per-CLI local / passthrough / reserved). True source in `commands`.
+pub fn slash_catalog(cli: Option<&str>) -> Vec<SlashCommandInfo> {
+    commands::slash_catalog(cli)
+}
 
 // Domain pure surface re-exported for stable `crate::services::chat::*` / services facade call sites.
 // `extract_plan_fence` is part of the public pure API (used by tests and callers via re-export).

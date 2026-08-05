@@ -40,9 +40,10 @@ use crate::services::{
     chat_save_wave_bundle, chat_send, chat_session_get, chat_stream_partial,
     cleanup_expired_chat_sessions, preview_start as services_preview_start,
     preview_status as services_preview_status, preview_stop as services_preview_stop,
-    read_plan_md as services_read_plan_md, ChatAttachment, ChatNormalizePlanResponse,
-    ChatSavePlanResponse, ChatSaveWaveResponse, ChatSendResponse, ChatSession, ChatSessionSummary,
-    ChatStreamPartial, PreviewStatus,
+    read_plan_md as services_read_plan_md, slash_catalog as services_slash_catalog,
+    ChatAttachment, ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSaveWaveResponse,
+    ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial, PreviewStatus,
+    SlashCommandInfo,
 };
 
 // --- session ---
@@ -96,12 +97,26 @@ pub fn send(
     effort: Option<&str>,
     cli: Option<&str>,
 ) -> Result<ChatSendResponse> {
-    chat_send(config, project, message, session_id, attachments, effort, cli)
+    chat_send(
+        config,
+        project,
+        message,
+        session_id,
+        attachments,
+        effort,
+        cli,
+    )
 }
 
 /// Chat-capable CLI list for the UI dropdown (claude default first, fake last).
 pub fn available_clis(config: &Config) -> Result<Vec<ChatCliInfo>> {
     Ok(available_chat_clis(config))
+}
+
+/// Slash-command catalog for the composer autocomplete (per-CLI local /
+/// passthrough / reserved). Pure — no IO, no confirm / start_run.
+pub fn slash_catalog(cli: Option<&str>) -> Vec<SlashCommandInfo> {
+    services_slash_catalog(cli)
 }
 
 /// Best-effort partial assistant text while send is in flight.

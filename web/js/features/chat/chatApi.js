@@ -112,6 +112,14 @@ export function previewStatus(project) {
 }
 
 /**
+ * Per-CLI slash-command catalog for the composer autocomplete.
+ * @param {string|null} [cli] picked channel; omit for default (claude)
+ */
+export function slashCatalog(cli) {
+  return gateway.chatSlashCatalog(cli || null);
+}
+
+/**
  * True if project-relative plan markdown exists on disk.
  * Used to drop ghost list rows (split index / selection pins after source delete).
  */

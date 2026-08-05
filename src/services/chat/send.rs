@@ -1,4 +1,6 @@
 //! chat_send: append user · CLI/fake · draft from ```plan · persist (no confirm/start_run).
+//! Slash commands: cco-owned `/help /clis /clear /new` answered locally; other
+//! `/cmd` passes through to the picked CLI (fake channel → local note).
 
 use std::path::Path;
 
@@ -18,6 +20,7 @@ use super::attachment::{
 use super::cli_call::{
     call_chat_provider, fake_chat_reply, soft_fallback_assistant_reply, soft_fallback_env_note,
 };
+use super::commands::{clears_history, local_command, parse_slash_command};
 use super::normalize::chat_normalize_plan;
 use super::session::{chat_session_get, save_session};
 use super::stream::clear_chat_stream_work;
@@ -107,12 +110,63 @@ pub fn chat_send(
         || config.default.default_provider.eq_ignore_ascii_case("fake")
         || cli == Some("fake");
 
+    // Slash-command routing (per-CLI): cco-owned commands are answered locally
+    // (session mutators /cli /effort /rename persist on the session; reserved
+    // /run /stop /start get guidance); other `/cmd` passes through to the picked
+    // CLI verbatim, except the fake channel (no real CLI) which gets a note.
+    // Local replies never spawn workers / never bypass confirm_start.
+    if let Some((cmd, args)) = parse_slash_command(msg) {
+        if let Some(out) = local_command(config, project, cmd, args, cli, force_fake, &mut sess)? {
+            // `/clear` `/new` drop history + draft plan first; the command turn
+            // itself (user + confirmation) stays visible.
+            if clears_history(cmd) {
+                sess.messages.clear();
+                sess.draft_plan = None;
+                sess.messages.push(ChatMessage {
+                    role: "user".into(),
+                    content: msg.to_string(),
+                    at: Some(Utc::now().to_rfc3339()),
+                    attachments: vec![],
+                });
+            }
+            sess.messages.push(ChatMessage {
+                role: "assistant".into(),
+                content: out.reply.clone(),
+                at: Some(Utc::now().to_rfc3339()),
+                attachments: vec![],
+            });
+            save_session(project, &sess)?;
+            return Ok(ChatSendResponse {
+                session_id: sess.session_id.clone(),
+                reply: out.reply,
+                messages: sess.messages.clone(),
+                draft_plan: sess.draft_plan.clone(),
+                fake: false,
+                env_note: None,
+                cli: Some(
+                    out.new_cli
+                        .clone()
+                        .unwrap_or_else(|| cli.unwrap_or("claude").to_string()),
+                ),
+                effort: out.new_effort.clone().or_else(|| sess.effort.clone()),
+                model: out.new_model.clone().or_else(|| sess.model.clone()),
+            });
+        }
+    }
+
+    // effort: explicit per-send override wins; else session default (/effort).
+    let effort_used: Option<String> = effort
+        .map(str::trim)
+        .filter(|e| !e.is_empty())
+        .map(str::to_lowercase)
+        .or_else(|| sess.effort.clone());
+
     // force_fake (CCO_CHAT_FAKE / provider=fake): full template with ```plan for UI联调.
     // production soft-fallback: short human reply + env_note; **no** plan fence → 不点亮就绪分配.
     let (reply_raw, used_fake, env_note) = if force_fake {
         (fake_chat_reply(msg, project), true, None)
     } else {
-        match call_chat_provider(config, project, &sess, effort, cli) {
+        match call_chat_provider(config, project, &sess, effort_used.as_deref(), cli) {
             Ok(r) => (r, false, None),
             Err(e) => {
                 let diagnostic = e.to_string();
@@ -121,8 +175,9 @@ pub fn chat_send(
                     project = %project.display(),
                     "chat: soft-fallback (CLI unavailable or empty reply)"
                 );
-                let env = soft_fallback_env_note(&diagnostic);
-                let human = soft_fallback_assistant_reply();
+                let cli_name = cli.unwrap_or("claude");
+                let env = soft_fallback_env_note(cli_name, &diagnostic);
+                let human = soft_fallback_assistant_reply(cli_name);
                 (human, true, Some(env))
             }
         }
@@ -203,6 +258,9 @@ pub fn chat_send(
         draft_plan: sess.draft_plan.clone(),
         fake: used_fake,
         env_note,
+        cli: Some(cli.unwrap_or("claude").to_string()),
+        effort: effort_used,
+        model: sess.model.clone(),
     })
 }
 

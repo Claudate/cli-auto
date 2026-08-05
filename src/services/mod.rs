@@ -27,16 +27,17 @@ pub use chat::{
     chat_read_image_data_url, chat_rename_session, chat_save_attachment, chat_save_plan,
     chat_save_wave_bundle, chat_send, chat_session_get, chat_stream_partial,
     cleanup_expired_chat_sessions, extract_title_from_md, normalize_plan_markdown, read_plan_md,
-    sanitize_plan_title, structure_plan_markdown, ChatAttachment, ChatDraftPlan, ChatMessage,
-    ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSaveWaveResponse, ChatSendResponse,
-    ChatSession, ChatSessionSummary, ChatStreamPartial,
+    sanitize_plan_title, slash_catalog, structure_plan_markdown, ChatAttachment, ChatDraftPlan,
+    ChatMessage, ChatNormalizePlanResponse, ChatSavePlanResponse, ChatSaveWaveResponse,
+    ChatSendResponse, ChatSession, ChatSessionSummary, ChatStreamPartial, SlashCommandInfo,
 };
 pub use git::{
     add_remote, apply_remotes, commit as git_commit, doctor as git_doctor,
     is_git_repo as git_is_repo, list_actual_remotes as git_list_actual_remotes,
     list_commit_candidates as git_list_commit_candidates, push as git_push, remove_remote,
-    set_identity as git_set_identity, status as git_status, CommitResult, GitActualRemote,
-    GitDoctorLine, GitRemoteView, GitStatusView, PushResult,
+    set_identity as git_set_identity, status as git_status, BranchInfo, CommitResult,
+    GitActualRemote, GitDoctorLine, GitRemoteView, GitStatusView, LogEntry, PullResult,
+    PushResult, StashEntry, TagInfo,
 };
 pub use live::{
     open_task_terminal, project_live_view, stop_task, task_logs, ProjectLiveView, TaskLiveView,
