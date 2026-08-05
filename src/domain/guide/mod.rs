@@ -250,7 +250,10 @@ mod tests {
             assert_eq!(SessionEntry::parse(raw), Some(entry));
             assert_eq!(entry.as_str(), raw);
         }
-        assert_eq!(SessionStatus::parse("checkpoint"), Some(SessionStatus::Checkpoint));
+        assert_eq!(
+            SessionStatus::parse("checkpoint"),
+            Some(SessionStatus::Checkpoint)
+        );
         assert_eq!(SessionStatus::parse("x"), None);
     }
 

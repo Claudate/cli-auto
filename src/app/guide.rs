@@ -60,8 +60,14 @@ mod tests {
         let project = PathBuf::from("/tmp/guide-app-proj");
 
         assert!(list(&cfg, &project).unwrap().is_empty());
-        let s = start(&cfg, &project, SessionMode::Coop, SessionEntry::Socratic, "ship-product")
-            .unwrap();
+        let s = start(
+            &cfg,
+            &project,
+            SessionMode::Coop,
+            SessionEntry::Socratic,
+            "ship-product",
+        )
+        .unwrap();
         assert_eq!(s.role_pack, "ship-product");
         assert_eq!(s.mode, SessionMode::Coop);
 

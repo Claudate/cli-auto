@@ -404,8 +404,7 @@ mod tests {
         let p = get_user_profile(&cfg).unwrap();
         assert_eq!(p.profile_id, "local");
         assert_eq!(p.prefs_json, "{}");
-        upsert_user_profile(&cfg, Some("小明"), r#"{"lang":"zh"}"#, r#"{"risk":"low"}"#)
-            .unwrap();
+        upsert_user_profile(&cfg, Some("小明"), r#"{"lang":"zh"}"#, r#"{"risk":"low"}"#).unwrap();
         let p2 = get_user_profile(&cfg).unwrap();
         assert_eq!(p2.display_name.as_deref(), Some("小明"));
         assert!(p2.prefs_json.contains("zh"));
@@ -435,11 +434,20 @@ mod tests {
     #[test]
     fn session_start_get_list_roundtrip() {
         let (_d, cfg) = test_cfg();
-        let s = start_session(&cfg, "/tmp/guide-proj/", SessionMode::Coop, SessionEntry::Socratic, "ship-product").unwrap();
+        let s = start_session(
+            &cfg,
+            "/tmp/guide-proj/",
+            SessionMode::Coop,
+            SessionEntry::Socratic,
+            "ship-product",
+        )
+        .unwrap();
         assert_eq!(s.status, SessionStatus::Active);
         assert!(s.session_id.starts_with("g20"));
 
-        let got = get_session(&cfg, &s.session_id).unwrap().expect("session found");
+        let got = get_session(&cfg, &s.session_id)
+            .unwrap()
+            .expect("session found");
         assert_eq!(got, s);
 
         let list = list_sessions(&cfg, "/tmp/guide-proj").unwrap();
@@ -453,6 +461,8 @@ mod tests {
     fn start_rejects_empty_project_or_pack() {
         let (_d, cfg) = test_cfg();
         assert!(start_session(&cfg, "", SessionMode::Coop, SessionEntry::Quick, "p").is_err());
-        assert!(start_session(&cfg, "/tmp/x", SessionMode::Coop, SessionEntry::Quick, "  ").is_err());
+        assert!(
+            start_session(&cfg, "/tmp/x", SessionMode::Coop, SessionEntry::Quick, "  ").is_err()
+        );
     }
 }
