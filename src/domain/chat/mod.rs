@@ -274,6 +274,20 @@ mod tests {
     }
 
     #[test]
+    fn extract_assistant_text_from_codewhale_exec_stream() {
+        // deepseek channel: token-split `content` chunks under codewhale.exec-stream schema.
+        let raw = r#"{"type":"content","content":"嗨","schema_version":1,"schema":"codewhale.exec-stream"}
+{"type":"content","content":"！","schema_version":1,"schema":"codewhale.exec-stream"}
+{"type":"content","content":"有什么","schema_version":1,"schema":"codewhale.exec-stream"}
+{"type":"session_capture","content":"<redacted>","schema_version":1,"schema":"codewhale.exec-stream"}
+{"type":"metadata","meta":{"status":"completed"},"schema_version":1,"schema":"codewhale.exec-stream"}
+{"type":"done","schema_version":1,"schema":"codewhale.exec-stream"}
+"#;
+        let t = extract_assistant_text(raw);
+        assert_eq!(t, "嗨！有什么", "got: {t}");
+    }
+
+    #[test]
     fn extract_assistant_text_plain_non_json() {
         assert_eq!(
             extract_assistant_text("hello plan\nsecond line\n"),

@@ -39,6 +39,36 @@ pub fn stream_result_summary(raw: &str) -> String {
 
 /// Extract human-readable assistant text from stream-json / plain stdout.
 pub fn extract_assistant_text(raw: &str) -> String {
+    // 0) CodeWhale exec-stream (deepseek channel, `--output-format stream-json`):
+    //    NDJSON with `type:"content"` + `content` string chunks (token-split).
+    //    Join in order; `metadata` / `done` / `session_capture` lines are ignored.
+    {
+        let mut chunks: Vec<String> = Vec::new();
+        for line in raw.lines() {
+            let line = line.trim();
+            if line.is_empty() || !line.starts_with('{') {
+                continue;
+            }
+            let Ok(v) = serde_json::from_str::<Value>(line) else {
+                continue;
+            };
+            if v.get("schema").and_then(|t| t.as_str()) != Some("codewhale.exec-stream") {
+                continue;
+            }
+            if v.get("type").and_then(|t| t.as_str()) != Some("content") {
+                continue;
+            }
+            if let Some(c) = v.get("content").and_then(|c| c.as_str()) {
+                if !c.is_empty() {
+                    chunks.push(c.to_string());
+                }
+            }
+        }
+        if !chunks.is_empty() {
+            return chunks.join("");
+        }
+    }
+
     // 1) Prefer last successful stream-json `result.result` (string or nested text).
     //    Error envelopes (error_max_turns / is_error) fall through to assistant prose.
     for line in raw.lines().rev() {
