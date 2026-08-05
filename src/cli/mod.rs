@@ -292,6 +292,11 @@ pub enum GitCommands {
         #[command(subcommand)]
         cmd: GitBranchCommands,
     },
+    /// Manage tags (list / create / delete / show)
+    Tag {
+        #[command(subcommand)]
+        cmd: GitTagCommands,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -328,7 +333,47 @@ pub enum GitBranchCommands {
 #[derive(Debug, Subcommand)]
 pub enum GitStashCommands {
     /// List stash entries
-    List,
+    List {
+        #[arg(long)]
+        project: Option<PathBuf>,
+    },
+    /// Push current changes to stash
+    Push {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        /// Stash message
+        #[arg(short, long)]
+        message: Option<String>,
+    },
+    /// Pop the latest stash entry (apply + drop)
+    Pop {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        /// Stash index (default: 0)
+        #[arg(long)]
+        index: Option<usize>,
+    },
+    /// Apply a stash entry without removing it
+    Apply {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        #[arg(long)]
+        index: Option<usize>,
+    },
+    /// Drop a stash entry
+    Drop {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        #[arg(long)]
+        index: Option<usize>,
+    },
+    /// Show the diff of a stash entry
+    Show {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        #[arg(long)]
+        index: Option<usize>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -369,6 +414,46 @@ pub enum GitIdentityCommands {
     Show {
         #[arg(long)]
         project: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum GitTagCommands {
+    /// List tags
+    List {
+        #[arg(long)]
+        project: Option<PathBuf>,
+    },
+    /// Create a lightweight tag
+    Create {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        name: String,
+        /// Commit/ref to tag (default: HEAD)
+        #[arg(long)]
+        commit: Option<String>,
+    },
+    /// Create an annotated tag with a message
+    Annotate {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        name: String,
+        #[arg(short, long)]
+        message: String,
+        #[arg(long)]
+        commit: Option<String>,
+    },
+    /// Delete a tag
+    Delete {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        name: String,
+    },
+    /// Show details of a tag
+    Show {
+        #[arg(long)]
+        project: Option<PathBuf>,
+        name: String,
     },
 }
 

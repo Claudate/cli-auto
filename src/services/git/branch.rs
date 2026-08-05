@@ -20,7 +20,11 @@ pub fn list_branches(project: &Path) -> Result<Vec<BranchInfo>> {
         let trimmed = line.trim();
         let is_current = trimmed.starts_with("* ");
         let name_part = if is_current { &trimmed[2..] } else { trimmed };
-        let name = name_part.split_whitespace().next().unwrap_or("").to_string();
+        let name = name_part
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .to_string();
         if name.is_empty() {
             continue;
         }
@@ -28,28 +32,46 @@ pub fn list_branches(project: &Path) -> Result<Vec<BranchInfo>> {
             let end = line[start..].find(']')?;
             let bracketed = &line[start + 1..start + end];
             let upstream_name = bracketed.split(':').next().unwrap_or(bracketed);
-            if upstream_name.is_empty() { None } else { Some(upstream_name.to_string()) }
+            if upstream_name.is_empty() {
+                None
+            } else {
+                Some(upstream_name.to_string())
+            }
         });
-        branches.push(BranchInfo { name, current: is_current, upstream });
+        branches.push(BranchInfo {
+            name,
+            current: is_current,
+            upstream,
+        });
     }
     Ok(branches)
 }
 
 /// Create a new branch from HEAD (or from a base ref).
 pub fn create_branch(project: &Path, name: &str, base: Option<&str>) -> Result<String> {
-    if !is_git_repo(project) { bail!("not a git repository: {}", project.display()); }
-    if name.trim().is_empty() { bail!("branch name cannot be empty"); }
+    if !is_git_repo(project) {
+        bail!("not a git repository: {}", project.display());
+    }
+    if name.trim().is_empty() {
+        bail!("branch name cannot be empty");
+    }
     let sanitized = name.trim();
     let mut args: Vec<&str> = vec!["branch", sanitized];
-    if let Some(base) = base { args.push(base); }
+    if let Some(base) = base {
+        args.push(base);
+    }
     git_run(project, &args)?;
     Ok(format!("created branch {sanitized}"))
 }
 
 /// Switch to an existing branch.
 pub fn switch_branch(project: &Path, name: &str) -> Result<String> {
-    if !is_git_repo(project) { bail!("not a git repository: {}", project.display()); }
-    if name.trim().is_empty() { bail!("branch name cannot be empty"); }
+    if !is_git_repo(project) {
+        bail!("not a git repository: {}", project.display());
+    }
+    if name.trim().is_empty() {
+        bail!("branch name cannot be empty");
+    }
     git_run(project, &["checkout", name.trim()])?;
     let branch = git_run(project, &["rev-parse", "--abbrev-ref", "HEAD"])?;
     Ok(format!("switched to {branch}"))
@@ -57,8 +79,12 @@ pub fn switch_branch(project: &Path, name: &str) -> Result<String> {
 
 /// Delete a local branch (refuses to delete current branch unless force).
 pub fn delete_branch(project: &Path, name: &str, force: bool) -> Result<String> {
-    if !is_git_repo(project) { bail!("not a git repository: {}", project.display()); }
-    if name.trim().is_empty() { bail!("branch name cannot be empty"); }
+    if !is_git_repo(project) {
+        bail!("not a git repository: {}", project.display());
+    }
+    if name.trim().is_empty() {
+        bail!("branch name cannot be empty");
+    }
     let flag = if force { "-D" } else { "-d" };
     git_run(project, &["branch", flag, name.trim()])?;
     Ok(format!("deleted branch {}", name.trim()))
@@ -74,7 +100,10 @@ mod tests {
         let root = dir.path().to_path_buf();
         git_run(&root, &["init", "--initial-branch=main"])?;
         git_run(&root, &["config", "--local", "user.name", "test"])?;
-        git_run(&root, &["config", "--local", "user.email", "test@example.com"])?;
+        git_run(
+            &root,
+            &["config", "--local", "user.email", "test@example.com"],
+        )?;
         fs::write(root.join("README.md"), "# test\n")?;
         git_run(&root, &["add", "README.md"])?;
         git_run(&root, &["commit", "-m", "init"])?;

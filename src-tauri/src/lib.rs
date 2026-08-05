@@ -883,6 +883,191 @@ fn git_doctor_cmd(
     svc_git_doctor(&config, PathBuf::from(project).as_path()).map_err(map_err)
 }
 
+#[tauri::command]
+fn git_pull_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    remote: Option<String>,
+    branch: Option<String>,
+    strategy: Option<String>,
+) -> Result<GitPullResult, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?;
+    let strat = match strategy.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        Some("merge") => cco::services::git::PullStrategy::Merge,
+        Some("fail") => cco::services::git::PullStrategy::Fail,
+        _ => cco::services::git::PullStrategy::Rebase,
+    };
+    cco::services::git::pull(
+        &config,
+        PathBuf::from(project).as_path(),
+        remote.as_deref(),
+        branch.as_deref(),
+        strat,
+    )
+    .map_err(map_err)
+}
+
+#[tauri::command]
+fn git_fetch_cmd(
+    project: String,
+    remote: Option<String>,
+    prune: Option<bool>,
+) -> Result<GitPullResult, String> {
+    cco::services::git::fetch(
+        PathBuf::from(project).as_path(),
+        remote.as_deref(),
+        prune.unwrap_or(false),
+    )
+    .map_err(map_err)
+}
+
+#[tauri::command]
+fn git_branch_list_cmd(project: String) -> Result<Vec<GitBranchInfo>, String> {
+    cco::services::git::list_branches(PathBuf::from(project).as_path()).map_err(map_err)
+}
+
+#[tauri::command]
+fn git_branch_create_cmd(
+    project: String,
+    name: String,
+    base: Option<String>,
+) -> Result<Value, String> {
+    let msg = cco::services::git::create_branch(
+        PathBuf::from(project).as_path(),
+        &name,
+        base.as_deref(),
+    )
+    .map_err(map_err)?;
+    Ok(json!({ "ok": true, "message": msg }))
+}
+
+#[tauri::command]
+fn git_branch_switch_cmd(project: String, name: String) -> Result<Value, String> {
+    let msg =
+        cco::services::git::switch_branch(PathBuf::from(project).as_path(), &name).map_err(map_err)?;
+    Ok(json!({ "ok": true, "message": msg }))
+}
+
+#[tauri::command]
+fn git_branch_delete_cmd(project: String, name: String, force: Option<bool>) -> Result<Value, String> {
+    let msg = cco::services::git::delete_branch(
+        PathBuf::from(project).as_path(),
+        &name,
+        force.unwrap_or(false),
+    )
+    .map_err(map_err)?;
+    Ok(json!({ "ok": true, "message": msg }))
+}
+
+#[tauri::command]
+fn git_log_cmd(project: String, n: Option<usize>) -> Result<Vec<LogEntry>, String> {
+    cco::services::git::log(PathBuf::from(project).as_path(), n).map_err(map_err)
+}
+
+#[tauri::command]
+fn git_diff_cmd(
+    project: String,
+    staged: Option<bool>,
+    stat: Option<bool>,
+    name_only: Option<bool>,
+) -> Result<Value, String> {
+    let path = PathBuf::from(project);
+    if name_only.unwrap_or(false) {
+        let files = cco::services::git::diff_name_only(&path).map_err(map_err)?;
+        return Ok(json!({ "files": files }));
+    }
+    if stat.unwrap_or(false) {
+        let out = cco::services::git::diff_stat(&path).map_err(map_err)?;
+        return Ok(json!({ "diff": out }));
+    }
+    if staged.unwrap_or(false) {
+        let out = cco::services::git::diff_staged(&path).map_err(map_err)?;
+        return Ok(json!({ "diff": out }));
+    }
+    let out = cco::services::git::diff(&path).map_err(map_err)?;
+    Ok(json!({ "diff": out }))
+}
+#[tauri::command]
+fn git_stash_list_cmd(project: String) -> Result<Vec<GitStashEntry>, String> {
+    cco::services::git::stash_list(PathBuf::from(project).as_path()).map_err(map_err)
+}
+
+#[tauri::command]
+fn git_stash_push_cmd(project: String, message: Option<String>) -> Result<Value, String> {
+    let out = cco::services::git::stash_push(
+        PathBuf::from(project).as_path(),
+        message.as_deref(),
+    )
+    .map_err(map_err)?;
+    Ok(json!({ "ok": true, "message": out }))
+}
+
+#[tauri::command]
+fn git_stash_pop_cmd(project: String, index: Option<usize>) -> Result<Value, String> {
+    let out =
+        cco::services::git::stash_pop(PathBuf::from(project).as_path(), index).map_err(map_err)?;
+    Ok(json!({ "ok": true, "message": out }))
+}
+
+#[tauri::command]
+fn git_stash_apply_cmd(project: String, index: Option<usize>) -> Result<Value, String> {
+    let out = cco::services::git::stash_apply(PathBuf::from(project).as_path(), index)
+        .map_err(map_err)?;
+    Ok(json!({ "ok": true, "message": out }))
+}
+
+#[tauri::command]
+fn git_stash_drop_cmd(project: String, index: Option<usize>) -> Result<Value, String> {
+    let out = cco::services::git::stash_drop(PathBuf::from(project).as_path(), index)
+        .map_err(map_err)?;
+    Ok(json!({ "ok": true, "message": out }))
+}
+
+#[tauri::command]
+fn git_stash_show_cmd(project: String, index: Option<usize>) -> Result<Value, String> {
+    let out = cco::services::git::stash_show(PathBuf::from(project).as_path(), index)
+        .map_err(map_err)?;
+    Ok(json!({ "diff": out }))
+}
+
+#[tauri::command]
+fn git_tag_list_cmd(project: String) -> Result<Vec<GitTagInfo>, String> {
+    cco::services::git::list_tags(PathBuf::from(project).as_path()).map_err(map_err)
+}
+
+#[tauri::command]
+fn git_tag_create_cmd(
+    project: String,
+    name: String,
+    commit: Option<String>,
+    message: Option<String>,
+) -> Result<Value, String> {
+    let path = PathBuf::from(project);
+    let msg = if let Some(m) = message {
+        cco::services::git::create_annotated_tag(&path, &name, &m, commit.as_deref())
+            .map_err(map_err)?
+    } else {
+        cco::services::git::create_tag(&path, &name, commit.as_deref()).map_err(map_err)?
+    };
+    Ok(json!({ "ok": true, "message": msg }))
+}
+
+#[tauri::command]
+fn git_tag_delete_cmd(project: String, name: String) -> Result<Value, String> {
+    let msg =
+        cco::services::git::delete_tag(PathBuf::from(project).as_path(), &name).map_err(map_err)?;
+    Ok(json!({ "ok": true, "message": msg }))
+}
+
+#[tauri::command]
+fn git_tag_show_cmd(project: String, name: String) -> Result<Value, String> {
+    let out =
+        cco::services::git::show_tag(PathBuf::from(project).as_path(), &name).map_err(map_err)?;
+    Ok(json!({ "output": out }))
+}
+
+
+
 // ── Chat (app::chat only · no open-run) ──────────────────────────────
 
 #[tauri::command]
@@ -1206,6 +1391,24 @@ pub fn run() {
             git_commit_cmd,
             git_push_cmd,
             git_doctor_cmd,
+            git_pull_cmd,
+            git_fetch_cmd,
+            git_branch_list_cmd,
+            git_branch_create_cmd,
+            git_branch_switch_cmd,
+            git_branch_delete_cmd,
+            git_log_cmd,
+            git_diff_cmd,
+            git_stash_list_cmd,
+            git_stash_push_cmd,
+            git_stash_pop_cmd,
+            git_stash_apply_cmd,
+            git_stash_drop_cmd,
+            git_stash_show_cmd,
+            git_tag_list_cmd,
+            git_tag_create_cmd,
+            git_tag_delete_cmd,
+            git_tag_show_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

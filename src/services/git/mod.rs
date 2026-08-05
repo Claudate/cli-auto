@@ -14,7 +14,8 @@
 //! - `branch`   — 分支管理 (list/create/switch/delete)
 //! - `log`      — 提交历史
 //! - `diff`     — 差异对比
-//! - `stash`    — 暂存/恢复
+//! - `stash`    — 暂存/恢复/应用/丢弃/查看
+//! - `tag`      — 标签管理 (list/create/delete/show)
 //! - `doctor`   — 环境诊断
 //!
 //! 安全规则（与 system_post.rs 一致）：
@@ -33,6 +34,7 @@ mod push;
 mod remotes;
 mod stash;
 mod status;
+mod tag;
 
 use std::path::Path;
 use std::process::Command;
@@ -189,6 +191,14 @@ pub struct LogEntry {
     pub message: String,
 }
 
+/// A single tag entry.
+#[derive(Debug, Clone, Serialize)]
+pub struct TagInfo {
+    pub name: String,
+    pub commit: String,
+    pub message: String,
+}
+
 /// Doctor line for git (used by `cco git doctor` and desktop).
 #[derive(Debug, Clone, Serialize)]
 pub struct GitDoctorLine {
@@ -209,3 +219,4 @@ pub use push::*;
 pub use remotes::*;
 pub use stash::*;
 pub use status::*;
+pub use tag::*;

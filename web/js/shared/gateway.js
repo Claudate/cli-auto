@@ -202,6 +202,78 @@ export const setSettings = (update) => raw("set_settings_cmd", { update });
 export const doctor = (project) =>
   raw("doctor_cmd", { project: project || null });
 export const gitDoctor = (project) => raw("git_doctor_cmd", { project });
+
+/* ── Git (host-level: pull / fetch / branch / log / diff / stash / tag) ── */
+export const gitStatus = (project) => raw("git_status_cmd", { project });
+export const gitCommit = (project, message, opts = {}) =>
+  raw("git_commit_cmd", {
+    project,
+    message,
+    dryRun: opts.dryRun,
+    push: opts.push,
+    all: opts.all,
+    paths: opts.paths,
+    force: opts.force,
+  });
+export const gitPush = (project, opts = {}) =>
+  raw("git_push_cmd", {
+    project,
+    remote: opts.remote,
+    branch: opts.branch,
+    force: opts.force,
+  });
+export const gitPull = (project, opts = {}) =>
+  raw("git_pull_cmd", {
+    project,
+    remote: opts.remote,
+    branch: opts.branch,
+    strategy: opts.strategy,
+  });
+export const gitFetch = (project, opts = {}) =>
+  raw("git_fetch_cmd", {
+    project,
+    remote: opts.remote,
+    prune: opts.prune,
+  });
+export const gitBranchList = (project) => raw("git_branch_list_cmd", { project });
+export const gitBranchCreate = (project, name, base) =>
+  raw("git_branch_create_cmd", { project, name, base });
+export const gitBranchSwitch = (project, name) =>
+  raw("git_branch_switch_cmd", { project, name });
+export const gitBranchDelete = (project, name, force) =>
+  raw("git_branch_delete_cmd", { project, name, force });
+export const gitLog = (project, n) => raw("git_log_cmd", { project, n });
+export const gitDiff = (project, opts = {}) =>
+  raw("git_diff_cmd", {
+    project,
+    staged: opts.staged,
+    stat: opts.stat,
+    nameOnly: opts.nameOnly,
+  });
+export const gitStashList = (project) => raw("git_stash_list_cmd", { project });
+export const gitStashPush = (project, message) =>
+  raw("git_stash_push_cmd", { project, message });
+export const gitStashPop = (project, index) =>
+  raw("git_stash_pop_cmd", { project, index });
+export const gitStashApply = (project, index) =>
+  raw("git_stash_apply_cmd", { project, index });
+export const gitStashDrop = (project, index) =>
+  raw("git_stash_drop_cmd", { project, index });
+export const gitStashShow = (project, index) =>
+  raw("git_stash_show_cmd", { project, index });
+export const gitTagList = (project) => raw("git_tag_list_cmd", { project });
+export const gitTagCreate = (project, name, opts = {}) =>
+  raw("git_tag_create_cmd", {
+    project,
+    name,
+    commit: opts.commit,
+    message: opts.message,
+  });
+export const gitTagDelete = (project, name) =>
+  raw("git_tag_delete_cmd", { project, name });
+export const gitTagShow = (project, name) =>
+  raw("git_tag_show_cmd", { project, name });
+
 export const meta = () => raw("meta");
 export const openPath = (path) => raw("open_path", { path });
 export const openMonitorWindow = (args) =>
@@ -278,6 +350,27 @@ export const gateway = {
   setSettings,
   doctor,
   gitDoctor,
+  gitStatus,
+  gitCommit,
+  gitPush,
+  gitPull,
+  gitFetch,
+  gitBranchList,
+  gitBranchCreate,
+  gitBranchSwitch,
+  gitBranchDelete,
+  gitLog,
+  gitDiff,
+  gitStashList,
+  gitStashPush,
+  gitStashPop,
+  gitStashApply,
+  gitStashDrop,
+  gitStashShow,
+  gitTagList,
+  gitTagCreate,
+  gitTagDelete,
+  gitTagShow,
   meta,
   openPath,
   openMonitorWindow,
