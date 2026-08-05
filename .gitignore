@@ -11,3 +11,6 @@ node_modules/
 .vscode/
 dist/
 src-tauri/gen/
+
+# one-off icon/debug scratch (CodeWhale workspace)
+.codewhale/
