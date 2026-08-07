@@ -133,7 +133,7 @@ fn worktree_creates_branch_dir() {
         .unwrap()
         .success());
 
-    let info = worktree::ensure_worktree(&project, "run1", "t1").unwrap();
+    let info = worktree::ensure_worktree(&project, "run1", "t1", None).unwrap();
     assert!(info.path.exists());
     assert!(info.branch.contains("cco/"));
     assert!(info.created);
@@ -144,6 +144,7 @@ fn worktree_creates_branch_dir() {
         "t1",
         true,
         worktree::WorktreeOnFail::FallbackProjectRoot,
+        None,
     )
     .unwrap();
     assert_eq!(wd, info.path);
@@ -163,6 +164,7 @@ fn resolve_work_dir_fallback_when_not_git() {
         "t1",
         true,
         worktree::WorktreeOnFail::FallbackProjectRoot,
+        None,
     )
     .unwrap();
     assert_eq!(wd, project);
@@ -182,6 +184,7 @@ fn resolve_work_dir_fail_closed_when_not_git() {
         "t1",
         true,
         worktree::WorktreeOnFail::FailClosed,
+        None,
     )
     .unwrap_err();
     let msg = format!("{err:#}");

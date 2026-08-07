@@ -7,6 +7,8 @@
 //! [OUTPUT]: 推进任务状态 · events.jsonl · plan.resolved.json · handoff · 终态 RunStatus
 //! [POS]: runtime 编排循环；CLI run 与 services.start_run_* 共用；行为契约不变
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/CLAUDE.md
+//! note: per_task worktree 从已提交依赖分支 fork（fork_base_for），后置任务可见前置产物；
+//!       implement 任务 Done 前过 noop guard（零产出 → Failed，防 codex 空转假成功）。
 //!
 //! ## Pure vs IO (A1-3/A1-4 map)
 //! | Pure (domain) | IO (this module) |

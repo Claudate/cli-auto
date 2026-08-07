@@ -1,9 +1,11 @@
 //! git worktree isolation helpers.
 //!
-//! [INPUT]: project_root · task id · worktree 开关 · 失败策略（混跑 fail-closed）
+//! [INPUT]: project_root · task id · worktree 开关 · 失败策略（混跑 fail-closed）· 可选 base_ref
 //! [OUTPUT]: 工作目录 PathBuf · WorktreeInfo 可选 · 清理
 //! [POS]: scheduler 启动任务前可选隔离
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/CLAUDE.md
+//! note: ensure_worktree 支持从指定 base_ref fork（默认 HEAD）。per_task 下 scheduler 传
+//!       已提交依赖分支，使后置任务能看到前置产物；否则独立 worktree 每次从 main HEAD 空 fork。
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -75,7 +77,16 @@ pub fn is_git_repo(project_root: &Path) -> bool {
 ///
 /// Layout: `{project}/.cco-worktrees/cco-{run}-{task}/`
 /// Branch: `cco/{run_id}/{task_id}`
-pub fn ensure_worktree(project_root: &Path, run_id: &str, task_id: &str) -> Result<WorktreeInfo> {
+///
+/// `base_ref`: commit/branch the new worktree branches from. Defaults to `HEAD`
+/// (main checkout) so later tasks see earlier tasks' committed artifacts instead
+/// of an empty fork of the untouched baseline.
+pub fn ensure_worktree(
+    project_root: &Path,
+    run_id: &str,
+    task_id: &str,
+    base_ref: Option<&str>,
+) -> Result<WorktreeInfo> {
     if which::which("git").is_err() {
         bail!("git not found; cannot create worktree");
     }
@@ -124,14 +135,15 @@ pub fn ensure_worktree(project_root: &Path, run_id: &str, task_id: &str) -> Resu
     std::fs::create_dir_all(project_root.join(".cco-worktrees"))
         .context("create .cco-worktrees")?;
 
-    // Prefer branching from HEAD
+    // Prefer branching from an explicit base (done dependency branch) else HEAD.
+    let base = base_ref.filter(|b| !b.trim().is_empty()).unwrap_or("HEAD");
     let add = Command::new("git")
         .args(["-C"])
         .arg(project_root)
         .args(["worktree", "add", "-b"])
         .arg(&branch)
         .arg(&path)
-        .arg("HEAD")
+        .arg(base)
         .output()
         .context("git worktree add")?;
 
@@ -180,11 +192,12 @@ pub fn resolve_work_dir(
     task_id: &str,
     want_worktree: bool,
     on_fail: WorktreeOnFail,
+    base_ref: Option<&str>,
 ) -> Result<(PathBuf, Option<WorktreeInfo>)> {
     if !want_worktree {
         return Ok((project_root.to_path_buf(), None));
     }
-    match ensure_worktree(project_root, run_id, task_id) {
+    match ensure_worktree(project_root, run_id, task_id, base_ref) {
         Ok(info) => Ok((info.path.clone(), Some(info))),
         Err(e) => match on_fail {
             WorktreeOnFail::FailClosed => {

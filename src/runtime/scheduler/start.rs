@@ -12,7 +12,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use tracing::{info, warn};
 
-use super::super::provider::{StartCtx, WorkerHandle, WorkerPort};
+use super::super::provider::{StartCtx, TaskStatus, WorkerHandle, WorkerPort};
 use super::super::worktree;
 use super::Scheduler;
 use crate::domain::run::provider_slot_open;
@@ -75,18 +75,41 @@ impl Scheduler {
         // A1-4: isolation policy from domain/worker (mix → FailClosed).
         let on_fail =
             worktree::on_fail_for_providers(self.plan.tasks.iter().map(|t| t.provider.as_str()));
+        // per_task 下每个任务独立 worktree；从「已提交的依赖分支」fork，而不是裸 main HEAD，
+        // 否则 t2 看不到 t1 产物 → codex 空转「无法执行」却 exit 0 被记成 done（假成功）。
+        let fork_base = self.fork_base_for(task);
         let (work_dir, wt_info) = worktree::resolve_work_dir(
             &self.state.project_root,
             &self.state.run_id,
             &task.id,
             want_wt,
             on_fail,
+            fork_base.as_deref(),
         )?;
+
+        // Resolve fork base to a concrete SHA so the noop guard can later ask
+        // "did the worker add anything on top of what it started with?"
+        let fork_base_sha = fork_base
+            .as_deref()
+            .and_then(|ref_name| {
+                std::process::Command::new("git")
+                    .args(["-C"])
+                    .arg(&work_dir)
+                    .args(["rev-parse", ref_name])
+                    .output()
+                    .ok()
+                    .filter(|o| o.status.success())
+                    .and_then(|o| String::from_utf8(o.stdout).ok())
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+            });
 
         let meta = serde_json::json!({
             "work_dir": work_dir,
             "worktree_branch": wt_info.as_ref().map(|w| &w.branch),
             "worktree_path": wt_info.as_ref().map(|w| &w.path),
+            "fork_base": fork_base,
+            "fork_base_sha": fork_base_sha,
         });
         std::fs::write(
             task_dir.join("work_dir.json"),
@@ -131,6 +154,33 @@ impl Scheduler {
         Ok((provider, handle, work_dir))
     }
 
+    /// Choose the git ref a new worktree should branch from so the worker sees
+    /// earlier tasks' committed artifacts.
+    ///
+    /// Takes the **newest committed dependency branch** (per_task mode records the
+    /// branch on TaskState after `auto_commit_task`). In a serial chain t1→t2→t3
+    /// the newest commit transitively contains all earlier artifacts. Falls back to
+    /// None (main `HEAD`) when no dependency has committed a branch yet.
+    pub(super) fn fork_base_for(&self, task: &TaskIR) -> Option<String> {
+        let mut best: Option<(chrono::DateTime<chrono::Utc>, String)> = None;
+        for dep in &task.depends_on {
+            let Some(ts) = self.state.tasks.get(dep) else {
+                continue;
+            };
+            if !matches!(ts.status, TaskStatus::Done | TaskStatus::Stopped) {
+                continue;
+            }
+            let Some(branch) = ts.worktree_branch.clone() else {
+                continue;
+            };
+            let at = ts.finished_at.unwrap_or_else(chrono::Utc::now);
+            if best.as_ref().map(|(t, _)| at > *t).unwrap_or(true) {
+                best = Some((at, branch));
+            }
+        }
+        best.map(|(_, b)| b)
+    }
+
     pub(super) fn provider_slot_available(
         &self,
         running: &HashMap<String, (Arc<dyn WorkerPort>, WorkerHandle, PathBuf)>,
@@ -142,5 +192,149 @@ impl Scheduler {
             .filter(|(p, _, _)| p.name() == provider)
             .count();
         provider_slot_open(used, cap)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::provider::TaskStatus;
+    use crate::state::RunState;
+
+    fn plan_with_deps() -> crate::plan::PlanIR {
+        let task = |id: &str, deps: &[&str]| crate::plan::TaskIR {
+            id: id.into(),
+            title: id.into(),
+            depends_on: deps.iter().map(|s| s.to_string()).collect(),
+            group: None,
+            provider: "fake".into(),
+            mode: "print".into(),
+            prompt: "p".into(),
+            verify_cmd: None,
+            acceptance: None,
+            timeout_secs: None,
+            worktree: None,
+            provider_opts: serde_json::json!({}),
+            optional: false,
+            include: true,
+            role: None,
+            scope: None,
+            outputs: vec![],
+            tags: vec![],
+        };
+        crate::plan::PlanIR {
+            schema: "cco-plan/v1".into(),
+            name: "chain".into(),
+            adapter: "cco-plan/v1".into(),
+            source_path: std::path::PathBuf::from("p.cco.yaml"),
+            max_parallel: 2,
+            on_failure: crate::plan::OnFailure::Pause,
+            retry_max: 0,
+            default_provider: "fake".into(),
+            default_mode: "print".into(),
+            worktree: true,
+            require_inspect: false,
+            tasks: vec![
+                task("t1", &[]),
+                task("t2", &["t1"]),
+                task("t3", &["t1", "t2"]),
+            ],
+        }
+    }
+
+    #[test]
+    fn fork_base_picks_newest_committed_dependency() {
+        let ir = plan_with_deps();
+        let run_dir = std::env::temp_dir().join(format!("cco-fork-test-{}", std::process::id()));
+        let state = RunState::new("r1".into(), run_dir.clone(), &ir, run_dir.join("run"));
+        {
+            // t1 done with branch; t2 still running (no branch).
+            let mut t1 = state.tasks.get("t1").unwrap().clone();
+            t1.status = TaskStatus::Done;
+            t1.worktree_branch = Some("cco/r1/t1".into());
+            t1.finished_at = Some(chrono::Utc::now());
+            // t2 later-finished branch should win over t1.
+            let mut t2 = state.tasks.get("t2").unwrap().clone();
+            t2.status = TaskStatus::Done;
+            t2.worktree_branch = Some("cco/r1/t2".into());
+            t2.finished_at = Some(chrono::Utc::now() + chrono::Duration::seconds(5));
+            let mut s = state.clone();
+            s.tasks.insert("t1".into(), t1);
+            s.tasks.insert("t2".into(), t2);
+
+            let scheduler = crate::runtime::Scheduler {
+                max_parallel: 1,
+                plan: ir.clone(),
+                state: s,
+                registry: crate::runtime::provider::ProviderRegistry::from_providers(vec![
+                    Arc::new(crate::runtime::provider::fake::FakeProvider::new("fake".into())),
+                ])
+                .expect("registry"),
+                poll_interval: std::time::Duration::from_millis(5),
+                yes: true,
+                only: None,
+                from_task: None,
+                dry_run: false,
+                mirror_state: None,
+                auto_open_terminal: false,
+                terminal_kind: crate::SessionKind::Embedded,
+                terminal_manager: None,
+                run_max_budget_usd: None,
+                provider_max_parallel: Default::default(),
+                retry_max: 0,
+                stall_secs: 600,
+                failover_enabled: false,
+                fallback_extra_attempts: 1,
+                failover_order: vec![],
+                cost_escalate_enabled: false,
+                browser: crate::config::BrowserConfig::default(),
+                provider_unhealthy: Vec::new(),
+            };
+            // t3 depends on [t1, t2] → newest committed branch t2 wins.
+            let base = scheduler.fork_base_for(&ir.tasks[2]);
+            assert_eq!(base.as_deref(), Some("cco/r1/t2"));
+            // t2 depends on [t1] → t1 wins.
+            let base2 = scheduler.fork_base_for(&ir.tasks[1]);
+            assert_eq!(base2.as_deref(), Some("cco/r1/t1"));
+        }
+        let _ = std::fs::remove_dir_all(run_dir);
+    }
+
+    #[test]
+    fn fork_base_none_when_no_deps_committed() {
+        let ir = plan_with_deps();
+        let run_dir = std::env::temp_dir().join(format!("cco-fork-none-{}", std::process::id()));
+        let state = RunState::new("r1".into(), run_dir.clone(), &ir, run_dir.join("run"));
+        let scheduler = crate::runtime::Scheduler {
+            max_parallel: 1,
+            plan: ir.clone(),
+            state,
+            registry: crate::runtime::provider::ProviderRegistry::from_providers(vec![Arc::new(
+                crate::runtime::provider::fake::FakeProvider::new("fake".into()),
+            )])
+            .expect("registry"),
+            poll_interval: std::time::Duration::from_millis(5),
+            yes: true,
+            only: None,
+            from_task: None,
+            dry_run: false,
+            mirror_state: None,
+            auto_open_terminal: false,
+            terminal_kind: crate::SessionKind::Embedded,
+            terminal_manager: None,
+            run_max_budget_usd: None,
+            provider_max_parallel: Default::default(),
+            retry_max: 0,
+            stall_secs: 600,
+            failover_enabled: false,
+            fallback_extra_attempts: 1,
+            failover_order: vec![],
+            cost_escalate_enabled: false,
+            browser: crate::config::BrowserConfig::default(),
+            provider_unhealthy: Vec::new(),
+        };
+        // No dependency done yet → fall back to main HEAD (None).
+        assert_eq!(scheduler.fork_base_for(&ir.tasks[1]), None);
+        let _ = std::fs::remove_dir_all(run_dir);
     }
 }

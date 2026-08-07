@@ -4,8 +4,9 @@
 成员清单
 mod.rs: 子模块与 re-export（Scheduler · LogEvent · ProviderRegistry · WorkerPort · handoff）
 scheduler/: **A1-3 多文件编排**（经 **A1-4 WorkerPort + domain/worker 策略**；读取 `auto_commit.json` 执行 host 自动提交）
-  · mod.rs: Scheduler 结构 + `run()` 主循环
-  · tick.rs: external_stop · reap · spawn_ready · exit 谓词
+  · mod.rs: Scheduler 结构 + `run()` 主循环；**per_task worktree 从已提交依赖分支 fork**（后置任务可见前置产物）
+  · tick.rs: external_stop · reap · spawn_ready · exit 谓词 · **noop guard**（implement Done 前零产出→Failed）
+  · start.rs: start_task · **fork_base_for**（取最新已提交依赖分支）· isolation_on_fail → worktree · terminal open · WorkerPort slot
   · finish.rs: finish_or_retry（FailoverPolicy.classify）· apply_result · archive logs · **auto_commit_task / auto_commit_plan**（记录 hash/files/push 状态，不改变 worker 成败）
   · start.rs: start_task · isolation_on_fail → worktree · terminal open · WorkerPort slot
   · patrol.rs: stall / budget / FailoverPolicy target+preflight
