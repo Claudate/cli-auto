@@ -458,8 +458,8 @@ export function renderChatMessages() {
       html += `<div class="chat-msg chat-msg-assistant chat-msg-pending" aria-live="polite">
       <div class="chat-msg-role">AI</div>
       <div class="chat-msg-body chat-msg-body-pending chat-msg-body-wait-only">
-        <span class="chat-pending-dots" aria-hidden="true"></span>
-        ${chatEsc(clarifyLoading || chatWaitLabel())}
+        <span class="chat-orb"><canvas class="thinking-orb" aria-hidden="true"></canvas></span>
+        <span class="chat-wait-label">${chatEsc(clarifyLoading || chatWaitLabel())}</span>
       </div>
     </div>`;
     }

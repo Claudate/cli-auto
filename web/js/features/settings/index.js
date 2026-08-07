@@ -37,5 +37,6 @@ export {
   parseCcoWindowBoot,
 } from "./shellBoot.js";
 export { createUiActions, backFromSubpage } from "./uiActions.js";
+export { wireSettingsNav, syncPermissionNav } from "./settingsNav.js";
 export { bindGlobalUI, wire } from "./bindUi.js";
 export { createSettingsDesk, installSettingsHost } from "./installSettings.js";

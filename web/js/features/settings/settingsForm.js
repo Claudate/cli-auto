@@ -3,10 +3,13 @@
  * [OUTPUT]: loadSettings / saveSettings / GitHub 发布状态 / 自动提交粒度表单 / pin CRUD（P2-2）
  * [POS]: A5-2d features/settings
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ *
+ * paintPermissionUi 末尾同步 syncPermissionNav —— 授权分区拒写时左侧菜单出现警示点。
  */
 
 import * as settingsApi from "./settingsApi.js";
 import * as gateway from "../../shared/gateway.js";
+import { wireSettingsNav, syncPermissionNav } from "./settingsNav.js";
 import {
   loadWorkStyleSetting,
   saveWorkStyleSetting,
@@ -62,6 +65,7 @@ export function paintPermissionUi(mode, opts = {}) {
     : "bypassPermissions";
   const blocks = permissionBlocks(m);
   const auto = permissionIsAuto(m);
+  syncPermissionNav(blocks);
 
   const select = $("#s-permission-mode");
   if (select && !opts.skipSelect) select.value = m;
@@ -242,6 +246,7 @@ export async function refreshGithubStatus() {
 export async function loadSettings() {
   try {
     wirePermissionUi();
+    wireSettingsNav();
     const s = await settingsApi.getSettings();
     const poll = $("#s-poll-interval");
     if (poll) poll.value = s.poll_interval_secs;

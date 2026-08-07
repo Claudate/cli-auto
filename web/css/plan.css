@@ -850,6 +850,12 @@
   text-overflow: ellipsis;
   vertical-align: middle;
 }
+/* 执行通道 chip：中性区分于费用优选（accent），用灰/边框描边 */
+.route-provider-chip {
+  color: var(--muted, #8a8a8a);
+  background: color-mix(in srgb, var(--muted, #8a8a8a) 10%, transparent);
+  border-color: var(--border);
+}
 /* W3-1: local-source desk — secondary CTA to force smart re-split */
 .split-smart-resplit {
   margin: 0.25rem 0 0.35rem;

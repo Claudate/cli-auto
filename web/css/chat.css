@@ -995,54 +995,22 @@ a.md-ext-link:hover {
   background: #f6f7f9;
   border-style: dashed;
 }
-.chat-pending-dots {
-  display: inline-block;
-  width: 1.1rem;
-  height: 0.55rem;
-  position: relative;
+/* 思考 orb（等待气泡指示器）：canvas 2D 九状态点阵球 · shared/thinkingOrb.js 驱动
+   尺寸按场景动态（澄清 composing=36 · 思考 weaving=32）；引擎写 inline 覆盖此默认值 */
+.chat-orb {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
+  line-height: 0;
 }
-.chat-pending-dots::before,
-.chat-pending-dots::after {
-  content: "";
-  position: absolute;
-  top: 0.15rem;
-  width: 0.28rem;
-  height: 0.28rem;
-  border-radius: 50%;
-  background: var(--muted);
-  animation: chat-dot-pulse 1.2s ease-in-out infinite;
+.chat-orb canvas.thinking-orb {
+  width: 32px; /* 默认兜底；实际由 shared/thinkingOrb.startThinkingOrb 按 size inline 覆盖 */
+  height: 32px;
+  display: block;
 }
-.chat-pending-dots::before {
-  left: 0;
-}
-.chat-pending-dots::after {
-  left: 0.4rem;
-  animation-delay: 0.2s;
-  box-shadow: 0.4rem 0 0 var(--muted);
-  animation-name: chat-dot-pulse-tail;
-}
-@keyframes chat-dot-pulse {
-  0%,
-  80%,
-  100% {
-    opacity: 0.35;
-    transform: translateY(0);
-  }
-  40% {
-    opacity: 1;
-    transform: translateY(-1px);
-  }
-}
-@keyframes chat-dot-pulse-tail {
-  0%,
-  80%,
-  100% {
-    opacity: 0.35;
-  }
-  40% {
-    opacity: 1;
-  }
+.chat-wait-label {
+  align-self: center;
+  min-width: 0;
 }
 
 .chat-plan-card {

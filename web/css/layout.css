@@ -856,6 +856,137 @@ th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
   flex-direction: column;
   gap: 0.85rem;
 }
+/* Settings — 父级分区 + 左侧父级菜单（macOS System Settings 风两栏） */
+#page-settings { overflow: hidden; }
+.settings-shell {
+  width: min(62rem, 100%);
+  flex: 1;
+  min-height: 0;
+}
+.settings-layout {
+  display: flex;
+  gap: 1.1rem;
+  align-items: stretch;
+  min-height: 0;
+  flex: 1;
+}
+.settings-aside {
+  flex: 0 0 11rem;
+  max-height: 100%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.15rem 0.2rem 0.55rem 0;
+}
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 550;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.settings-nav-item .ico {
+  flex: none;
+  opacity: 0.9;
+  width: 1rem;
+  height: 1rem;
+}
+.settings-nav-item.is-active .ico {
+  color: #fff;
+  opacity: 1;
+}
+/* 授权分区「会拒写」警示点：卡在卡片里的错误状态一眼可见 */
+.settings-nav-item.is-warn {
+  color: #c47b00;
+  font-weight: 650;
+}
+.settings-nav-item.is-warn::after {
+  content: "";
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-left: auto;
+  border-radius: 50%;
+  background: #c47b00;
+}
+.settings-nav-item:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+}
+.settings-nav-item:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring, 0 0 0 3px rgba(0,113,227,.25));
+}
+.settings-nav-item.is-active {
+  background: var(--accent, #0071e3);
+  color: #fff;
+}
+.settings-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  overflow-y: auto;
+  position: relative;
+  padding: 0.1rem 0.2rem 1.25rem 0;
+}
+.settings-area { scroll-margin-top: 0.1rem; }
+/* 父区标题钉在滚动容器顶部：滚动时始终可见当前分区名 */
+.settings-area-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 0 0.55rem;
+  padding: 0.5rem 0.3rem 0.45rem;
+  background: var(--bg, #F5F5F7);
+  border-radius: 10px;
+}
+.settings-area-title {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 720;
+  color: var(--text);
+  letter-spacing: 0;
+}
+.settings-area-note {
+  margin: 0.18rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.45;
+  max-width: 40rem;
+}
+@media (max-width: 720px) {
+  .settings-layout { flex-direction: column; }
+  .settings-aside {
+    flex: none;
+    max-height: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    padding: 0;
+  }
+  .settings-nav-item { width: auto; flex: 0 1 auto; }
+  .settings-nav-item.is-warn::after {
+    width: 0.4rem;
+    height: 0.4rem;
+    margin-left: 0.25rem;
+  }
+}
+
+
 .settings-group {
   display: flex;
   flex-direction: column;

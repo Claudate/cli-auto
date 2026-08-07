@@ -101,7 +101,6 @@ export function ensureAdvancedRouteDom() {
     `<option value="deepseek">CodeWhale</option>` +
     `<option value="copilot">Copilot</option>` +
     `<option value="codebuddy">CodeBuddy</option>` +
-    `<option value="fake">演练</option>` +
     `</select>` +
     `</label>` +
     `<label class="field split-route-role-field" id="split-route-role-field">` +

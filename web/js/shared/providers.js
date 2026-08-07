@@ -42,36 +42,24 @@ export function productLabel(provider) {
 /**
  * Fill a <select> with known providers. Preserves current value when possible.
  * @param {HTMLSelectElement|null} el
- * @param {{ includeFake?: boolean, selected?: string }} [opts]
+ * @param {{ selected?: string }} [opts]
  */
 export function fillProviderSelect(el, opts = {}) {
   if (!el) return;
   const selected = String(opts.selected || el.value || "claude").toLowerCase();
-  const includeFake = !!opts.includeFake;
   const optsHtml = KNOWN_PROVIDERS.map(
     (p) => `<option value="${p.id}">${p.label}</option>`
   ).join("");
-  const fakeOpt = includeFake
-    ? `<option value="fake">演练</option>`
-    : "";
-  el.innerHTML = optsHtml + fakeOpt;
-  const allowed = new Set([
-    ...KNOWN_PROVIDERS.map((p) => p.id),
-    ...(includeFake ? ["fake"] : []),
-  ]);
+  el.innerHTML = optsHtml;
+  const allowed = new Set(KNOWN_PROVIDERS.map((p) => p.id));
   el.value = allowed.has(selected) ? selected : "claude";
 }
 
 /**
  * Options HTML fragment for static embeds.
- * @param {{ includeFake?: boolean }} [opts]
  */
-export function providerOptionsHtml(opts = {}) {
-  const rows = KNOWN_PROVIDERS.map(
+export function providerOptionsHtml() {
+  return KNOWN_PROVIDERS.map(
     (p) => `<option value="${p.id}">${p.label}</option>`
-  );
-  if (opts.includeFake) {
-    rows.push(`<option value="fake">演练</option>`);
-  }
-  return rows.join("");
+  ).join("");
 }

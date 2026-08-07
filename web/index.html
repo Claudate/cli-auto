@@ -3,7 +3,7 @@
 <head>
 <!--
 [INPUT]: 无静态依赖；由 Tauri 加载 app.css + web/js/*（D4）+ A2/A3 js/main.js module
-[OUTPUT]: DOM 结构：sidebar · welcome · workspace(plan/monitor) · chat · settings GitHub 发布大区 · modals
+[OUTPUT]: DOM 结构：sidebar · welcome · workspace(plan/monitor) · chat · settings 父级分区两栏（左侧图标菜单 · Git·版本发布 大区）· modals
 [POS]: 桌面壳结构真源；规划相位 spinner · 合并选计划弹窗 · task-dash · 执行看板 · 聊天建计划 · 设置分区
 [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
 note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高级选项
@@ -273,7 +273,6 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                         <option value="deepseek">CodeWhale</option>
                         <option value="copilot">Copilot</option>
                         <option value="codebuddy">CodeBuddy</option>
-                        <option value="fake">演练</option>
                       </select>
                     </label>
                     <button class="btn ghost sm" id="btn-confirm-edit" type="button" hidden>编辑</button>
@@ -300,7 +299,6 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                       <option value="deepseek">CodeWhale</option>
                       <option value="copilot">Copilot</option>
                       <option value="codebuddy">CodeBuddy</option>
-                      <option value="fake">演练模式</option>
                     </select>
                   </label>
                   <label class="field confirm-deps-field">
@@ -715,163 +713,73 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
             </div>
           </header>
 
-          <div class="settings-stack">
-            <section class="settings-group" aria-labelledby="sg-common">
-              <h3 class="settings-group-title" id="sg-common">常用</h3>
-              <label class="settings-row">
-                <span class="settings-row-text">
-                  <span class="settings-label">最多同时进行几步</span>
-                  <span class="field-hint">建议 2–4</span>
-                </span>
-                <input id="s-max-parallel" class="settings-num" type="number" min="1" max="32" step="1" placeholder="2" />
-              </label>
-              <label class="settings-row" title="主路径状态旁短旁白">
-                <span class="settings-row-text">
-                  <span class="settings-label">趣味流程说明</span>
-                  <span class="field-hint">拆分/执行时的一句旁白</span>
-                </span>
-                <input id="s-flow-fun" type="checkbox" checked />
-              </label>
-              <label class="settings-row">
-                <span class="settings-row-text">
-                  <span class="settings-label">日志字号</span>
-                </span>
-                <select id="s-log-font" class="settings-select">
-                  <option value="12">紧凑</option>
-                  <option value="14" selected>推荐</option>
-                  <option value="16">大</option>
-                </select>
-              </label>
-            </section>
+          <div class="settings-layout">
+            <nav class="settings-aside" aria-label="设置分区">
+              <button class="settings-nav-item is-active" type="button" data-settings-anchor="set-common">
+                <span data-icon="sliders" aria-hidden="true"></span>常用
+              </button>
+              <button class="settings-nav-item" type="button" data-settings-anchor="set-exec">
+                <span data-icon="route" aria-hidden="true"></span>执行与通道
+              </button>
+              <button class="settings-nav-item" type="button" data-settings-anchor="set-permission">
+                <span data-icon="shield-check" aria-hidden="true"></span>授权
+              </button>
+              <button class="settings-nav-item" type="button" data-settings-anchor="set-post">
+                <span data-icon="flag" aria-hidden="true"></span>收尾
+              </button>
+              <button class="settings-nav-item" type="button" data-settings-anchor="set-git">
+                <span data-icon="git-branch" aria-hidden="true"></span>Git · 版本发布
+              </button>
+              <button class="settings-nav-item" type="button" data-settings-anchor="set-ui">
+                <span data-icon="palette" aria-hidden="true"></span>界面
+              </button>
+              <button class="settings-nav-item" type="button" data-settings-anchor="set-pins">
+                <span data-icon="bookmark" aria-hidden="true"></span>项目记忆
+              </button>
+            </nav>
 
-            <section class="settings-group" aria-labelledby="sg-auth" id="s-permission-group">
-              <h3 class="settings-group-title" id="sg-auth">任务授权</h3>
-              <p class="settings-group-note field-hint" id="s-permission-lead">
-                执行规划时没有人点「允许」。必须预先授权，任务才能改文件、跑命令；否则会静默失败、看起来像软件坏了。
-              </p>
-              <p
-                class="settings-auth-status"
-                id="s-permission-status"
-                role="status"
-                data-state="ok"
-              >
-                任务可自动写文件与执行命令
-              </p>
-              <label
-                class="settings-row"
-                title="无人值守 worker 的默认权限。推荐开启：自动授权写文件与命令。"
-              >
-                <span class="settings-row-text">
-                  <span class="settings-label">自动授权写文件与命令</span>
-                  <span class="field-hint" id="s-permission-mode-note">推荐开启 · 任务才能真正落地</span>
-                </span>
-                <input id="s-permission-auto" type="checkbox" checked />
-              </label>
-              <label
-                class="settings-row"
-                title="对应 Claude CLI --permission-mode。自动授权 = bypassPermissions。"
-              >
-                <span class="settings-row-text">
-                  <span class="settings-label">授权模式</span>
-                  <span class="field-hint">一般用「自动授权」即可</span>
-                </span>
-                <select id="s-permission-mode" class="settings-select">
-                  <option value="bypassPermissions" selected>自动授权（推荐）</option>
-                  <option value="acceptEdits">只自动改文件（命令仍可能被拦）</option>
-                  <option value="dontAsk">拒绝未授权（会假完成）</option>
-                  <option value="default">CLI 默认（可能弹窗/拒写）</option>
-                </select>
-              </label>
-              <div class="settings-tool-row" id="s-permission-actions">
-                <button
-                  class="btn ghost sm"
-                  id="btn-permission-restore"
-                  type="button"
-                  title="立刻改回自动授权并保存"
-                >
-                  恢复推荐授权
-                </button>
-              </div>
-            </section>
+            <div class="settings-content">
+              <!-- ── 常用 ── -->
+              <section class="settings-area" id="set-common" aria-labelledby="area-common">
+                <header class="settings-area-head">
+                  <h2 class="settings-area-title" id="area-common">常用</h2>
+                  <p class="settings-area-note">主路径频率最高的几个选项，多数时候保持默认即可。</p>
+                </header>
+                <section class="settings-group" aria-labelledby="sg-common">
+                  <h3 class="settings-group-title" id="sg-common">运行节奏</h3>
+                  <label class="settings-row">
+                    <span class="settings-row-text">
+                      <span class="settings-label">最多同时进行几步</span>
+                      <span class="field-hint">建议 2–4</span>
+                    </span>
+                    <input id="s-max-parallel" class="settings-num" type="number" min="1" max="32" step="1" placeholder="2" />
+                  </label>
+                  <label class="settings-row" title="主路径状态旁短旁白">
+                    <span class="settings-row-text">
+                      <span class="settings-label">趣味流程说明</span>
+                      <span class="field-hint">拆分/执行时的一句旁白</span>
+                    </span>
+                    <input id="s-flow-fun" type="checkbox" checked />
+                  </label>
+                  <label class="settings-row">
+                    <span class="settings-row-text">
+                      <span class="settings-label">日志字号</span>
+                    </span>
+                    <select id="s-log-font" class="settings-select">
+                      <option value="12">紧凑</option>
+                      <option value="14" selected>推荐</option>
+                      <option value="16">大</option>
+                    </select>
+                  </label>
+                </section>
+              </section>
 
-            <section class="settings-group settings-major" aria-labelledby="sg-post">
-              <div class="settings-section-head">
-                <h3 class="settings-group-title" id="sg-post">质量收尾</h3>
-                <p class="settings-group-note field-hint" id="s-post-tasks-note">
-                  执行完之后追加的检查项；默认关，拆分台仍可取消。
-                </p>
-              </div>
-              <div class="settings-subsection">
-                <h4 class="settings-subtitle">完成检查</h4>
-                <label class="settings-row" title="开启后每次拆分追加「任务巡检」">
-                  <span class="settings-row-text">
-                    <span class="settings-label">任务巡检</span>
-                    <span class="field-hint">对照计划写完成/遗漏</span>
-                  </span>
-                  <input id="s-post-inspect" type="checkbox" />
-                </label>
-              </div>
-            </section>
-
-            <section class="settings-group settings-major" aria-labelledby="sg-github">
-              <div class="settings-section-head">
-                <h3 class="settings-group-title" id="sg-github">GitHub 发布</h3>
-                <p class="settings-group-note field-hint">
-                  自动提交、Push、开 PR 都依赖当前项目是 Git 仓库，并且本机 GitHub CLI 已登录。
-                </p>
-              </div>
-              <div class="settings-subsection settings-status-panel" id="s-github-status" data-state="idle" role="status" aria-live="polite">
-                <div class="settings-status-title">等待检查 GitHub 状态</div>
-                <p class="field-hint">打开设置页后会读取左侧选中项目。</p>
-              </div>
-              <div class="settings-subsection">
-                <h4 class="settings-subtitle">本机准备</h4>
-                <div class="settings-command-grid" aria-label="GitHub CLI 配置命令">
-                  <code>gh auth login</code>
-                  <code>gh auth status</code>
-                  <code>git remote -v</code>
-                  <code>git push -u origin HEAD</code>
-                </div>
-                <p class="settings-group-note field-hint">
-                  没有远端时，先在 GitHub 创建仓库，再给当前项目添加 origin；这里不会自动 force-push 或自动 merge。
-                </p>
-              </div>
-              <div class="settings-subsection">
-                <h4 class="settings-subtitle">自动留痕</h4>
-                <label class="settings-row" title="选择自动提交发生在整个计划完成后，还是每个拆分任务完成后">
-                  <span class="settings-row-text">
-                    <span class="settings-label">自动提交粒度</span>
-                    <span class="field-hint">按计划串行提交；按任务提交到独立分支</span>
-                  </span>
-                  <select id="s-git-auto-commit-granularity" class="settings-select">
-                    <option value="off">关闭</option>
-                    <option value="per_plan">按计划提交</option>
-                    <option value="per_task">按拆分任务提交</option>
-                  </select>
-                </label>
-                <label class="settings-row" title="每次自动提交成功后是否推送当前分支">
-                  <span class="settings-row-text">
-                    <span class="settings-label">提交后自动 Push</span>
-                    <span class="field-hint">失败会记录原因，不会重试或 force-push</span>
-                  </span>
-                  <input id="s-git-push-after-commit" type="checkbox" />
-                </label>
-                <label class="settings-row" title="开启后每次拆分追加「自动开 PR」（需本机 gh 已登录）">
-                  <span class="settings-row-text">
-                    <span class="settings-label">自动开 PR</span>
-                    <span class="field-hint">需 gh 已登录，且当前分支可推送到 GitHub</span>
-                  </span>
-                  <input id="s-post-open-pr" type="checkbox" />
-                </label>
-              </div>
-              <div class="settings-tool-row">
-                <button class="btn ghost sm" id="btn-github-status-refresh" type="button">重新检查 GitHub</button>
-              </div>
-            </section>
-
-            <details class="settings-advanced">
-              <summary>高级</summary>
-              <div class="settings-advanced-body">
+              <!-- ── 执行与通道 ── -->
+              <section class="settings-area" id="set-exec" aria-labelledby="area-exec">
+                <header class="settings-area-head">
+                  <h2 class="settings-area-title" id="area-exec">执行与通道</h2>
+                  <p class="settings-area-note">拆成步骤与执行时的通道、并发、重试与卡住策略。高级项从这里进。</p>
+                </header>
                 <section class="settings-group" aria-labelledby="sg-exec">
                   <h3 class="settings-group-title" id="sg-exec">执行与拆分</h3>
                   <label class="settings-row" title="勾选后「拆成步骤」先弹出通道/并发等选项">
@@ -907,7 +815,6 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                       <option value="deepseek">CodeWhale</option>
                       <option value="copilot">Copilot</option>
                       <option value="codebuddy">CodeBuddy</option>
-                      <option value="fake">演练模式</option>
                     </select>
                   </label>
                   <label class="settings-row" title="Claude 推理深度；ultracode = xhigh + 多 Agent 穷尽。聊天区可按次覆盖。">
@@ -966,6 +873,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                     <input id="s-browser-require-preview" type="checkbox" checked />
                   </label>
                 </section>
+
 
                 <!-- shell-chrome A2：拆分台「调整…」退出第一屏后，能力从这里进 -->
                 <section class="settings-group" aria-labelledby="sg-split-tools">
@@ -1028,9 +936,162 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                     <input id="s-cost-intent-enabled" type="checkbox" />
                   </label>
                 </section>
+              </section>
 
+
+              <!-- ── 授权 ── -->
+              <section class="settings-area" id="set-permission" aria-labelledby="area-permission">
+                <header class="settings-area-head">
+                  <h2 class="settings-area-title" id="area-permission">授权</h2>
+                  <p class="settings-area-note">执行规划时，任务能否自动改文件、跑命令。</p>
+                </header>
+                <section class="settings-group" aria-labelledby="sg-auth" id="s-permission-group">
+                  <h3 class="settings-group-title" id="sg-auth">任务授权</h3>
+                  <p class="settings-group-note field-hint" id="s-permission-lead">
+                    执行规划时没有人点「允许」。必须预先授权，任务才能改文件、跑命令；否则会静默失败、看起来像软件坏了。
+                  </p>
+                  <p
+                    class="settings-auth-status"
+                    id="s-permission-status"
+                    role="status"
+                    data-state="ok"
+                  >
+                    任务可自动写文件与执行命令
+                  </p>
+                  <label
+                    class="settings-row"
+                    title="无人值守 worker 的默认权限。推荐开启：自动授权写文件与命令。"
+                  >
+                    <span class="settings-row-text">
+                      <span class="settings-label">自动授权写文件与命令</span>
+                      <span class="field-hint" id="s-permission-mode-note">推荐开启 · 任务才能真正落地</span>
+                    </span>
+                    <input id="s-permission-auto" type="checkbox" checked />
+                  </label>
+                  <label
+                    class="settings-row"
+                    title="对应 Claude CLI --permission-mode。自动授权 = bypassPermissions。"
+                  >
+                    <span class="settings-row-text">
+                      <span class="settings-label">授权模式</span>
+                      <span class="field-hint">一般用「自动授权」即可</span>
+                    </span>
+                    <select id="s-permission-mode" class="settings-select">
+                      <option value="bypassPermissions" selected>自动授权（推荐）</option>
+                      <option value="acceptEdits">只自动改文件（命令仍可能被拦）</option>
+                      <option value="dontAsk">拒绝未授权（会假完成）</option>
+                      <option value="default">CLI 默认（可能弹窗/拒写）</option>
+                    </select>
+                  </label>
+                  <div class="settings-tool-row" id="s-permission-actions">
+                    <button
+                      class="btn ghost sm"
+                      id="btn-permission-restore"
+                      type="button"
+                      title="立刻改回自动授权并保存"
+                    >
+                      恢复推荐授权
+                    </button>
+                  </div>
+                </section>
+              </section>
+
+              <!-- ── 收尾 ── -->
+              <section class="settings-area" id="set-post" aria-labelledby="area-post">
+                <header class="settings-area-head">
+                  <h2 class="settings-area-title" id="area-post">收尾</h2>
+                  <p class="settings-area-note">执行完之后自动追加的检查项。</p>
+                </header>
+                <section class="settings-group" aria-labelledby="sg-post">
+                  <h3 class="settings-group-title" id="sg-post">质量收尾</h3>
+                  <p class="settings-group-note field-hint" id="s-post-tasks-note">
+                    执行完之后追加的检查项；默认关，拆分台仍可取消。
+                  </p>
+                  <div class="settings-subsection">
+                    <h4 class="settings-subtitle">完成检查</h4>
+                    <label class="settings-row" title="开启后每次拆分追加「任务巡检」">
+                      <span class="settings-row-text">
+                        <span class="settings-label">任务巡检</span>
+                        <span class="field-hint">对照计划写完成/遗漏</span>
+                      </span>
+                      <input id="s-post-inspect" type="checkbox" />
+                    </label>
+                  </div>
+                </section>
+              </section>
+
+
+              <!-- ── Git · 版本发布 ── -->
+              <section class="settings-area" id="set-git" aria-labelledby="area-git">
+                <header class="settings-area-head">
+                  <h2 class="settings-area-title" id="area-git">Git · 版本发布</h2>
+                  <p class="settings-area-note">项目的 Git 设置：自动提交、Push、开 PR 与发布就绪状态。</p>
+                </header>
+                <section class="settings-group" aria-labelledby="sg-github">
+                  <div class="settings-section-head">
+                    <h3 class="settings-group-title" id="sg-github">自动提交 · Push · PR</h3>
+                    <p class="settings-group-note field-hint">
+                      自动提交、Push、开 PR 都依赖当前项目是 Git 仓库，并且本机 GitHub CLI 已登录。
+                    </p>
+                  </div>
+                  <div class="settings-subsection settings-status-panel" id="s-github-status" data-state="idle" role="status" aria-live="polite">
+                    <div class="settings-status-title">等待检查 GitHub 状态</div>
+                    <p class="field-hint">打开设置页后会读取左侧选中项目。</p>
+                  </div>
+                  <div class="settings-subsection">
+                    <h4 class="settings-subtitle">本机准备</h4>
+                    <div class="settings-command-grid" aria-label="GitHub CLI 配置命令">
+                      <code>gh auth login</code>
+                      <code>gh auth status</code>
+                      <code>git remote -v</code>
+                      <code>git push -u origin HEAD</code>
+                    </div>
+                    <p class="settings-group-note field-hint">
+                      没有远端时，先在 GitHub 创建仓库，再给当前项目添加 origin；这里不会自动 force-push 或自动 merge。
+                    </p>
+                  </div>
+                  <div class="settings-subsection">
+                    <h4 class="settings-subtitle">自动留痕</h4>
+                    <label class="settings-row" title="选择自动提交发生在整个计划完成后，还是每个拆分任务完成后">
+                      <span class="settings-row-text">
+                        <span class="settings-label">自动提交粒度</span>
+                        <span class="field-hint">按计划串行提交；按任务提交到独立分支</span>
+                      </span>
+                      <select id="s-git-auto-commit-granularity" class="settings-select">
+                        <option value="off">关闭</option>
+                        <option value="per_plan">按计划提交</option>
+                        <option value="per_task">按拆分任务提交</option>
+                      </select>
+                    </label>
+                    <label class="settings-row" title="每次自动提交成功后是否推送当前分支">
+                      <span class="settings-row-text">
+                        <span class="settings-label">提交后自动 Push</span>
+                        <span class="field-hint">失败会记录原因，不会重试或 force-push</span>
+                      </span>
+                      <input id="s-git-push-after-commit" type="checkbox" />
+                    </label>
+                    <label class="settings-row" title="开启后每次拆分追加「自动开 PR」（需本机 gh 已登录）">
+                      <span class="settings-row-text">
+                        <span class="settings-label">自动开 PR</span>
+                        <span class="field-hint">需 gh 已登录，且当前分支可推送到 GitHub</span>
+                      </span>
+                      <input id="s-post-open-pr" type="checkbox" />
+                    </label>
+                  </div>
+                  <div class="settings-tool-row">
+                    <button class="btn ghost sm" id="btn-github-status-refresh" type="button">重新检查 GitHub</button>
+                  </div>
+                </section>
+              </section>
+
+              <!-- ── 界面 ── -->
+              <section class="settings-area" id="set-ui" aria-labelledby="area-ui">
+                <header class="settings-area-head">
+                  <h2 class="settings-area-title" id="area-ui">界面</h2>
+                  <p class="settings-area-note">状态刷新节奏等外观设置。</p>
+                </header>
                 <section class="settings-group" aria-labelledby="sg-ui">
-                  <h3 class="settings-group-title" id="sg-ui">界面</h3>
+                  <h3 class="settings-group-title" id="sg-ui">刷新节奏</h3>
                   <label class="settings-row">
                     <span class="settings-row-text">
                       <span class="settings-label">状态刷新间隔</span>
@@ -1042,9 +1103,17 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                     聊天约保留 2 天；附图 ≤5MB，每条最多 4 张。
                   </p>
                 </section>
+              </section>
 
+
+              <!-- ── 项目记忆 ── -->
+              <section class="settings-area" id="set-pins" aria-labelledby="area-pins">
+                <header class="settings-area-head">
+                  <h2 class="settings-area-title" id="area-pins">项目记忆</h2>
+                  <p class="settings-area-note">为当前项目加点速记，仅作上下文。</p>
+                </header>
                 <section class="settings-group" id="s-pins-group" aria-labelledby="sg-pins">
-                  <h3 class="settings-group-title" id="sg-pins">项目记忆</h3>
+                  <h3 class="settings-group-title" id="sg-pins">速记（最多 3 条）</h3>
                   <p class="settings-group-note field-hint">
                     每项目最多 3 条 pin，仅作上下文；需先选中左侧项目。
                   </p>
@@ -1064,11 +1133,13 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                   </div>
                   <p class="field-hint" id="s-pins-status" hidden></p>
                 </section>
-              </div>
-            </details>
+              </section>
+            </div>
           </div>
         </div>
       </section>
+
+
 
       <section id="page-help" class="page">
         <div class="panel prose">
@@ -1149,7 +1220,6 @@ bin = "/Users/你/.local/bin/claude"</pre>
                   <option value="ai" selected>智能拆分（推荐 · 会思考依赖与并行）</option>
                   <option value="fast">快速拆分（本地规则 · 不等模型）</option>
                   <option value="parse">跳过规划（直接解析）</option>
-                  <option value="fake">模拟拆分</option>
                 </select>
               </label>
               <label class="field" title="智能拆分时的推理深度；ultracode = xhigh + 多 Agent 穷尽">
@@ -1174,7 +1244,6 @@ bin = "/Users/你/.local/bin/claude"</pre>
                   <option value="deepseek">CodeWhale</option>
                   <option value="copilot">Copilot</option>
                   <option value="codebuddy">CodeBuddy</option>
-                  <option value="fake">演练模式</option>
                 </select>
               </label>
               <label class="field">

@@ -304,6 +304,13 @@ function taskCardHtml(t, byId, opts = {}) {
         costHint
       )}</span>`
     : "";
+  // 执行通道：本步将用哪个 CLI（自动分配或手动改过的通道），一眼可辨。
+  const provRaw = String(t.provider || t.provider_label || "").trim();
+  const provHtml = provRaw
+    ? `<span class="cost-route-chip route-provider-chip" title="本步执行通道（可选中该步后在「高级·执行通道」改）">${esc(
+        engineLabel(provRaw)
+      )}</span>`
+    : "";
   const checkHtml = isOpt
     ? `<label class="wave-task-check" title="${
         role.kind === "sys"
@@ -322,6 +329,7 @@ function taskCardHtml(t, byId, opts = {}) {
     `<div class="split-card-top">` +
     `<span class="split-role split-role-${role.kind}">${role.label}</span>` +
     riskHtml +
+    provHtml +
     costHtml +
     (isOpt
       ? role.kind === "sys"

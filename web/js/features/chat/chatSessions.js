@@ -16,6 +16,7 @@ import {
 } from "./chatState.js";
 import { chatEsc, chatFormatStreamBody } from "./chatFormat.js";
 import { resetClarifyState, hydrateClarifyFromSession } from "./chatClarify.js";
+import { paintPendingWait, stopPendingOrb } from "./chatThinkingOrb.js";
 
 export function chatWaitLabel() {
   // t3: prefer clarify loading copy while in clarify phase
@@ -32,12 +33,13 @@ export function chatWaitLabel() {
   return `AI 正在思考…（已等 ${m}分${s}s，可稍候）`;
 }
 
-/** Paint the pending assistant bubble (wait label or streaming partial as rendered md). */
+/** Paint the pending assistant bubble (thinking orb + wait label, or streaming partial as rendered md). */
 export function paintChatPendingBubble() {
   const pending = document.querySelector(".chat-msg-pending .chat-msg-body");
   if (!pending) return;
   const stream = String(state.chatStreamText || "").trim();
   if (stream) {
+    stopPendingOrb(pending);
     pending.classList.add("chat-msg-streaming", "md-body");
     pending.classList.remove("chat-msg-body-wait-only");
     // Stream as rendered markdown (not raw source / "template" text).
@@ -47,9 +49,14 @@ export function paintChatPendingBubble() {
   } else {
     pending.classList.remove("chat-msg-streaming", "md-body");
     pending.classList.add("chat-msg-body-wait-only");
-    pending.innerHTML =
-      `<span class="chat-pending-dots" aria-hidden="true"></span>` +
-      chatEsc(chatWaitLabel());
+    // 场景 → orb 状态/尺寸/文案映射（参考站 nine states）
+    //   澄清/整合想法（chatClarify loading）→ composing（整理态 · 稍大） + 「正在整理你的想法…」
+    //   普通思考 → weaving（braid 招牌态） + chatWaitLabel()
+    const clarify = state.chatClarify?.uiStatus === "loading";
+    const label = clarify ? "正在整理你的想法…" : chatWaitLabel();
+    const orbState = clarify ? "composing" : "weaving";
+    const orbSize = clarify ? 36 : 32;
+    paintPendingWait(pending, label, orbState, orbSize);
   }
 }
 
