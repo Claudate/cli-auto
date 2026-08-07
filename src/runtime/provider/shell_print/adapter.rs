@@ -14,6 +14,7 @@ use async_trait::async_trait;
 use tokio::process::{Child, Command};
 use tracing::{info, warn};
 
+use super::decode;
 use super::profiles::{PromptPlacement, ShellProfile};
 use super::scope::with_scope_prefix;
 use super::stream::{process_alive, stop_pid, stream_child};
@@ -127,6 +128,9 @@ impl ShellPrintProvider {
 
         let mut cmd = self.build_command(&prompt, &task.provider_opts);
         cmd.current_dir(&ctx.work_dir);
+        // Headless: prompt travels via argv, stdin closes immediately (EOF).
+        // Interactive CLIs (codex exec) otherwise block reading stdin forever.
+        cmd.stdin(Stdio::null());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
         crate::runtime::provider::apply_worker_process_env(&mut cmd, &ctx.env_extra);
@@ -410,6 +414,10 @@ impl WorkerPort for ShellPrintProvider {
             other => task_status_from_exit(other),
         };
 
+        // 契约层 T1/T2：按 result_kind 解码，填充「平台完成信号 / 执行动作证据」，
+        // 供调度层统一裁决（不再单信 exit）。
+        let outcome = decode::decode(self.profile.result_kind, &stdout, &meta, exit_code);
+
         let error = if status == TaskStatus::Failed {
             let stderr = handle
                 .stdout_path
@@ -434,6 +442,8 @@ impl WorkerPort for ShellPrintProvider {
             cost_usd: None,
             raw: parsed.unwrap_or(meta),
             error,
+            done_marker: outcome.done_marker,
+            execution_evidence: outcome.execution_evidence,
         })
     }
 }

@@ -4,6 +4,7 @@
 //! [OUTPUT]: ShellProfile constants
 //! [POS]: runtime/provider/shell_print
 //! [PROTOCOL]: 新 CLI = 加 profile + registry 一行；spawn **禁止** npm install
+//! note: codex yolo_args 已从 deprecated `--full-auto` 换成 `--sandbox workspace-write`（headless 自动写）
 
 /// Where the user prompt lands on the CLI argv.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,6 +14,19 @@ pub enum PromptPlacement {
     FlagOrTrailing,
     /// `cmd <subcommand> [flags…] <prompt>` (codex exec).
     SubcommandThenTrailing,
+}
+
+/// Output schema a shell-print CLI emits — decides which decoder judges success (契约层 T1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultKind {
+    /// codex `--json` NDJSON stream of `item.started|item.completed`.
+    CodexItemStream,
+    /// CodeWhale `codewhale exec --output-format stream-json` NDJSON (`codewhale.exec-stream`).
+    CodewhaleExecStream,
+    /// One-shot JSON result object (gemini / qwen / codebuddy `-o json`).
+    OneShotJson,
+    /// Plain text output with no enforced schema (kimi / copilot).
+    Plain,
 }
 
 /// Static per-CLI shape for headless print workers.
@@ -38,6 +52,8 @@ pub struct ShellProfile {
     pub json_args: &'static [&'static str],
     /// Model flag name (`-m` or `--model`); value from provider_opts.model.
     pub model_flag: Option<&'static str>,
+    /// Output schema → which decoder judges success (契约层 T1).
+    pub result_kind: ResultKind,
 }
 
 pub const CODEX: ShellProfile = ShellProfile {
@@ -51,9 +67,11 @@ pub const CODEX: ShellProfile = ShellProfile {
     placement: PromptPlacement::SubcommandThenTrailing,
     subcommand: Some("exec"),
     prompt_flag: None,
-    yolo_args: &["--full-auto"],
+    // --full-auto deprecated → --sandbox workspace-write (unattended write access).
+    yolo_args: &["--sandbox", "workspace-write"],
     json_args: &["--json"],
     model_flag: Some("--model"),
+    result_kind: ResultKind::CodexItemStream,
 };
 
 pub const GEMINI: ShellProfile = ShellProfile {
@@ -70,6 +88,7 @@ pub const GEMINI: ShellProfile = ShellProfile {
     yolo_args: &["-y"],
     json_args: &["-o", "json"],
     model_flag: Some("-m"),
+    result_kind: ResultKind::OneShotJson,
 };
 
 pub const QWEN: ShellProfile = ShellProfile {
@@ -86,6 +105,7 @@ pub const QWEN: ShellProfile = ShellProfile {
     yolo_args: &["-y"],
     json_args: &["-o", "json"],
     model_flag: Some("-m"),
+    result_kind: ResultKind::OneShotJson,
 };
 
 pub const KIMI: ShellProfile = ShellProfile {
@@ -103,6 +123,7 @@ pub const KIMI: ShellProfile = ShellProfile {
     yolo_args: &[],
     json_args: &[],
     model_flag: Some("-m"),
+    result_kind: ResultKind::Plain,
 };
 
 /// DeepSeek channel → [CodeWhale](https://github.com/Hmbown/CodeWhale) CLI.
@@ -125,6 +146,7 @@ pub const DEEPSEEK: ShellProfile = ShellProfile {
     yolo_args: &["--auto"],
     json_args: &["--output-format", "stream-json"],
     model_flag: Some("--model"),
+    result_kind: ResultKind::CodewhaleExecStream,
 };
 
 pub const COPILOT: ShellProfile = ShellProfile {
@@ -142,6 +164,7 @@ pub const COPILOT: ShellProfile = ShellProfile {
     yolo_args: &["--allow-all-tools"],
     json_args: &[],
     model_flag: Some("--model"),
+    result_kind: ResultKind::Plain,
 };
 
 pub const CODEBUDDY: ShellProfile = ShellProfile {
@@ -158,6 +181,7 @@ pub const CODEBUDDY: ShellProfile = ShellProfile {
     yolo_args: &["-y"],
     json_args: &["-o", "json"],
     model_flag: Some("-m"),
+    result_kind: ResultKind::OneShotJson,
 };
 
 /// All shell-print production profiles (not claude / fake / sdk).

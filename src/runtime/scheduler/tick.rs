@@ -93,6 +93,8 @@ impl Scheduler {
                         cost_usd: None,
                         raw: serde_json::json!({}),
                         error: Some(format!("external stop collect: {e:#}")),
+                        done_marker: true,
+                        execution_evidence: false,
                     }
                 });
                 result.status = TaskStatus::Stopped;
@@ -184,6 +186,8 @@ impl Scheduler {
                                 cost_usd: None,
                                 raw: serde_json::json!({}),
                                 error: Some(format!("stall collect: {e:#}")),
+                                done_marker: true,
+                                execution_evidence: false,
                             }
                         });
                         result.status = TaskStatus::Timeout;
@@ -329,6 +333,9 @@ impl Scheduler {
         }
         if result.status == TaskStatus::Done {
             self.enforce_outputs(task, work_dir, result);
+        }
+        if result.status == TaskStatus::Done {
+            self.enforce_success_evidence(task, work_dir, result);
         }
         if result.status == TaskStatus::Done {
             self.enforce_inspect_verdict(task, work_dir, result);
@@ -527,6 +534,8 @@ impl Scheduler {
                         cost_usd: None,
                         raw: serde_json::json!({}),
                         error: Some(format!("{e:#}")),
+                        done_marker: false,
+                        execution_evidence: false,
                     };
                     let retried = self
                         .finish_or_retry(

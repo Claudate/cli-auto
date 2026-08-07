@@ -349,6 +349,8 @@ impl WorkerProvider for FakeProvider {
             cost_usd: parsed.get("total_cost_usd").and_then(|v| v.as_f64()),
             raw: parsed,
             error: None,
+            done_marker: code == Some(0),
+            execution_evidence: status.is_success(),
         })
     }
 }

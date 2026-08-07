@@ -352,6 +352,8 @@ impl WorkerProvider for ClaudeProvider {
             cost_usd: cost,
             raw: parsed.unwrap_or(meta),
             error,
+            done_marker: exit_code == Some(0),
+            execution_evidence: status == TaskStatus::Done,
         })
     }
 }
