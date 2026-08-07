@@ -13,7 +13,8 @@ use std::path::Path;
 use crate::domain::inspect::{
     demote_residual_evidence_issues, effective_blocking_count, gate_candidate_paths,
     inspect_pass_blocked, parse_gate_json, parse_issues_text, parse_verdict_text,
-    push_inspect_gate_decision, InspectGateDoc, InspectVerdict, ParsedIssue, INSPECT_ISSUES_REL,
+    push_inspect_gate_decision, InspectGateDoc, InspectVerdict, IssueSeverity, ParsedIssue,
+    INSPECT_ISSUES_REL,
 };
 use crate::plan::{PlanIR, TaskIR, TaskRole};
 
@@ -49,10 +50,16 @@ pub fn load_inspect_gate_doc(
 ///
 /// When ISSUES are residual-only after host demotion (handwalk / hygiene), force
 /// **Pass** so a mis-written FAIL does not pause a finished implement wave.
+/// Exception (Fix B): an **out-of-scope scope violation** (`severity=OutOfScope`)
+/// is a real blocker and must never be swept to Pass — it still falls through to
+/// the explicit VERDICT below.
 pub fn read_inspect_verdict(task: &TaskIR, work_dir: &Path, project_root: &Path) -> InspectVerdict {
     let mut issues = load_parsed_inspect_issues(task, work_dir, project_root);
     demote_residual_evidence_issues(&mut issues);
-    if !issues.is_empty() && effective_blocking_count(&issues) == 0 {
+    let has_oos = issues
+        .iter()
+        .any(|i| i.severity == IssueSeverity::OutOfScope);
+    if !has_oos && !issues.is_empty() && effective_blocking_count(&issues) == 0 {
         return InspectVerdict::Pass;
     }
 

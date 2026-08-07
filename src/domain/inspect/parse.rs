@@ -549,7 +549,22 @@ fn parse_severity_token(block: &str) -> Option<IssueSeverity> {
     if lower.contains("不阻塞") || lower.contains("可选残留") {
         return Some(IssueSeverity::Residual);
     }
-    if lower.contains("范围外") || lower.contains("out of scope") {
+    // Fix A: OutOfScope must only be a *declared grade* — line-start heading / note
+    // like `## out-of-scope`, `- out-of-scope`, `范围外：…` — never mid-prose.
+    // Symptom prose like「feat-a (out of scope)」describes a scope *violation* and
+    // must fail-closed to Blocking, not be treated as a residual grade.
+    if lower.lines().any(|l| {
+        let t = l
+            .trim()
+            .trim_start_matches(|c: char| c == '#' || c == '-' || c == '*' || c == '•')
+            .trim_start();
+        let compact = t
+            .replace('-', " ")
+            .replace('_', " ")
+            .split_whitespace()
+            .collect::<String>();
+        t.starts_with("oos") || compact.starts_with("范围外") || compact.starts_with("outofscope")
+    }) {
         return Some(IssueSeverity::OutOfScope);
     }
     None
@@ -891,5 +906,38 @@ Companion: VERDICT.md → Result: **PASS**
             .iter()
             .filter(|i| i.severity.is_blocking_for_gate())
             .count()
+    }
+
+    /// Fix A: "out of scope" in symptom *prose* describes a scope violation, not a
+    /// grade — must fail-closed to Blocking. A line-start declared grade (`- out-of-scope`)
+    /// still yields OutOfScope.
+    #[test]
+    fn prose_out_of_scope_is_blocking_not_oos_grade() {
+        // Reported fixture: scope-leak described with "(out of scope)" in prose.
+        let prose = r#"- file: examples/demo_b/extra.rs
+- symptom: written by feat-a (out of scope)
+- suggestion: remove file; re-run feat-a within scope
+"#;
+        let parsed = parse_issues_text(prose);
+        assert_eq!(parsed.len(), 1, "parsed={parsed:?}");
+        assert_eq!(
+            parsed[0].severity,
+            IssueSeverity::Blocking,
+            "prose 里的 out of scope 不应判成 OOS grade: {parsed:?}"
+        );
+        assert!(parsed[0].severity.is_blocking_for_gate());
+
+        // Declared line-start grade still works.
+        let declared = r#"- out-of-scope: scope-locked demo_b region
+- file: examples/demo_b/extra.rs
+"#;
+        let parsed2 = parse_issues_text(declared);
+        assert!(!parsed2.is_empty(), "parsed2={parsed2:?}");
+        assert!(
+            parsed2
+                .iter()
+                .all(|i| i.severity == IssueSeverity::OutOfScope),
+            "declared out-of-scope 应判 OOS: {parsed2:?}"
+        );
     }
 }
