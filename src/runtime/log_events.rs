@@ -1,7 +1,9 @@
-//! [INPUT]: 依赖 worker stdout/stderr 文本（Claude stream-json NDJSON / 纯文本）
+//! [INPUT]: 依赖 worker stdout/stderr 文本（Claude stream-json NDJSON / codex item.* / 纯文本）
 //! [OUTPUT]: 对外提供 LogEvent、parse_worker_logs、events_to_plain、read_text_tail
 //! [POS]: runtime 的日志语义层，供 services 桌面 live / planner 视图消费
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/runtime/CLAUDE.md
+//! note: codex `--json` 的 `item.started|item.completed` → agent_message=message / command_execution=tool_use
+//!       （其余 turn/thread 噪音 → meta），否则前端 isAiInteractionEvent 过滤成空 →「等待 CLI 输出」。
 
 use serde::{Deserialize, Serialize};
 
@@ -490,6 +492,68 @@ fn event_from_json(id: String, v: &serde_json::Value, raw: &str) -> LogEvent {
                 level: "info".into(),
             }
         }
+        // codex `--json` 流式：`item.started` / `item.completed` 内嵌 item
+        // （agent_message → message，command_execution → tool_use，其余噪音 → meta）。
+        "item.started" | "item.completed" => {
+            let it = v.get("item").cloned().unwrap_or_default();
+            let ity = it.get("type").and_then(|x| x.as_str()).unwrap_or("");
+            match ity {
+                "agent_message" => {
+                    let text = it
+                        .get("text")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    LogEvent {
+                        id,
+                        kind: "message".into(),
+                        stream: "stdout".into(),
+                        title: "助手".into(),
+                        summary: truncate(&text, SUMMARY_CAP),
+                        detail: if text.len() > SUMMARY_CAP {
+                            Some(truncate(&text, DETAIL_CAP))
+                        } else {
+                            None
+                        },
+                        level: "info".into(),
+                    }
+                }
+                "command_execution" => {
+                    let cmd = it
+                        .get("command")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let out = it
+                        .get("aggregated_output")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    LogEvent {
+                        id,
+                        kind: "tool_use".into(),
+                        stream: "stdout".into(),
+                        title: "命令".into(),
+                        summary: truncate(&cmd, SUMMARY_CAP),
+                        detail: if !out.is_empty() && out != cmd {
+                            Some(truncate(&out, DETAIL_CAP))
+                        } else {
+                            None
+                        },
+                        level: "info".into(),
+                    }
+                }
+                _ => LogEvent {
+                    id,
+                    kind: "meta".into(),
+                    stream: "stdout".into(),
+                    title: if ity.is_empty() { ty.into() } else { ity.into() },
+                    summary: "…".into(),
+                    detail: None,
+                    level: "info".into(),
+                },
+            }
+        }
         _ => {
             // 有 type 但不认识，或无 type 的 JSON
             if let Some(name) = v.get("name").and_then(|x| x.as_str()) {
@@ -942,5 +1006,41 @@ not-json-plain-line that should become raw_line
         assert!(events
             .iter()
             .all(|e| e.kind == "raw_line" || e.kind == "meta"));
+    }
+
+    #[test]
+    fn codex_item_stream_maps_message_and_tool_use() {
+        let stdout = r#"{"type":"thread.started","thread_id":"t1"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"哥，我先看项目结构。"}}
+{"type":"item.started","item":{"id":"item_2","type":"command_execution","command":"/bin/zsh -lc pwd","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"/bin/zsh -lc pwd","aggregated_output":"/Users/me/proj\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"完成。"}}
+{"type":"turn.completed"}
+"#;
+        let events = parse_worker_logs(stdout, "", 50);
+        let msgs: Vec<_> = events
+            .iter()
+            .filter(|e| e.kind == "message")
+            .map(|e| e.summary.clone())
+            .collect();
+        assert_eq!(msgs.len(), 2, "agent_message → message: {events:?}");
+        assert!(msgs[0].contains("项目结构"));
+        assert!(msgs[1].contains("完成"));
+        let tools: Vec<_> = events
+            .iter()
+            .filter(|e| e.kind == "tool_use")
+            .map(|e| e.summary.clone())
+            .collect();
+        assert_eq!(tools.len(), 2, "command_execution → tool_use: {events:?}");
+        assert!(tools[0].contains("pwd"));
+        let cmd = events
+            .iter()
+            .find(|e| e.kind == "tool_use" && e.title == "命令" && e.detail.is_some())
+            .expect("completed command event");
+        assert!(
+            cmd.detail.as_deref().unwrap_or("").contains("proj"),
+            "aggregated_output lands in detail: {cmd:?}"
+        );
     }
 }
