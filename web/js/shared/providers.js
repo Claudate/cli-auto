@@ -4,8 +4,8 @@
  */
 
 export const KNOWN_PROVIDERS = [
-  { id: "claude", label: "默认通道", product: "Claude" },
-  { id: "codex", label: "备用通道", product: "Codex" },
+  { id: "claude", label: "Claude", product: "Claude" },
+  { id: "codex", label: "Codex", product: "Codex" },
   { id: "gemini", label: "Gemini", product: "Gemini" },
   { id: "qwen", label: "通义 Qwen", product: "通义 Qwen" },
   { id: "kimi", label: "Kimi", product: "Kimi" },

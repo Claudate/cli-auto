@@ -31,6 +31,7 @@ class SelectShell {
       opts.size ||
       (select.classList.contains("chat-session-select") ||
       select.classList.contains("chat-effort-select") ||
+      select.classList.contains("split-provider-select") ||
       select.id === "chat-effort" ||
       select.id === "split-effort" ||
       select.id === "confirm-task-provider"
@@ -41,7 +42,8 @@ class SelectShell {
       !!opts.inline ||
       this.size === "sm" ||
       select.classList.contains("chat-session-select") ||
-      select.classList.contains("chat-effort-select");
+      select.classList.contains("chat-effort-select") ||
+      select.classList.contains("split-provider-select");
     this.activeIndex = -1;
     this._syncing = false;
     this._rebuildQueued = false;

@@ -197,8 +197,8 @@ function stripWorkerScaffold(prompt) {
 /** Map provider id → short product label (only when advanced shows engine). */
 function flowEngineLabel(provider) {
   const p = String(provider || "").toLowerCase();
-  if (p === "codex") return "备用通道";
-  if (p === "claude") return "默认通道";
+  if (p === "codex") return "Codex";
+  if (p === "claude") return "Claude";
   if (p === "gemini") return "Gemini";
   if (p === "qwen" || p === "tongyi") return "通义 Qwen";
   if (p === "kimi" || p === "moonshot") return "Kimi";
@@ -228,8 +228,8 @@ function flowStallUserText(raw) {
   let out = s
     .replace(/CLI/gi, "执行通道")
     .replace(/provider/gi, "执行方式")
-    .replace(/claude/gi, "默认通道")
-    .replace(/codex/gi, "备用通道")
+    .replace(/claude/gi, "Claude")
+    .replace(/codex/gi, "Codex")
     .replace(/卡死/g, "卡住")
     .replace(/阈值/g, "等待上限");
   // Prefer fun blurb as suffix when serious already has numbers

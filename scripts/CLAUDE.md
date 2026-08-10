@@ -11,6 +11,7 @@ chat-quiz-parse-smoke.mjs: **AI 编号题点选解析**（`**1. 题？**` 加粗
 claim-boundary-check.mjs: **认领边界**（claim 只 draft/save_plan · 禁 confirm_start/start_run · 黄条不拦 claim · 与 assign 分轨）；W0 出货保留；不进默认 CI
 ensure-v3-cta-smoke.mjs: **Ensure V3 代理冒烟**（失败卡主 CTA=回补并再巡检 · 再跑考官为 ghost）；`node scripts/ensure-v3-cta-smoke.mjs`；**不**替代 wros 人工 V1–V5  
 clarify-split-visual-smoke.mjs: **澄清+拆分台静态目视契约**（三入口/认领文案 · revision_notes · risk chip · 外发提示 · 链 ensure-v3）；`node scripts/clarify-split-visual-smoke.mjs`；配合 `package-app` 扫包；不进默认 CI
+provider-control-smoke.mjs: **通道下拉冒烟**（P2-17：确认台详头「默认通道」+ 每张任务卡胶囊下拉可开/可选/持久化 · 8 选项 · 步骤切换跟随 · 无页面错误）；`node scripts/provider-control-smoke.mjs`；内建 stub invoke（`__TAURI_INTERNALS__.invoke` + `window.invoke`），无需 Tauri 宿主；不进默认 CI
 path-depth-wave-smoke.mjs: **path-depth 波次静态契约**（无三档英雄 · 场景芯片 · 当前理解 · 认领本波不旁路 · wave 分组/总览/串行 confirm · supersede per path）；`node scripts/path-depth-wave-smoke.mjs`；可代 W1-6 结构项；**不**替代真人桌面清单
 
 ## 硬规则

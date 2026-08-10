@@ -246,9 +246,9 @@
   font-size: 0.8rem;
   line-height: 1.4;
 }
-/* 顶栏通道选择器整段隐藏（通道改走高级折叠，避免与详情头叠控件） */
-#confirm-provider-field {
-  display: none !important;
+/* 顶栏「Claude」快捷下拉：放活为确认台每步通道入口（与高级折叠共用 task.provider） */
+#confirm-provider-field[hidden] {
+  display: none;
 }
 .flow-stage-row {
   display: flex;
@@ -855,6 +855,37 @@
   color: var(--muted, #8a8a8a);
   background: color-mix(in srgb, var(--muted, #8a8a8a) 10%, transparent);
   border-color: var(--border);
+}
+/* P2-17: 卡片右侧 provider 胶囊真实可点下拉（selectUi 增强为 sm inline 胶囊）。
+   绝对定位在卡片内容右上角，不吃任务选中点击，也不撑高标题行。 */
+.wave-task-row.split-card {
+  position: relative;
+}
+.wave-task-row.split-card .wave-task {
+  padding-right: 7.8rem;
+}
+.split-provider-wrap {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.6rem;
+  z-index: 3;
+  max-width: 6.9rem;
+  min-width: 5.9rem;
+}
+.split-provider-wrap .cco-select.cco-select--sm {
+  width: 100%;
+  min-width: 0;
+}
+.split-provider-wrap .cco-select__trigger {
+  border-radius: 999px;
+  padding: 0.22rem 0.6rem 0.22rem 0.6rem;
+  border-color: var(--border);
+  background: var(--bg2, #f5f5f7);
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+.split-provider-wrap .cco-select__trigger:hover:not(:disabled) {
+  border-color: var(--accent, #0071e3);
 }
 /* W3-1: local-source desk — secondary CTA to force smart re-split */
 .split-smart-resplit {

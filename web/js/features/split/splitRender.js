@@ -10,6 +10,18 @@ function g(name) {
   return w[name];
 }
 
+/** 通道枚举：卡片下拉 / 详情头 / 高级折叠共用（视觉文案与 engineLabel 同源）。 */
+const PROVIDER_OPTS = [
+  ["claude", "Claude"],
+  ["codex", "Codex"],
+  ["gemini", "Gemini"],
+  ["qwen", "通义 Qwen"],
+  ["kimi", "Kimi"],
+  ["deepseek", "CodeWhale"],
+  ["copilot", "Copilot"],
+  ["codebuddy", "CodeBuddy"],
+];
+
 function esc(s) {
   const fn = g("esc");
   if (typeof fn === "function") return fn(s);
@@ -144,8 +156,8 @@ export function engineLabel(provider) {
   const fn = g("flowEngineLabel");
   if (typeof fn === "function") return fn(provider);
   const p = String(provider || "claude").toLowerCase();
-  if (p === "codex") return "备用通道";
-  if (p === "claude") return "默认通道";
+  if (p === "codex") return "Codex";
+  if (p === "claude") return "Claude";
   if (p === "gemini") return "Gemini";
   if (p === "qwen" || p === "tongyi") return "通义 Qwen";
   if (p === "kimi" || p === "moonshot") return "Kimi";
@@ -153,7 +165,7 @@ export function engineLabel(provider) {
   if (p === "copilot") return "Copilot";
   if (p === "codebuddy" || p === "cbc") return "CodeBuddy";
   if (p === "fake") return "演练";
-  return p || "默认通道";
+  return p || "Claude";
 }
 
 /**
@@ -243,7 +255,7 @@ export function timelineHtml(layers, byId, selectedId) {
 
 /** Single step card row (shared by wave groups). */
 function taskCardHtml(t, byId, opts = {}) {
-  const { runLocked, selectedId, liveTask } = opts;
+  const { runLocked, selectedId, liveTask, jobProvider } = opts;
   const id = t.id;
   const sel = selectedId === id ? " selected" : "";
   const live =
@@ -300,17 +312,25 @@ function taskCardHtml(t, byId, opts = {}) {
     : "";
   const costHint = String(t.cost_route_hint || t.costRouteHint || "").trim();
   const costHtml = costHint
-    ? `<span class="cost-route-chip" title="开跑时费用优选（未改你指定的通道）">${esc(
+    ? `<span class="cost-route-chip" title="开跑时费用优先（未改你指定的通道）">${esc(
         costHint
       )}</span>`
     : "";
-  // 执行通道：本步将用哪个 CLI（自动分配或手动改过的通道），一眼可辨。
-  const provRaw = String(t.provider || t.provider_label || "").trim();
-  const provHtml = provRaw
-    ? `<span class="cost-route-chip route-provider-chip" title="本步执行通道（可选中该步后在「高级·执行通道」改）">${esc(
-        engineLabel(provRaw)
-      )}</span>`
-    : "";
+  // 执行通道：卡片上的 provider 胶囊是真实可点下拉（P2-17 修：用户一直点它点不动）。
+  // 每张卡用一个独立 <select>，经 selectUi 增强为 macOS 下拉，onchange → setProvider 直达 po。
+  const provVal = (
+    t.provider ||
+    t.provider_label ||
+    jobProvider ||
+    "claude"
+  ).toLowerCase();
+  const provDisabled = !!runLocked;
+  const provHtml = `<span class="split-provider-wrap" data-provider-for="${esc(id)}"><select class="split-provider-select" data-card-id="${esc(id)}" data-cur="${esc(provVal)}" title="本步执行通道（点选即改）" ${provDisabled ? "disabled" : ""}>` +
+    PROVIDER_OPTS.map(
+      ([v, label]) =>
+        `<option value="${v}" ${v === provVal ? "selected" : ""}>${esc(label)}</option>`
+    ).join("") +
+    `</select></span>`;
   const checkHtml = isOpt
     ? `<label class="wave-task-check" title="${
         role.kind === "sys"
@@ -329,7 +349,6 @@ function taskCardHtml(t, byId, opts = {}) {
     `<div class="split-card-top">` +
     `<span class="split-role split-role-${role.kind}">${role.label}</span>` +
     riskHtml +
-    provHtml +
     costHtml +
     (isOpt
       ? role.kind === "sys"
@@ -342,7 +361,9 @@ function taskCardHtml(t, byId, opts = {}) {
     `<div class="wave-task-meta muted">${esc(wait)}${
       statusHint ? " · " + esc(statusHint) : ""
     }</div>` +
-    `</button></div>`
+    `</button>` +
+    provHtml +
+    `</div>`
   );
 }
 
@@ -395,7 +416,9 @@ export function cardsHtml(job, byId, opts = {}) {
       const label = parallel
         ? `第 ${i + 1} 批 · ${n} 步一起`
         : `第 ${i + 1} 批 · 按顺序`;
-      const rows = waveTasks.map((t) => taskCardHtml(t, byId, opts)).join("");
+      const rows = waveTasks
+        .map((t) => taskCardHtml(t, byId, opts))
+        .join("");
       return (
         `<div class="split-wave-group tone-${tone}${kindClass}" data-wave="${i + 1}">` +
         `<div class="split-wave-group-head">` +

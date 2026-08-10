@@ -30,6 +30,7 @@ function g(name) {
  */
 export function bindSplitView(vm, bridge = {}) {
   ensureAdvancedRouteDom();
+  let wavesDirty = false;
 
   function legacy() {
     return (typeof bridge.getLegacy === "function" && bridge.getLegacy()) || {};
@@ -80,7 +81,16 @@ export function bindSplitView(vm, bridge = {}) {
 
     const tasks = job.tasks || [];
     const byId = Object.fromEntries(tasks.map((t) => [t.id, t]));
-    const runLocked = hasActiveRun();
+    // 确认台锁定只认「本 job 的 run」：残留的历史 live / 其它计划运行不锁本拆分，
+    // 否则高级折叠里的执行通道 / 角色 / 范围 全部不可点。
+    // 真正开跑中的重复启动仍由 confirmAndStart 里 hasActiveRun() 兜底。
+    const jrid = job?.run_id || job?.runId || null;
+    const live = g("state")?.live;
+    const runLocked =
+      !!jrid &&
+      !!live?.run_id &&
+      String(live.run_id) === String(jrid) &&
+      hasActiveRun();
     const selectedId = s.selectedTaskId;
 
     // 波次轨已并入步骤列表（按执行顺序 + 并行外框）；左侧栏隐藏
@@ -92,54 +102,100 @@ export function bindSplitView(vm, bridge = {}) {
 
     const waves = $("confirm-waves");
     if (waves) {
-      waves.innerHTML = cardsHtml(job, byId, {
-        runLocked,
-        selectedId,
-      });
-      waves.querySelectorAll(".wave-task").forEach((b) => {
-        b.onclick = () => {
-          if (vm.getSnapshot().editing) {
-            toast("请先保存或取消当前编辑");
-            return;
-          }
-          vm.selectTask(b.dataset.id);
-          pushSelection();
-          render();
-        };
-      });
-      waves.querySelectorAll(".wave-opt-check").forEach((cb) => {
-        cb.onchange = async (ev) => {
-          ev.stopPropagation();
-          if (vm.getSnapshot().editing) {
-            cb.checked = !cb.checked;
-            toast("请先保存或取消当前编辑");
-            return;
-          }
-          if (hasActiveRun()) {
-            cb.checked = !cb.checked;
-            toast("运行中不可改勾选");
-            return;
-          }
-          const taskId = cb.dataset.id;
-          const include = !!cb.checked;
-          try {
-            await vm.setInclude(taskId, include);
+      const selectApi = g("ccoSelectUi");
+      let providerBusy = false;
+      if (selectApi && typeof selectApi.isSelectBusy === "function") {
+        waves.querySelectorAll(".split-provider-select").forEach((sel) => {
+          if (selectApi.isSelectBusy(sel)) providerBusy = true;
+        });
+      }
+      const rebuildWaves = !providerBusy;
+      if (rebuildWaves) {
+        wavesDirty = false;
+        waves.innerHTML = cardsHtml(job, byId, {
+          runLocked,
+          selectedId,
+          jobProvider: job.provider,
+        });
+        waves.querySelectorAll(".wave-task").forEach((b) => {
+          b.onclick = () => {
+            if (vm.getSnapshot().editing) {
+              toast("请先保存或取消当前编辑");
+              return;
+            }
+            vm.selectTask(b.dataset.id);
             pushSelection();
-            const title = byId[taskId]?.title || taskId;
-            toast(
-              include
-                ? `已勾选：将执行「${title}」`
-                : `已取消：不跑「${title}」`
-            );
-            afterMutate();
             render();
-          } catch (e) {
-            cb.checked = !include;
-            toast(String(e?.message || e));
-          }
-        };
-        cb.onclick = (ev) => ev.stopPropagation();
-      });
+          };
+        });
+        waves.querySelectorAll(".split-provider-select").forEach((sel) => {
+          sel.onchange = async () => {
+            const taskId = sel.dataset.cardId;
+            const prev = sel.dataset.cur;
+            const next = String(sel.value || "claude").toLowerCase();
+            if (next === prev) return;
+            if (vm.getSnapshot().editing) {
+              sel.value = prev;
+              toast("请先保存或取消当前编辑");
+              return;
+            }
+            try {
+              await vm.setProvider(taskId, next);
+              sel.dataset.cur = next;
+              pushSelection();
+              toast(
+                `已设「${byId[taskId]?.title || taskId}」→ ${g("flowEngineLabel")
+                  ? g("flowEngineLabel")(next)
+                  : next}`
+              );
+              afterMutate();
+              render();
+            } catch (e) {
+              sel.value = prev;
+              sel.dataset.cur = prev;
+              toast(String(e?.message || e));
+            }
+          };
+        });
+        waves.querySelectorAll(".wave-opt-check").forEach((cb) => {
+          cb.onchange = async (ev) => {
+            ev.stopPropagation();
+            if (vm.getSnapshot().editing) {
+              cb.checked = !cb.checked;
+              toast("请先保存或取消当前编辑");
+              return;
+            }
+            if (hasActiveRun()) {
+              cb.checked = !cb.checked;
+              toast("运行中不可改勾选");
+              return;
+            }
+            const taskId = cb.dataset.id;
+            const include = !!cb.checked;
+            try {
+              await vm.setInclude(taskId, include);
+              pushSelection();
+              const title = byId[taskId]?.title || taskId;
+              toast(
+                include
+                  ? `已勾选：将执行「${title}」`
+                  : `已取消：不跑「${title}」`
+              );
+              afterMutate();
+              render();
+            } catch (e) {
+              cb.checked = !include;
+              toast(String(e?.message || e));
+            }
+          };
+          cb.onclick = (ev) => ev.stopPropagation();
+        });
+      } else {
+        if (!wavesDirty) {
+          wavesDirty = true;
+          setTimeout(() => { if (wavesDirty) render(); }, 300);
+        }
+      }
     }
 
     paintDetail({

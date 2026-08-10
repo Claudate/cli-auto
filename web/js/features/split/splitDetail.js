@@ -93,8 +93,8 @@ export function ensureAdvancedRouteDom() {
     `<label class="field split-route-provider-field" id="split-route-provider-field">` +
     `<span>本步骤执行通道</span>` +
     `<select id="split-route-provider">` +
-    `<option value="claude">默认通道</option>` +
-    `<option value="codex">备用通道</option>` +
+    `<option value="claude">Claude</option>` +
+    `<option value="codex">Codex</option>` +
     `<option value="gemini">Gemini</option>` +
     `<option value="qwen">通义 Qwen</option>` +
     `<option value="kimi">Kimi</option>` +
@@ -349,17 +349,51 @@ export function paintDetail(ctx) {
     }
   }
 
-  // 顶栏「默认通道」与「高级·执行通道」双控件叠层：通道只留高级折叠一处
+  // 详情头「Claude」快捷下拉：每步真实通道入口，与高级折叠共用 task.provider。
+  // 仅当本 job 的 run 活跃（或编辑中）才禁用；编辑焦点保留不覆盖。
+  const jobRunId = String(job?.run_id || job?.runId || "");
+  const thisJobRunActive = () => {
+    if (!jobRunId) return false;
+    const lv = g("state")?.live;
+    if (!lv?.run_id || String(lv.run_id) !== jobRunId) return false;
+    return hasActiveRun();
+  };
   const providerField = $("confirm-provider-field");
   if (providerField) {
-    providerField.hidden = true;
+    providerField.hidden = false;
   }
   if (providerSel) {
+    const lockHeader = !taskEditable || thisJobRunActive() || ctx.vm.getSnapshot().editing;
     if (!selectBusy(providerSel)) {
-      providerSel.value = cur ? curProvider : "claude";
+      providerSel.value = curProvider;
     }
-    providerSel.disabled = true;
-    providerSel.onchange = null;
+    providerSel.disabled = lockHeader;
+    providerSel.title = lockHeader
+      ? "运行中或编辑中不可改通道"
+      : "本步骤执行通道（点选即改）";
+    providerSel.onchange = async () => {
+      if (
+        !cur ||
+        !taskEditable ||
+        thisJobRunActive() ||
+        ctx.vm.getSnapshot().editing
+      ) {
+        providerSel.value = curProvider;
+        return;
+      }
+      const next = String(providerSel.value || "claude").toLowerCase();
+      if (next === curProvider) return;
+      try {
+        await ctx.vm.setProvider(cur.id, next);
+        ctx.pushSelection();
+        toast(`已设「${cur.title || cur.id}」→ ${engineLabel(next)}`);
+        ctx.afterMutate();
+        ctx.render();
+      } catch (e) {
+        providerSel.value = curProvider;
+        toast(String(e?.message || e));
+      }
+    };
   }
 
   paintAdvancedRoute(cur, job, {
@@ -444,6 +478,15 @@ function paintAdvancedRoute(cur, job, ctx) {
       verifyLabel.textContent = "—";
     }
   }
+  const routeJobRunId = String(job?.run_id || job?.runId || "");
+  // 确认台 onchange 兜底：只认「本 job」的活跃 run（与 runLocked 同口径）。
+  // 残留的历史 live / 其它计划运行不得让已 enabled 的修改被回滚。
+  function thisJobRunActive() {
+    if (!routeJobRunId) return false;
+    const lv = g("state")?.live;
+    if (!lv?.run_id || String(lv.run_id) !== routeJobRunId) return false;
+    return hasActiveRun();
+  }
   if (advSel) {
     if (!selectBusy(advSel)) {
       advSel.value = route.provider;
@@ -453,7 +496,7 @@ function paintAdvancedRoute(cur, job, ctx) {
       if (
         !cur ||
         !ctx.taskEditable ||
-        hasActiveRun() ||
+        thisJobRunActive() ||
         ctx.vm.getSnapshot().editing
       ) {
         advSel.value = ctx.curProvider;
@@ -483,7 +526,7 @@ function paintAdvancedRoute(cur, job, ctx) {
       if (
         !cur ||
         !ctx.taskEditable ||
-        hasActiveRun() ||
+        thisJobRunActive() ||
         ctx.vm.getSnapshot().editing
       ) {
         roleSel.value = curRole;
@@ -517,7 +560,7 @@ function paintAdvancedRoute(cur, job, ctx) {
       if (
         !cur ||
         !ctx.taskEditable ||
-        hasActiveRun() ||
+        thisJobRunActive() ||
         ctx.vm.getSnapshot().editing
       ) {
         scopeTa.value = scopeText;
@@ -557,7 +600,14 @@ function paintAdvancedRoute(cur, job, ctx) {
 
 export function paintChrome(vm, job, runLocked) {
   const s = vm.getSnapshot();
-  const paused = isRunPaused();
+  // 与 SplitView 的 runLocked 同口径：只有「本 job」的 paused 才算可续跑；
+  // 残留的历史 live 不得把主按钮误判成「继续运行」。
+  const jrid = job?.run_id || job?.runId || null;
+  const live = g("state")?.live;
+  const paused =
+    !!jrid && !!live?.run_id && String(live.run_id) === String(jrid)
+      ? isRunPaused()
+      : false;
   const editing = !!s.editing;
   const err = $("confirm-error");
   if (err && !s.lastError) err.hidden = true;

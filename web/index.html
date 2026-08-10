@@ -262,11 +262,11 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                     <div id="confirm-task-meta" class="confirm-meta muted" hidden></div>
                   </div>
                   <div class="confirm-detail-actions">
-                    <label class="field confirm-task-provider-field" id="confirm-provider-field" hidden title="高级：本步骤执行通道">
+                    <label class="field confirm-task-provider-field" id="confirm-provider-field" title="本步骤执行通道（点选即改）">
                       <span class="sr-only">执行通道</span>
-                      <select id="confirm-task-provider" disabled>
-                        <option value="claude">默认通道</option>
-                        <option value="codex">备用通道</option>
+                      <select id="confirm-task-provider">
+                        <option value="claude">Claude</option>
+                        <option value="codex">Codex</option>
                         <option value="gemini">Gemini</option>
                         <option value="qwen">通义 Qwen</option>
                         <option value="kimi">Kimi</option>
@@ -291,8 +291,8 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                   <label class="field">
                     <span>执行通道（高级）</span>
                     <select id="confirm-edit-provider">
-                      <option value="claude">默认通道</option>
-                      <option value="codex">备用通道</option>
+                      <option value="claude">Claude</option>
+                      <option value="codex">Codex</option>
                       <option value="gemini">Gemini</option>
                       <option value="qwen">通义 Qwen</option>
                       <option value="kimi">Kimi</option>
@@ -807,8 +807,8 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                       <span class="settings-label">默认执行通道</span>
                     </span>
                     <select id="s-default-provider" class="settings-select">
-                      <option value="claude">默认通道</option>
-                      <option value="codex">备用通道</option>
+                      <option value="claude">Claude</option>
+                      <option value="codex">Codex</option>
                       <option value="gemini">Gemini</option>
                       <option value="qwen">通义 Qwen</option>
                       <option value="kimi">Kimi</option>
@@ -910,7 +910,7 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                   <label class="settings-row" title="同方式重试尽后是否换通道">
                     <span class="settings-row-text">
                       <span class="settings-label">卡住后换执行方式</span>
-                      <span class="field-hint" id="s-failover-order-note">默认与备用通道切换</span>
+                      <span class="field-hint" id="s-failover-order-note">主通道与备用通道切换</span>
                     </span>
                     <input id="s-failover-enabled" type="checkbox" checked />
                   </label>
@@ -1236,8 +1236,8 @@ bin = "/Users/你/.local/bin/claude"</pre>
               <label class="field">
                 <span>执行通道（高级）</span>
                 <select id="pp-provider">
-                  <option value="claude" selected>默认通道</option>
-                  <option value="codex">备用通道</option>
+                  <option value="claude" selected>Claude</option>
+                  <option value="codex">Codex</option>
                   <option value="gemini">Gemini</option>
                   <option value="qwen">通义 Qwen</option>
                   <option value="kimi">Kimi</option>

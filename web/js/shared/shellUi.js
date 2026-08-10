@@ -92,8 +92,9 @@ export function canEditSelectedTask(taskId) {
   const state = st();
   const id = taskId != null ? taskId : state.confirmTaskId;
   if (!id) return false;
-  if (hasActiveRun()) return false;
-  // A1：拆分台可改任务图；勿用「项目最近一次 completed live」当本轮已开跑
+  // A1：拆分台可改任务图；勿「项目最近一次 completed live」当本轮已开跑。
+  // confirm 分支必须优先于 hasActiveRun()，否则残留的 live 会把确认台一并锁死，
+  // 高级折叠里的执行通道 / 角色 / 范围 全部不可点。
   if (state.phase === "confirm") {
     const job = state.planJob;
     const jrid = job?.run_id || job?.runId || null;
@@ -102,8 +103,15 @@ export function canEditSelectedTask(taskId) {
     if (!state.live?.run_id || String(state.live.run_id) !== String(jrid)) {
       return true;
     }
-    // 本 job 已确认且 live 就是该 run → 只读（paused 未开跑任务走下方）
+    // 本 job 已确认且 live 就是该 run → 回退到运行中/暂停语义
+    if (hasActiveRun()) return false;
+    if (!isRunPaused()) return false;
+    const t = liveTaskById(id);
+    if (!t) return true;
+    const v = String(t.status || "").toLowerCase();
+    return !v || v === "pending" || v === "queued" || v === "waiting" || v === "ready";
   }
+  if (hasActiveRun()) return false;
   if (!isRunPaused()) return false;
   const t = liveTaskById(id);
   if (!t) return true;
