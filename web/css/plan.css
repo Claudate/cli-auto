@@ -484,6 +484,9 @@
   gap: 0.65rem;
   padding-right: 0.15rem;
 }
+.confirm-waves:has(.cco-select.is-open) {
+  overflow: visible;
+}
 .wave-block {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -788,6 +791,9 @@
   font-size: 0.75rem;
   margin-bottom: 0.45rem;
   flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* B6: optional-not-checked banner (non-dismiss) */
 .split-optional-banner {
@@ -2006,6 +2012,7 @@
 .split-head-main {
   min-width: 0;
   flex: 1 1 240px;
+  overflow: hidden;
 }
 .split-actions {
   display: flex;

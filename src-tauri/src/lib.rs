@@ -59,7 +59,7 @@ struct AppState {
 const MONITOR_WINDOW_LABEL: &str = "cco-monitor";
 
 fn map_err(e: impl std::fmt::Display) -> String {
-    e.to_string()
+    format!("{:#}", e)
 }
 
 #[derive(Debug, Serialize)]
