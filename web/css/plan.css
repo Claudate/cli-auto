@@ -878,6 +878,10 @@
   max-width: 6.9rem;
   min-width: 5.9rem;
 }
+/* 打开下拉时提升层级，防止被下方任务卡遮挡 */
+.split-provider-wrap:has(.cco-select.is-open) {
+  z-index: 90;
+}
 .split-provider-wrap .cco-select.cco-select--sm {
   width: 100%;
   min-width: 0;
