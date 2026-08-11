@@ -6,14 +6,15 @@
 ## 结果快照
 
 - **FAIL=0**（非 STRICT）
-- **WARN=11**（Rust 业务源 > soft 400 或 hard 600）
+- **WARN≈10**（Rust 业务源 > soft 400 或 hard 600；**parse hard 已消**）
 - web S8 classic facade 已出 GIANTS；`state.js` ~248 在 soft 内
 
-## Rust WARN 列表（本波未动）
+## Rust WARN 列表（2026-08-11 更新 · parse 已拆）
 
 | 文件 | 约行 | 级 |
 |------|------|-----|
-| `src/domain/inspect/parse.rs` | 869 | hard |
+| `src/domain/inspect/parse/issues.rs` | ~488 | soft |
+| ~~`src/domain/inspect/parse.rs`~~ | ~~869→拆~~ | ✅ hard 已消（verdict/issues + tests 分文件） |
 | `src/domain/chat/normalize.rs` | 803 | hard |
 | `src/domain/plan/materialize.rs` | 650 | hard |
 | `src/domain/chat/clarify.rs` | 623 | hard |
@@ -40,7 +41,7 @@
 1. ✅ **已完成**：`chatClarify.js` 第 1 刀纵切 — Brief+Claim 拆分到 `clarify/briefAndClaim.js`（保留向后兼容）
 2. ✅ **已完成**：`chatClarify.js` 第 2 刀纵切 — Empty/Card 渲染层拆出到 `clarify/render.js`（CSS + 事件绑定 + UI 渲染）
 3. ⏳ `chatClarify.js` 剩余代码清理与整合（搬移完整后可删除重复定义）
-4. `inspect/parse` · `normalize` 按纯函数边界拆文件
+4. ✅ **已完成**：`inspect/parse` 按纯函数边界拆（verdict / issues / issues_tests；hard 已消）· 下刀 `normalize`
 5. `STRICT=1`仅在 CI 对**新增**hard 违约失败，旧债 allowlist（若要做须改`check-arch.sh` + L1）
 
 **W4-3 关账标准（本波）**：门禁可跑、FAIL=0、债表入库、本波新文件尽量 ≤ soft —— **✅ 记 residual，不假装清零**。
