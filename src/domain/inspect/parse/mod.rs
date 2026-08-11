@@ -1,8 +1,9 @@
 //! Pure VERDICT / ISSUES text parsers (A1-5).
 //!
-//! Split by pure-function boundary (arch hard ≤600):
+//! Split by pure-function boundary (arch hard ≤600 / soft ≤400):
 //! - [`verdict`] — structured Result/VERDICT head scan
-//! - [`issues`] — ISSUES body → graded rows
+//! - [`issues`] — ISSUES body → graded rows (orchestration)
+//! - [`parsers`] — severity / ID / empty-set / extract helpers
 //!
 //! [INPUT]: raw product file body strings
 //! [OUTPUT]: InspectVerdict · Vec\<ParsedIssue\>
@@ -10,6 +11,7 @@
 //! [PROTOCOL]: 解析语义变更须同步 tests + plan-execute-inspect 契约说明
 
 mod issues;
+mod parsers;
 mod verdict;
 
 pub use issues::parse_issues_text;

@@ -25,18 +25,18 @@ pub const FILE_CHAT_VISUAL_REVIEW: &str = "chat-visual-review.md";
 pub const ENV_RUNTIME_PROMPTS_DIR: &str = "CCO_RUNTIME_PROMPTS_DIR";
 
 // Compile-time embed = packaging fallback when no disk copy exists (still "from document").
-const EMBED_CHAT: &str = include_str!("../../docs/runtime-prompts/chat-plan-writing.md");
-const EMBED_SPLIT: &str = include_str!("../../docs/runtime-prompts/split-agent-delivery.md");
+const EMBED_CHAT: &str = include_str!("../../../../docs/runtime-prompts/chat-plan-writing.md");
+const EMBED_SPLIT: &str = include_str!("../../../../docs/runtime-prompts/split-agent-delivery.md");
 const EMBED_PLANNER: &str =
-    include_str!("../../docs/runtime-prompts/planner-greenfield-stack.md");
-const EMBED_UI_RECIPES: &str = include_str!("../../docs/runtime-prompts/ui-delivery-recipes.md");
-const EMBED_UI_LAYOUT: &str = include_str!("../../docs/runtime-prompts/ui-layout-systems.md");
-const EMBED_UI_COLOR: &str = include_str!("../../docs/runtime-prompts/ui-color-systems.md");
-const EMBED_UI_TYPE: &str = include_str!("../../docs/runtime-prompts/ui-typography-systems.md");
-const EMBED_UI_MOTION: &str = include_str!("../../docs/runtime-prompts/ui-motion-effects.md");
-const EMBED_UI_COPY: &str = include_str!("../../docs/runtime-prompts/ui-copy-systems.md");
-const EMBED_BACKEND: &str = include_str!("../../docs/runtime-prompts/backend-architecture.md");
-const EMBED_CHAT_VISUAL: &str = include_str!("../../docs/runtime-prompts/chat-visual-review.md");
+    include_str!("../../../../docs/runtime-prompts/planner-greenfield-stack.md");
+const EMBED_UI_RECIPES: &str = include_str!("../../../../docs/runtime-prompts/ui-delivery-recipes.md");
+const EMBED_UI_LAYOUT: &str = include_str!("../../../../docs/runtime-prompts/ui-layout-systems.md");
+const EMBED_UI_COLOR: &str = include_str!("../../../../docs/runtime-prompts/ui-color-systems.md");
+const EMBED_UI_TYPE: &str = include_str!("../../../../docs/runtime-prompts/ui-typography-systems.md");
+const EMBED_UI_MOTION: &str = include_str!("../../../../docs/runtime-prompts/ui-motion-effects.md");
+const EMBED_UI_COPY: &str = include_str!("../../../../docs/runtime-prompts/ui-copy-systems.md");
+const EMBED_BACKEND: &str = include_str!("../../../../docs/runtime-prompts/backend-architecture.md");
+const EMBED_CHAT_VISUAL: &str = include_str!("../../../../docs/runtime-prompts/chat-visual-review.md");
 
 /// Compact architect + frontend co-plan rules for the desktop chat system prompt.
 pub fn chat_plan_writing_guidance() -> &'static str {

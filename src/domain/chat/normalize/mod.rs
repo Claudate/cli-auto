@@ -4,6 +4,7 @@
 //! - [`plan_md`] — normalize / structure plan markdown
 //! - [`acceptance`] — acceptance quality + checklist
 //! - [`verification`] — plan vs inspect side-by-side view
+//! - [`plan_writing_guidance`] — runtime prompt inject (chat / split / planner)
 //!
 //! [INPUT]: plan markdown strings · verification inputs
 //! [OUTPUT]: pure transforms; no path / fs / provider
@@ -11,7 +12,8 @@
 //! [PROTOCOL]: 变更时更新 domain/CLAUDE.md
 
 mod acceptance;
-mod plan_writing_guidance;mod plan_md;
+mod plan_md;
+mod plan_writing_guidance;
 mod verification;
 
 pub use acceptance::{
@@ -25,3 +27,8 @@ pub use plan_writing_guidance::{
     ui_copy_systems_guidance, ui_delivery_recipes_guidance, ui_layout_systems_guidance,
     ui_motion_effects_guidance, ui_typography_systems_guidance,
 };
+pub use verification::{
+    build_verification, VerificationInputs, VerificationItem, VerificationItemStatus,
+    VerificationSource, VerificationView,
+};
+

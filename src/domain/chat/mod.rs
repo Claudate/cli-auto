@@ -42,11 +42,11 @@ pub use normalize::{
     collect_task_acceptance_items, normalize_plan_markdown, parse_acceptance_checklist,
     structure_plan_markdown, AcceptanceQuality, PlanChecklistItem, TaskAcceptanceItem,
     VerificationInputs, VerificationItem, VerificationItemStatus, VerificationSource,
-    VerificationView,
-	    backend_architecture_guidance, chat_plan_writing_guidance, chat_visual_review_guidance,
-	    planner_greenfield_stack_blurb, split_agent_delivery_guidance, ui_color_systems_guidance,
-	    ui_copy_systems_guidance, ui_delivery_recipes_guidance, ui_layout_systems_guidance,
-	    ui_motion_effects_guidance, ui_typography_systems_guidance,};
+    VerificationView, backend_architecture_guidance, chat_plan_writing_guidance,
+    chat_visual_review_guidance, planner_greenfield_stack_blurb, split_agent_delivery_guidance,
+    ui_color_systems_guidance, ui_copy_systems_guidance, ui_delivery_recipes_guidance,
+    ui_layout_systems_guidance, ui_motion_effects_guidance, ui_typography_systems_guidance,
+};
 pub use session_digest::{
     format_session_digest_prompt_block, session_digest_looks_valid, session_digest_reject_reason,
     truncate_session_digest, SESSION_DIGEST_SOFT_MAX_CHARS,

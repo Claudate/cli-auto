@@ -18,6 +18,7 @@ mod classify;
 mod gate;
 mod gate_doc;
 mod parse;
+mod residual;
 mod types;
 
 pub use classify::{
