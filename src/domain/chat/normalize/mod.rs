@@ -11,7 +11,7 @@
 //! [PROTOCOL]: 变更时更新 domain/CLAUDE.md
 
 mod acceptance;
-mod plan_md;
+mod plan_writing_guidance;mod plan_md;
 mod verification;
 
 pub use acceptance::{
@@ -19,7 +19,9 @@ pub use acceptance::{
     parse_acceptance_checklist, AcceptanceQuality, PlanChecklistItem, TaskAcceptanceItem,
 };
 pub use plan_md::{normalize_plan_markdown, structure_plan_markdown};
-pub use verification::{
-    build_verification, VerificationInputs, VerificationItem, VerificationItemStatus,
-    VerificationSource, VerificationView,
+pub use plan_writing_guidance::{
+    backend_architecture_guidance, chat_plan_writing_guidance, chat_visual_review_guidance,
+    planner_greenfield_stack_blurb, split_agent_delivery_guidance, ui_color_systems_guidance,
+    ui_copy_systems_guidance, ui_delivery_recipes_guidance, ui_layout_systems_guidance,
+    ui_motion_effects_guidance, ui_typography_systems_guidance,
 };
