@@ -110,14 +110,3 @@ pub fn chat_cancel(project: &Path) -> Result<bool> {
     std::thread::sleep(std::time::Duration::from_millis(50));
     Ok(true)
 }
-
-/// True when the latest chat turn was user-cancelled (stop button).
-pub(crate) fn chat_was_cancelled(project: &Path) -> bool {
-    let task_dir = chat_work_task_dir(project);
-    if task_dir.join("cancelled.flag").is_file() {
-        return true;
-    }
-    std::fs::read_to_string(task_dir.join(".done"))
-        .map(|s| s.trim() == "130")
-        .unwrap_or(false)
-}
