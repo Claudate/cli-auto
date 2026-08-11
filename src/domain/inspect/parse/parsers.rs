@@ -126,7 +126,7 @@ pub(crate) fn strip_severity_trailing_note(s: &str) -> &str {
     s[..cut].trim()
 }
 
-pub(crate) pub(crate) fn severity_from_token(token: &str) -> Option<IssueSeverity> {
+pub(crate) fn severity_from_token(token: &str) -> Option<IssueSeverity> {
     let token = strip_severity_trailing_note(token)
         .trim()
         .trim_matches(|c: char| {
