@@ -90,19 +90,6 @@ export function ensureAdvancedRouteDom() {
     `<div class="split-route-row"><span class="muted">范围</span> <span id="split-route-scope-label">—</span></div>` +
     `<div class="split-route-row" id="split-route-verify-row" hidden><span class="muted">自动检查</span> <code id="split-route-verify-label" class="split-route-verify">—</code></div>` +
     `</div>` +
-    `<label class="field split-route-provider-field" id="split-route-provider-field">` +
-    `<span>本步骤执行通道</span>` +
-    `<select id="split-route-provider">` +
-    `<option value="claude">Claude</option>` +
-    `<option value="codex">Codex</option>` +
-    `<option value="gemini">Gemini</option>` +
-    `<option value="qwen">通义 Qwen</option>` +
-    `<option value="kimi">Kimi</option>` +
-    `<option value="deepseek">CodeWhale</option>` +
-    `<option value="copilot">Copilot</option>` +
-    `<option value="codebuddy">CodeBuddy</option>` +
-    `</select>` +
-    `</label>` +
     `<label class="field split-route-role-field" id="split-route-role-field">` +
     `<span>协作角色</span>` +
     `<select id="split-route-role">` +
@@ -457,7 +444,6 @@ function paintAdvancedRoute(cur, job, ctx) {
   const scopeLabelEl = $("split-route-scope-label");
   const verifyRow = $("split-route-verify-row");
   const verifyLabel = $("split-route-verify-label");
-  const advSel = $("split-route-provider");
   const roleSel = $("split-route-role");
   const scopeTa = $("split-route-scope");
   const locked = !ctx.taskEditable || ctx.editing || !!ctx.runLocked;
@@ -486,35 +472,6 @@ function paintAdvancedRoute(cur, job, ctx) {
     const lv = g("state")?.live;
     if (!lv?.run_id || String(lv.run_id) !== routeJobRunId) return false;
     return hasActiveRun();
-  }
-  if (advSel) {
-    if (!selectBusy(advSel)) {
-      advSel.value = route.provider;
-    }
-    advSel.disabled = locked;
-    advSel.onchange = async () => {
-      if (
-        !cur ||
-        !ctx.taskEditable ||
-        thisJobRunActive() ||
-        ctx.vm.getSnapshot().editing
-      ) {
-        advSel.value = ctx.curProvider;
-        return;
-      }
-      const next = (advSel.value || "claude").toLowerCase();
-      if (next === ctx.curProvider) return;
-      try {
-        await ctx.vm.setProvider(cur.id, next);
-        ctx.pushSelection();
-        toast(`已设「${cur.title || cur.id}」→ ${engineLabel(next)}`);
-        ctx.afterMutate();
-        ctx.render();
-      } catch (e) {
-        advSel.value = ctx.curProvider;
-        toast(String(e?.message || e));
-      }
-    };
   }
   const curRole = currentRoleValue(cur);
   if (roleSel) {

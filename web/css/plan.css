@@ -2349,13 +2349,10 @@
   align-items: baseline;
   flex-wrap: wrap;
 }
-.split-route-provider-field,
 .split-route-role-field,
 .split-route-scope-field {
   margin: 0.35rem 0 0;
 }
-.split-route-provider-field select,
-.split-route-provider-field .cco-select,
 .split-route-role-field select,
 .split-route-role-field .cco-select {
   width: 100%;
