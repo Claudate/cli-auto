@@ -136,7 +136,7 @@ pub fn inject_closeout_task(plan: &mut PlanIR, auto_closeout: bool, checklist_pa
         verify_cmd: None,
         acceptance: Some("台账/索引与证据对齐；无证据不勾".into()),
         timeout_secs: None,
-        worktree: Some(false),
+        worktree: None, // Inherit plan.worktree (multi-provider parallel requires it)
         provider_opts: opts,
         optional: false,
         include: true,
