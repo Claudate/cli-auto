@@ -1,17 +1,18 @@
 use std::collections::HashSet;
 
-use anyhow::{bail, Result};
-
-use super::optional::normalize_optional_title;
-use super::system_ids::is_system_post_task;
-use super::types::{
-    PlanIR, TaskIR, TaskRole, IMPLEMENT_USABILITY_SYSTEM_PROMPT,
-    IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER, INSPECT_DEFAULT_ALLOWED_TOOLS,
-    INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_STRIP_TOOLS, INSPECT_SYSTEM_PROMPT,
-    INSPECT_SYSTEM_PROMPT_MARKER,
+use super::super::system_ids::is_system_post_task;
+use super::super::types::{
+    PlanIR, TaskIR, TaskRole, BROWSER_SYSTEM_PROMPT, BROWSER_SYSTEM_PROMPT_MARKER,
+    IMPLEMENT_USABILITY_SYSTEM_PROMPT, IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER,
+    INSPECT_DEFAULT_ALLOWED_TOOLS, INSPECT_DEFAULT_WRITE_SCOPE, INSPECT_STRIP_TOOLS,
+    INSPECT_SYSTEM_PROMPT, INSPECT_SYSTEM_PROMPT_MARKER,
 };
-use crate::domain::plan::risk::task_has_browser_tag;
-use crate::domain::plan::types::TaskIR; // for helpers
+use super::super::risk::task_has_browser_tag;
+
+use crate::domain::inspect::{INSPECT_GATE_REL, INSPECT_ISSUES_REL, INSPECT_VERDICT_REL};
+use crate::domain::plan::risk::{
+    task_has_scrape_tag, task_has_ui_smoke_tag, task_has_ui_verify_tag,
+};
 
 /// Apply per-role default opts / scope after adapter parse (P2-1 + usability floor).
 ///
@@ -64,9 +65,6 @@ pub fn materialize_role_defaults(plan: &mut PlanIR) {
 ///
 /// Does not remove author-declared outputs; only fills missing defaults.
 pub(crate) fn ensure_browser_evidence_outputs(task: &mut TaskIR) {
-    use crate::domain::plan::risk::{
-        task_has_browser_tag, task_has_scrape_tag, task_has_ui_smoke_tag, task_has_ui_verify_tag,
-    };
     if !task_has_browser_tag(&task.tags) {
         return;
     }
@@ -154,18 +152,170 @@ pub(crate) fn wire_empty_inspect_depends_on(plan: &mut PlanIR) {
         .filter(|id| !is_predecessor.contains(*id))
         .cloned()
         .collect();
+    if leaves.is_empty() {
+        // Degenerate cycle or all intermediate — fall back to every business task.
+        leaves = business_ids;
+    }
     leaves.sort();
     leaves.dedup();
 
-    for t in &mut plan.tasks {
-        if t.role == Some(TaskRole::Inspect) {
-            for leaf in &leaves {
-                if !t.depends_on.contains(leaf) {
-                    t.depends_on.push(leaf.clone());
-                }
-            }
+    for t in plan.tasks.iter_mut() {
+        if t.role != Some(TaskRole::Inspect) {
+            continue;
         }
+        if !t.depends_on.is_empty() {
+            continue;
+        }
+        t.depends_on = leaves.clone();
     }
 }
 
-// More helpers would go here if needed. The rest of the original file is now in tests or cleaned.
+pub(crate) fn materialize_inspect_task(task: &mut TaskIR) {
+    let allow_business_write = task
+        .provider_opts
+        .get("allow_business_write")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    // ── allowed_tools (Claude / fake; codex ignores) ─────────────────
+    if !allow_business_write {
+        let tools = normalize_inspect_allowed_tools(task.provider_opts.get("allowed_tools"));
+        task.provider_opts["allowed_tools"] = serde_json::json!(tools);
+    }
+
+    // ── scope.paths writable whitelist ───────────────────────────────
+    let need_default_paths = match task.scope.as_ref() {
+        None => true,
+        Some(s) => s.paths.is_empty(),
+    };
+    if need_default_paths {
+        let mut scope = task.scope.take().unwrap_or_default();
+        scope.paths = vec![INSPECT_DEFAULT_WRITE_SCOPE.to_string()];
+        task.scope = Some(scope);
+    }
+
+    // Prefer GATE.json when the plan already lists inspect products; do **not**
+    // hard-require GATE as missing_outputs (legacy VERDICT-only runs must still gate).
+    // Prompt + host prefer GATE when present (see inspect_io::load_inspect_gate_doc).
+    let has_inspect_product = task.outputs.iter().any(|o| {
+        let l = o.to_ascii_lowercase();
+        l.contains("verdict") || l.contains("issues") || l.contains("gate.json")
+    }) || task.role == Some(TaskRole::Inspect);
+    if has_inspect_product {
+        for req in [INSPECT_VERDICT_REL, INSPECT_ISSUES_REL] {
+            if !task.outputs.iter().any(|o| o == req) {
+                task.outputs.push(req.into());
+            }
+        }
+        // Soft list GATE so workers know the path; host does not fail missing GATE.
+        if !task.outputs.iter().any(|o| o == INSPECT_GATE_REL) {
+            // Keep out of hard outputs — document only in prompt.
+        }
+    }
+
+    // ── system prompt segment ────────────────────────────────────────
+    inject_inspect_system_prompt(&mut task.provider_opts, allow_business_write);
+}
+
+pub(crate) fn normalize_inspect_allowed_tools(raw: Option<&serde_json::Value>) -> Vec<String> {
+    let mut tools: Vec<String> = match raw {
+        Some(serde_json::Value::Array(arr)) => arr
+            .iter()
+            .filter_map(|x| x.as_str().map(|s| s.to_string()))
+            .filter(|t| {
+                !INSPECT_STRIP_TOOLS
+                    .iter()
+                    .any(|b| t.eq_ignore_ascii_case(b))
+            })
+            .collect(),
+        Some(serde_json::Value::String(s)) if !s.trim().is_empty() => s
+            .split(',')
+            .map(|p| p.trim().to_string())
+            .filter(|t| {
+                !t.is_empty()
+                    && !INSPECT_STRIP_TOOLS
+                        .iter()
+                        .any(|b| t.eq_ignore_ascii_case(b))
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+
+    if tools.is_empty() {
+        return INSPECT_DEFAULT_ALLOWED_TOOLS
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+    }
+
+    // Ensure report write + basic read are always available for the gate.
+    for required in ["Read", "Write"] {
+        if !tools.iter().any(|t| t.eq_ignore_ascii_case(required)) {
+            tools.push(required.to_string());
+        }
+    }
+    tools
+}
+
+pub(crate) fn inject_inspect_system_prompt(
+    opts: &mut serde_json::Value,
+    allow_business_write: bool,
+) {
+    let existing = opts
+        .get("append_system_prompt")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if existing.contains(INSPECT_SYSTEM_PROMPT_MARKER) {
+        return;
+    }
+    let segment = if allow_business_write {
+        format!(
+            "{INSPECT_SYSTEM_PROMPT} Note: allow_business_write=true — prefer still writing only under `.cco-out/inspect/**`; do not silently rework features."
+        )
+    } else {
+        INSPECT_SYSTEM_PROMPT.to_string()
+    };
+    let merged = if existing.trim().is_empty() {
+        segment
+    } else {
+        format!("{existing}\n\n{segment}")
+    };
+    opts["append_system_prompt"] = serde_json::json!(merged);
+}
+
+/// Inject implement usability floor into `append_system_prompt` (idempotent).
+pub(crate) fn inject_implement_usability_system_prompt(opts: &mut serde_json::Value) {
+    let existing = opts
+        .get("append_system_prompt")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if existing.contains(IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER) {
+        return;
+    }
+    let merged = if existing.trim().is_empty() {
+        IMPLEMENT_USABILITY_SYSTEM_PROMPT.to_string()
+    } else {
+        format!("{existing}\n\n{IMPLEMENT_USABILITY_SYSTEM_PROMPT}")
+    };
+    opts["append_system_prompt"] = serde_json::json!(merged);
+}
+
+/// Inject browser MCP discipline (idempotent). Gated at runtime by config.enabled.
+pub(crate) fn inject_browser_system_prompt(opts: &mut serde_json::Value) {
+    let existing = opts
+        .get("append_system_prompt")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if existing.contains(BROWSER_SYSTEM_PROMPT_MARKER) {
+        return;
+    }
+    let merged = if existing.trim().is_empty() {
+        BROWSER_SYSTEM_PROMPT.to_string()
+    } else {
+        format!("{existing}\n\n{BROWSER_SYSTEM_PROMPT}")
+    };
+    opts["append_system_prompt"] = serde_json::json!(merged);
+}

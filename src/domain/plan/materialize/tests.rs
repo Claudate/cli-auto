@@ -1,7 +1,8 @@
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domain::plan::types::{OnFailure, TaskScope};
+use super::*;
+use crate::domain::plan::types::{
+    OnFailure, PlanIR, TaskIR, TaskRole, TaskScope, IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER,
+    INSPECT_SYSTEM_PROMPT_MARKER,
+};
 
     fn task(id: &str, role: Option<TaskRole>, deps: &[&str]) -> TaskIR {
         TaskIR {
@@ -300,4 +301,3 @@ mod tests {
         let ir = plan(vec![t]);
         ir.validate().expect("scrape with scope ok");
     }
-}

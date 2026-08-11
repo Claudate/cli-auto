@@ -923,7 +923,7 @@ fn session_clarify_meta_roundtrip_and_legacy_compat() {
     sess = loaded;
     if let Some(ref mut cl) = sess.clarify {
         cl.entry = ClarifyEntry::PlanOnly;
-        cl.phase = ClarifyPhase::ClaimedToPlan;
+        cl.phase = ClarifyPhase::Claimed;
     }
     save_session(&project, &sess).unwrap();
     let loaded2 = chat_session_get(&project, Some("s-clarify")).unwrap();
@@ -933,6 +933,6 @@ fn session_clarify_meta_roundtrip_and_legacy_compat() {
     );
     assert_eq!(
         loaded2.clarify.as_ref().map(|c| c.phase),
-        Some(ClarifyPhase::ClaimedToPlan)
+        Some(ClarifyPhase::Claimed)
     );
 }

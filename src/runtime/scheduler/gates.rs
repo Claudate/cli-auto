@@ -334,7 +334,7 @@ mod tests {
             tasks: vec![task.clone()],
         };
         ir.tasks[0].depends_on = vec!["t1".into()];
-        let mut state = RunState::new("r1".into(), repo.path().to_path_buf(), &ir, repo.path().join("run"));
+        let state = RunState::new("r1".into(), repo.path().to_path_buf(), &ir, repo.path().join("run"));
         std::fs::create_dir_all(state.task_dir("t2")).unwrap();
         // Record fork_base_sha == current HEAD (worker did nothing).
         std::fs::write(
@@ -381,7 +381,7 @@ mod tests {
             require_inspect: false,
             tasks: vec![task.clone()],
         };
-        let mut state = RunState::new("r1".into(), repo.path().to_path_buf(), &ir, repo.path().join("run"));
+        let state = RunState::new("r1".into(), repo.path().to_path_buf(), &ir, repo.path().join("run"));
         std::fs::create_dir_all(state.task_dir("t8")).unwrap();
         std::fs::write(
             state.task_dir("t8").join("work_dir.json"),
@@ -435,7 +435,7 @@ mod tests {
             tasks: vec![task.clone()],
         };
         ir.tasks[0].depends_on = vec!["t1".into()];
-        let mut state = RunState::new("r1".into(), repo.path().to_path_buf(), &ir, repo.path().join("run"));
+        let state = RunState::new("r1".into(), repo.path().to_path_buf(), &ir, repo.path().join("run"));
         std::fs::create_dir_all(state.task_dir("t2")).unwrap();
         std::fs::write(
             state.task_dir("t2").join("work_dir.json"),
@@ -480,7 +480,7 @@ mod tests {
             require_inspect: false,
             tasks: vec![task.clone()],
         };
-        let mut state = RunState::new("r1".into(), repo.path().to_path_buf(), &ir, repo.path().join("run"));
+        let state = RunState::new("r1".into(), repo.path().to_path_buf(), &ir, repo.path().join("run"));
         let mut result = TaskResult {
             status: TaskStatus::Done,
             exit_code: Some(0),
@@ -519,7 +519,7 @@ mod tests {
             require_inspect: false,
             tasks: vec![task.clone()],
         };
-        let mut state = RunState::new("r1".into(), repo.path().to_path_buf(), &ir, repo.path().join("run"));
+        let state = RunState::new("r1".into(), repo.path().to_path_buf(), &ir, repo.path().join("run"));
         let mut result = TaskResult {
             status: TaskStatus::Done,
             exit_code: Some(0),

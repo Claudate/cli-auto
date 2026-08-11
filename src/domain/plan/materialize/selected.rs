@@ -1,4 +1,5 @@
-use super::{normalize_optional_title, materialize_role_defaults};
+use super::super::optional::normalize_optional_title;
+use super::role::materialize_role_defaults;
 use anyhow::{bail, Result};
 use std::collections::HashSet;
 

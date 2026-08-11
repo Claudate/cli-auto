@@ -2,7 +2,7 @@
 //!
 //! [INPUT]: 计划文件路径 · config 默认 provider/mode
 //! [OUTPUT]: PlanIR/TaskIR · load_plan · list_plans · materialize_* · inject_system_post_tasks
-//! [POS]: plan 模块入口；**类型/校验/物化真源** = `crate::domain::plan`；本文件 = adapters + IO + 兼容 re-export
+// **domain/plan/materialize/**（split from 663→360 prod + tests.rs; hard 600 cleared）· **chat/clarify/**（directory split; entry/slot/state pure on-ramps & missing-slot detection）
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/plan/CLAUDE.md
 
 pub mod adapters;
