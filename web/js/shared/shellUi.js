@@ -111,7 +111,8 @@ export function canEditSelectedTask(taskId) {
     const v = String(t.status || "").toLowerCase();
     return !v || v === "pending" || v === "queued" || v === "waiting" || v === "ready";
   }
-  if (hasActiveRun()) return false;
+  // 无活跃运行时，历史拆分台可改 provider（用户重开前可调整通道）
+  if (!hasActiveRun()) return true;
   if (!isRunPaused()) return false;
   const t = liveTaskById(id);
   if (!t) return true;

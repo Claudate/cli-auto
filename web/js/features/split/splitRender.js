@@ -310,27 +310,6 @@ function taskCardHtml(t, byId, opts = {}) {
               : "会改本地代码或文件"
       )}">${esc(riskLabel)}</span>`
     : "";
-  const costHint = String(t.cost_route_hint || t.costRouteHint || "").trim();
-  const costHtml = costHint
-    ? `<span class="cost-route-chip" title="开跑时费用优先（未改你指定的通道）">${esc(
-        costHint
-      )}</span>`
-    : "";
-  // 执行通道：卡片上的 provider 胶囊是真实可点下拉（P2-17 修：用户一直点它点不动）。
-  // 每张卡用一个独立 <select>，经 selectUi 增强为 macOS 下拉，onchange → setProvider 直达 po。
-  const provVal = (
-    t.provider ||
-    t.provider_label ||
-    jobProvider ||
-    "claude"
-  ).toLowerCase();
-  const provDisabled = !!runLocked;
-  const provHtml = `<span class="split-provider-wrap" data-provider-for="${esc(id)}"><select class="split-provider-select" data-card-id="${esc(id)}" data-cur="${esc(provVal)}" title="本步执行通道（点选即改）" ${provDisabled ? "disabled" : ""}>` +
-    PROVIDER_OPTS.map(
-      ([v, label]) =>
-        `<option value="${v}" ${v === provVal ? "selected" : ""}>${esc(label)}</option>`
-    ).join("") +
-    `</select></span>`;
   const checkHtml = isOpt
     ? `<label class="wave-task-check" title="${
         role.kind === "sys"
@@ -349,7 +328,6 @@ function taskCardHtml(t, byId, opts = {}) {
     `<div class="split-card-top">` +
     `<span class="split-role split-role-${role.kind}">${role.label}</span>` +
     riskHtml +
-    costHtml +
     (isOpt
       ? role.kind === "sys"
         ? `<span class="opt-badge opt-badge-sys">系统</span>`
@@ -362,7 +340,6 @@ function taskCardHtml(t, byId, opts = {}) {
       statusHint ? " · " + esc(statusHint) : ""
     }</div>` +
     `</button>` +
-    provHtml +
     `</div>`
   );
 }

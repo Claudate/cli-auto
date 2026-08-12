@@ -981,6 +981,9 @@ pub fn update_proposed_task(
         patch.depends_on_titles = Some(Vec::new());
     }
 
+    // Auto-enable worktree for multi-provider parallel plans
+    auto_enable_worktree_if_needed(&mut ir);
+
     ir.validate()?;
     write_proposed(config, job_id, &ir)?;
 
@@ -1177,8 +1180,45 @@ pub fn load_proposed_for_exec(
     })?;
     // Soft collab fixes before hard materialize validate (align with split accept layer).
     let _ = crate::plan::soften_plan_for_accept(&mut ir);
+
+    // Load user edits to preserve explicitly set providers (P2-17 fix)
+    let user_edits = load_user_edits(config, job_id);
+    let user_edited_providers: std::collections::HashSet<String> = user_edits
+        .by_title
+        .iter()
+        .filter_map(|(title, edit)| {
+            if edit.provider.is_some() {
+                // Find task by normalized title
+                ir.tasks.iter().find(|t| {
+                    normalize_task_title_key(&t.title) == *title
+                }).map(|t| t.id.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Mark user-edited providers so soft-fill won't overwrite them
+    // by temporarily changing them to a non-default value that will be preserved
+    let mut preserved_providers: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for task in &mut ir.tasks {
+        if user_edited_providers.contains(&task.id) {
+            preserved_providers.insert(task.id.clone(), task.provider.clone());
+            // Set to a marker that won't match old_default
+            task.provider = format!("__user_set__{}", task.provider);
+        }
+    }
+
     let soft_report =
         crate::domain::worker::apply_worker_defaults(&mut ir, &job.provider, &job.exec_mode);
+
+    // Restore preserved providers
+    for task in &mut ir.tasks {
+        if let Some(original) = preserved_providers.get(&task.id) {
+            task.provider = original.clone();
+        }
+    }
+
     // Drop unselected optional tasks before validate / spawn.
     let before = ir.tasks.len();
     ir = crate::plan::materialize_selected_tasks(ir)?;
@@ -1196,4 +1236,56 @@ pub fn load_proposed_for_exec(
         &format!("confirm_start → spawning run with {} tasks", ir.tasks.len()),
     );
     Ok((job, ir, soft_report))
+}
+
+/// Auto-enable worktree for multi-provider parallel plans to avoid validation errors.
+fn auto_enable_worktree_if_needed(ir: &mut crate::plan::PlanIR) {
+    use std::collections::HashSet;
+
+    let provider_set: HashSet<&str> = ir.tasks.iter().map(|t| t.provider.as_str()).collect();
+    if provider_set.len() <= 1 {
+        return; // Single provider, no worktree needed
+    }
+
+    // Check if there's a parallel wave
+    let mut has_parallel = false;
+    for i in 0..ir.tasks.len() {
+        for j in (i + 1)..ir.tasks.len() {
+            let a = &ir.tasks[i];
+            let b = &ir.tasks[j];
+            // Simple parallel check: neither depends on the other
+            let a_deps_b = a.depends_on.contains(&b.id);
+            let b_deps_a = b.depends_on.contains(&a.id);
+            if !a_deps_b && !b_deps_a {
+                has_parallel = true;
+                break;
+            }
+        }
+        if has_parallel {
+            break;
+        }
+    }
+
+    if !has_parallel {
+        return;
+    }
+
+    // Check if project is a git repository before enabling worktree
+    let project_root = &ir.source_path.parent().unwrap_or(std::path::Path::new("."));
+    let git_dir = project_root.join(".git");
+    if !git_dir.exists() {
+        // Not a git repo - cannot enable worktree, but don't fail silently
+        // The validation will catch this and give a proper error message
+        return;
+    }
+
+    // Enable worktree for all tasks
+    if !ir.worktree {
+        ir.worktree = true;
+    }
+    for t in &mut ir.tasks {
+        if t.worktree.is_none() {
+            t.worktree = Some(true);
+        }
+    }
 }

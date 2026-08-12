@@ -239,13 +239,8 @@ function paintCostRouteBanner(job, { runLocked } = {}) {
   const line = String(
     job?.cost_route_summary || job?.costRouteSummary || ""
   ).trim();
-  if (line && !runLocked) {
-    bar.hidden = false;
-    bar.textContent = line.startsWith("费用") ? line : `费用优选：${line}`;
-  } else {
-    bar.hidden = true;
-    bar.textContent = "";
-  }
+  bar.hidden = true;
+  bar.textContent = "";
 }
 
 /**

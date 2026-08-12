@@ -878,6 +878,19 @@
   max-width: 6.9rem;
   min-width: 5.9rem;
 }
+/* 纯文本标签样式（移除下拉功能） */
+.split-provider-label {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.22rem 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--bg2, #f5f5f7);
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--text);
+  cursor: default;
+  user-select: none;
+}
 /* 打开下拉时提升层级，防止被下方任务卡遮挡 */
 .split-provider-wrap:has(.cco-select.is-open) {
   z-index: 90;

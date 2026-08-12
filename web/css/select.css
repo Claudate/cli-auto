@@ -211,7 +211,7 @@ select.cco-select--sm,
 /* 下拉面板 */
 .cco-select__menu {
   position: absolute;
-  z-index: 80;
+  z-index: 15000;
   top: calc(100% + 0.3rem);
   left: 0;
   right: 0;
@@ -224,7 +224,8 @@ select.cco-select--sm,
   list-style: none;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--bg2);
+  background: #FFFFFF;
+  opacity: 1;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.02),
     0 10px 28px rgba(0, 0, 0, 0.12),

@@ -85,7 +85,6 @@ export function ensureAdvancedRouteDom() {
     `<div class="split-route-body">` +
     `<p class="muted split-route-hint" id="split-route-hint">智能建议可改；不会静默覆盖你已改过的通道 / 角色 / 范围。</p>` +
     `<div class="split-route-grid">` +
-    `<div class="split-route-row"><span class="muted">通道</span> <strong id="split-route-provider-label">—</strong></div>` +
     `<div class="split-route-row"><span class="muted">角色</span> <span id="split-route-role-label">—</span></div>` +
     `<div class="split-route-row"><span class="muted">范围</span> <span id="split-route-scope-label">—</span></div>` +
     `<div class="split-route-row" id="split-route-verify-row" hidden><span class="muted">自动检查</span> <code id="split-route-verify-label" class="split-route-verify">—</code></div>` +
@@ -336,8 +335,8 @@ export function paintDetail(ctx) {
     }
   }
 
-  // 详情头「Claude」快捷下拉：每步真实通道入口，与高级折叠共用 task.provider。
-  // 仅当本 job 的 run 活跃（或编辑中）才禁用；编辑焦点保留不覆盖。
+  // 详情头「Claude」快捷下拉：展示计划声明的默认通道（非实际执行时路由）。
+  // 历史拆分台可改 provider（无活跃运行时），用于重开前调整通道。
   const jobRunId = String(job?.run_id || job?.runId || "");
   const thisJobRunActive = () => {
     if (!jobRunId) return false;
@@ -350,14 +349,18 @@ export function paintDetail(ctx) {
     providerField.hidden = false;
   }
   if (providerSel) {
-    const lockHeader = !taskEditable || thisJobRunActive() || ctx.vm.getSnapshot().editing;
+    // 简化：只要没有活跃运行且不在编辑中，就允许改 provider
+    const lockHeader = hasActiveRun() || ctx.vm.getSnapshot().editing;
     if (!selectBusy(providerSel)) {
       providerSel.value = curProvider;
     }
     providerSel.disabled = lockHeader;
+    const hasExplicitProvider = !!(cur?.provider || job.provider);
     providerSel.title = lockHeader
       ? "运行中或编辑中不可改通道"
-      : "本步骤执行通道（点选即改）";
+      : hasExplicitProvider
+        ? "默认通道（点选即改）· 实际执行时可能自动路由"
+        : "默认通道（点选即改）· 未显式指定时回退到 Claude";
     providerSel.onchange = async () => {
       if (
         !cur ||
@@ -373,7 +376,7 @@ export function paintDetail(ctx) {
       try {
         await ctx.vm.setProvider(cur.id, next);
         ctx.pushSelection();
-        toast(`已设「${cur.title || cur.id}」→ ${engineLabel(next)}`);
+        toast(`已设「${cur.title || cur.id}」默认通道 → ${engineLabel(next)}（实际执行时可能自动路由）`);
         ctx.afterMutate();
         ctx.render();
       } catch (e) {

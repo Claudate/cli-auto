@@ -440,8 +440,7 @@ export function enhanceSelect(select, opts) {
   if (shells.has(select)) return shells.get(select);
   // Skip selects already inside an enhanced root (double-run guard)
   if (select.closest(".cco-select.is-enhanced")) {
-    const existing = shells.get(select);
-    if (existing) return existing;
+    return null; // 已增强，直接返回
   }
   const shell = new SelectShell(select, opts || {});
   shells.set(select, shell);

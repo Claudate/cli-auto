@@ -102,14 +102,7 @@ export function bindSplitView(vm, bridge = {}) {
 
     const waves = $("confirm-waves");
     if (waves) {
-      const selectApi = g("ccoSelectUi");
-      let providerBusy = false;
-      if (selectApi && typeof selectApi.isSelectBusy === "function") {
-        waves.querySelectorAll(".split-provider-select").forEach((sel) => {
-          if (selectApi.isSelectBusy(sel)) providerBusy = true;
-        });
-      }
-      const rebuildWaves = !providerBusy;
+      const rebuildWaves = true;
       if (rebuildWaves) {
         wavesDirty = false;
         waves.innerHTML = cardsHtml(job, byId, {
@@ -126,35 +119,6 @@ export function bindSplitView(vm, bridge = {}) {
             vm.selectTask(b.dataset.id);
             pushSelection();
             render();
-          };
-        });
-        waves.querySelectorAll(".split-provider-select").forEach((sel) => {
-          sel.onchange = async () => {
-            const taskId = sel.dataset.cardId;
-            const prev = sel.dataset.cur;
-            const next = String(sel.value || "claude").toLowerCase();
-            if (next === prev) return;
-            if (vm.getSnapshot().editing) {
-              sel.value = prev;
-              toast("请先保存或取消当前编辑");
-              return;
-            }
-            try {
-              await vm.setProvider(taskId, next);
-              sel.dataset.cur = next;
-              pushSelection();
-              toast(
-                `已设「${byId[taskId]?.title || taskId}」→ ${g("flowEngineLabel")
-                  ? g("flowEngineLabel")(next)
-                  : next}`
-              );
-              afterMutate();
-              render();
-            } catch (e) {
-              sel.value = prev;
-              sel.dataset.cur = prev;
-              toast(String(e?.message || e));
-            }
           };
         });
         waves.querySelectorAll(".wave-opt-check").forEach((cb) => {
