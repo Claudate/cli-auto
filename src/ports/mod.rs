@@ -18,7 +18,11 @@ pub mod handoff;
 /// Dedicated plan-split agent (cco-split/v1 · Plan Mode).
 pub mod split_agent;
 
+/// Semantic memory port (agentmemory integration · P3 spike).
+pub mod memory;
+
 pub use handoff::HandoffStore;
+pub use memory::{MemoryHit, MemoryPort, Metadata, NoOpMemory, Relation};
 pub use split_agent::{SplitAgentPort, SplitRequest};
 pub use worker::{
     Capabilities, StartCtx, TaskResult, TaskStatus, WorkerHandle, WorkerPort, WorkerStatus,

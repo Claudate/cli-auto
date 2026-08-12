@@ -475,6 +475,7 @@ mod tests {
             scope: None,
             outputs: vec![],
             tags: vec!["browser".into(), "ui-verify".into()],
+            wait_for: vec![],
         };
         assert!(!should_inject_browser_mcp(&cfg, &task));
         cfg.enabled = true;
@@ -521,6 +522,7 @@ mod tests {
             scope: None,
             outputs: vec![],
             tags: vec!["browser".into(), "ui-verify".into()],
+            wait_for: vec![],
         };
         assert!(preview_required_missing(&cfg, &task, None).is_some());
         assert!(preview_required_missing(&cfg, &task, Some("http://127.0.0.1:5173/")).is_none());
@@ -592,6 +594,7 @@ mod tests {
             scope: None,
             outputs: vec![],
             tags: vec!["browser".into(), "ui-smoke".into()],
+            wait_for: vec![],
         };
         let env = prepare_task_browser(
             &cfg,

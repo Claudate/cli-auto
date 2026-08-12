@@ -221,6 +221,7 @@ mod tests {
             scope: None,
             outputs: vec![],
             tags: vec![],
+            wait_for: vec![],
         };
         crate::plan::PlanIR {
             schema: "cco-plan/v1".into(),
@@ -289,6 +290,8 @@ mod tests {
                 cost_escalate_enabled: false,
                 browser: crate::config::BrowserConfig::default(),
                 provider_unhealthy: Vec::new(),
+        collab_bus: None,
+        memory: None,
             };
             // t3 depends on [t1, t2] → newest committed branch t2 wins.
             let base = scheduler.fork_base_for(&ir.tasks[2]);
@@ -332,6 +335,8 @@ mod tests {
             cost_escalate_enabled: false,
             browser: crate::config::BrowserConfig::default(),
             provider_unhealthy: Vec::new(),
+        collab_bus: None,
+        memory: None,
         };
         // No dependency done yet → fall back to main HEAD (None).
         assert_eq!(scheduler.fork_base_for(&ir.tasks[1]), None);

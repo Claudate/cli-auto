@@ -13,6 +13,9 @@ use anyhow::{Context, Result};
 pub(super) struct ProgressWatch {
     pub last_bytes: u64,
     pub last_change: chrono::DateTime<chrono::Utc>,
+    /// Stdout bytes already published to the collab bus (independent of
+    /// `last_bytes`, which snapshots pre-existing content at spawn).
+    pub collab_pos: u64,
 }
 
 pub(super) struct StallAction {

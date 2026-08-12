@@ -157,6 +157,7 @@ fn make_inspect_task(ir: &PlanIR, depends_on: &[String]) -> TaskIR {
             ".cco-out/inspect/ISSUES.md".into(),
         ],
         tags: vec!["inspect".into(), "system".into()],
+        wait_for: vec![],
     }
 }
 
@@ -230,6 +231,7 @@ fn make_git_push_task(ir: &PlanIR, depends_on: &[String]) -> TaskIR {
         scope: None,
         outputs: vec![],
         tags: vec!["system".into()],
+        wait_for: vec![],
     }
 }
 
@@ -308,6 +310,7 @@ fn make_open_pr_task(ir: &PlanIR, depends_on: &[String]) -> TaskIR {
         scope: None,
         outputs: vec![],
         tags: vec!["system".into(), "pr".into()],
+        wait_for: vec![],
     }
 }
 
@@ -350,6 +353,7 @@ mod tests {
                 scope: None,
                 outputs: vec![],
                 tags: vec![],
+            wait_for: vec![],
             }],
         }
     }

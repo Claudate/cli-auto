@@ -61,6 +61,7 @@ fn sample_task(id: &str, prompt: &str) -> TaskIR {
         scope: None,
         outputs: vec![],
         tags: vec![],
+        wait_for: vec![],
     }
 }
 

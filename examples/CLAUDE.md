@@ -9,6 +9,7 @@ plans/raw-hello.md: raw-single 散文单任务
 plans/serial-prompts-sample.md: serial-prompts/v0 多段
 plans/with-acceptance.cco.yaml: 带 acceptance 命令的 v1 示例
 plans/mixed-claude-codex-inspect.cco.yaml: P0-2/P0-3 混跑真源；inventory(claude)→feat-a(claude)‖feat-b(codex)→integrate→inspect；含 role/scope/outputs + 头注释 handoff 样板
+plans/serve-then-test.cco.yaml: wait_for 运行时协作示例（bg serve 输出 "Server ready" 即开跑 test；不用 depends_on——那等的是完成）
 plans/plan-loop-inspect-rework.md: P-loop 说明样例（规范体四波 plan_ref/severity · rework · 桌面回补）；真源 docs/plan-execute-inspect-rework
 
 运行注意（混跑）：

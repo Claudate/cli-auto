@@ -98,6 +98,9 @@ pub fn prepare_scheduler(
         cost_escalate_enabled: config.default.cost_escalate_enabled,
         browser: config.browser.clone(),
         provider_unhealthy: Vec::new(),
+        collab_bus: None, // Collaboration bus created on-demand when wait_for is used
+        // P3 memory pilot: outcome recording + preventive failover (config.memory.enabled 门控).
+        memory: crate::app::memory::semantic_port(config),
     })
 }
 

@@ -1731,6 +1731,7 @@ mod apply_worker_defaults_tests {
             scope: None,
             outputs: vec![],
             tags: vec![],
+            wait_for: vec![],
         }
     }
 

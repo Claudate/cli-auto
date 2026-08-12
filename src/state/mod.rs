@@ -7,6 +7,7 @@
 
 pub mod cco_split_store;
 pub mod guide_store;
+pub mod memory_store;
 pub mod persona_store;
 pub mod project_memory;
 pub mod project_ui;

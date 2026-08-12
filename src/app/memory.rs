@@ -1,7 +1,7 @@
-//! Project light memory use cases (P2-2 · last_summary + pin).
+//! Project light memory use cases (P2-2 · last_summary + pin) + P3 semantic memory pilot.
 //!
-//! [INPUT]: Config · project path · run_id · pin key/value
-//! [OUTPUT]: ProjectMemoryView · set summary from run · pin CRUD
+//! [INPUT]: Config · project path · run_id · pin key/value · split outcome
+//! [OUTPUT]: ProjectMemoryView · set summary from run · pin CRUD · semantic split context
 //! [POS]: Application 层；Presentation 经 Tauri/CLI 调本模块
 //! [PROTOCOL]: 变更时更新此头部与 src/app/CLAUDE.md
 //!
@@ -9,6 +9,8 @@
 //! - Memory failures are best-effort (finish round still succeeds).
 //! - Pins inject chat/planner prompts **as context only** — no route rewrite, no auto-confirm.
 //! - No Dream / timeline / cross-project persona.
+//! - P3 semantic memory: gated by `config.memory.enabled` (default off · zero behavior change);
+//!   retrieval injects **context only** — never rewrites route / confirm / task graph.
 
 use std::path::Path;
 
@@ -89,6 +91,108 @@ fn project_id(project: &Path) -> String {
     project.to_string_lossy().trim_end_matches('/').to_string()
 }
 
+// ── P3 semantic memory pilot (agentmemory-integration-plan-2026-08-12) ──
+
+/// Store config under `<state_root>/memory`; None when memory is disabled.
+fn semantic_store_cfg(config: &Config) -> Option<crate::state::memory_store::MemoryConfig> {
+    if !config.memory.enabled {
+        return None;
+    }
+    Some(crate::state::memory_store::MemoryConfig {
+        storage_root: config.state_root.join("memory"),
+        ttl_days: config.memory.ttl_days,
+        max_entries: config.memory.max_entries,
+        model_path: None, // auto-detect ~/.cco/models (stub embedding when absent)
+    })
+}
+
+/// Open the local semantic store under `<state_root>/memory` with config limits.
+/// Returns None when disabled or the store cannot be opened (best-effort).
+fn open_semantic_store(config: &Config) -> Option<crate::state::memory_store::MemoryStore> {
+    let store_cfg = semantic_store_cfg(config)?;
+    match crate::state::memory_store::MemoryStore::new(store_cfg) {
+        Ok(store) => Some(store),
+        Err(e) => {
+            tracing::warn!(error = %e, "semantic memory store open failed (skipping)");
+            None
+        }
+    }
+}
+
+/// Async `MemoryPort` handle for the scheduler (P3 场景 2 · cost router history).
+/// None when memory is disabled — callers must treat that as "no memory".
+pub fn semantic_port(config: &Config) -> Option<std::sync::Arc<dyn crate::ports::MemoryPort>> {
+    let cfg = semantic_store_cfg(config)?;
+    Some(std::sync::Arc::new(
+        crate::state::memory_store::LocalMemory::new(cfg),
+    ))
+}
+
+/// Retrieve past split cases relevant to `query` as a prompt context block.
+/// Empty string when memory is disabled, store unavailable, or no hits.
+/// Context only — the planner prompt rules still fully govern the output plan.
+pub fn semantic_split_context(config: &Config, project: &Path, query: &str, limit: usize) -> String {
+    let Some(mut store) = open_semantic_store(config) else {
+        return String::new();
+    };
+    let hits = match store.search(query, limit) {
+        Ok(h) => h,
+        Err(e) => {
+            tracing::warn!(error = %e, "semantic memory search failed (skipping)");
+            return String::new();
+        }
+    };
+    // Prefer same-project memories; keep cross-project ones as secondary reference.
+    let pid = project_id(project);
+    let mut lines = Vec::new();
+    for hit in &hits {
+        let same_project = hit.metadata.project_id.as_deref() == Some(pid.as_str());
+        let origin = if same_project { "本项目" } else { "其他项目" };
+        lines.push(format!("- [{origin}] {}", hit.content.replace('\n', " ")));
+    }
+    if lines.is_empty() {
+        return String::new();
+    }
+    format!(
+        "\n## 历史拆分记忆（仅参考，不构成硬约束）\n{}\n",
+        lines.join("\n")
+    )
+}
+
+/// Store a successful Mode B split as a memory entry (best-effort, never fails caller).
+pub fn remember_split_success(
+    config: &Config,
+    project: &Path,
+    job_id: &str,
+    plan_name: &str,
+    tasks: &[crate::plan::TaskIR],
+) {
+    let Some(mut store) = open_semantic_store(config) else {
+        return;
+    };
+    let titles: Vec<String> = tasks.iter().map(|t| format!("「{}」", t.title)).collect();
+    // Leading tokens ("拆分" · project · plan name) are space-separated so the
+    // BM25 tokenizer aligns them with the retrieval query in semantic_split_context.
+    let project_name = project.file_name().and_then(|s| s.to_str()).unwrap_or("");
+    let content = format!(
+        "拆分 {project_name} {plan_name} 成功：{} 个任务：{}",
+        tasks.len(),
+        titles.join(" · ")
+    );
+    let metadata = crate::ports::memory::Metadata {
+        project_id: Some(project_id(project)),
+        task_role: None,
+        provider: None,
+        outcome: Some("success".into()),
+        tags: vec!["split".into(), "planner".into()],
+        ..Default::default()
+    };
+    let key = format!("split-{job_id}");
+    if let Err(e) = store.store(&key, &content, metadata) {
+        tracing::warn!(error = %e, key = %key, "remember_split_success failed (skipping)");
+    }
+}
+
 fn status_label(status: RunStatus) -> &'static str {
     match status {
         RunStatus::Init => "初始化",
@@ -166,6 +270,57 @@ mod tests {
         assert!(row.text.contains("2/2") || row.text.contains("完成 2"));
         let mem = get(&cfg, &project).unwrap();
         assert!(mem.last_summary.is_some());
+    }
+
+    fn mk_task(id: &str, title: &str) -> crate::plan::TaskIR {
+        crate::plan::TaskIR {
+            id: id.into(),
+            title: title.into(),
+            depends_on: vec![],
+            group: None,
+            provider: "claude".into(),
+            mode: "print".into(),
+            prompt: "p\nCCO_DONE ok".into(),
+            verify_cmd: None,
+            acceptance: None,
+            timeout_secs: None,
+            worktree: None,
+            provider_opts: serde_json::json!({}),
+            optional: false,
+            include: true,
+            role: None,
+            scope: None,
+            outputs: vec![],
+            tags: vec![],
+            wait_for: vec![],
+        }
+    }
+
+    #[test]
+    fn semantic_context_empty_when_disabled() {
+        let dir = tempdir().unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().to_path_buf();
+        assert!(!cfg.memory.enabled, "memory must default off");
+        let ctx = semantic_split_context(&cfg, Path::new("/tmp/p"), "拆分 demo", 3);
+        assert!(ctx.is_empty(), "disabled memory must not inject context");
+    }
+
+    #[test]
+    fn semantic_split_memory_roundtrip() {
+        let dir = tempdir().unwrap();
+        let mut cfg = Config::default();
+        cfg.state_root = dir.path().to_path_buf();
+        cfg.memory.enabled = true;
+        let project = dir.path().join("tauri-app");
+
+        let tasks = vec![mk_task("t1", "实现登录页"), mk_task("t2", "检验员终检（可选）")];
+        remember_split_success(&cfg, &project, "job-1", "tauri-app-plan", &tasks);
+
+        let ctx = semantic_split_context(&cfg, &project, "拆分 tauri-app greenfield", 3);
+        assert!(ctx.contains("历史拆分记忆"), "ctx={ctx}");
+        assert!(ctx.contains("实现登录页"), "ctx={ctx}");
+        assert!(ctx.contains("[本项目]"), "ctx={ctx}");
     }
 
     #[test]

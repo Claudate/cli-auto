@@ -41,6 +41,7 @@
                     scope: None,
                     outputs: vec![],
                 tags: vec![],
+                wait_for: vec![],
                 },
                 TaskIR {
                     id: "b".into(),
@@ -61,6 +62,7 @@
                     scope: None,
                     outputs: vec![],
                 tags: vec![],
+                wait_for: vec![],
                 },
             ],
         };
@@ -137,6 +139,7 @@
             scope: None,
             outputs: vec![],
         tags: vec![],
+        wait_for: vec![],
         }
     }
 
@@ -323,6 +326,52 @@ tasks:
         assert!(t.scope.is_none());
         assert!(t.outputs.is_empty());
         assert_eq!(t.provider, "fake");
+    }
+
+    #[test]
+    fn cco_v1_parses_wait_for_conditions() {
+        let cfg = Config::default();
+        let dir = tempfile::tempdir().unwrap();
+        let yaml = dir.path().join("collab.cco.yaml");
+        std::fs::write(
+            &yaml,
+            r#"
+schema: cco-plan/v1
+name: serve-then-test
+defaults:
+  provider: fake
+  mode: print
+tasks:
+  - id: serve
+    title: dev server
+    prompt: |
+      run server
+      CCO_DONE ok
+  - id: test
+    title: smoke test
+    depends_on: [serve]
+    prompt: |
+      run tests
+      CCO_DONE ok
+    wait_for:
+      - task_id: serve
+        condition: output_match
+        pattern: "Server ready"
+"#,
+        )
+        .unwrap();
+        let ir = load_plan(dir.path(), &yaml, None, &cfg).unwrap();
+        let t = ir.tasks.iter().find(|t| t.id == "test").unwrap();
+        assert_eq!(t.wait_for.len(), 1, "wait_for must survive YAML parse");
+        assert_eq!(t.wait_for[0].task_id, "serve");
+        assert_eq!(
+            t.wait_for[0].condition,
+            crate::domain::plan::WaitType::OutputMatch
+        );
+        assert_eq!(t.wait_for[0].pattern.as_deref(), Some("Server ready"));
+        // serve declares no waits.
+        let s = ir.tasks.iter().find(|t| t.id == "serve").unwrap();
+        assert!(s.wait_for.is_empty());
     }
 
     /// P1-1: full collaboration contract fields parse into TaskIR/PlanIR.
@@ -543,6 +592,7 @@ tasks:
             }),
             outputs: vec![],
         tags: vec![],
+        wait_for: vec![],
         }
     }
 

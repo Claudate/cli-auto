@@ -215,6 +215,7 @@ mod step_progress_tests {
             scope: None,
             outputs: vec![],
             tags: vec![],
+            wait_for: vec![],
         }
     }
 

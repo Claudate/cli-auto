@@ -42,6 +42,7 @@ fn sample_plan(outputs_a: Vec<String>) -> PlanIR {
                 scope: None,
                 outputs: outputs_a,
                 tags: vec![],
+                wait_for: vec![],
             },
             TaskIR {
                 id: "b".into(),
@@ -62,6 +63,7 @@ fn sample_plan(outputs_a: Vec<String>) -> PlanIR {
                 scope: None,
                 outputs: vec![],
                 tags: vec![],
+                wait_for: vec![],
             },
         ],
     }
@@ -432,6 +434,7 @@ fn system_push_gate_blocks_without_verdict() {
         scope: None,
         outputs: vec![INSPECT_VERDICT_REL.into()],
         tags: vec![],
+        wait_for: vec![],
     });
     plan.tasks.push(TaskIR {
         id: SYS_POST_GIT_PUSH_ID.into(),
@@ -452,6 +455,7 @@ fn system_push_gate_blocks_without_verdict() {
         scope: None,
         outputs: vec![],
         tags: vec![],
+        wait_for: vec![],
     });
     let push = plan.task(SYS_POST_GIT_PUSH_ID).unwrap();
     let err = system_push_inspect_gate(&plan, push, root).unwrap_err();
@@ -505,6 +509,7 @@ fn write_task_diff_lists_outputs_without_git() {
         scope: None,
         outputs: vec![".cco-out/t1/SUMMARY.md".into()],
         tags: vec![],
+        wait_for: vec![],
     };
     let rel = write_task_diff(&task, &wd, root)
         .unwrap()
@@ -563,6 +568,7 @@ fn gate_json_wins_over_verdict_prose_fail() {
             ".cco-out/inspect/ISSUES.md".into(),
         ],
         tags: vec![],
+        wait_for: vec![],
     };
 
     assert_eq!(
@@ -633,6 +639,7 @@ fn handwalk_gate_fail_demoted_pass() {
             ".cco-out/inspect/GATE.json".into(),
         ],
         tags: vec![],
+        wait_for: vec![],
     };
 
     assert_eq!(

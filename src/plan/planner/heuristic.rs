@@ -53,6 +53,7 @@ pub(super) fn build_fake_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> 
             scope: None,
             outputs: vec![],
         tags: vec![],
+            wait_for: vec![],
         }
     };
 
@@ -405,6 +406,7 @@ pub(super) fn build_heuristic_ai_plan(config: &Config, job: &PlanJob) -> Result<
             scope,
             outputs,
             tags: vec![],
+            wait_for: vec![],
         });
     }
 

@@ -246,6 +246,7 @@ fn call_claude_cli_print(config: &Config, req: &SplitRequest) -> Result<String> 
         scope: None,
         outputs: vec![],
         tags: vec![],
+            wait_for: vec![],
     };
 
     let ctx = StartCtx {

@@ -423,6 +423,7 @@ fn a0_materialize_rejects_all_optional_unselected() {
         scope: None,
         outputs: vec![],
         tags: vec![],
+        wait_for: vec![],
     };
     only_opt.title = cco::plan::normalize_optional_title(&only_opt.title, true);
     let plan = PlanIR {
@@ -490,6 +491,7 @@ fn a0_parse_only_materialize_drops_unselected_optional() {
                 scope: None,
                 outputs: vec![],
                 tags: vec![],
+                wait_for: vec![],
             },
             TaskIR {
                 id: "maybe".into(),
@@ -510,6 +512,7 @@ fn a0_parse_only_materialize_drops_unselected_optional() {
                 scope: None,
                 outputs: vec![],
                 tags: vec![],
+                wait_for: vec![],
             },
         ],
     };

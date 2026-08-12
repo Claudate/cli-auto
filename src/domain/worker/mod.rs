@@ -13,6 +13,7 @@ mod cost_intent;
 mod cost_route;
 mod failover;
 mod isolation;
+mod memory_route;
 mod route;
 mod types;
 
@@ -34,6 +35,10 @@ pub use cost_route::{
     CostPick, CostRouteChange, CostRouteReport, CostTier, ProviderCostEntry,
 };
 pub use failover::FailoverPolicy;
+pub use memory_route::{
+    memory_failover_target, MemoryOutcomeStats, MEMORY_FAILOVER_MAX_FAIL_RATE,
+    MEMORY_FAILOVER_MIN_SAMPLES,
+};
 pub use isolation::{is_multi_provider, isolation_on_fail, IsolationOnFail};
 pub use route::{
     apply_route_fill, apply_worker_defaults, is_still_default_route, RouteFillMode, RouteFillReport,

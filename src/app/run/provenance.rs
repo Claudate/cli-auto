@@ -246,6 +246,7 @@ mod tests {
             scope: None,
             outputs: vec![],
             tags: tags.iter().map(|s| (*s).to_string()).collect(),
+            wait_for: vec![],
         }
     }
 

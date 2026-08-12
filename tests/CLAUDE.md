@@ -13,6 +13,8 @@ retry_and_stall.rs: 失败自动重试成功 · 卡死巡检重试耗尽暂停
 handoff_ledger.rs: P1-4 handoff.md/json 更新 · outputs 缺失 → Failed · P2-3 VERDICT=FAIL pause+ISSUES · P-loop PASS+blocking FAIL / residual PASS / rework plan
 ensure_close_loop.rs: **Ensure E1/E3** materialize 注入 `sys-closeout`（role=None 图）· docs-only FAIL → `maybe_auto_rework` 新 run · 业务 blocking / 开关关 不自动
 mixed_provider_smoke.rs: 同 run 多 provider · 非法 mix 校验
+collab_runtime_wait.rs: CollabBus 直测（wait_condition output_match/step_done/timeout · CCO_STEP 解析）
+integration_collab_e2e.rs: wait_for 端到端（无 depends_on 等输出行开跑 · 不可满足等待快速判 Failed 不挂死）
 fixtures/: fake-claude · serial-prompts-sample.md · stream-json
 
 法则: 成员完整·一行一文件·父级链接·技术词前置

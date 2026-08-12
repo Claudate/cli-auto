@@ -258,6 +258,7 @@ fn task_to_ir(t: &CcoSplitTask, default_provider: &str, default_mode: &str) -> T
     TaskIR {
         id: t.task_id.clone(),
         title: t.title.clone(),
+        wait_for: vec![],
         depends_on: t.depends_on.clone(),
         group,
         provider,

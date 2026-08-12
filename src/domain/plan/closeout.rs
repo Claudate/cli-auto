@@ -128,6 +128,7 @@ pub fn inject_closeout_task(plan: &mut PlanIR, auto_closeout: bool, checklist_pa
     let closeout = TaskIR {
         id: SYS_CLOSEOUT_ID.into(),
         title: "回写台账与验收索引（有证据才勾）".into(),
+        wait_for: vec![],
         depends_on: business_ids,
         group: Some("ensure".into()),
         provider,
@@ -272,6 +273,7 @@ mod tests {
             scope: None,
             outputs: vec![],
             tags: vec![],
+            wait_for: vec![],
         }
     }
 

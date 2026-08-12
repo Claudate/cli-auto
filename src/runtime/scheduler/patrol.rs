@@ -178,6 +178,7 @@ impl Scheduler {
             .or_insert_with(|| ProgressWatch {
                 last_bytes: bytes,
                 last_change: now,
+                collab_pos: 0,
             });
         if bytes > entry.last_bytes {
             entry.last_bytes = bytes;

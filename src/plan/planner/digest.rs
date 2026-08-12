@@ -581,6 +581,7 @@ mod tests {
                 scope: None,
                 outputs: vec![],
                 tags: vec![],
+            wait_for: vec![],
             },
             TaskIR {
                 id: "t2".into(),
@@ -602,6 +603,7 @@ mod tests {
                 scope: None,
                 outputs: vec![],
                 tags: vec![],
+            wait_for: vec![],
             },
         ];
         sanitize_task_deps(&mut tasks);
@@ -630,6 +632,7 @@ mod tests {
                 scope: None,
                 outputs: vec![],
                 tags: vec![],
+            wait_for: vec![],
             },
             TaskIR {
                 id: "t2".into(),
@@ -650,6 +653,7 @@ mod tests {
                 scope: None,
                 outputs: vec![],
                 tags: vec![],
+            wait_for: vec![],
             },
         ];
         sanitize_task_deps(&mut tasks);
@@ -676,6 +680,7 @@ mod tests {
             scope: None,
             outputs: vec![],
             tags: vec![],
+            wait_for: vec![],
         }
     }
 

@@ -77,6 +77,8 @@ tasks:
         cost_escalate_enabled: false,
         browser: cco::config::BrowserConfig::default(),
         provider_unhealthy: Vec::new(),
+        collab_bus: None,
+        memory: None,
     };
 
     let status = sched.run().await.unwrap();
@@ -241,6 +243,8 @@ tasks:
         cost_escalate_enabled: false,
         browser: cco::config::BrowserConfig::default(),
         provider_unhealthy: Vec::new(),
+        collab_bus: None,
+        memory: None,
     }
     .run()
     .await
@@ -351,6 +355,8 @@ tasks:
         cost_escalate_enabled: false,
         browser: cco::config::BrowserConfig::default(),
         provider_unhealthy: Vec::new(),
+        collab_bus: None,
+        memory: None,
     }
     .run()
     .await
@@ -440,6 +446,8 @@ tasks:
         cost_escalate_enabled: false,
         browser: cco::config::BrowserConfig::default(),
         provider_unhealthy: Vec::new(),
+        collab_bus: None,
+        memory: None,
     };
 
     let status = sched.run().await.unwrap();
@@ -561,6 +569,8 @@ tasks:
         cost_escalate_enabled: false,
         browser: cco::config::BrowserConfig::default(),
         provider_unhealthy: Vec::new(),
+        collab_bus: None,
+        memory: None,
     };
 
     let status = sched.run().await.unwrap();
@@ -662,6 +672,8 @@ tasks:
         cost_escalate_enabled: false,
         browser: cco::config::BrowserConfig::default(),
         provider_unhealthy: Vec::new(),
+        collab_bus: None,
+        memory: None,
     };
 
     let status = sched.run().await.unwrap();
@@ -700,4 +712,95 @@ tasks:
         plan_b["prompt"].as_str().unwrap(),
         "do b business\nCCO_DONE ok"
     );
+}
+
+/// P3 memory pilot: a finished fake task leaves an outcome entry in semantic memory
+/// (scenario 2 recording path · docs/agentmemory-integration-plan-2026-08-12.md).
+#[tokio::test]
+async fn memory_pilot_records_task_outcome() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().join("proj");
+    std::fs::create_dir_all(project.join("docs/plans")).unwrap();
+    let plan_path = project.join("docs/plans/mem.cco.yaml");
+    std::fs::write(
+        &plan_path,
+        r#"
+schema: cco-plan/v1
+name: mem
+defaults:
+  provider: fake
+  mode: print
+tasks:
+  - id: a
+    title: a
+    prompt: "do a\nCCO_DONE ok"
+"#,
+    )
+    .unwrap();
+
+    let mut config = Config::default();
+    config.state_root = tmp.path().join("state");
+    config.default.default_provider = "fake".into();
+    std::fs::create_dir_all(config.runs_dir()).unwrap();
+
+    let ir = load_plan(&project, &plan_path, Some("cco-plan/v1"), &config).unwrap();
+    let run_id = state::new_run_id();
+    let run_dir = state::prepare_run_dir(&config.runs_dir(), &run_id).unwrap();
+    let run_state = RunState::new(
+        run_id,
+        project.canonicalize().unwrap(),
+        &ir,
+        run_dir.clone(),
+    );
+
+    let mem_cfg = cco::state::memory_store::MemoryConfig {
+        storage_root: tmp.path().join("memory"),
+        ..Default::default()
+    };
+    let memory: std::sync::Arc<dyn cco::ports::MemoryPort> =
+        std::sync::Arc::new(cco::state::memory_store::LocalMemory::new(mem_cfg));
+
+    let registry = ProviderRegistry::from_config(&config).unwrap();
+    let sched = Scheduler {
+        max_parallel: 1,
+        plan: ir,
+        state: run_state,
+        registry,
+        poll_interval: Duration::from_millis(20),
+        yes: true,
+        only: None,
+        from_task: None,
+        dry_run: false,
+        mirror_state: None,
+        auto_open_terminal: false,
+        terminal_kind: cco::SessionKind::Embedded,
+        terminal_manager: None,
+        run_max_budget_usd: None,
+        provider_max_parallel: Default::default(),
+        retry_max: 0,
+        stall_secs: 600,
+        failover_enabled: false,
+        fallback_extra_attempts: 1,
+        failover_order: vec![],
+        cost_escalate_enabled: false,
+        browser: cco::config::BrowserConfig::default(),
+        provider_unhealthy: Vec::new(),
+        collab_bus: None,
+        memory: Some(memory.clone()),
+    };
+
+    let status = sched.run().await.unwrap();
+    assert_eq!(status, RunStatus::Completed);
+
+    // Outcome entry must be retrievable via the same query shape the router uses.
+    let hits = memory.search("outcome fake implement", 10).await.unwrap();
+    assert!(
+        !hits.is_empty(),
+        "task outcome should be recorded in semantic memory"
+    );
+    let hit = &hits[0];
+    assert_eq!(hit.metadata.provider.as_deref(), Some("fake"));
+    assert_eq!(hit.metadata.task_role.as_deref(), Some("implement"));
+    assert_eq!(hit.metadata.outcome.as_deref(), Some("success"));
+    assert!(hit.metadata.tags.contains(&"task-outcome".to_string()));
 }

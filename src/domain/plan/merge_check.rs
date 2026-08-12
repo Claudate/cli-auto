@@ -95,6 +95,7 @@ mod tests {
             scope: None,
             outputs: outputs.iter().map(|s| (*s).into()).collect(),
             tags: vec![],
+            wait_for: vec![],
         }
     }
 

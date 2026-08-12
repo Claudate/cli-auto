@@ -98,6 +98,7 @@ mod tests {
             scope: None,
             outputs: vec![],
             tags: vec![],
+            wait_for: vec![],
         };
         let err = p.validate_task(&task).unwrap_err().to_string();
         assert!(

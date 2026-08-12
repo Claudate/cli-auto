@@ -76,6 +76,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             scope: None,
             outputs: vec![],
             tags: vec![],
+            wait_for: vec![],
         });
     }
 

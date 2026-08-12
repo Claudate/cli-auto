@@ -131,6 +131,7 @@ mod tests {
                 scope: None,
                 outputs: vec![],
                 tags: vec![],
+            wait_for: vec![],
             }],
         }
     }

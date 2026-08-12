@@ -7,6 +7,7 @@
 
 pub mod acceptance;
 pub mod browser_mcp;
+pub mod collab;
 pub mod handoff;
 pub mod log_events;
 pub mod provider;

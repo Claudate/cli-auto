@@ -68,6 +68,9 @@ impl FakeProvider {
             body.push_str(&serde_json::to_string(&v)?);
             body.push('\n');
         }
+        // Add plaintext lines that collaboration bus can match
+        body.push_str(&format!("Server ready at http://localhost:3000\n"));
+        body.push_str(&format!("Task {} completed\n", task.id));
         body.push_str("CCO_DONE ok\n");
         std::fs::write(stdout_path, body)?;
         std::fs::write(
@@ -382,6 +385,7 @@ mod tests {
             scope: None,
             outputs: vec![],
             tags: vec![],
+            wait_for: vec![],
         }
     }
 

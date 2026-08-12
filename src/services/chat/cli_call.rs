@@ -315,6 +315,7 @@ pub(crate) fn call_chat_provider(
         scope: None,
         outputs: vec![],
         tags: vec!["browser".into()],
+        wait_for: vec![],
     };
 
     // Visual QA path: optional browser MCP + preview URL env (display still via ![path]).
@@ -487,6 +488,7 @@ pub(crate) fn call_claude_normalize(
         scope: None,
         outputs: vec![],
         tags: vec![],
+        wait_for: vec![],
     };
 
     let ctx = StartCtx {

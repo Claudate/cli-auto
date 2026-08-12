@@ -343,6 +343,7 @@ pub fn start_run_from_plan_with_route(
     let failover_order = config.default.failover_order.clone();
     let cost_escalate_enabled = config.default.cost_escalate_enabled;
     let browser_cfg = config.browser.clone();
+    let memory_port = crate::app::memory::semantic_port(&config);
     let config_for_ensure = config.clone();
 
     std::thread::spawn(move || {
@@ -388,6 +389,8 @@ pub fn start_run_from_plan_with_route(
                 cost_escalate_enabled,
                 browser: browser_cfg,
                 provider_unhealthy: Vec::new(),
+                collab_bus: None,
+                memory: memory_port,
             };
             match sched.run().await {
                 Ok(status) => {
@@ -570,6 +573,7 @@ fn spawn_resume(config: Config, run_id: &str, only_task: Option<String>) -> Resu
     let failover_order = config.default.failover_order.clone();
     let cost_escalate_enabled = config.default.cost_escalate_enabled;
     let browser_cfg = config.browser.clone();
+    let memory_port = crate::app::memory::semantic_port(&config);
     let config_for_ensure = config.clone();
 
     std::thread::spawn(move || {
@@ -602,6 +606,8 @@ fn spawn_resume(config: Config, run_id: &str, only_task: Option<String>) -> Resu
                 cost_escalate_enabled,
                 browser: browser_cfg,
                 provider_unhealthy: Vec::new(),
+                collab_bus: None,
+                memory: memory_port,
             };
             let status = sched.run().await;
             if let Ok(st) = RunState::load(&runs_dir.join(&rid)) {

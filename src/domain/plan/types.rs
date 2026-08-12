@@ -9,6 +9,31 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+/// Runtime collaboration: condition to wait for before starting a task.
+/// Extends static `depends_on` with dynamic runtime events.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WaitCondition {
+    /// ID of the task to wait for
+    pub task_id: String,
+    /// Type of condition to wait for
+    pub condition: WaitType,
+    /// Pattern to match (used by OutputMatch and StepDone)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pattern: Option<String>,
+}
+
+/// Type of runtime wait condition
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WaitType {
+    /// Wait for task to complete (default, equivalent to depends_on)
+    Complete,
+    /// Wait for task output to match a pattern
+    OutputMatch,
+    /// Wait for a specific step marker (CCO_STEP done:name)
+    StepDone,
+}
+
 // ── Product hard limits (P1-4 / B3) ───────────────────────────────────
 /// Max tasks in one plan (planner + validate).
 /// Planner soft-cap leaves room for up to three system post-tasks
@@ -267,6 +292,11 @@ pub struct TaskIR {
     /// Absent in old plans → empty (serde default).
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Runtime collaboration: wait for conditions beyond static `depends_on`.
+    /// Allows tasks to start when a dependency reaches a specific state (e.g. output match)
+    /// rather than waiting for full completion.
+    #[serde(default)]
+    pub wait_for: Vec<WaitCondition>,
 }
 
 impl TaskIR {

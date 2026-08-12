@@ -1,0 +1,41 @@
+schema: cco-plan/v1
+name: serve-then-test
+max_parallel: 2
+
+# 示例：后台启动 dev server，等输出 "ready" 后再跑测试
+# 展示 wait_for 运行时协作能力
+
+tasks:
+  - id: serve
+    title: 启动开发服务器（后台）
+    provider: claude
+    mode: bg
+    prompt: |
+      启动项目的开发服务器（保持运行）：
+      
+      1. 进入项目目录
+      2. 运行 npm run dev（或对应的启动命令）
+      3. 等待服务器就绪，看到类似 "Server ready" 或 "Listening on" 的输出
+      4. 打印一行确认：CCO_DONE ok
+      
+      注意：不要停止服务器，保持运行状态供后续任务使用。
+
+  - id: test
+    title: 运行冒烟测试
+    # 注意：不写 depends_on: [serve] —— depends_on 等的是「serve 完成」，
+    # 而 dev server 永不完成；wait_for 等的是「serve 输出就绪行」即可开跑。
+    provider: claude
+    prompt: |
+      对本地开发服务器运行冒烟测试：
+      
+      1. 等待 serve 任务输出 "ready" 后再开始
+      2. 访问 http://localhost:3000（或对应端口）
+      3. 验证主页可以正常加载
+      4. 检查关键功能是否可用
+      5. 打印测试结果
+    
+    # 运行时协作：等待 serve 输出特定内容，而非等它完成（serve 永不完成）
+    wait_for:
+      - task_id: serve
+        condition: output_match
+        pattern: "Server ready"

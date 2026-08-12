@@ -14,7 +14,7 @@ run/: **A1-3/A1-7/A5-1/A5-3 · S-run 多文件** Run 用例面（单文件 ≤40
   · **status_line.rs（H1）**：`from_run_state` / `from_job_view` / `resolve` → `StatusOneLiner`；CLI/live 共用
   · 编排循环仍在 `runtime/scheduler`；**不**旁路 Mode B；TUI 只经本面
 chat.rs: **A1-6/A1-7** Chat 用例面 — session list/get/new/**rename**/delete · send · stream_partial · **preview_start/stop/status**（本地 dev 独立进程）· save_plan · read_plan_md · normalize_plan · save_attachment · **read_image_data_url** · cleanup_expired；委托 `services::chat_*` / `preview`；**禁止** confirm/start_run
-memory.rs: **P2-2** 项目轻记忆 — get/last_summary/list_pins/upsert_pin/delete_pin · writeback_from_run · prompt_context
+memory.rs: **P2-2** 项目轻记忆 — get/last_summary/list_pins/upsert_pin/delete_pin · writeback_from_run · prompt_context · **P3 语义记忆试点** semantic_split_context / remember_split_success（`config.memory.enabled` 门控 · 默认关 · best-effort · 仅 context 注入不改路由/confirm）
 guide.rs: **G0-3** 引导空用例 — list/start/get 会话；**无**策略/开跑（confirm 唯一开跑不变）
 project_ui.rs: **项目 UI 偏好** — dismiss_run / clear_dismissed_run（SQLite `project_ui_prefs`；结束本轮 SoT）
 （A1-5 **未**加 `app/inspect` 用例面：inspect 纯规则在 `domain/inspect`，IO 在 `runtime/handoff`；桌面 rework 经 `app::run::start_rework` → services。A4 再做人话 DTO 用例。）

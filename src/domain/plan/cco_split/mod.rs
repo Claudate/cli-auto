@@ -148,6 +148,7 @@ mod tests {
                 }),
                 outputs: vec![],
                 tags: vec!["frontend".into()],
+                wait_for: vec![],
             }],
         };
         let doc = from_plan_ir(

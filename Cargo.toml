@@ -37,6 +37,11 @@ ratatui = "0.29"
 crossterm = "0.28"
 reqwest = { version = "0.13.4", features = ["json"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
+# P3: Lightweight memory system dependencies
+ort = "2.0.0-rc.13"      # ONNX Runtime for embedding (latest stable RC)
+tantivy = "0.22"         # Full-text search (BM25)
+hnsw = { version = "0.11", optional = true }  # Vector index (optional for P4)
+tokenizers = "0.20"      # HuggingFace tokenizers for BERT/Sentence-BERT
 
 [dev-dependencies]
 assert_cmd = "2"

@@ -23,7 +23,7 @@ pub use crate::domain::plan::{
     task_has_ui_verify_tag, title_is_meta_heading, title_looks_optional, to_plan_ir, CcoSplitJob,
     CcoSplitSource, CcoSplitStatus, CcoSplitTask, CcoTaskKind, CcoTaskStatus, ChecklistKind,
     HostChecklist, HostChecklistItem, OnFailure, PlanIR, RiskClass, TaskIR, TaskRole, TaskScope,
-    BROWSER_SYSTEM_PROMPT, BROWSER_SYSTEM_PROMPT_MARKER, CCO_SPLIT_SCHEMA,
+    WaitCondition, WaitType, BROWSER_SYSTEM_PROMPT, BROWSER_SYSTEM_PROMPT_MARKER, CCO_SPLIT_SCHEMA,
     CHECKLIST_SCHEMA_VERSION, CLOSEOUT_DEFAULT_FORBID, CLOSEOUT_DEFAULT_WRITE_SCOPE,
     CLOSEOUT_SYSTEM_PROMPT, CLOSEOUT_SYSTEM_PROMPT_MARKER, IMPLEMENT_USABILITY_SYSTEM_PROMPT,
     IMPLEMENT_USABILITY_SYSTEM_PROMPT_MARKER, INSPECT_DEFAULT_ALLOWED_TOOLS,

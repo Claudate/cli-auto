@@ -12,7 +12,7 @@ use serde::Deserialize;
 
 use crate::config::Config;
 use crate::plan::adapters::raw_single::default_provider_opts;
-use crate::plan::{OnFailure, PlanIR, TaskIR, TaskRole, TaskScope};
+use crate::plan::{OnFailure, PlanIR, TaskIR, TaskRole, TaskScope, WaitCondition};
 
 #[derive(Debug, Deserialize)]
 struct FilePlan {
@@ -123,6 +123,9 @@ struct FileTask {
     /// Free-form tags for L1 routing (P2-4). Absent → empty.
     #[serde(default)]
     tags: Vec<String>,
+    /// Runtime collaboration waits (output_match/step_done). Absent → empty.
+    #[serde(default)]
+    wait_for: Vec<WaitCondition>,
 }
 
 pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
@@ -281,6 +284,7 @@ pub fn parse(path: &Path, text: &str, config: &Config) -> Result<PlanIR> {
             scope,
             outputs: ft.outputs.clone(),
             tags: ft.tags.clone(),
+            wait_for: ft.wait_for.clone(),
         });
     }
 

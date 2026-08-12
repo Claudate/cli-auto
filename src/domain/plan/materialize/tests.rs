@@ -28,6 +28,7 @@ use crate::domain::plan::types::{
             }),
             outputs: vec![],
             tags: vec![],
+            wait_for: vec![],
         }
     }
 

@@ -273,6 +273,7 @@ mod tests {
             }),
             outputs: vec![],
             tags: vec![],
+            wait_for: vec![],
         }
     }
 
@@ -306,6 +307,8 @@ mod tests {
             cost_escalate_enabled: false,
             browser: crate::config::BrowserConfig::default(),
             provider_unhealthy: Vec::new(),
+            collab_bus: None,
+            memory: None,
         }
     }
 
@@ -367,7 +370,7 @@ mod tests {
         let base_sha = git(repo.path(), &["rev-parse", "HEAD"]);
         let mut task = implement_task("t8");
         task.role = Some(crate::domain::plan::TaskRole::Inspect);
-        let mut ir = crate::plan::PlanIR {
+        let ir = crate::plan::PlanIR {
             schema: "cco-plan/v1".into(),
             name: "n".into(),
             adapter: "cco-plan/v1".into(),
@@ -466,7 +469,7 @@ mod tests {
         let repo = make_repo();
         let mut task = implement_task("t9");
         task.scope = None;
-        let mut ir = crate::plan::PlanIR {
+        let ir = crate::plan::PlanIR {
             schema: "cco-plan/v1".into(),
             name: "n".into(),
             adapter: "cco-plan/v1".into(),
@@ -505,7 +508,7 @@ mod tests {
         let repo = make_repo();
         let mut task = implement_task("t10");
         task.scope = None;
-        let mut ir = crate::plan::PlanIR {
+        let ir = crate::plan::PlanIR {
             schema: "cco-plan/v1".into(),
             name: "n".into(),
             adapter: "cco-plan/v1".into(),

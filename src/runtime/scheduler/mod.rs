@@ -21,8 +21,10 @@
 //! | soft-fill route (domain/worker) | acceptance shell · mirror_run |
 
 mod active;
+mod collab_gate;
 mod finish;
 mod gates;
+mod memory;
 mod patrol;
 mod start;
 mod tick;
@@ -36,6 +38,7 @@ use std::time::Duration;
 use anyhow::Result;
 use tracing::{info, warn};
 
+use super::collab::CollabBus;
 use super::handoff;
 use super::provider::{ProviderRegistry, TaskStatus, WorkerHandle, WorkerPort};
 use crate::domain::run::{resolve_final_run_status, FinalRunStatus};
@@ -82,6 +85,10 @@ pub struct Scheduler {
     pub browser: crate::config::BrowserConfig,
     /// Providers that failed preflight this run (skip in cost escalate / budget picks).
     pub provider_unhealthy: Vec<String>,
+    /// Optional collaboration bus for runtime task coordination (wait_for conditions).
+    pub collab_bus: Option<Arc<CollabBus>>,
+    /// P3 memory pilot: outcome recording + preventive failover (None = disabled).
+    pub memory: Option<Arc<dyn crate::ports::MemoryPort>>,
 }
 
 impl Scheduler {

@@ -275,6 +275,7 @@ mod tests {
             }),
             outputs: vec![],
             tags: vec![],
+            wait_for: vec![],
         }
     }
 

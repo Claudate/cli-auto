@@ -319,6 +319,7 @@ mod tests {
                 scope: None,
                 outputs: vec![],
                 tags: vec![],
+            wait_for: vec![],
             }],
         };
         apply_permission_mode(&mut ir, &cfg, None);
@@ -374,6 +375,7 @@ mod tests {
                     scope: None,
                     outputs: vec![],
                     tags: vec![],
+            wait_for: vec![],
                 },
                 TaskIR {
                     id: "maybe".into(),
@@ -394,6 +396,7 @@ mod tests {
                     scope: None,
                     outputs: vec![],
                     tags: vec![],
+            wait_for: vec![],
                 },
                 TaskIR {
                     id: "maybe_on".into(),
@@ -414,6 +417,7 @@ mod tests {
                     scope: None,
                     outputs: vec![],
                     tags: vec![],
+            wait_for: vec![],
                 },
             ],
         }

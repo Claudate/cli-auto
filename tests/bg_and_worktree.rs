@@ -75,6 +75,8 @@ tasks:
         cost_escalate_enabled: false,
         browser: cco::config::BrowserConfig::default(),
         provider_unhealthy: Vec::new(),
+        collab_bus: None,
+        memory: None,
     }
     .run()
     .await
@@ -278,6 +280,8 @@ tasks:
         cost_escalate_enabled: false,
         browser: cco::config::BrowserConfig::default(),
         provider_unhealthy: Vec::new(),
+        collab_bus: None,
+        memory: None,
     }
     .run()
     .await

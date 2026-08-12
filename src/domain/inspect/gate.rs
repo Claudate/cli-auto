@@ -229,6 +229,7 @@ mod tests {
             scope: None,
             outputs,
             tags: vec![],
+            wait_for: vec![],
         }
     }
 

@@ -191,6 +191,7 @@ pub fn build_rework_plan(
             ".cco-out/progress/SUMMARY.md".into(),
         ],
         tags: vec!["rework".into()],
+        wait_for: vec![],
     };
 
     let inspect_task = TaskIR {
@@ -216,6 +217,7 @@ pub fn build_rework_plan(
         }),
         outputs: vec![INSPECT_VERDICT_REL.into(), INSPECT_ISSUES_REL.into()],
         tags: vec!["inspect".into(), "rework".into()],
+        wait_for: vec![],
     };
 
     let mut ir = PlanIR {

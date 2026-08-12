@@ -166,6 +166,11 @@ impl Scheduler {
         for id in ids {
             let (provider, handle, _) = running.get(&id).unwrap();
             let st = provider.poll(handle).await?;
+
+            // Publish new stdout lines to the collab bus (collab_gate cursor).
+            let stdout_path = handle.stdout_path.clone();
+            self.publish_collab_output(&id, &stdout_path, progress);
+            let (_, handle, _) = running.get(&id).unwrap();
             match st {
                 WorkerStatus::Running => {
                     if let Some(action) =
@@ -242,6 +247,17 @@ impl Scheduler {
                         self.apply_result(&id, &result)?;
                         self.auto_commit_task(&id, &result);
                         done.insert(id.clone());
+                        
+                        // Publish status change to collaboration bus
+                        if let Some(bus) = &self.collab_bus {
+                            bus.publish(super::super::collab::TaskEvent::StatusChange {
+                                task_id: id.clone(),
+                                status: TaskStatus::Done,
+                            });
+                        }
+                        // P3 memory pilot: record success (best-effort).
+                        self.record_task_outcome(&id, "success").await;
+                        
                         info!(task = %id, cost = ?result.cost_usd, "task done");
                         self.state.event(
                             "task_end",
@@ -255,6 +271,22 @@ impl Scheduler {
                         self.state.save()?;
                         self.handoff_task_end(&id, &result, Some(&work_dir));
                     } else {
+                        // Publish terminal status (Failed/Timeout/Stopped) to collab bus
+                        if let Some(bus) = &self.collab_bus {
+                            bus.publish(super::super::collab::TaskEvent::StatusChange {
+                                task_id: id.clone(),
+                                status: result.status.clone(),
+                            });
+                        }
+                        // P3 memory pilot: record failure kind before retry/failover
+                        // rewrites the provider (best-effort).
+                        let outcome = match result.status {
+                            TaskStatus::Timeout => "timeout",
+                            TaskStatus::Stopped => "stopped",
+                            _ => "failed",
+                        };
+                        self.record_task_outcome(&id, outcome).await;
+                        
                         let _ = self
                             .finish_or_retry(
                                 &id,
@@ -392,11 +424,38 @@ impl Scheduler {
             // P2: before spawn, optionally downgrade still-auto routes under budget ceiling.
             self.maybe_budget_downgrade_task(&id);
 
-            let task = self
+            let mut task = self
                 .plan
                 .task(&id)
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("missing task {id}"))?;
+
+            // Runtime collaboration: non-blocking wait_for gate (collab_gate.rs).
+            // Never await here — the reap phase of this same loop is what
+            // publishes the awaited events (inline await = deadlock).
+            match self.collab_wait_gate(&task) {
+                super::collab_gate::WaitGate::Proceed => {}
+                super::collab_gate::WaitGate::Defer => {
+                    // Not started: ready_tasks re-offers it next tick.
+                    continue;
+                }
+                super::collab_gate::WaitGate::Fail(reason) => {
+                    warn!(task = %id, %reason, "wait_for condition failed");
+                    if let Some(ts) = self.state.tasks.get_mut(&id) {
+                        ts.status = TaskStatus::Failed;
+                        ts.error = Some(format!("wait_for failed: {reason}"));
+                        ts.finished_at = Some(chrono::Utc::now());
+                    }
+                    failed.insert(id.clone());
+                    started.insert(id.clone());
+                    let _ = self.state.save();
+                    continue;
+                }
+            }
+
+            // P3 memory pilot: preventive failover from recorded history
+            // (no-op when memory disabled; Explicit routes untouched).
+            self.maybe_memory_failover(&id, &mut task).await;
 
             if let Err(reason) =
                 handoff::system_push_inspect_gate(&self.plan, &task, &self.state.project_root)
@@ -443,6 +502,7 @@ impl Scheduler {
                         ProgressWatch {
                             last_bytes: bytes,
                             last_change: chrono::Utc::now(),
+                            collab_pos: 0,
                         },
                     );
                     self.maybe_open_terminal(&id, &work_dir, &handle)?;
@@ -464,16 +524,26 @@ impl Scheduler {
 
                     let st = provider.poll(&handle).await?;
                     if !matches!(st, WorkerStatus::Running) {
+                        // Fast path (task finished on first poll) must mirror the
+                        // reap path: output lines + status event + memory record.
+                        self.publish_collab_output(&id, &handle.stdout_path, progress);
                         progress.remove(&id);
                         let mut result = provider.collect(&handle).await?;
                         if result.status == TaskStatus::Done {
                             self.apply_post_done_gates(&task, &work_dir, &mut result)
                                 .await;
                         }
+                        if let Some(bus) = &self.collab_bus {
+                            bus.publish(super::super::collab::TaskEvent::StatusChange {
+                                task_id: id.clone(),
+                                status: result.status.clone(),
+                            });
+                        }
                         if result.status == TaskStatus::Done {
                             self.apply_result(&id, &result)?;
                             self.auto_commit_task(&id, &result);
                             done.insert(id.clone());
+                            self.record_task_outcome(&id, "success").await;
                             self.state.event(
                                 "task_end",
                                 serde_json::json!({
@@ -486,6 +556,12 @@ impl Scheduler {
                             self.state.save()?;
                             self.handoff_task_end(&id, &result, Some(&work_dir));
                         } else {
+                            let outcome = match result.status {
+                                TaskStatus::Timeout => "timeout",
+                                TaskStatus::Stopped => "stopped",
+                                _ => "failed",
+                            };
+                            self.record_task_outcome(&id, outcome).await;
                             let reason = match result.status {
                                 TaskStatus::Timeout => "timeout",
                                 TaskStatus::Stopped => "stopped",

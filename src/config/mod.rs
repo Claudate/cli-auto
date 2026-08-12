@@ -35,6 +35,9 @@ pub struct Config {
     /// Allowed projects shown in the desktop sidebar (not a filesystem tree).
     #[serde(default)]
     pub projects: Vec<AllowedProject>,
+    /// Memory backend configuration (agentmemory integration · P3 spike).
+    #[serde(default)]
+    pub memory: MemoryConfig,
     /// Resolved home state root (~/.cco)
     #[serde(skip)]
     pub state_root: PathBuf,
@@ -493,6 +496,34 @@ impl Default for TuiConfig {
     }
 }
 
+/// Memory backend configuration for semantic search and knowledge graphs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MemoryConfig {
+    /// Master switch. Default false — no memory until opted in.
+    pub enabled: bool,
+    /// Base URL of agentmemory service.
+    pub base_url: String,
+    /// Embedding model (e.g., "nomic-embed-text" for local Ollama).
+    pub embedding_model: String,
+    /// TTL in days for auto-archiving old memories (default 90).
+    pub ttl_days: u32,
+    /// Maximum entries before triggering cleanup (default 10,000).
+    pub max_entries: usize,
+}
+
+impl Default for MemoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: "http://localhost:3000".into(),
+            embedding_model: "nomic-embed-text".into(),
+            ttl_days: 90,
+            max_entries: 10_000,
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -503,6 +534,7 @@ impl Default for Config {
             browser: BrowserConfig::default(),
             projects: Vec::new(),
             git: GitConfig::default(),
+            memory: MemoryConfig::default(),
             state_root: default_state_root(),
         }
     }
@@ -729,6 +761,19 @@ enabled = false
 granularity = "off"
 push_after_commit = false
 allow_force = false
+
+# Memory backend for semantic search and knowledge graphs (P3 spike).
+# Requires agentmemory service running (default: http://localhost:3000).
+# Docs: docs/agentmemory-integration-plan-2026-08-12.md
+[memory]
+enabled = false
+base_url = "http://localhost:3000"
+# Embedding model (e.g., "nomic-embed-text" for local Ollama).
+embedding_model = "nomic-embed-text"
+# TTL in days for auto-archiving old memories (default 90).
+ttl_days = 90
+# Maximum entries before triggering cleanup (default 10,000).
+max_entries = 10000
 "#;
         std::fs::write(path, template)
             .with_context(|| format!("write config template {}", path.display()))?;

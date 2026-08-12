@@ -91,6 +91,24 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
         max_parallel,
         &digest,
     );
+    // P3 pilot: retrieve past split cases as context (config.memory.enabled gated;
+    // empty by default → prompt unchanged).
+    let mem_query = format!(
+        "拆分 {} {} {}",
+        job.project
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or(""),
+        abs.file_stem().and_then(|s| s.to_str()).unwrap_or(""),
+        digest.mode.as_str()
+    );
+    let sem = crate::app::memory::semantic_split_context(config, &job.project, &mem_query, 3);
+    let prompt = if sem.is_empty() {
+        prompt
+    } else {
+        append_log(config, &job.job_id, "semantic memory: 注入历史拆分 context");
+        format!("{prompt}\n{sem}")
+    };
     std::fs::write(task_dir.join("prompt.md"), &prompt)?;
     append_log(config, &job.job_id, "starting intelligent planner…");
 
@@ -118,6 +136,7 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
         scope: None,
         outputs: vec![],
         tags: vec![],
+        wait_for: vec![],
     };
 
     let ctx = StartCtx {
@@ -258,6 +277,8 @@ pub(super) fn build_llm_plan(config: &Config, job: &PlanJob) -> Result<PlanIR> {
             }
         ),
     );
+    // P3 pilot: remember this successful split for future retrieval (best-effort).
+    crate::app::memory::remember_split_success(config, &job.project, &job.job_id, &ir.name, &ir.tasks);
     Ok(ir)
 }
 
@@ -461,6 +482,7 @@ fn run_short_claude_print(
         scope: None,
         outputs: vec![],
         tags: vec![],
+        wait_for: vec![],
     };
     let ctx = StartCtx {
         run_id: job.job_id.clone(),
@@ -839,6 +861,7 @@ pub(super) fn parse_llm_plan_output(
                 scope,
                 outputs: t.outputs,
                 tags,
+                wait_for: vec![],
             })
         })
         .collect();
@@ -1207,6 +1230,7 @@ mod llm_critic_gate_tests {
                 scope: None,
                 outputs: vec![],
                 tags: vec![],
+                wait_for: vec![],
             }],
         };
         let out = run_optional_llm_critic(&cfg, &job, &mut ir, PlanModeKind::Greenfield);
