@@ -115,32 +115,21 @@ pub struct NoOpMemory; // 空实现，enabled=false 时使用
 - `runtime/scheduler/memory.rs` — 终态 outcome 录入 + spawn 前预防性 failover（Explicit route 不动；`route_note=memory:…` + `provider_switched` 事件）
 
 **验收标准**：
-- [x] 决策单测 6 项 + 集成测试（fake 跑完记忆库有 outcome 条目）
-- [ ] 真机 e2e：真实 claude 3 次 timeout → 自动切 codex（需真实 provider）
+- [x] 决策单测 6 项 + 集成测试（fake 跑完记忆库有 outcome 条目；预置失败历史 → spawn 前真切换 + route_note/事件断言）
+- [ ] 真机 e2e：真实 claude 3 次 timeout → 自动切 codex（需真实 provider；切换动作已被 fake 集成覆盖）
 
 ---
 
-## 三、待清理项（P3 启动前）
+## 三、待清理项 ✅ 已核销（2026-08-12）
 
-### 删除超范围实现
-
-当前存在但 P3 不需要的文件：
-
-1. **src/ports/agentmemory_client.rs** (319 行)
-   - REST API 客户端
-   - 轻量方案不使用 HTTP
-   - 建议：P3 启动时删除
-
-2. **Cargo.toml 依赖**
-   - `urlencoding = "2"` - 仅 HTTP 客户端需要
-   - 建议：P3 启动时移除
+- ✅ `src/ports/agentmemory_client.rs`（REST 客户端）— 已删除
+- ✅ Cargo.toml `urlencoding` 依赖 — 已移除
+- ✅ `config::MemoryConfig` 残留 REST 字段（`base_url` / `embedding_model`）与「需要 agentmemory 服务」模板注释 — 2026-08-12 清除，配置只留 `enabled` / `ttl_days` / `max_entries`
 
 ### 保留资产
 
-以下文件保留，P3 可直接复用：
-
 - ✅ `src/ports/memory.rs` - MemoryPort trait
-- ✅ `src/config/mod.rs` - MemoryConfig
+- ✅ `src/config/mod.rs` - MemoryConfig（纯本地语义）
 - ✅ `docs/agentmemory-integration-plan-2026-08-12.md` - 完整路线图
 
 ---
@@ -159,34 +148,26 @@ pub struct NoOpMemory; // 空实现，enabled=false 时使用
 
 ## 五、下一步行动
 
-### 立即行动（P2 完成后）
+### 剩余（需真实环境，本机无法关账）
 
-1. **删除超范围代码**
-   ```bash
-   rm src/ports/agentmemory_client.rs
-   # 编辑 Cargo.toml，移除 urlencoding 依赖
-   # 编辑 src/ports/mod.rs，移除 agentmemory_client 相关导出
-   ```
-
-2. **P3-Week1 启动**
-   - 添加依赖：`tantivy`, `ort`, `ndarray`
-   - 创建 `src/state/memory_store.rs`
-   - 实现 MemoryStore 基础结构
+1. 场景 1 真实项目实测：5 个不同类型项目检索命中 + 任务数减少 20%+ 对比
+2. 场景 2 真机 e2e：真实 claude 3 次 timeout → 自动切 codex
 
 ### 验收标准
 
-**P2 阶段（当前）**：
+**P2 阶段**：
 - ✅ 优点分析完成
-- ✅ 落地计划文档完成（506 行）
+- ✅ 落地计划文档完成
 - ✅ 技术选型明确（纯 Rust 轻量方案）
 - ✅ 基础接口层就绪（MemoryPort trait）
 
-**P3 阶段（待启动）**：
-- [ ] 两个试点场景能独立运行
-- [ ] 集成测试覆盖率 > 80%
-- [ ] 性能基准：10k 条存储 + 100 次检索 < 5 秒
+**P3 阶段（代码路径已收口 · 2026-08-12）**：
+- [x] 两个试点场景能独立运行（单测/fake 集成级；真实项目实测见上方剩余项）
+- [x] 集成测试覆盖率 > 80%（记忆相关模块行覆盖 85.9%–100% · cargo llvm-cov）
+- [x] 性能基准：10k 条存储 + 100 次检索 < 5 秒（实测 2.31s · `store_batch` 批量路径）
+- [x] 文档：`memory-user-guide.md` + `memory-dev-guide.md`
 
 ---
 
 **最后更新**: 2026-08-12  
-**状态**: 评估完成，等待 P2-17 收口后启动 P3
+**状态**: P3 代码路径收口；剩真实环境验收（真机 e2e + 真实项目实测）

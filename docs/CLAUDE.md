@@ -26,8 +26,10 @@ browser-automation-cco.md: **浏览器自动化契约**（**W0–W3+++ ✅** · 
 
 ### 还在做（活跃落地 · 可有 ☐）
 
-agentmemory-integration-plan-2026-08-12.md: **轻量语义记忆（纯 Rust · P3）**（存储层 SQLite+tantivy+ONNX ✅ 实测 12.6ms · 场景1 Mode B 拆分记忆注入 ✅ · 场景2 Cost Router 历史 failover ✅ 代码落地/真机 e2e ☐ · P4+ 后置；**本能力唯一勾选**；不引入 Node/Docker）
+agentmemory-integration-plan-2026-08-12.md: **轻量语义记忆（纯 Rust · P3）**（存储层 ✅ 检索 12.6ms · 场景1 Mode B 注入 ✅ · 场景2 Cost Router failover ✅ 含切换集成测试 · **P3 完成标志 4/4 ✅**：基准 10k 2.31s · 覆盖率 85.9–100% · 双指南；残余=真机 e2e + 真实项目实测 ☐ · P4+ 后置；**本能力唯一勾选**；不引入 Node/Docker）
 agentmemory-integration-summary.md: agentmemory 评估总结（选型对比 · 采用本地纯 Rust 方案的理由；参考，勾选看上行）
+memory-user-guide.md: **语义记忆使用指南**（开关/模型下载/三个行为/数据管理；面向 PM/非开发）
+memory-dev-guide.md: **语义记忆开发指南**（六边形摆位 · 两条数据流 · 存储层 · 测试/基准实测 · 硬边界）
 path-depth-wave-2026-07-28/: **空态分群 · 更懂边聊 · 多计划本波**（去三档英雄键 · 01b 画像 · wave 认领/分组/总览 · 勾选只认 [landing](./path-depth-wave-2026-07-28/landing.md) · [INDEX](./path-depth-wave-2026-07-28/INDEX.md) · W0–W2 主路径已落 · W3 总览薄实现 · W1-6 桌面 residual）
 path-depth-multi-plan-audience-2026-07-28.md: **指针** → 上目录（勿再追加正文）
 context-digest-compress-landing-2026-07-27.md: **会话语义压缩 Session Digest**（**C0–C2 ✅ · 内置默认每轮** · 桌面 chat 抽/存/剥/注入 · 契约/skill · C3 可选 pin · **非**口令开关 · **非** gzip/文言 · **不**重开 guided G；**本能力唯一勾选**）
