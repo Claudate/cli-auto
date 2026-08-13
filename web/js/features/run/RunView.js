@@ -330,7 +330,14 @@ export function bindRunView(vm, bridge = {}) {
     const logResume = $("btn-log-resume");
     if (logResume) logResume.hidden = !canResume;
     const logEnd = $("btn-log-end-plan");
-    if (logEnd) logEnd.hidden = !(hasRun || active || finished);
+    if (logEnd) {
+      logEnd.hidden = !(hasRun || active || finished);
+      // Live run: ending the round stops workers first — say so up front.
+      logEnd.textContent = active ? "停止并结束" : "结束计划";
+      logEnd.title = active
+        ? "先停止所有执行中的任务，再结束本轮"
+        : "结束本轮计划";
+    }
 
     const toggle = $("btn-task-dash-toggle");
     if (toggle) {

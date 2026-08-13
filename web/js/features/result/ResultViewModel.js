@@ -9,6 +9,7 @@
  */
 
 import { createStore } from "../../shared/store.js";
+import { isLiveStatus, isPausedStatus } from "../../shared/statusUi.js";
 import * as resultApi from "./resultApi.js";
 
 /**
@@ -175,9 +176,31 @@ export function createResultViewModel(deps = {}) {
 
     /**
      * Soft end + P2-2 writeback last_summary (best-effort; never blocks finish).
+     * A still-live run must be stopped first — otherwise「结束计划」only clears
+     * the UI while workers keep running (and billing/committing) in background.
      */
     async finishRound() {
-      const runId = runIdOf(currentLive() || snap().live);
+      const live = currentLive() || snap().live;
+      const runId = runIdOf(live);
+      const status = String(live?.run_status || "").toLowerCase();
+      let stopped = false;
+      if (
+        runId &&
+        typeof runId === "string" &&
+        runId.trim() &&
+        (isLiveStatus(status) || isPausedStatus(status))
+      ) {
+        toast("正在停止执行…");
+        try {
+          await resultApi.stopRun(runId);
+          stopped = true;
+        } catch (e) {
+          const msg = e?.message || String(e);
+          console.warn("[ResultViewModel] stopRun before finish", e);
+          toast(`没停下来，本轮未结束：${msg}`);
+          return;
+        }
+      }
       if (runId && typeof runId === "string" && runId.trim()) {
         try {
           await resultApi.writebackMemory(runId);
@@ -193,7 +216,11 @@ export function createResultViewModel(deps = {}) {
           console.error("[ResultViewModel] onFinishRound", e);
         }
       }
-      toast("本轮已结束 · 可回聊天写下一份计划");
+      toast(
+        stopped
+          ? "已停止执行并结束本轮 · 可回聊天写下一份计划"
+          : "本轮已结束 · 可回聊天写下一份计划"
+      );
     },
   };
 }

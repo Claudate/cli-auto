@@ -36,8 +36,7 @@ import {
   ensureClaimDraftMessageVisible,
   renderHollowBarHtml,
 } from "./chatClarify.js";
-// Note: ensureClaimDraftMessageVisible and renderHollowBarHtml are now in clarify/briefAndClaim.js
-// but re-exported from chatClarify for backward compatibility.
+// Note: ensureClaimDraftMessageVisible and renderHollowBarHtml live in chatClarify.js.
 import {
   enhanceAssistantBody,
   shouldFoldMessage,
@@ -246,10 +245,23 @@ export function renderLastSummaryBanner(text) {
   }
 }
 
-export function renderChatMessages() {
+// Scroll anchoring: remember which session was painted last so a session /
+// project switch snaps to bottom while in-place repaints keep reading position.
+let _lastScrollKey = null;
+
+export function renderChatMessages(opts = {}) {
   const list = $("#chat-messages");
   if (!list) return;
+  const nearBottom =
+    list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+  const prevScrollTop = list.scrollTop;
   ensureChatState();
+  const scrollKey = `${state.chatProjectPath || state.selectedPath || ""}::${
+    state.chatSession?.session_id || "default"
+  }`;
+  const sessionSwitched = scrollKey !== _lastScrollKey;
+  _lastScrollKey = scrollKey;
+  const stickBottom = !!opts.stickBottom || sessionSwitched || nearBottom;
   ensureClarifyState();
   installClarifyUi();
   // t4: after claim + reload, draft_plan may exist without a ```plan bubble
@@ -502,7 +514,13 @@ export function renderChatMessages() {
       }
     }
   } catch (_) {}
-  list.scrollTop = list.scrollHeight;
+  if (stickBottom) {
+    list.scrollTop = list.scrollHeight;
+  } else {
+    // Preserve reading position — unfolding an old message or a background
+    // repaint must not yank the viewport to the bottom.
+    list.scrollTop = prevScrollTop;
+  }
 }
 
 export function renderChatEnvBar() {

@@ -313,6 +313,18 @@ export function createUiActions() {
       if (tasks.length) call("renderCliBoard", tasks);
       toast("CLI 高度已恢复自适应");
     },
+    /** 日志高级工具（视图/字号/导出/自适应高度）：默认收起，点「工具」展开 */
+    "btn-log-advanced-toggle": () => {
+      const adv = document.getElementById("log-advanced");
+      if (!adv) return;
+      const show = !!adv.hidden;
+      adv.hidden = !show;
+      adv.setAttribute("aria-hidden", show ? "false" : "true");
+      const body = adv.querySelector(".log-advanced-body");
+      if (body) body.hidden = !show;
+      const btn = document.getElementById("btn-log-advanced-toggle");
+      if (btn) btn.classList.toggle("active", show);
+    },
     "btn-copy-log": async () => {
       const st = state();
       const t =

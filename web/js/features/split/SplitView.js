@@ -17,6 +17,7 @@ import {
   $,
 } from "./splitDetail.js";
 import * as gateway from "../../shared/gateway.js";
+import { confirmDialog } from "../../shared/confirmDialog.js";
 
 function g(name) {
   const w = typeof window !== "undefined" ? window : globalThis;
@@ -31,6 +32,7 @@ function g(name) {
 export function bindSplitView(vm, bridge = {}) {
   ensureAdvancedRouteDom();
   let wavesDirty = false;
+  let confirmInFlight = false;
 
   function legacy() {
     return (typeof bridge.getLegacy === "function" && bridge.getLegacy()) || {};
@@ -86,11 +88,16 @@ export function bindSplitView(vm, bridge = {}) {
     // 真正开跑中的重复启动仍由 confirmAndStart 里 hasActiveRun() 兜底。
     const jrid = job?.run_id || job?.runId || null;
     const live = g("state")?.live;
-    const runLocked =
-      !!jrid &&
-      !!live?.run_id &&
-      String(live.run_id) === String(jrid) &&
-      hasActiveRun();
+    const liveIsThisJob =
+      !!jrid && !!live?.run_id && String(live.run_id) === String(jrid);
+    const runLocked = liveIsThisJob && hasActiveRun();
+    // 卡片 live 状态同样只认「本 job 的 run」：任务 id（t1/t2…）跨 job 复用，
+    // 历史 run 会把新拆分的卡片标成完成/失败，并误禁用可选步骤的勾选框。
+    const liveTask = (id) => {
+      if (!liveIsThisJob) return null;
+      const fn = g("liveTaskById");
+      return typeof fn === "function" ? fn(id) : null;
+    };
     const selectedId = s.selectedTaskId;
 
     // 波次轨已并入步骤列表（按执行顺序 + 并行外框）；左侧栏隐藏
@@ -108,6 +115,7 @@ export function bindSplitView(vm, bridge = {}) {
         waves.innerHTML = cardsHtml(job, byId, {
           runLocked,
           selectedId,
+          liveTask,
           jobProvider: job.provider,
         });
         waves.querySelectorAll(".wave-task").forEach((b) => {
@@ -272,13 +280,13 @@ export function bindSplitView(vm, bridge = {}) {
       }
       const cur = tasks.find((t) => t.id === s.selectedTaskId);
       const label = cur?.title || s.selectedTaskId;
-      if (
-        !window.confirm(
-          `从本轮拆分中删除「${label}」？\n依赖它的步骤会自动去掉这条边。`
-        )
-      ) {
-        return;
-      }
+      const okDel = await confirmDialog({
+        title: "删除步骤",
+        body: `从本轮拆分中删除「${label}」？\n依赖它的步骤会自动去掉这条边。`,
+        okLabel: "删除",
+        danger: true,
+      });
+      if (!okDel) return;
       try {
         await vm.removeTask(s.selectedTaskId);
         const depsBox = $("confirm-edit-deps");
@@ -292,6 +300,24 @@ export function bindSplitView(vm, bridge = {}) {
       }
     },
     async confirmAndStart(opts = {}) {
+      // Re-entrancy guard: the doctor/settings awaits below leave a window
+      // where a double-click could fire confirm_start twice.
+      if (confirmInFlight) return;
+      confirmInFlight = true;
+      const startBtn = $("btn-confirm-start");
+      if (startBtn) startBtn.disabled = true;
+      try {
+        await actions._confirmAndStartInner(opts);
+      } finally {
+        confirmInFlight = false;
+        if (startBtn) startBtn.disabled = false;
+        // Let phase-aware paint re-disable if a run is now live.
+        try {
+          render();
+        } catch (_) {}
+      }
+    },
+    async _confirmAndStartInner(opts = {}) {
       const err = $("confirm-error");
       if (err) err.hidden = true;
       if (hasActiveRun()) {
@@ -363,12 +389,14 @@ export function bindSplitView(vm, bridge = {}) {
           const settings = await gateway.getSettings();
           const mode = String(settings?.permission_mode || "");
           if (mode === "dontAsk" || mode === "default") {
-            const ok = window.confirm(
-              "当前「任务授权」会拒绝写文件（执行时没有人点允许）。\n\n" +
-                "任务将无法改代码，看起来像软件坏了。\n\n" +
-                "点「确定」：改为自动授权并开始执行。\n" +
-                "点「取消」：不开始（可到设置 → 任务授权 修改）。"
-            );
+            const ok = await confirmDialog({
+              title: "需要开启任务自动授权",
+              body:
+                "当前「任务授权」会拒绝写文件（执行时没有人点允许），任务将无法改代码，看起来像软件坏了。\n\n" +
+                "开始执行前会把设置改为自动授权（可到 设置 → 任务授权 改回）。",
+              okLabel: "开启并开始执行",
+              cancelLabel: "先不开始",
+            });
             if (!ok) {
               if (err) {
                 err.textContent =

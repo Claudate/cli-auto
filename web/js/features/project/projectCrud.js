@@ -6,6 +6,7 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
+import { confirmDialog } from "../../shared/confirmDialog.js";
 import {
   state,
   $,
@@ -57,15 +58,15 @@ export async function addProjectFromModal() {
   try {
     await requireGateway().addProject(path, name);
     toast("已添加项目");
-    closeModal();
-    await loadProjects();
-    await host.selectProject(path);
-    // C4: resume welcome-template click after folder pick
+    // C4: consume the pending template BEFORE closeModal — closing the modal
+    // (incl. user cancel) always clears the stash so it can't fire days later.
     let pending = null;
     try {
       pending = sessionStorage.getItem("cco.pendingPlanTemplate");
-      if (pending) sessionStorage.removeItem("cco.pendingPlanTemplate");
     } catch (_) {}
+    closeModal();
+    await loadProjects();
+    await host.selectProject(path);
     if (pending && typeof window.applyPlanTemplate === "function") {
       await Promise.resolve(window.applyPlanTemplate(pending)).catch((e) =>
         toast(String(e?.message || e))
@@ -127,9 +128,12 @@ export async function removeSelectedProject(pathArg, opts = {}) {
     String(path).split(/[/\\]/).filter(Boolean).pop() ||
     path;
   if (!opts.skipConfirm) {
-    const ok = window.confirm(
-      `从 cco 列表移除「${name}」？不会删除电脑上的文件夹。`
-    );
+    const ok = await confirmDialog({
+      title: "移除项目",
+      body: `从 cco 列表移除「${name}」？不会删除电脑上的文件夹。`,
+      okLabel: "移除",
+      danger: true,
+    });
     if (!ok) return;
   }
   try {

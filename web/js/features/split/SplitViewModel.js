@@ -333,6 +333,11 @@ export function createSplitViewModel(deps = {}) {
      */
     async confirm() {
       const s = snap();
+      if (s.busy) {
+        // A confirm (or another mutation) is already in flight — never allow
+        // a second confirm_start from a double-click.
+        throw new Error("上一步操作还在进行，请稍候…");
+      }
       if (s.editing) {
         const err = "请先保存或取消编辑";
         setPatch({ lastError: err });

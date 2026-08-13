@@ -56,8 +56,7 @@ import {
   CLARIFY_COPY,
   DEFAULT_CLARIFY_ENTRY,
 } from "./chatClarify.js";
-// Note: Brief+Claim functions (claimBriefToPlan, rechatFromBrief, etc.) are now in clarify/briefAndClaim.js
-// but re-exported from chatClarify for backward compatibility.
+// Note: Brief+Claim functions (claimBriefToPlan, rechatFromBrief, etc.) live in chatClarify.js.
 
 // Re-export surfaces so installChat `...chatActions` stays stable.
 export {
@@ -221,10 +220,13 @@ export function handleLastSummaryAction(action) {
 /** L1: fill the CLI dropdown once from backend (never blocks send). */
 async function ensureChatCliOptions() {
   const sel = $("#chat-cli");
-  if (!sel || sel.dataset.loaded) return;
-  sel.dataset.loaded = "1";
+  // `loading` dedupes concurrent calls; `loaded` is only set on success so a
+  // failed fetch retries on the next render instead of leaving a stub list.
+  if (!sel || sel.dataset.loaded || sel.dataset.loading) return;
+  sel.dataset.loading = "1";
   try {
     const list = await chatApi.clisList();
+    sel.dataset.loaded = "1";
     const saved = (() => {
       try { return localStorage.getItem("cco.chatCli") || "claude"; } catch (_) { return "claude"; }
     })();
@@ -237,7 +239,11 @@ async function ensureChatCliOptions() {
           `<option value="${chatEsc(c.name)}"${c.name === saved ? " selected" : ""}>${chatEsc(c.label)}${c.installed ? "" : " · 未安装"}</option>`
       );
     if (opts.length) sel.innerHTML = opts.join("");
-  } catch (_) { /* non-fatal */ }
+  } catch (_) {
+    /* non-fatal: retry next render */
+  } finally {
+    delete sel.dataset.loading;
+  }
 }
 
 export async function sendChatMessage() {
@@ -250,11 +256,15 @@ export async function sendChatMessage() {
   const text = (input?.value || "").trim();
   const hasAtt = (state.chatPendingAttachments || []).length > 0;
   if (!text && !hasAtt) return;
-  if (state.chatBusy) return;
+  if (state.chatBusy) {
+    toast("AI 正在回复，等本轮结束再发；等太久可点红色按钮停止");
+    return;
+  }
 
   const projectPath = state.selectedPath;
   state.chatProjectPath = projectPath;
   state.chatBusy = true;
+  state.chatCancelRequested = false;
   state.chatWaitStartedAt = Date.now();
   // t3: mark clarify loading while send is in flight (人话载)
   try {
@@ -299,6 +309,11 @@ export async function sendChatMessage() {
   clearChatAttachments();
   stashChatSession(projectPath);
   renderChatPage();
+  // Sending always reveals your own message, even if you had scrolled up.
+  try {
+    const listEl = $("#chat-messages");
+    if (listEl) listEl.scrollTop = listEl.scrollHeight;
+  } catch (_) {}
   startChatWaitTicker();
 
   try {
@@ -420,21 +435,49 @@ export async function sendChatMessage() {
       }
     }
   } catch (e) {
+    const errMsg = String(e?.message || e);
     if (state.selectedPath === projectPath) {
-      state.chatSession.messages.push({
+      // The message never reached the CLI. Pull the optimistic bubble back out
+      // of the timeline（下一次成功合并会无声丢掉它），把内容还给用户可重发。
+      const msgs = state.chatSession.messages || [];
+      const last = msgs[msgs.length - 1];
+      if (last && last.role === "user" && last.content === optContent) {
+        msgs.pop();
+      }
+      let restoredHint = "";
+      if (text) {
+        if (input && !input.value.trim()) {
+          input.value = text;
+          input.style.height = "auto";
+          restoredHint = "内容已放回输入框，";
+        } else if (input && input.value.trim()) {
+          // User already typed something new — don't clobber; keep text in bubble.
+          msgs.push({ role: "user", content: optContent, _failed: true });
+          restoredHint = "上面这条没有发出去，";
+        }
+      }
+      if (pendingSnap.length && !(state.chatPendingAttachments || []).length) {
+        state.chatPendingAttachments = pendingSnap;
+        restoredHint += "附件已放回附件栏，";
+      }
+      msgs.push({
         role: "system",
-        content: `发送失败：${e?.message || e}`,
+        content: `发送失败（${restoredHint || ""}可直接重发）：${errMsg}`,
       });
-      // t3: product error copy for clarify phase
+      // Transport / environment failure — not「你没说清楚」。Clarify 的 error
+      // 文案会引导用户改写措辞，发送失败不能走那条归因。
       try {
-        setClarifyUiStatus("error");
+        if (state.chatClarify?.uiStatus === "loading") {
+          setClarifyUiStatus("idle");
+        }
       } catch (_) {}
       stashChatSession(projectPath);
     }
-    toast(String(e?.message || e));
+    toast(`发送失败：${errMsg}`);
   } finally {
     if (state.selectedPath === projectPath) {
       state.chatBusy = false;
+      state.chatCancelRequested = false;
       state.chatWaitStartedAt = 0;
       state.chatStreamText = "";
       state.chatStreamBytes = 0;
@@ -450,7 +493,8 @@ export async function sendChatMessage() {
       stopChatWaitTicker();
       stashChatSession(projectPath);
       renderChatPage();
-      input?.focus();
+      // Don't steal focus when the user has moved to another page meanwhile.
+      if (state.page === "chat") input?.focus();
     } else if (state.chatSessions[projectPath]) {
       state.chatSessions[projectPath].busy = false;
       state.chatSessions[projectPath].waitStartedAt = 0;
@@ -467,9 +511,12 @@ export async function cancelChatMessage() {
   if (!state.chatBusy) return;
   const project = state.chatProjectPath || state.selectedPath;
   if (!project) return;
+  // Immediate feedback: wait label flips to「正在停止…」via chatWaitLabel.
+  state.chatCancelRequested = true;
   try {
     await chatApi.cancelMessage(project);
   } catch (_) {
     // best-effort; send() will finish on its own
+    toast("停止请求没有送达，会等 AI 自己结束这轮");
   }
 }

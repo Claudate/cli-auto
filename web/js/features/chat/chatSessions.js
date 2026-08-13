@@ -17,8 +17,10 @@ import {
 import { chatEsc, chatFormatStreamBody } from "./chatFormat.js";
 import { resetClarifyState, hydrateClarifyFromSession } from "./chatClarify.js";
 import { paintPendingWait, stopPendingOrb } from "./chatThinkingOrb.js";
+import { confirmDialog } from "../../shared/confirmDialog.js";
 
 export function chatWaitLabel() {
+  if (state.chatCancelRequested) return "正在停止…";
   // t3: prefer clarify loading copy while in clarify phase
   if (state.chatClarify?.uiStatus === "loading") {
     return "正在整理你的想法…";
@@ -30,6 +32,9 @@ export function chatWaitLabel() {
   if (sec < 60) return `AI 正在思考…（已等 ${sec}s）`;
   const m = Math.floor(sec / 60);
   const s = sec % 60;
+  if (m >= 3) {
+    return `AI 正在思考…（已等 ${m}分${s}s，等太久可点「停止」重新提问）`;
+  }
   return `AI 正在思考…（已等 ${m}分${s}s，可稍候）`;
 }
 
@@ -37,6 +42,10 @@ export function chatWaitLabel() {
 export function paintChatPendingBubble() {
   const pending = document.querySelector(".chat-msg-pending .chat-msg-body");
   if (!pending) return;
+  const list = $("#chat-messages");
+  // Follow streaming output only when the user is already reading the bottom.
+  const nearBottom =
+    !!list && list.scrollHeight - list.scrollTop - list.clientHeight < 80;
   const stream = String(state.chatStreamText || "").trim();
   if (stream) {
     stopPendingOrb(pending);
@@ -58,6 +67,7 @@ export function paintChatPendingBubble() {
     const orbSize = clarify ? 36 : 32;
     paintPendingWait(pending, label, orbState, orbSize);
   }
+  if (list && nearBottom) list.scrollTop = list.scrollHeight;
 }
 
 /**
@@ -305,7 +315,10 @@ export function renderChatSessionSelect() {
   const panelList = $("#chat-session-panel-list");
   if (panelList) {
     bindChatSessionPanelPick(panelList);
-    if (!state.selectedPath) {
+    if (panelList.querySelector(".chat-session-item.is-renaming")) {
+      // A rename input is open — a background refresh must not blow it away.
+      // The list repaints on the next render after rename commits/cancels.
+    } else if (!state.selectedPath) {
       panelList.innerHTML =
         `<div class="chat-session-panel-empty muted">请先选择项目</div>`;
     } else if (state.chatSessionListLoading && !rows.length) {
@@ -507,15 +520,18 @@ export async function deleteChatSession(sessionId) {
     }
   );
   const isCurrent = sid === cur;
-  const ok = window.confirm(
-    isCurrent
+  const ok = await confirmDialog({
+    title: sid === "default" ? "清空默认会话" : "删除会话",
+    body: isCurrent
       ? (sid === "default"
-          ? "当前聊天记录将被清空，确认后将自动打开新会话。计划文件本身不会删除。"
-          : `将删除当前会话「${label}」，确认后将自动打开新会话。计划文件本身不会删除。`)
+          ? "当前聊天记录将被清空。计划文件本身不会删除。"
+          : `将删除当前会话「${label}」，之后回到默认会话。计划文件本身不会删除。`)
       : (sid === "default"
           ? "清空默认会话的聊天记录与草稿绑定？计划文件本身不会删除。"
-          : `删除会话「${label}」？计划文件本身不会删除。`)
-  );
+          : `删除会话「${label}」？计划文件本身不会删除。`),
+    okLabel: sid === "default" ? "清空" : "删除",
+    danger: true,
+  });
   if (!ok) return;
   try {
     await chatApi.deleteSession(state.selectedPath, sid);
@@ -527,13 +543,20 @@ export async function deleteChatSession(sessionId) {
     toast(sid === "default" ? "已清空默认会话" : "已删除会话");
     await loadChatSessionList();
     if (isCurrent) {
-      // Reset state first so newChatSession stashes a clean slate
+      // Back to the (always-present) default session — creating a fresh
+      // server session per delete piled up empty sessions in the list.
       state.chatSession = { session_id: "default", messages: [], draft_plan: null, title: null };
       state.chatDraftPlan = null;
       state.chatFake = false;
       state.chatEnvNote = null;
       resetClarifyState();
-      await newChatSession();
+      if (sid === "default") {
+        stashChatSession(state.selectedPath);
+        host.renderChatPage();
+        renderChatSessionSelect();
+      } else {
+        await loadChatSession({ sessionId: "default", force: true });
+      }
     } else {
       renderChatSessionSelect();
     }

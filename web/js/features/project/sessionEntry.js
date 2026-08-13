@@ -250,7 +250,10 @@ export function applyRestoredPlanJob(view, { resumePoll = true } = {}) {
     normalizePlanPath(view.plan_path || view.planPath) ||
     state.selectedPlan;
   state.confirmTaskId = view.tasks?.[0]?.id || state.confirmTaskId || null;
-  state.planStartedAt = Date.now();
+  // Elapsed/timeout clock = job creation time, not restore time — restoring an
+  // old planning job must not silently grant it another fresh 12 minutes.
+  const createdMs = Date.parse(view.created_at || view.createdAt || "");
+  state.planStartedAt = Number.isFinite(createdMs) ? createdMs : Date.now();
   state.planPollFails = 0;
 
   if (status === "planning") {
@@ -382,10 +385,9 @@ export async function loadPlanSplitIndex(projectPath = state.selectedPath) {
         plan_path: key,
       };
       by[key] = entry;
-      // also index by raw path variants
+      // also index by raw path variant (NOT bare basename — cross-directory
+      // same-named plans must not borrow each other's 已拆分 badge)
       by[raw] = entry;
-      const base = key.split("/").pop();
-      if (base && !by[base]) by[base] = entry;
     }
     state.planSplitByPath = by;
     return by;
@@ -401,7 +403,7 @@ export function planSplitForPath(planPath, projectRoot = state.selectedPath) {
   if (!planPath) return null;
   const by = state.planSplitByPath || {};
   const key = planPathLookupKey(planPath, projectRoot);
-  return by[key] || by[planPath] || by[key.split("/").pop()] || null;
+  return by[key] || by[planPath] || null;
 }
 
 /** 离开 workspace 后仍可回看：规划中 / 待确认 / 运行中 / 暂停 / 刚结束 */

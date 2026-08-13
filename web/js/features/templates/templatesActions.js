@@ -12,6 +12,7 @@ import {
   mergeSplitSummaryIntoMarkdown,
 } from "./splitSummary.js";
 import * as templatesApi from "./templatesApi.js";
+import { confirmDialog } from "../../shared/confirmDialog.js";
 
 function g(name) {
   return typeof window !== "undefined" ? window[name] : undefined;
@@ -169,9 +170,11 @@ export async function writeSplitSummaryToPlan() {
       toast("摘要无变化");
       return;
     }
-    const ok = window.confirm(
-      `将把步骤标题清单写到计划文末（不覆盖正文）：\n${rel}\n\n确定写回？`
-    );
+    const ok = await confirmDialog({
+      title: "写回步骤摘要",
+      body: `将把步骤标题清单写到计划文末（不覆盖正文）：\n${rel}`,
+      okLabel: "写回",
+    });
     if (!ok) return;
 
     await templatesApi.savePlan({

@@ -228,7 +228,7 @@ export async function replanFromConfirm() {
 
   let revisionPreview = "";
   try {
-    const el = $("split-revision-notes");
+    const el = $("#split-revision-notes");
     revisionPreview = el && String(el.value || "").trim();
   } catch (_) {
     revisionPreview = "";

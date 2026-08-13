@@ -125,7 +125,7 @@ export function canEditSelectedTask(taskId) {
 export function toastRunLocked(action = "此操作") {
   call(
     "toast",
-    `本轮还在执行，请先点顶栏「停止」后再${action}`
+    `本轮还在执行，请先在运行页点「全部停止」后再${action}`
   );
 }
 
@@ -255,83 +255,6 @@ export function showPage(name) {
   }
 }
 
-/* ── Run Control UI Helpers ── */
-
-/**
- * Get human-readable status label with emoji icon
- */
-export function statusLabel(status) {
-  const statusMap = {
-    running: { label: "运行中", icon: "▶️" },
-    paused: { label: "已暂停", icon: "⏸️" },
-    aborted: { label: "已停止", icon: "⏹️" },
-    completed: { label: "完成", icon: "✅" },
-    failed: { label: "失败", icon: "❌" },
-    init: { label: "初始化", icon: "🔄" },
-    validated: { label: "已验证", icon: "✓" },
-  };
-  const key = String(status || "").toLowerCase();
-  const result = statusMap[key] || { label: "未知", icon: "❓" };
-  return `${result.icon} ${result.label}`;
-}
-
-/**
- * Check if status is a terminal state
- */
-export function isTerminalStatus(status) {
-  const terminal = ["completed", "failed", "aborted"];
-  return terminal.includes(String(status || "").toLowerCase());
-}
-
-/**
- * Check if run is currently active (can pause/stop)
- */
-export function isActiveStatus(status) {
-  const active = ["running", "starting", "queued", "validated", "init", "resuming"];
-  return active.includes(String(status || "").toLowerCase());
-}
-
-/**
- * Invoke pause run command
- */
-export async function invokePauseRun(runId) {
-  if (typeof window !== "undefined" && window.__TAURI__) {
-    const { invoke } = window.__TAURI__.core;
-    await invoke("pause_run_cmd", { runId });
-  }
-}
-
-/**
- * Invoke resume run command
- */
-export async function invokeResumeRun(runId) {
-  if (typeof window !== "undefined" && window.__TAURI__) {
-    const { invoke } = window.__TAURI__.core;
-    await invoke("resume_run_cmd", { runId });
-  }
-}
-
-/**
- * Invoke stop run command
- */
-export async function invokeStopRun(runId) {
-  if (typeof window !== "undefined" && window.__TAURI__) {
-    const { invoke } = window.__TAURI__.core;
-    await invoke("stop_run_cmd", { runId });
-  }
-}
-
-/**
- * Get current run status via Tauri command
- */
-export async function getRunStatus(runId) {
-  if (typeof window !== "undefined" && window.__TAURI__) {
-    const { invoke } = window.__TAURI__.core;
-    return await invoke("get_run_status_cmd", { runId });
-  }
-  return "unknown";
-}
-
 export function updateWorkspaceTitle() {
   // 工作区标题只展示计划，交给 updateTopPlanInfo
   try {
@@ -399,6 +322,11 @@ export function openModal() {
 export function closeModal() {
   const m = $el("#modal");
   if (m) m.hidden = true;
+  // C4: any close (add-project success or cancel) drops the stashed welcome
+  // template so it can't surprisingly auto-apply on a later add.
+  try {
+    sessionStorage.removeItem("cco.pendingPlanTemplate");
+  } catch (_) {}
 }
 
 /* ── Projects ── */

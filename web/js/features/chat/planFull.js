@@ -24,6 +24,7 @@ import { ensureChatState, stashChatSession } from "./chatState.js";
 import { getPlansDir } from "./planDir.js";
 import { chatEsc } from "./chatFormat.js";
 import { renderMarkdown } from "../../shared/markdown.js";
+import { confirmDialog } from "../../shared/confirmDialog.js";
 
 export function planFullState() {
   ensureChatState();
@@ -34,9 +35,20 @@ export function closePlanFullView() {
   ensureChatState();
   const pf = state.planFull;
   if (pf?.dirty && (pf.editing || pf.diffing)) {
-    const ok = window.confirm("有未保存改动，确定关闭？");
-    if (!ok) return;
+    confirmDialog({
+      title: "关闭编辑",
+      body: "有未保存改动，确定关闭？",
+      okLabel: "放弃并关闭",
+      danger: true,
+    }).then((ok) => {
+      if (ok) doClosePlanFullView();
+    });
+    return;
   }
+  doClosePlanFullView();
+}
+
+function doClosePlanFullView() {
   state.planFull = {
     open: false,
     path: null,
@@ -382,9 +394,22 @@ export function cancelPlanFullEdit() {
   const pf = state.planFull;
   if (!pf?.open) return;
   if (pf.dirty) {
-    const ok = window.confirm("放弃未保存改动？");
-    if (!ok) return;
+    confirmDialog({
+      title: "放弃修改",
+      body: "放弃未保存改动？",
+      okLabel: "放弃",
+      danger: true,
+    }).then((ok) => {
+      if (ok) doCancelPlanFullEdit();
+    });
+    return;
   }
+  doCancelPlanFullEdit();
+}
+
+function doCancelPlanFullEdit() {
+  const pf = state.planFull;
+  if (!pf?.open) return;
   pf.markdown = pf.original;
   pf.editing = false;
   pf.diffing = false;

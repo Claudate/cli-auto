@@ -18,9 +18,8 @@ import { host } from "./host.js";
 import * as chatApi from "./chatApi.js";
 import { stashChatSession, ensureChatState, sanitizePlanTitle } from "./chatState.js";
 import { getPlansDir } from "./planDir.js";
-// note: clarify/briefAndClaim.js 是纵切草稿；本文件仍持完整实现与 export。
-// 禁止再 `export { … } from "./clarify/briefAndClaim.js"` 与下方同名 export 并存
-// （Duplicate export 会让 type=module main.js 整链挂掉 → 无图标 / 无项目列表）。
+// note: 本文件是 clarify 唯一真源（clarify/ 纵切草稿已删，2026-08-12）。
+// 禁止再建平行副本；Duplicate export 会让 type=module main.js 整链挂掉。
 
 
 // ─── Copy contract (product; first sentence human · non-dev tone) ────────────
@@ -1830,9 +1829,9 @@ export async function claimBriefToPlan() {
         state.chatSession.draft_plan.markdown = md;
       }
     } catch (e) {
-      // Disk save failed — keep session draft; user can「仅保存」later
+      // Disk save failed — keep session draft; user can save via plan card later
       console.warn("claimBriefToPlan: save_plan failed; session draft kept", e);
-      toast("计划草稿已在会话中；落盘稍后可点「仅保存」");
+      toast("计划草稿已在会话中；稍后可在计划卡片点「这版作数」保存到本机");
     }
 
     // 3) Phase → claimed (still NOT confirm_start)

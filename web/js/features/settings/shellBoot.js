@@ -27,6 +27,21 @@ function isLiveStatus(st) {
     : false;
 }
 
+/**
+ * Settings-derived poll interval — same clamp as saveSettings
+ * (`poll_interval_secs * 1000`, capped at 5000ms). Falls back on IPC failure.
+ */
+async function settingsPollMs(fallbackMs = 2000) {
+  try {
+    const s = await settingsApi.getSettings();
+    const secs = Number(s?.poll_interval_secs);
+    if (Number.isFinite(secs) && secs > 0) {
+      return Math.min(secs * 1000, 5000);
+    }
+  } catch (_) {}
+  return fallbackMs;
+}
+
 /** Workspace / plan-job poll tick (no business policy). */
 export function startPolling(intervalMs = 2000) {
   const st = state();
@@ -34,6 +49,18 @@ export function startPolling(intervalMs = 2000) {
   clearInterval(st.pollTimer);
   st.pollTimer = setInterval(() => {
     st.now = Date.now();
+    // 窗口在后台时降频：只保留规划轮询（拆分完成要自动接续），
+    // 项目/live 刷新等回到前台的下一个 tick 再恢复。
+    if (typeof document !== "undefined" && document.hidden) {
+      if (
+        st.planJobId &&
+        st.phase === "planning" &&
+        typeof window.refreshPlanJob === "function"
+      ) {
+        window.refreshPlanJob().catch(() => {});
+      }
+      return;
+    }
     // 规划轮询不绑死 workspace：切到设置/帮助/环境检查也继续
     if (st.planJobId && st.phase === "planning") {
       if (typeof window.refreshPlanJob === "function") {
@@ -169,7 +196,7 @@ export async function boot(opts = {}) {
         if (typeof window.showPage === "function") window.showPage("welcome");
         toast("监视窗：请先在主窗选择项目");
       }
-      startPolling(1500);
+      startPolling(await settingsPollMs(1500));
       return;
     }
 
@@ -200,7 +227,7 @@ export async function boot(opts = {}) {
         else if (typeof window.showPage === "function") window.showPage("chat");
       }
     }
-    startPolling();
+    startPolling(await settingsPollMs());
   } catch (e) {
     console.error(e);
     const cs = $("#conn-status");

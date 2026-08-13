@@ -95,6 +95,9 @@ function renderMenu(prefix) {
     .join("");
   menu.hidden = false;
   menuActive = true;
+  // Default-highlight the first selectable row so Enter accepts immediately.
+  const first = items.findIndex((r) => r.scope !== "reserved");
+  if (first >= 0) highlightIndex(first);
   return true;
 }
 
@@ -103,6 +106,11 @@ function highlightIndex(i) {
   const els = menuEl()?.querySelectorAll(".chat-slash-item");
   els?.forEach((el, idx) => {
     el.classList.toggle("is-active", idx === i);
+    if (idx === i) {
+      try {
+        el.scrollIntoView({ block: "nearest" });
+      } catch (_) {}
+    }
   });
 }
 
@@ -238,6 +246,15 @@ export function bindSlashMenuDismiss() {
   });
   menu.addEventListener("mousedown", (e) => {
     e.preventDefault(); // keep focus in textarea so blur does not fire first
+  });
+  // Hover follows the pointer (keyboard highlight stays in sync).
+  menu.addEventListener("mousemove", (e) => {
+    const row = e.target.closest(".chat-slash-item");
+    if (!row) return;
+    const idx = Number(row.dataset.index);
+    if (!Number.isFinite(idx) || idx === menuIndex) return;
+    if (menuItems[idx]?.scope === "reserved") return;
+    highlightIndex(idx);
   });
   menu.addEventListener("click", (e) => {
     const row = e.target.closest(".chat-slash-item");

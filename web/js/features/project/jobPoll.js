@@ -64,13 +64,13 @@ function humanPlanFail(raw) {
   const s = String(raw || "").trim();
   if (!s) return "";
   if (/hard timeout|301s|planner worker did not finish/i.test(s)) {
-    return "智能拆分超时未完成。可点「再拆一次」，或在更多选项改用本地规则拆分。";
+    return "智能拆分超时未完成。可点「再拆一次」，或在选计划页「更多选项 → 规划方式」改用「快速拆分（本地规则）」。";
   }
   if (/未返回任何任务|找不到.*JSON|empty/i.test(s)) {
-    return "智能拆分没有产出可用步骤。请再拆一次，或改用本地规则拆分。";
+    return "智能拆分没有产出可用步骤。请再拆一次，或改用「快速拆分（本地规则）」。";
   }
   if (/保留上次成功的拆分|refuse heuristic cover|未用本地残图覆盖|没有可展示的完整拆分|不展示、不覆盖/i.test(s)) {
-    return "智能拆分未完整完成：只展示成功结果，残图不显示、不覆盖。可再拆一次，或显式改用本地规则。";
+    return "智能拆分未完整完成：只展示成功结果，残图不显示、不覆盖。可再拆一次，或改用「快速拆分（本地规则）」。";
   }
   // Keep short; full text still in pp-error / planning-fail-detail
   return s.length > 160 ? s.slice(0, 158) + "…" : s;
@@ -214,7 +214,10 @@ export async function analyzePlanFromPicker(planPathArg) {
     }
   }
 
-  // Capture prior job path BEFORE clearing — used only to gate preserve_from.
+  // Capture prior job BEFORE clearing — preserve_from gate + restore on failure
+  // (replan must not wipe a previous good split off the desk when start throws).
+  const prevJob = state.planJob || null;
+  const prevJobId = state.planJobId || null;
   const prevJobPlan =
     state.planJob?.plan_path || state.planJob?.planPath || null;
   let preserveFrom = state.preserveFromJobId || null;
@@ -279,6 +282,7 @@ export async function analyzePlanFromPicker(planPathArg) {
         : core;
   }
 
+  const projectAtStart = state.selectedPath;
   try {
     // Final identity assertion — never send a different path than toast/top bar.
     state.selectedPlan = plan;
@@ -300,6 +304,12 @@ export async function analyzePlanFromPicker(planPathArg) {
         effort: effort || null,
       },
     });
+    if (state.selectedPath !== projectAtStart) {
+      // User switched project mid-flight — drop the stale response instead of
+      // polluting the new project's state (job stays queryable via 计划列表).
+      console.warn("startPlanJob response dropped: project switched mid-flight");
+      return;
+    }
     state.planJob = view;
     if (revEl0) revEl0.value = "";
     // Tauri/serde 字段兼容
@@ -349,12 +359,37 @@ export async function analyzePlanFromPicker(planPathArg) {
     // One-shot direct flags must not stick across failures.
     state.forcePlanModeDirect = false;
     state.forceAutoStartAfterPlan = false;
-    state.phase = "pick";
+    if (state.selectedPath !== projectAtStart) {
+      // Project switched mid-flight: leave the new project's state untouched.
+      console.warn("startPlanJob failed after project switch", e);
+      return;
+    }
+    const prevStatus = String(prevJob?.status || "").toLowerCase();
+    const samePlanAsPrev =
+      prevJobPlan &&
+      normalizePlanPath(prevJobPlan, state.selectedPath) ===
+        normalizePlanPath(plan, state.selectedPath);
+    if (
+      prevJob &&
+      prevJobId &&
+      samePlanAsPrev &&
+      (prevStatus === "planned" || prevStatus === "confirmed")
+    ) {
+      // Replan start failed → keep the previous good split on the desk
+      // instead of dropping the user to an empty pick screen.
+      state.planJob = prevJob;
+      state.planJobId = prevJobId;
+      state.phase = "confirm";
+      host.stashPlanSession(state.selectedPath);
+      toast("重新规划没有发起成功，已回到上一次的拆分结果");
+    } else {
+      state.phase = "pick";
+      toast(String(e));
+    }
     if (err) {
       err.textContent = String(e);
       err.hidden = false;
     }
-    toast(String(e));
     host.renderPhasePanels();
     host.renderPlanPicker();
     host.setAssignBusy(false);
@@ -362,17 +397,32 @@ export async function analyzePlanFromPicker(planPathArg) {
 }
 
 export function stopPlanJobPoll() {
+  // Generation bump also invalidates a tick that is currently awaiting IPC,
+  // so it cannot re-schedule after stop (clearTimeout alone can't reach it).
+  state.planPollGen = (state.planPollGen || 0) + 1;
   if (state.planJobPollTimer) {
-    clearInterval(state.planJobPollTimer);
+    clearTimeout(state.planJobPollTimer);
     state.planJobPollTimer = null;
   }
 }
 
 export function startPlanJobPoll() {
   stopPlanJobPoll();
-  state.planJobPollTimer = setInterval(() => {
-    refreshPlanJob().catch((e) => console.warn("plan poll", e));
-  }, 600);
+  const gen = state.planPollGen;
+  const tick = async () => {
+    if (gen !== state.planPollGen) return;
+    try {
+      await refreshPlanJob();
+    } catch (e) {
+      console.warn("plan poll", e);
+    }
+    if (gen !== state.planPollGen) return;
+    // Self-scheduling (not setInterval): ticks never overlap, and flaky IPC
+    // backs off instead of hammering — a ~5s blip no longer kills the poll.
+    const delay = (state.planPollFails || 0) >= 3 ? 2500 : 600;
+    state.planJobPollTimer = setTimeout(tick, delay);
+  };
+  state.planJobPollTimer = setTimeout(tick, 600);
 }
 
 export function planHasOptionalTasks(view) {
@@ -414,6 +464,11 @@ export function planNeedsOptionalConfirm(view) {
 }
 
 export async function advancePlannedJob(view) {
+  // Idempotent per job: overlapping poll ticks / double entry must not advance
+  // (and possibly auto-start via confirmAndStart) the same planned job twice.
+  const advJobId = view?.job_id || view?.jobId || null;
+  if (advJobId && state.planAdvancedJobId === advJobId) return;
+  if (advJobId) state.planAdvancedJobId = advJobId;
   stopPlanJobPoll();
   state.planJob = view;
   if (!state.confirmTaskId && view.tasks?.length) {
@@ -486,8 +541,14 @@ export async function advancePlannedJob(view) {
 
 export async function refreshPlanJob() {
   if (!state.planJobId) return;
+  // Callers overlap (poll chain + shellBoot tick + manual refresh) — collapse.
+  if (state.planPollInFlight) return;
+  state.planPollInFlight = true;
+  const jobId = state.planJobId;
   try {
-    const view = await requireGateway().getPlanJob(state.planJobId);
+    const view = await requireGateway().getPlanJob(jobId);
+    // Stale response: job replaced/cleared (project or plan switched) mid-flight.
+    if (jobId !== state.planJobId) return;
     state.planPollFails = 0;
     state.planJob = view;
     const status = String(view.status || "").toLowerCase();
@@ -566,7 +627,9 @@ export async function refreshPlanJob() {
         stopPlanJobPoll();
         host.setAssignBusy(false);
         state.phase = "plan_failed";
-        toast("拆分超时：智能拆分可能无响应。请检查环境，或在更多选项里改用「本地规则拆分」。");
+        toast(
+          "拆分等了 12 分钟还没结果，先停在这里。后台可能仍在继续，稍后可在计划列表回看；也可点「再拆一次」，或改用「快速拆分（本地规则）」。"
+        );
         host.renderPhasePanels();
         host.renderPlanPicker();
         return;
@@ -596,19 +659,25 @@ export async function refreshPlanJob() {
       host.renderPhasePanels();
     }
   } catch (e) {
+    // Stale failure (job replaced mid-flight) must not count or re-render.
+    if (jobId !== state.planJobId) return;
     state.planPollFails = (state.planPollFails || 0) + 1;
     console.warn("refreshPlanJob", e);
     if (state.planPollFails === 1 || state.planPollFails % 5 === 0) {
-      toast(`规划状态刷新失败：${e}`);
+      toast(`拆分进度暂时读不到，正在重试…`);
     }
-    // 5 次失败后尝试读本地日志提示
+    // 持续失败（含退避约 15s+）才放弃；不回 pick 空态，留在失败面可「再拆一次」
     if (state.planPollFails >= 8) {
       stopPlanJobPoll();
       host.setAssignBusy(false);
-      state.phase = "pick";
-      toast("无法轮询规划任务。请点刷新重试，或用 CLI：cco plan --project ...");
+      state.phase = "plan_failed";
+      toast(
+        "一直读不到拆分进度，先停在这里。后台可能仍在拆：稍后可在计划列表回看，或点「再拆一次」。"
+      );
       host.renderPhasePanels();
       host.renderPlanPicker();
     }
+  } finally {
+    state.planPollInFlight = false;
   }
 }

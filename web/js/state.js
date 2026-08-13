@@ -118,6 +118,9 @@ const state = {
   /** H2: 默认隐藏已成功执行；开关「显示已执行」可展开（chooser/右轨共用） */
   showExecutedPlans: localStorage.getItem("cco.showExecutedPlans") === "1",
   planPollFails: 0,
+  planPollGen: 0, // 轮询代际：stop 时 +1，让在飞 tick 不再自我续期
+  planPollInFlight: false, // refreshPlanJob 在飞守卫（多入口合并为一次）
+  planAdvancedJobId: null, // advancePlannedJob 幂等：同一 job 只推进一次
   planStartedAt: 0,
   /** 按项目缓存规划会话，切页/切项目不丢 */
   planSessions: {}, // path -> session snapshot

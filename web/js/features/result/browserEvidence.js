@@ -115,6 +115,7 @@ export function renderBrowserEvidence(live, deps = {}) {
   if (!Array.isArray(items) || !items.length) {
     panel.hidden = true;
     grid.innerHTML = "";
+    delete grid.dataset.ccoSig;
     if (note) {
       note.hidden = true;
       note.textContent = "";
@@ -127,6 +128,22 @@ export function renderBrowserEvidence(live, deps = {}) {
     note.hidden = false;
     note.textContent = `本轮留下 ${items.length} 份网页相关证据（点图放大 · 可打开文件）`;
   }
+
+  // Poll repaints with identical content must not rebuild the DOM —
+  // that destroys the user's text selection / an in-progress click.
+  const sig = items
+    .map((it) =>
+      [
+        it?.kind,
+        it?.task_id || it?.taskId,
+        it?.rel_path || it?.relPath,
+        it?.abs_path || it?.absPath,
+        String(it?.excerpt || "").length,
+        String(it?.preview_data_url || it?.previewDataUrl || "").length,
+      ].join("|")
+    )
+    .join("~");
+  if (grid.dataset.ccoSig === sig) return;
 
   grid.innerHTML = items
     .map((it, idx) => {
@@ -173,6 +190,7 @@ export function renderBrowserEvidence(live, deps = {}) {
     .join("");
 
   // One listener on grid (replace prior by cloning)
+  grid.dataset.ccoSig = sig;
   const next = grid.cloneNode(true);
   grid.parentNode.replaceChild(next, grid);
   next.addEventListener("click", (e) => {

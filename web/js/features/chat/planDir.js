@@ -147,12 +147,8 @@ export async function promptPlansDir() {
     dialogOk = false;
   }
   if (dialogOk) return;
-  const next = window.prompt(
-    "默认计划文件夹（相对项目根，例如 plans 或 docs）",
-    cur
-  );
-  if (next == null) return;
-  setPlansDir(next);
+  // window.prompt is unreliable in desktop WKWebView (silent null) — no fallback.
+  toast(`无法打开文件夹选择器，请稍后重试（当前计划目录：${cur}）`);
 }
 
 /**

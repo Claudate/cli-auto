@@ -393,8 +393,19 @@ export async function loadSettings() {
       await refreshGithubStatus();
     } catch (_) {}
     return s;
-  } catch (_) {
-    /* ignore cold-load failures */
+  } catch (e) {
+    // Cold-load may fail before the backend is ready — stay quiet then.
+    // On the settings page itself the user must know the form shows defaults.
+    if (state()?.page === "settings") {
+      const status = $("#s-save-status");
+      if (status) {
+        status.hidden = false;
+        status.textContent = `设置读取失败：${e?.message || e}（当前显示默认值，请重进本页后再保存）`;
+      }
+      if (typeof window.toast === "function") {
+        window.toast("设置读取失败，显示的是默认值");
+      }
+    }
     return null;
   }
 }

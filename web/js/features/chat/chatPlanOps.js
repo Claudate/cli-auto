@@ -24,6 +24,7 @@ import {
   stashChatSession,
 } from "./chatState.js";
 import { getPlansDir } from "./planDir.js";
+import { confirmDialog } from "../../shared/confirmDialog.js";
 import {
   chatExtractPlanFence,
   chatNormMdKey,
@@ -134,11 +135,13 @@ export async function saveChatPlan(opts) {
     const previewPath =
       overwriteRel ||
       `${plansDir}/chat-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "").slice(0, 13)}.md`;
-    const ok = window.confirm(
-      overwriteRel
-        ? `将覆盖已保存计划：\n${overwriteRel}\n\n确定保存？`
-        : `将保存到：\n${previewPath}\n\n确定保存？`
-    );
+    const ok = await confirmDialog({
+      title: overwriteRel ? "覆盖已保存计划" : "保存计划",
+      body: overwriteRel
+        ? `将覆盖已保存计划：\n${overwriteRel}`
+        : `将保存到：\n${previewPath}`,
+      okLabel: "保存",
+    });
     if (!ok) return null;
   }
   state.chatBusy = true;

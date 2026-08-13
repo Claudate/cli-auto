@@ -10,6 +10,7 @@
  */
 
 let _wired = false;
+let _updateFn = null; // scroll 监听只绑一次，回调始终指向最近一次 wire 的 update
 
 /**
  * 授权分区「会拒写」→ 左侧菜单项加警示点（同步 paintPermissionUi 的错误态）。
@@ -74,15 +75,19 @@ export function wireSettingsNav() {
     }
   };
 
-  let ticking = false;
-  content.addEventListener("scroll", () => {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(() => {
-      update();
-      ticking = false;
+  _updateFn = update;
+  if (!content.dataset.ccoNavScrollWired) {
+    content.dataset.ccoNavScrollWired = "1";
+    let ticking = false;
+    content.addEventListener("scroll", () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        if (_updateFn) _updateFn();
+        ticking = false;
+      });
     });
-  });
+  }
   update();
 }
 

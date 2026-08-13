@@ -568,12 +568,19 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  /* 隐藏滚动条外观，保留滚轮/触控板滚动 */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* legacy Edge */
+  /* 细滚动条：长会话要能看到自己在哪、能拖动定位 */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
 }
 .chat-messages::-webkit-scrollbar {
-  display: none; /* Chromium / WebKit（Tauri） */
+  width: 6px; /* Chromium / WebKit（Tauri） */
+}
+.chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 3px;
+}
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .chat-empty {

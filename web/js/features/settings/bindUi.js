@@ -55,6 +55,15 @@ export function bindGlobalUI() {
         return;
       }
     }
+    // Esc closes the add-project modal (confirm overlay handles its own Esc).
+    if (e.key === "Escape") {
+      const modal = document.getElementById("modal");
+      if (modal && !modal.hidden) {
+        e.preventDefault();
+        call("closeModal");
+        return;
+      }
+    }
     // 斜杠命令联想：`/` 打开菜单；↑↓/Enter/Tab/Esc 由菜单优先消费。
     if (e.target?.id === "chat-input") {
       if (handleSlashKeydown(e)) return;
@@ -63,7 +72,8 @@ export function bindGlobalUI() {
     if (e.target?.id === "chat-input" && e.key === "Enter" && !e.shiftKey) {
       if (e.isComposing || e.keyCode === 229 || e.which === 229) return;
       e.preventDefault();
-      if (!state()?.chatBusy) call("sendChatMessage");
+      // busy 时也进：sendChatMessage 自己拦截并 toast，避免回车静默无反馈
+      call("sendChatMessage");
     }
   });
 

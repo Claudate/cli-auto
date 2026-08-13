@@ -28,6 +28,7 @@ import gateway from "./shared/gateway.js";
 import { installStatusUi } from "./shared/statusUi.js";
 import { installMarkdown } from "./shared/markdown.js";
 import { installShellUi } from "./shared/shellUi.js";
+import { installConfirmDialog } from "./shared/confirmDialog.js";
 import { installSelectUi } from "./shared/selectUi.js";
 import { installIconsGlobal, hydrateIcons } from "./shared/icons.js";
 import { installClickOutsideGlobal } from "./shared/clickOutside.js";
@@ -57,6 +58,7 @@ import { installTemplatesHost } from "./features/templates/installTemplates.js";
 installStatusUi(window);
 installMarkdown(window);
 installShellUi(window);
+installConfirmDialog(window);
 installIconsGlobal();
 try {
   hydrateIcons(document);
@@ -593,6 +595,7 @@ function boot() {
     }, ms);
   });
   setInterval(() => {
+    if (document.hidden) return; // 后台窗口不做镜像同步，回前台自动恢复
     try {
       softSyncFromLegacy();
     } catch (_) {}

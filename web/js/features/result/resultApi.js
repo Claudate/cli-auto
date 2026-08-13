@@ -24,6 +24,11 @@ export function acceptResidual(runId, note) {
   return gateway.acceptResidual(runId, note || null);
 }
 
+/** Stop a still-live run before soft-ending the round (finishRound). */
+export function stopRun(runId) {
+  return gateway.stopRun(runId);
+}
+
 /** P2-2: write project last_summary from run (best-effort). */
 export function writebackMemory(runId) {
   return gateway.writebackMemory(runId);
