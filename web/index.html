@@ -1378,18 +1378,19 @@ bin = "/Users/你/.local/bin/claude"</pre>
       chat 发消息/列表  → features/chat/*（经 gateway）
       plan/monitor/…   → 仍经典；A3+ 再迁 feature（禁止往旧文件堆新功能）
   -->
-  <script src="js/state.js"></script>
-  <script src="js/flow.js"></script>
+  <script src="dist/classic/state.js"></script>
+  <script src="dist/classic/flow.js"></script>
   <!-- A5-2f D3: split.js removed — ccoSplit (main.js ESM) is sole three-col path -->
   <!-- P-ship-D D7: templates.js ≤80 facade → features/templates · window.ccoTemplates -->
-  <script src="js/templates.js"></script>
-  <script src="js/plan.js"></script>
-  <script src="js/monitor.js"></script>
-  <script src="js/result.js"></script>
-  <script src="js/log.js"></script>
-  <script src="js/chat.js"></script>
-  <script src="js/doctor.js"></script>
+  <script src="dist/classic/templates.js"></script>
+  <script src="dist/classic/plan.js"></script>
+  <script src="dist/classic/monitor.js"></script>
+  <script src="dist/classic/result.js"></script>
+  <script src="dist/classic/log.js"></script>
+  <script src="dist/classic/chat.js"></script>
+  <script src="dist/classic/doctor.js"></script>
   <!-- A2/A3: ES module 边界；AppViewModel + gateway + features/{chat,split} -->
-  <script type="module" src="js/main.js"></script>
+  <!-- 防逆向：dist/app.js = esbuild bundle + terser 混淆产物（web/build.mjs） -->
+  <script type="module" src="dist/app.js"></script>
 </body>
 </html>

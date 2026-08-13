@@ -2,6 +2,21 @@
 members = [".", "src-tauri"]
 resolver = "2"
 
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+# 防逆向主力 = strip + LTO fat + codegen-units=1（符号/内联层已去除）。
+# 不用 panic="abort"：本 crate 有大量 unwrap + spawn_blocking，abort 会把单条
+# Tauri 命令的 panic 放大成整个 app 无提示闪退；unwind 对逆向难度影响可忽略。
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+debug = false
+overflow-checks = false
+
 [package]
 name = "cco"
 version = "0.1.0"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build release binary and assemble dist/CCO.app (macOS)
+# Build release binary and assemble dist/Leaf.app (macOS)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -37,22 +37,54 @@ cargo build -p cco --release
 # touch web so tauri rebuilds asset embed (D4: include js/ css/ tree)
 touch web/index.html web/app.js web/app.css
 find web/js web/css -type f \( -name '*.js' -o -name '*.css' \) -exec touch {} +
+
+# 防逆向：web 前端打包+混淆（esbuild bundle main.js → dist/app.js + dist/classic/*.js）
+echo "[1.5/3] build web bundle + terser mangle (web/build.mjs)"
+if [[ -d "$ROOT/web/node_modules" ]]; then
+  (cd "$ROOT/web" && node build.mjs)
+else
+  (cd "$ROOT/web" && npm install >/dev/null 2>&1 && node build.mjs)
+fi
+if [[ ! -f "$ROOT/web/dist/app.js" ]]; then
+  echo "WEB_BUILD_FAIL: dist/app.js missing after build.mjs" >&2
+  exit 1
+fi
+
 cargo build -p cco-desktop --release
 
 DIST="$ROOT/dist"
-APP="$DIST/CCO.app"
+APP="$DIST/Leaf.app"
 BIN="$ROOT/target/release/cco-desktop"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/CCO"
-chmod +x "$APP/Contents/MacOS/CCO"
+cp "$BIN" "$APP/Contents/MacOS/Leaf"
+chmod +x "$APP/Contents/MacOS/Leaf"
 cp -f "$ROOT/target/release/cco" "$DIST/cco" 2>/dev/null || true
 
 # Place web next to binary (Contents/MacOS/web) AND Contents/web for compatibility
 rm -rf "$APP/Contents/MacOS/web" "$APP/Contents/web"
 cp -R "$ROOT/web" "$APP/Contents/MacOS/web"
 cp -R "$ROOT/web" "$APP/Contents/web"
+
+# 防逆向：移除打包产物中的明文源码与构建依赖，只保留 dist/ 混淆产物
+for W in "$APP/Contents/MacOS/web" "$APP/Contents/web"; do
+  rm -rf "$W/node_modules" "$W/js" "$W/build.mjs" "$W/package.json" "$W/package-lock.json" "$W/mock-tauri-ipc.js"
+  rm -f "$W/dist/app.bundle.js"   # esbuild 未混淆中间产物，只保留 terser 后的 app.js
+done
+
+# 防逆向闸门：app 内不得残留明文源码 / 未混淆中间产物 / 构建依赖
+LEAK=""
+for W in "$APP/Contents/MacOS/web" "$APP/Contents/web"; do
+  for P in js node_modules build.mjs package.json dist/app.bundle.js; do
+    [[ -e "$W/$P" ]] && LEAK="$LEAK $W/$P"
+  done
+done
+if [[ -n "$LEAK" ]]; then
+  echo "PURGE_FAIL: 打包产物残留明文源码/构建物:$LEAK" >&2
+  exit 1
+fi
+echo "PURGE_OK: app 内仅 dist/ 混淆产物"
 
 cp -f "$ROOT/src-tauri/icons/icon.icns" "$APP/Contents/Resources/AppIcon.icns" 2>/dev/null || true
 
@@ -67,10 +99,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleExecutable</key><string>CCO</string>
-  <key>CFBundleIdentifier</key><string>dev.cco.orchestrator</string>
-  <key>CFBundleName</key><string>CCO</string>
-  <key>CFBundleDisplayName</key><string>CCO</string>
+  <key>CFBundleExecutable</key><string>Leaf</string>
+  <key>CFBundleIdentifier</key><string>dev.leaf.console</string>
+  <key>CFBundleName</key><string>Leaf</string>
+  <key>CFBundleDisplayName</key><string>轻叶</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>0.1.0</string>
@@ -82,33 +114,37 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 
 cd "$DIST"
-rm -f CCO-macos-arm64.zip
-zip -r CCO-macos-arm64.zip CCO.app >/dev/null
+rm -f Leaf-macos-arm64.zip
+zip -r Leaf-macos-arm64.zip Leaf.app >/dev/null
 echo "OK: $APP"
 echo "WEB_MACOS: $APP/Contents/MacOS/web"
 echo "WEB_CONTENTS: $APP/Contents/web"
 echo "RUNTIME_PROMPTS: $APP/Contents/Resources/runtime-prompts"
-echo "ZIP: $DIST/CCO-macos-arm64.zip"
+echo "ZIP: $DIST/Leaf-macos-arm64.zip"
 if [[ -f "$APP/Contents/Resources/runtime-prompts/chat-plan-writing.md" ]]; then
   echo "RUNTIME_PROMPTS_OK: chat-plan-writing.md present"
 else
   echo "RUNTIME_PROMPTS_WARN: missing Resources/runtime-prompts (binary still has include_str fallback)"
 fi
-# sanity: new UI markers must exist in packaged web
+# sanity: 新 UI 标记必须存在于打包产物（js/ 源已被净化，标记在 dist/ 混淆产物里）
 SEARCH_BIN="$(command -v rg || true)"
 if [[ -z "$SEARCH_BIN" && -x /opt/homebrew/bin/rg ]]; then SEARCH_BIN=/opt/homebrew/bin/rg; fi
 if [[ -z "$SEARCH_BIN" && -x "$HOME/.cargo/bin/rg" ]]; then SEARCH_BIN=$HOME/.cargo/bin/rg; fi
-# D4: logic/styles live under web/js/* and web/css/*; app.js/app.css are thin entry
 WEB_ROOT="$APP/Contents/MacOS/web"
+SANITY_RE="btn-chooser-assign|btn-task-dash-toggle|cli-rerun-btn|分配计划|plan-chooser-foot|taskDashCollapsed|budget-chip|updateBudgetChip|btn-open-chat|page-chat|btn-chat-assign|assignFromChat|btn-plan-full-diff|chat_stream_partial|mountVirtualLog|plan-full-diff|log-virt|data-plan-template|btn-split-writeback|templates|拆成步骤|确认并开始|result-desk|help-rs-checklist"
 if [[ -n "$SEARCH_BIN" ]]; then
-  "$SEARCH_BIN" -n "btn-chooser-assign|btn-task-dash-toggle|cli-rerun-btn|分配计划|plan-chooser-foot|taskDashCollapsed|budget-chip|updateBudgetChip|btn-open-chat|page-chat|btn-chat-assign|assignFromChat|btn-plan-full-diff|chat_stream_partial|mountVirtualLog|plan-full-diff|log-virt|data-plan-template|btn-split-writeback|templates\.js|拆成步骤|确认并开始|result-desk|help-rs-checklist" \
-    "$WEB_ROOT/index.html" "$WEB_ROOT/app.css" "$WEB_ROOT/app.js" \
-    "$WEB_ROOT/js" "$WEB_ROOT/css" 2>/dev/null | head -80
+  HITS=$("$SEARCH_BIN" -l "$SANITY_RE" "$WEB_ROOT/index.html" "$WEB_ROOT/app.css" \
+    "$WEB_ROOT/dist" "$WEB_ROOT/css" 2>/dev/null | head -80 || true)
 else
-  grep -rnE "btn-chooser-assign|btn-task-dash-toggle|cli-rerun-btn|分配计划|plan-chooser-foot|taskDashCollapsed|budget-chip|updateBudgetChip|btn-open-chat|page-chat|btn-chat-assign|assignFromChat|btn-plan-full-diff|chat_stream_partial|mountVirtualLog|plan-full-diff|log-virt|data-plan-template|btn-split-writeback|templates\.js|拆成步骤|确认并开始|result-desk|help-rs-checklist" \
-    "$WEB_ROOT/index.html" "$WEB_ROOT/app.css" "$WEB_ROOT/app.js" \
-    "$WEB_ROOT/js" "$WEB_ROOT/css" 2>/dev/null | head -80
+  HITS=$(grep -rlE "$SANITY_RE" "$WEB_ROOT/index.html" "$WEB_ROOT/app.css" \
+    "$WEB_ROOT/dist" "$WEB_ROOT/css" 2>/dev/null | head -80 || true)
 fi
+if [[ -z "$HITS" ]]; then
+  echo "SANITY_FAIL: 打包产物中未找到任何 UI 标记（$WEB_ROOT/index.html + dist/ + css/ 全空）" >&2
+  exit 1
+fi
+echo "SANITY_OK: 打包产物含 UI 标记"
+echo "$HITS"
 echo ""
 echo "── X3 目视清单（打包后人工走一遍）──"
 echo "  1. 欢迎：添加项目 · 见模板「出海落地页/通用需求大纲」"

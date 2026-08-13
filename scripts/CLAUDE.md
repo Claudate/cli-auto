@@ -2,7 +2,7 @@
 > L2 | 父级: /CLAUDE.md
 
 成员清单
-package-app.sh: release 构建 cco + cco-desktop → dist/CCO.app；**先 ESM dynamic import 扫 web/js**（防 main.js 导入期 SyntaxError 卡「就绪中…」）· X3 目视清单 + web 标记扫描（模板/写回/拆成步骤/结果台）
+package-app.sh: release 构建 cco + cco-desktop → dist/Leaf.app；**先 ESM dynamic import 扫 web/js**（防 main.js 导入期 SyntaxError 卡「就绪中…」）· `cd web && node build.mjs`（esbuild+terser → `dist/`，含 facade 守卫）；**防逆向双硬闸**——purge 后明文残留 `PURGE_FAIL`、产物 UI 标记 `SANITY_FAIL` 均 exit 1；X3 目视清单
 smoke.sh: doctor + fake provider 最小冒烟（CCO_STATE_ROOT 隔离）
 check-arch.sh: **架构硬规则门禁**（文件行数 · GIANTS 哨兵 · LEGACY_THICK state.js · gateway/invoke · domain 不依赖 tauri）；默认 warn；`STRICT=1` 可失败
 check-landing-gates.sh: **落地页/营销站门禁**（example.com · 占位邮箱 · **G7 占位图** · **G8 电商/真实感商品图不得 SVG-only** · 页脚主 CTA · CTA 刷屏 · h1）；说明 `docs/runtime-prompts/landing-gates.md`；默认 FAIL 硬失败、WARN 不失败；`STRICT=1` WARN 也失败；`SKIP_G1=1`/`SKIP_G7=1`/`SKIP_G8=1` 仅显式演示

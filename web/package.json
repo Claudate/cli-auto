@@ -1,0 +1,15 @@
+{
+  "name": "cco-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "轻叶 web 前端 —— esbuild 打包 + terser 混淆（防逆向）",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:dev": "node build.mjs --dev"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "terser": "^5.36.0"
+  }
+}

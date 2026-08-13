@@ -1,13 +1,34 @@
 #!/usr/bin/env node
 /**
- * Real-browser guard: on the split confirm desk, the header「默认通道」dropdown
+ * Real-browser guard: on the split confirm desk, the header「执行通道」dropdown
  * (#confirm-task-provider) must be enabled (when this job's run is not active)
- * and selecting it must persist via the VM.
+ * and selecting it must persist via the VM. 通道只经详头下拉（卡片级下拉已随
+ * 57ab9d6「unify split desk provider wording; remove card inline select」移除,
+ * 2026-08-12）——本冒烟同时断言卡片不再渲染 provider 下拉, 防旧控件回归复活。
  *
  * Loads web/ via local server, seeds state.planJob + phase=confirm, calls
  * ccoSplit.render(), then asserts the control is clickable and updates.
  */
 import { chromium } from "playwright";
+import { existsSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// 防逆向构建后 index.html 只引用 dist/（gitignored）——干净 clone / CI 上必须先
+// 构建一次，否则页面全 404、冒烟假绿/假挂。这里缺 dist 时自动 npm run build。
+const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "web");
+if (!existsSync(join(WEB_DIR, "dist", "app.js"))) {
+  const missing = "web/dist/app.js";
+  if (!existsSync(join(WEB_DIR, "node_modules", ".bin", "esbuild"))) {
+    execSync("npm install --no-audit --no-fund", { cwd: WEB_DIR, stdio: "inherit" });
+  }
+  execSync("node build.mjs", { cwd: WEB_DIR, stdio: "inherit" });
+  if (!existsSync(join(WEB_DIR, "dist", "app.js"))) {
+    console.error(`BUILD_FAIL: ${missing} 仍缺失，npm run build 未产出 dist 契约`);
+    process.exit(2);
+  }
+}
 
 const BASE = process.env.BASE || "http://localhost:3457";
 const results = [];
@@ -128,32 +149,32 @@ try {
   // #confirm-task-provider is enhanced → its visible trigger owns the open/select.
   const headerTrigger = page.locator("#confirm-task-provider__trigger");
   const triggerCount = await headerTrigger.count();
-  check("确认台「默认通道」下拉已增强", triggerCount > 0, `triggers=${triggerCount}`);
+  check("确认台「执行通道」下拉已增强", triggerCount > 0, `triggers=${triggerCount}`);
   const headerDisabled = await headerTrigger.first().isDisabled();
-  check("确认台「默认通道」下拉未禁用", !headerDisabled, `disabled=${headerDisabled}`);
+  check("确认台「执行通道」下拉未禁用", !headerDisabled, `disabled=${headerDisabled}`);
 
   if (triggerCount > 0 && !headerDisabled) {
-    // Open the enhanced menu and pick 备用通道 (index 1) via the real option button.
+    // Open the enhanced menu and pick Codex (index 1) via the real option button.
     await headerTrigger.first().click();
     await page.waitForTimeout(100);
     const headerMenu = page.locator("#confirm-task-provider__menu");
     const menuVisible = await headerMenu.isVisible();
-    check("「默认通道」菜单可打开", menuVisible);
+    check("「执行通道」菜单可打开", menuVisible);
     const options = headerMenu.locator(".cco-select__option");
     const optCount = await options.count();
     check("菜单含 8 个通道选项", optCount === 8, `options=${optCount}`);
-    await options.nth(1).click(); // 备用通道
+    await options.nth(1).click(); // Codex
     await page.waitForTimeout(300);
     const jobProvider = await page.evaluate(() => {
       const j = window.state.planJob;
       return (j.tasks || []).find((x) => x.id === "t1")?.provider;
     });
-    check("选备用通道后 t1 通道持久化", jobProvider === "codex", `provider=${jobProvider}`);
+    check("选 Codex 后 t1 通道持久化", jobProvider === "codex", `provider=${jobProvider}`);
   } else {
     check("菜单可打开 / 通道持久化", false, "下拉不可用");
   }
 
-  // Second task is selected → header label reflects its provider (codex → 备用通道).
+  // Second task is selected → header label reflects its provider (codex → Codex).
   await page.evaluate(() => {
     window.state.confirmTaskId = "t2";
     window.ccoSplit.render();
@@ -164,37 +185,15 @@ try {
     .locator(".cco-select__label")
     .textContent()
     .catch(() => null);
-  check("切换步骤后下拉跟随该步通道", headerLabel2 === "备用通道", `label=${headerLabel2}`);
+  check("切换步骤后下拉跟随该步通道", headerLabel2 === "Codex", `label=${headerLabel2}`);
 
-  // ---- 每张任务卡上的「默认通道」已是可点下拉（P2-17：用户点不动的正是它）----
-  const cardCount = await page.locator(".split-provider-select").count();
-  check("每张任务卡含通道下拉", cardCount === 2, `count=${cardCount}`);
-  if (cardCount === 2) {
-    const cardWrap = page.locator(
-      ".split-provider-wrap[data-provider-for='t1']"
-    );
-    await cardWrap.locator(".cco-select__trigger").click();
-    await page.waitForTimeout(100);
-    const cardMenuOpen = await cardWrap.locator(".cco-select__menu").isVisible();
-    check("卡片通道菜单可打开", cardMenuOpen);
-    const cardOpts = await cardWrap.locator(".cco-select__option").count();
-    check("卡片菜单含 8 个通道选项", cardOpts === 8, `options=${cardOpts}`);
-    // 选回 claude（t1 现在是 codex）→ 应持久化并更新卡片当前值。
-    await cardWrap.locator(".cco-select__option[data-value='claude']").click();
-    await page.waitForTimeout(150);
-    const cardProvider = await page.evaluate(() => {
-      const j = window.state.planJob;
-      return (j.tasks || []).find((x) => x.id === "t1")?.provider;
-    });
-    const cardVal = await page.evaluate(() => {
-      const sel = document.querySelector(
-        ".split-provider-wrap[data-provider-for='t1'] select"
-      );
-      return sel?.value;
-    });
-    check("卡片改通道后 t1 持久化", cardProvider === "claude", `provider=${cardProvider}`);
-    check("卡片下拉当前值同步", cardVal === "claude", `value=${cardVal}`);
-  }
+  // ---- 卡片级的 provider 下拉已随 57ab9d6 移除（P2-17 只保留详头下拉）----
+  // 断言不应复活：若拆分台又冒出 .split-provider-select / .split-provider-wrap,
+  // 说明旧控件被回退或双轨, 冒烟应显式标红。
+  const cardSelCount = await page.locator(".split-provider-select").count();
+  check("任务卡片无 provider 下拉（57ab9d6 后已移除）", cardSelCount === 0, `count=${cardSelCount}`);
+  const cardWrapCount = await page.locator(".split-provider-wrap").count();
+  check("任务卡片无 provider 容器（57ab9d6 后已移除）", cardWrapCount === 0, `count=${cardWrapCount}`);
 
   if (errors.length) {
     check("无页面错误", false, errors.join(" | ").slice(0, 300));

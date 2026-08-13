@@ -2,7 +2,7 @@
 > L2 | 父级: /CLAUDE.md
 
 成员清单
-index.html: 桌面壳结构；经典 `js/*.js` 顺序加载 + **A2–A5** `type=module` → `js/main.js`；**shell-chrome** 顶栏无阶段条/编辑任务 · 三 icon（聊天/计划/刷新）· 拆分台仅「重新规划/执行规划」· 设置含 **GitHub 发布** 大区
+index.html: 桌面壳结构；经典 `js/*.js` 顺序加载 + **A2–A5** `type=module` → `js/main.js`（构建后改引 `dist/`）；**shell-chrome** 顶栏无阶段条/编辑任务 · 三 icon（聊天/计划/刷新）· 拆分台仅「重新规划/执行规划」· 设置含 **GitHub 发布** 大区。**防逆向 dist/ 前置**：产物引用 gitignored `web/dist/`（`dist/app.js` + `dist/classic/*.js`），干净 clone / 冒烟先 `cd web && node build.mjs`，否则页面全 404
 app.js: 入口说明（逻辑在 js/）
 app.css: @import 聚合 css/*（含 chat · tokens CTA）
 js/: **A5 S8 facade** state（**D9 桥/瘦 ~230**）· flow · **templates≤80**（**P-ship-D D7 ✅**）· plan≤200 · monitor≤200 · result≤80 · split 空壳 · log≤200 · chat≤80 · doctor≤80（**禁止堆新功能**；**A5-0/2 清单**见下文 · **A5-4 收口**）
