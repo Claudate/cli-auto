@@ -18,12 +18,13 @@
   min-width: 0;
   z-index: 2;
 }
-.brand { cursor: pointer; padding: 0.15rem 0.25rem 0.35rem; }
+.brand { cursor: pointer; padding: 0.15rem 0.25rem 0.35rem; display: flex; align-items: center; gap: 0.5rem; }
 .brand .logo {
-  font-weight: 700;
-  font-size: 1.35rem;
-  letter-spacing: 0.04em;
-  color: var(--text);
+  display: block;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  flex: none;
 }
 .brand .tag { color: var(--muted); font-size: 0.75rem; margin-top: 0.1rem; }
 

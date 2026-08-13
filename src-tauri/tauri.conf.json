@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "CCO",
+  "productName": "Leaf",
   "version": "0.1.0",
-  "identifier": "dev.cco.orchestrator",
+  "identifier": "dev.leaf.console",
   "build": {
     "frontendDist": "../web"
   },
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "cco · CLI Orchestrator",
+        "title": "轻叶 · 项目任务控制台",
         "width": 1100,
         "height": 740,
         "minWidth": 860,
@@ -35,7 +35,7 @@
       "minimumSystemVersion": "11.0"
     },
     "category": "DeveloperTool",
-    "shortDescription": "CLI Orchestrator desktop",
-    "longDescription": "Native macOS desktop for cco — plan-driven multi-CLI agent orchestration."
+    "shortDescription": "轻叶 · 项目任务控制台",
+    "longDescription": "轻叶（Leaf）— 本机轻量计划闭环任务控制台：生成→核对→拆分→并行→巡检。"
   }
 }

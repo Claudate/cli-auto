@@ -184,7 +184,7 @@ export function showPage(name) {
     } catch (_) {}
   } else if (name === "chat") {
     const title = $el("#page-title");
-    if (title) title.textContent = "共建计划";
+    if (title) title.textContent = "写计划";
     if (sub) {
       sub.hidden = false;
       const proj = (state.projects || []).find(
@@ -196,7 +196,7 @@ export function showPage(name) {
           ? String(state.selectedPath).split(/[/\\]/).filter(Boolean).pop()
           : "");
       // 后台 Mode B 态只走顶栏监控 ghost / 可关 banner，副标题不再夹「待确认/返回确认」
-      sub.textContent = label ? `与 AI 写计划 · ${label}` : "与 AI 写计划文档";
+      sub.textContent = label ? `和 AI 一起写计划 · ${label}` : "和 AI 一起写计划";
     }
     try {
       call("renderPlanPicker");

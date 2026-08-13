@@ -273,7 +273,7 @@ export function paintWorkStyleChooser(opts = {}) {
     )
     .join("");
   host.innerHTML =
-    `<p class="work-style-title">你更常拿 cco 干什么？（可跳过，以后在设置里改）</p>` +
+    `<p class="work-style-title">你更常拿轻叶干什么？（可跳过，以后在设置里改）</p>` +
     `<div class="work-style-grid">${cards}</div>` +
     `<button type="button" class="linkish work-style-skip" data-work-style-skip="1">先跳过，按通用来</button>`;
 

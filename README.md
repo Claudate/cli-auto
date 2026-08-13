@@ -1,6 +1,6 @@
-# cco — CLI Orchestrator
+# Leaf — 轻叶 · 项目任务控制台
 
-独立 **Rust** 编排器：读计划 → DAG 调度 → 通过 `WorkerProvider` 启停 agent CLI（首期 **Claude**，可扩展）。
+**Leaf（轻叶）** — 独立 **Rust** 桌面/CLI 编排器：读计划 → DAG 调度 → 通过 `WorkerProvider` 启停 agent CLI（首期 **Claude**，可扩展）。「翻叶子」暗合计划流转。
 
 产品方向（给谁用、主循环、轻量化）：[`PRODUCT.md`](./PRODUCT.md)  
 工程设计真源：[`docs/architecture-redesign-2026-07-20.md`](./docs/architecture-redesign-2026-07-20.md)（架构 · A0–A5 ✅）· 索引 [`docs/CLAUDE.md`](./docs/CLAUDE.md)  
@@ -11,7 +11,7 @@
 **M0–M4 + macOS 桌面 App（Tauri）**
 
 - CLI：`doctor` / `run` / `resume` / `status` / `stop` / `report` / `logs` / `term` / `tui`
-- **桌面软件**：`dist/CCO.app`（Tauri 2 原生窗口，可双击）
+- **桌面软件**：`dist/Leaf.app`（Tauri 2 原生窗口，可双击）
 - Plan：`cco-plan/v1` · `serial-prompts/v0` · `raw-single`
 - Providers：`claude`（print + bg）· `codex`（exec）· `fake`
 - 桌面监视：可读事件流（解析 stream-json）/ 原始日志切换
@@ -27,7 +27,7 @@
 
 ```bash
 # 已打包好（在仓库根目录）：
-open dist/CCO.app
+open dist/Leaf.app
 
 # 或从源码构建（web/ 为前端资源，改完需重新打包才进 .app）：
 cargo build -p cco-desktop --release

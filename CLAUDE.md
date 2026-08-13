@@ -1,5 +1,7 @@
-# cco — CLI Orchestrator（项目任务控制台）
+# Leaf — 轻叶 · 项目任务控制台（cco 引擎）
 Rust + Tokio + Clap + ratatui + Tauri 2 + 原生 web（HTML/CSS/JS）
+
+> **品牌名 = Leaf / 轻叶**（用户可见面：Web/桌面/文档）。**引擎 crate 名仍为 `cco`**（内部代号，二进制/IPC/workspace 不改）——本轮只换用户可见名字，不重命名 crate。
 
 **产品方向**（非计划）：[`PRODUCT.md`](./PRODUCT.md) — 轻量 Codex 式 · 主受众 PM/出海/非开发 · 生成→核对→拆分→并行→巡检  
 **架构大改**（实施真源 · **已收口**）：[`docs/architecture-redesign-2026-07-20.md`](./docs/architecture-redesign-2026-07-20.md) — 六边形+用例 · 前端 MVVM · Split/Worker/Run/Inspect · **A0–A5 ✅** · **P2-17 t58** · **A5-5 可选 ☐ 本轮不做**（评估 [`docs/a5-5-workspace-crates-eval-2026-07-21.md`](./docs/a5-5-workspace-crates-eval-2026-07-21.md)）  

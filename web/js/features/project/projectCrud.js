@@ -130,7 +130,7 @@ export async function removeSelectedProject(pathArg, opts = {}) {
   if (!opts.skipConfirm) {
     const ok = await confirmDialog({
       title: "移除项目",
-      body: `从 cco 列表移除「${name}」？不会删除电脑上的文件夹。`,
+      body: `从轻叶列表移除「${name}」？不会删除电脑上的文件夹。`,
       okLabel: "移除",
       danger: true,
     });
