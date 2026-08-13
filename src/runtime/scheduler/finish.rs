@@ -356,17 +356,26 @@ impl Scheduler {
                 push_requested,
                 r,
             ),
-            Err(e) => TaskAutoCommitResult {
-                granularity: AutoCommitGranularity::PerTask.as_str().into(),
-                ok: false,
-                message: format!("auto-commit failed: {e:#}"),
-                commit_hash: None,
-                files: vec![],
-                pushed: false,
-                push_output: None,
-                branch: None,
-                work_dir: Some(work_dir),
-                created_at: Utc::now(),
+            Err(e) => {
+                // 理论不可达：confirm/materialize 已 gate（ensure_can_auto_commit）；
+                // 防御 race / 老 run 恢复，仍记录失败。
+                tracing::warn!(
+                    run_id = %self.state.run_id,
+                    task_id = %id,
+                    "auto-commit task failed (confirm gate should have blocked) — {e:#}"
+                );
+                TaskAutoCommitResult {
+                    granularity: AutoCommitGranularity::PerTask.as_str().into(),
+                    ok: false,
+                    message: format!("auto-commit failed: {e:#}"),
+                    commit_hash: None,
+                    files: vec![],
+                    pushed: false,
+                    push_output: None,
+                    branch: None,
+                    work_dir: Some(work_dir),
+                    created_at: Utc::now(),
+                }
             },
         };
         if let Some(ts) = self.state.tasks.get_mut(id) {
@@ -411,17 +420,24 @@ impl Scheduler {
                 push_requested,
                 r,
             ),
-            Err(e) => TaskAutoCommitResult {
-                granularity: AutoCommitGranularity::PerPlan.as_str().into(),
-                ok: false,
-                message: format!("auto-commit failed: {e:#}"),
-                commit_hash: None,
-                files: vec![],
-                pushed: false,
-                push_output: None,
-                branch: None,
-                work_dir: Some(self.state.project_root.clone()),
-                created_at: Utc::now(),
+            Err(e) => {
+                // 理论不可达：confirm/materialize 已 gate；防御性。
+                tracing::warn!(
+                    run_id = %self.state.run_id,
+                    "auto-commit plan failed (confirm gate should have blocked) — {e:#}"
+                );
+                TaskAutoCommitResult {
+                    granularity: AutoCommitGranularity::PerPlan.as_str().into(),
+                    ok: false,
+                    message: format!("auto-commit failed: {e:#}"),
+                    commit_hash: None,
+                    files: vec![],
+                    pushed: false,
+                    push_output: None,
+                    branch: None,
+                    work_dir: Some(self.state.project_root.clone()),
+                    created_at: Utc::now(),
+                }
             },
         };
         let _ = self.state.event(

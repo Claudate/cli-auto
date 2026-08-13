@@ -62,6 +62,117 @@ fn ensure_git_bin() -> Result<()> {
     Ok(())
 }
 
+/// Gate: auto-commit only runs when the target project is a git repository.
+///
+/// Hard rule — 自动提交是可选能力：**没开不拦**；**开了必须校验通过才放行**。
+/// Called once from `app::run::materialize::materialize_run_with_route_opts`
+/// so both desktop confirm and CLI confirm share the same gate.
+pub fn ensure_can_auto_commit(config: &crate::config::Config, project: &Path) -> Result<()> {
+    use crate::config::AutoCommitGranularity;
+    let granularity = config.auto_commit_granularity();
+    if granularity == AutoCommitGranularity::Off {
+        return Ok(());
+    }
+    if is_git_repo(project) {
+        return Ok(());
+    }
+    bail!(
+        "已开启自动提交（粒度：{}），但项目目录还不是 git 仓库：\n  {}\n\n\
+        请选择其一：\n  \
+        1) 在该目录运行 `git init`（桌面拆分台会提供「一键初始化 git」按钮）\n  \
+        2) 关闭自动提交：设置 → Git / 版本发布 → 自动提交 → 关",
+        granularity.as_str(),
+        project.display()
+    )
+}
+
+/// Initialize a fresh git repository at `project` (idempotent).
+///
+/// Used by the split desk "一键初始化 git" action when auto-commit is on but
+/// the project is not yet a repo. After `git init`, applies any configured
+/// repo-local identity and creates an initial commit so later worktree forks
+/// have a HEAD to branch from.
+pub fn init_repo(
+    config: &crate::config::Config,
+    project: &Path,
+    default_branch: Option<&str>,
+) -> Result<String> {
+    if is_git_repo(project) {
+        return Ok("already a git repository".into());
+    }
+    ensure_git_bin()?;
+    let branch = default_branch
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("main");
+    git_run(project, &["init", "--initial-branch", branch])?;
+    let id = &config.git.identity;
+    if let Some(name) = id.name.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        git_run(project, &["config", "--local", "user.name", name])?;
+    }
+    if let Some(email) = id.email.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        git_run(project, &["config", "--local", "user.email", email])?;
+    }
+    // Initial commit so `git worktree add -b ... HEAD` has a base_ref.
+    git_run(project, &["add", "-A"])?;
+    // Allow empty tree (fresh project dirs may have nothing yet).
+    git_run(project, &["commit", "--allow-empty", "-m", "chore: init"])?;
+    Ok(format!("initialized git repo on branch '{branch}'"))
+}
+
+#[cfg(test)]
+mod auto_commit_gate_tests {
+    use super::*;
+    use crate::config::AutoCommitGranularity;
+
+    fn cfg_with(auto_commit: bool, granularity: AutoCommitGranularity) -> crate::config::Config {
+        let mut c = crate::config::Config::default();
+        c.git.auto_commit.enabled = auto_commit;
+        c.git.auto_commit.granularity = granularity;
+        c
+    }
+
+    /// 没开自动提交 → 不拦（即使非 git 目录）。
+    #[test]
+    fn gate_allows_when_auto_commit_off() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = cfg_with(false, AutoCommitGranularity::PerTask);
+        ensure_can_auto_commit(&cfg, tmp.path()).unwrap();
+    }
+
+    /// 开了 + 项目已是 git 仓库 → 放行。
+    #[test]
+    fn gate_allows_when_project_is_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        git_run(tmp.path(), &["init", "--initial-branch", "main"]).unwrap();
+        let cfg = cfg_with(true, AutoCommitGranularity::PerTask);
+        ensure_can_auto_commit(&cfg, tmp.path()).unwrap();
+    }
+
+    /// 开了 + 项目还不是 git 仓库 → Err，文案含解决方案。
+    #[test]
+    fn gate_rejects_when_project_not_a_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = cfg_with(true, AutoCommitGranularity::PerTask);
+        let err = ensure_can_auto_commit(&cfg, tmp.path()).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("还不是 git 仓库"), "msg: {msg}");
+        assert!(msg.contains("git init"), "should suggest git init: {msg}");
+        assert!(msg.contains("关闭自动提交"), "should mention turning off: {msg}");
+    }
+
+    /// init_repo on a fresh dir is idempotent-ish: second call short-circuits.
+    #[test]
+    fn init_repo_is_idempotent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = crate::config::Config::default();
+        let first = init_repo(&cfg, tmp.path(), Some("main")).unwrap();
+        assert!(first.contains("initialized"));
+        assert!(is_git_repo(tmp.path()));
+        let second = init_repo(&cfg, tmp.path(), Some("main")).unwrap();
+        assert_eq!(second, "already a git repository");
+    }
+}
+
 /// Run `git -C <root> <args...>` and return stdout (trimmed). Errors carry stderr.
 fn git_run(root: &Path, args: &[&str]) -> Result<String> {
     ensure_git_bin()?;

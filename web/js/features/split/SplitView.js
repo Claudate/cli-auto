@@ -382,6 +382,43 @@ export function bindSplitView(vm, bridge = {}) {
           }
         } catch (_) {}
       }
+      // Auto-commit gate: 开了自动提交但项目还不是 git 仓库 → 提供一键初始化。
+      // 后端 materialize ensure_can_auto_commit 仍兜底（防 race / CLI 直调）。
+      try {
+        const settings = await gateway.getSettings();
+        const autoCommitOn =
+          settings?.git_auto_commit_enabled &&
+          String(settings?.git_auto_commit_granularity || "") !== "off";
+        const projPath = g("state")?.selectedPath;
+        if (autoCommitOn && projPath) {
+          const doc = await gateway.gitDoctor(projPath);
+          const repoLine = (doc || []).find((l) => l.name === "git_repo");
+          if (repoLine && !repoLine.ok) {
+            const ok = await confirmDialog({
+              title: "需要先初始化 git 仓库",
+              body:
+                `你已开启自动提交（${settings.git_auto_commit_granularity}），但项目目录还不是 git 仓库：\n  ${projPath}\n\n` +
+                "点「一键初始化」会在该目录运行 git init 并做首次提交；之后每次任务完成会自动 commit。\n" +
+                "或到 设置 → Git / 版本发布 → 自动提交 关闭。",
+              okLabel: "一键初始化并开始",
+              cancelLabel: "取消",
+            });
+            if (!ok) {
+              if (err) {
+                err.textContent =
+                  "已取消：请先初始化 git 仓库或关闭自动提交";
+                err.hidden = false;
+              }
+              toast("已取消：请先初始化 git 或关闭自动提交");
+              return;
+            }
+            await gateway.gitInit(projPath);
+            toast("已初始化 git 仓库");
+          }
+        }
+      } catch (_) {
+        /* best-effort; backend gate 兜底 */
+      }
       // Unattended workers cannot pop Claude permission UI. If config is
       // dontAsk/default, offer to switch to auto-authorize before starting.
       if (provider !== "fake") {

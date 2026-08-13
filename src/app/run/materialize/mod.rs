@@ -91,6 +91,9 @@ pub fn materialize_run_with_route_opts(
     if !project.is_dir() {
         bail!("项目路径不是目录: {}", project.display());
     }
+    // Auto-commit gate（L1 硬规则 #10）：开启了自动提交，项目必须已是 git 仓库，
+    // 否则不开跑；桌面 confirm 与 CLI confirm/materialize 共用同一闸门。
+    crate::services::git::ensure_can_auto_commit(config, &project)?;
     // Drop optional && !include before any disk write or scheduler handoff.
     let mut ir = materialize_selected_tasks(ir.clone())?;
     match config.auto_commit_granularity() {
@@ -457,10 +460,30 @@ mod tests {
 
     #[test]
     fn materialize_applies_auto_commit_checkout_policy() {
+        use std::process::Command;
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("proj");
         std::fs::create_dir_all(project.join("docs/plans")).unwrap();
         let ir = sample_ir(&project);
+        // Auto-commit gate now requires a real repo before materialize.
+        for args in [
+            ["init", "--initial-branch=main"].as_slice(),
+            &["config", "--local", "user.name", "test"][..],
+            &["config", "--local", "user.email", "test@example.com"][..],
+            &["add", "-A"][..],
+            &["commit", "--allow-empty", "-m", "init"][..],
+        ] {
+            assert!(
+                Command::new("git")
+                    .arg("-C")
+                    .arg(&project)
+                    .args(args)
+                    .status()
+                    .unwrap()
+                    .success(),
+                "git {args:?} failed"
+            );
+        }
 
         let mut per_plan = test_cfg(tmp.path());
         per_plan.git.auto_commit.enabled = true;
@@ -484,6 +507,59 @@ mod tests {
             .iter()
             .filter(|task| !crate::plan::is_system_ensure_task(&task.id))
             .all(|task| task.worktree == Some(true)));
+    }
+
+    /// Auto-commit gate: enabled + PerTask but project not a git repo → refuse to run.
+    #[test]
+    fn materialize_rejects_auto_commit_when_project_not_a_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        std::fs::create_dir_all(project.join("docs/plans")).unwrap();
+        let mut cfg = test_cfg(tmp.path());
+        cfg.git.auto_commit.enabled = true;
+        cfg.git.auto_commit.granularity = AutoCommitGranularity::PerTask;
+        let ir = sample_ir(&project);
+
+        let err = materialize_run(&cfg, project, &ir).unwrap_err();
+        assert!(
+            err.to_string().contains("还不是 git 仓库"),
+            "gate error should point at git init: {err}"
+        );
+    }
+
+    /// Auto-commit gate: enabled + PerTask and project IS a repo → passes the gate.
+    #[test]
+    fn materialize_allows_auto_commit_when_project_is_repo() {
+        use std::process::Command;
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        std::fs::create_dir_all(project.join("docs/plans")).unwrap();
+        // Make it a real git repo (is_git_repo + per_task worktree fork need HEAD).
+        for args in [
+            ["init", "--initial-branch=main"].as_slice(),
+            &["config", "--local", "user.name", "test"][..],
+            &["config", "--local", "user.email", "test@example.com"][..],
+            &["add", "-A"][..],
+            &["commit", "--allow-empty", "-m", "init"][..],
+        ] {
+            assert!(
+                Command::new("git")
+                    .arg("-C")
+                    .arg(&project)
+                    .args(args)
+                    .status()
+                    .unwrap()
+                    .success(),
+                "git {args:?} failed"
+            );
+        }
+        let mut cfg = test_cfg(tmp.path());
+        cfg.git.auto_commit.enabled = true;
+        cfg.git.auto_commit.granularity = AutoCommitGranularity::PerTask;
+        let ir = sample_ir(&project);
+
+        let (_run_id, st, _out) = materialize_run(&cfg, project, &ir).unwrap();
+        assert!(!st.tasks.is_empty(), "run must materialize once gate passes");
     }
 
     /// P1-2: soft fill report → filled soft_fill, kept explicit in run.json.

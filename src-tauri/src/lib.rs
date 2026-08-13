@@ -883,6 +883,22 @@ fn git_doctor_cmd(
     svc_git_doctor(&config, PathBuf::from(project).as_path()).map_err(map_err)
 }
 
+/// One-click git init for the split desk auto-commit gate.
+/// Initializes the repo, applies repo-local identity (if configured), and makes
+/// an initial commit so per_task worktree forks have a HEAD.
+#[tauri::command]
+fn git_init_cmd(
+    state: tauri::State<'_, AppState>,
+    project: String,
+    default_branch: Option<String>,
+) -> Result<Value, String> {
+    let config = state.config.lock().map_err(|e| e.to_string())?.clone();
+    let msg =
+        cco::services::git::init_repo(&config, PathBuf::from(project).as_path(), default_branch.as_deref())
+            .map_err(map_err)?;
+    Ok(json!({ "ok": true, "message": msg }))
+}
+
 #[tauri::command]
 fn git_pull_cmd(
     state: tauri::State<'_, AppState>,
@@ -1391,6 +1407,7 @@ pub fn run() {
             git_commit_cmd,
             git_push_cmd,
             git_doctor_cmd,
+            git_init_cmd,
             git_pull_cmd,
             git_fetch_cmd,
             git_branch_list_cmd,

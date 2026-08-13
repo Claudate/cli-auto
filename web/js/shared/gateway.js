@@ -202,6 +202,9 @@ export const setSettings = (update) => raw("set_settings_cmd", { update });
 export const doctor = (project) =>
   raw("doctor_cmd", { project: project || null });
 export const gitDoctor = (project) => raw("git_doctor_cmd", { project });
+/** One-click git init for the auto-commit gate (split desk confirm). */
+export const gitInit = (project, opts = {}) =>
+  raw("git_init_cmd", { project, ...opts });
 
 /* ── Git (host-level: pull / fetch / branch / log / diff / stash / tag) ── */
 export const gitStatus = (project) => raw("git_status_cmd", { project });
