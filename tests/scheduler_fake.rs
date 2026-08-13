@@ -804,3 +804,122 @@ tasks:
     assert_eq!(hit.metadata.outcome.as_deref(), Some("success"));
     assert!(hit.metadata.tags.contains(&"task-outcome".to_string()));
 }
+
+/// P3 memory pilot: seeded failure history (≥3 samples · >30% rate) triggers a
+/// preventive pre-spawn provider switch with route provenance + event
+/// (scenario 2 failover path · docs/agentmemory-integration-plan-2026-08-12.md).
+#[tokio::test]
+async fn memory_pilot_preventive_failover_switches_provider() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().join("proj");
+    std::fs::create_dir_all(project.join("docs/plans")).unwrap();
+    let plan_path = project.join("docs/plans/mem-failover.cco.yaml");
+    std::fs::write(
+        &plan_path,
+        r#"
+schema: cco-plan/v1
+name: mem-failover
+defaults:
+  provider: claude
+  mode: print
+tasks:
+  - id: a
+    title: a
+    prompt: "do a\nCCO_DONE ok"
+"#,
+    )
+    .unwrap();
+
+    let mut config = Config::default();
+    config.state_root = tmp.path().join("state");
+    std::fs::create_dir_all(config.runs_dir()).unwrap();
+
+    // Seed 3 timeout outcomes for (claude, implement): 100% failure rate over
+    // 3 samples clears both domain thresholds (≥3 samples · >30%).
+    let mem_cfg = cco::state::memory_store::MemoryConfig {
+        storage_root: tmp.path().join("memory"),
+        ..Default::default()
+    };
+    let memory: std::sync::Arc<dyn cco::ports::MemoryPort> =
+        std::sync::Arc::new(cco::state::memory_store::LocalMemory::new(mem_cfg));
+    for i in 0..3 {
+        memory
+            .store(
+                &format!("seed-{i}"),
+                "outcome claude implement timeout 任务 historic",
+                cco::ports::memory::Metadata {
+                    provider: Some("claude".into()),
+                    task_role: Some("implement".into()),
+                    outcome: Some("timeout".into()),
+                    tags: vec!["task-outcome".into()],
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+    }
+
+    let ir = load_plan(&project, &plan_path, Some("cco-plan/v1"), &config).unwrap();
+    assert_eq!(ir.tasks[0].provider, "claude");
+    let run_id = state::new_run_id();
+    let run_dir = state::prepare_run_dir(&config.runs_dir(), &run_id).unwrap();
+    let run_state = RunState::new(
+        run_id,
+        project.canonicalize().unwrap(),
+        &ir,
+        run_dir.clone(),
+    );
+
+    let registry = ProviderRegistry::from_config(&config).unwrap();
+    let sched = Scheduler {
+        max_parallel: 1,
+        plan: ir,
+        state: run_state,
+        registry,
+        poll_interval: Duration::from_millis(20),
+        yes: true,
+        only: None,
+        from_task: None,
+        dry_run: false,
+        mirror_state: None,
+        auto_open_terminal: false,
+        terminal_kind: cco::SessionKind::Embedded,
+        terminal_manager: None,
+        run_max_budget_usd: None,
+        provider_max_parallel: Default::default(),
+        retry_max: 0,
+        stall_secs: 600,
+        failover_enabled: false,
+        fallback_extra_attempts: 1,
+        failover_order: vec!["fake".into()],
+        cost_escalate_enabled: false,
+        browser: cco::config::BrowserConfig::default(),
+        provider_unhealthy: Vec::new(),
+        collab_bus: None,
+        memory: Some(memory.clone()),
+    };
+
+    // The pre-spawn switch means claude is never actually started.
+    let status = sched.run().await.unwrap();
+    assert_eq!(status, RunStatus::Completed);
+
+    let st = RunState::load(&run_dir).unwrap();
+    let task = &st.tasks["a"];
+    assert_eq!(task.status, cco::runtime::provider::TaskStatus::Done);
+    assert_eq!(task.provider, "fake", "provider should be switched pre-spawn");
+    assert_eq!(task.route_previous.as_deref(), Some("claude"));
+    assert_eq!(task.route_source, Some(cco::state::RouteSource::Failover));
+    let note = task.route_note.as_deref().unwrap_or("");
+    assert!(note.starts_with("memory:"), "route_note={note}");
+    assert!(note.contains("100%"), "route_note={note}");
+
+    let events = std::fs::read_to_string(run_dir.join("events.jsonl")).unwrap();
+    let switched = events
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find(|e| e["type"] == "provider_switched")
+        .expect("provider_switched event");
+    assert_eq!(switched["why"], "memory_history");
+    assert_eq!(switched["provider"], "fake");
+    assert_eq!(switched["from_provider"], "claude");
+}

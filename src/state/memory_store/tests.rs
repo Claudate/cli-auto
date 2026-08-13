@@ -149,6 +149,103 @@ fn memory_store_max_entries_archiving() {
     assert!(ids.contains(&"mem4".to_string()));
 }
 
+#[test]
+fn memory_store_batch_roundtrip() {
+    let dir = tempdir().unwrap();
+    let config = MemoryConfig {
+        storage_root: dir.path().to_path_buf(),
+        ..Default::default()
+    };
+    let mut store = MemoryStore::new(config).unwrap();
+
+    let entries = vec![
+        (
+            "batch1".to_string(),
+            "browser verification timeout on claude".to_string(),
+            Metadata::default(),
+        ),
+        (
+            "batch2".to_string(),
+            "backend API tests pass quickly".to_string(),
+            Metadata::default(),
+        ),
+    ];
+    assert_eq!(store.store_batch(&entries).unwrap(), 2);
+    assert_eq!(store.store_batch(&[]).unwrap(), 0);
+
+    let ids = store.list_ids().unwrap();
+    assert_eq!(ids.len(), 2);
+
+    let hits = store.search("browser timeout", 5).unwrap();
+    assert_eq!(hits.len(), 1, "batch-stored entry should be searchable");
+    assert_eq!(hits[0].key, "batch1");
+}
+
+/// P3 完成标志 benchmark: 10k stored entries + 100 searches < 5s.
+///
+/// Measures the SQLite + tantivy storage/search path with stub embeddings;
+/// real-model embedding cost is measured separately in
+/// `memory_store_perf_real_model` (~12.6ms/entry, would dominate at 10k).
+#[test]
+#[ignore = "perf benchmark; run explicitly with --ignored"]
+fn memory_store_perf_10k_bulk() {
+    let dir = tempdir().unwrap();
+    let config = MemoryConfig {
+        storage_root: dir.path().to_path_buf(),
+        ttl_days: 365,
+        max_entries: 20_000,
+        // Nonexistent model path forces stub embeddings even when
+        // ~/.cco/models has the real one: isolate SQLite + tantivy.
+        model_path: Some(dir.path().join("no-model.onnx")),
+    };
+    let mut store = MemoryStore::new(config).unwrap();
+    assert!(store.session.is_none(), "benchmark must use stub embeddings");
+
+    let providers = ["claude", "codex", "fake"];
+    let roles = ["browser", "backend", "frontend"];
+    let outcomes = ["success", "timeout"];
+    let entries: Vec<(String, String, Metadata)> = (0..10_000)
+        .map(|i| {
+            (
+                format!("mem{i}"),
+                format!(
+                    "task {i} provider {} role {} outcome {} in project demo-{}",
+                    providers[i % 3],
+                    roles[i % 3],
+                    outcomes[i % 2],
+                    i % 17
+                ),
+                Metadata::default(),
+            )
+        })
+        .collect();
+
+    let t = std::time::Instant::now();
+    assert_eq!(store.store_batch(&entries).unwrap(), 10_000);
+    let store_elapsed = t.elapsed();
+
+    let t = std::time::Instant::now();
+    let mut total_hits = 0usize;
+    for i in 0..100 {
+        let hits = store
+            .search(&format!("provider claude outcome success demo-{}", i % 17), 3)
+            .unwrap();
+        total_hits += hits.len();
+    }
+    let search_elapsed = t.elapsed();
+
+    let db_size = std::fs::metadata(dir.path().join("memory.db")).unwrap().len();
+    eprintln!(
+        "perf10k: store={store_elapsed:?} search100={search_elapsed:?} db={db_size}B hits={total_hits}"
+    );
+    assert!(total_hits > 0, "searches should hit entries");
+    let total = store_elapsed + search_elapsed;
+    assert!(
+        total.as_secs_f64() < 5.0,
+        "10k store + 100 searches should be < 5s, got {total:?}"
+    );
+}
+
 /// P3-Week1 acceptance: 100 entries < 200KB · single search (incl. embedding) < 100ms.
 /// Needs the real model in ~/.cco/models — run with `cargo test -- --ignored`.
 #[test]

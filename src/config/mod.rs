@@ -496,16 +496,14 @@ impl Default for TuiConfig {
     }
 }
 
-/// Memory backend configuration for semantic search and knowledge graphs.
+/// Local semantic memory configuration (P3 · pure Rust, no external service).
+/// Storage lives under `<state_root>/memory`; the ONNX embedding model is
+/// auto-detected in `~/.cco/models` (stub zero-vector embeddings when absent).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MemoryConfig {
     /// Master switch. Default false — no memory until opted in.
     pub enabled: bool,
-    /// Base URL of agentmemory service.
-    pub base_url: String,
-    /// Embedding model (e.g., "nomic-embed-text" for local Ollama).
-    pub embedding_model: String,
     /// TTL in days for auto-archiving old memories (default 90).
     pub ttl_days: u32,
     /// Maximum entries before triggering cleanup (default 10,000).
@@ -516,8 +514,6 @@ impl Default for MemoryConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            base_url: "http://localhost:3000".into(),
-            embedding_model: "nomic-embed-text".into(),
             ttl_days: 90,
             max_entries: 10_000,
         }
@@ -762,14 +758,11 @@ granularity = "off"
 push_after_commit = false
 allow_force = false
 
-# Memory backend for semantic search and knowledge graphs (P3 spike).
-# Requires agentmemory service running (default: http://localhost:3000).
-# Docs: docs/agentmemory-integration-plan-2026-08-12.md
+# Local semantic memory (P3 · pure Rust, no external service).
+# Data: ~/.cco/memory · embedding model auto-detected in ~/.cco/models.
+# Docs: docs/memory-user-guide.md · docs/agentmemory-integration-plan-2026-08-12.md
 [memory]
 enabled = false
-base_url = "http://localhost:3000"
-# Embedding model (e.g., "nomic-embed-text" for local Ollama).
-embedding_model = "nomic-embed-text"
 # TTL in days for auto-archiving old memories (default 90).
 ttl_days = 90
 # Maximum entries before triggering cleanup (default 10,000).

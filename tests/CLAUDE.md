@@ -2,7 +2,7 @@
 > L2 | 父级: /CLAUDE.md
 
 成员清单
-scheduler_fake.rs: FakeProvider 多任务调度主路径 · P1-8 report by_provider + handoff 路径
+scheduler_fake.rs: FakeProvider 多任务调度主路径 · P1-8 report by_provider + handoff 路径 · **P3 记忆试点**（outcome 录入 · 预置失败历史 → spawn 前预防性切换 + route_note/事件）
 resume_and_budget.rs: resume / **单任务 prepare_task_retry** / 预算截断
 acceptance_and_term.rs: acceptance 门禁 + term 会话
 bg_and_worktree.rs: bg 模式与 worktree 隔离

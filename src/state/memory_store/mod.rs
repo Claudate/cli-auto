@@ -222,6 +222,53 @@ impl MemoryStore {
         Ok(id.to_string())
     }
 
+    /// Store many entries with one SQLite transaction and a single tantivy commit.
+    ///
+    /// Bulk path for imports and benchmarks; per-entry [`Self::store`] commits the
+    /// full-text index on every call, which dominates cost at high volume.
+    pub fn store_batch(&mut self, entries: &[(String, String, Metadata)]) -> Result<usize> {
+        if entries.is_empty() {
+            return Ok(0);
+        }
+        let created_at = Utc::now();
+
+        // Embeddings first: `embed` needs `&mut self`, which cannot overlap
+        // with the SQLite transaction borrow below.
+        let mut prepared = Vec::with_capacity(entries.len());
+        for (id, content, metadata) in entries {
+            let embedding = self.embed(content)?;
+            let blob: Vec<u8> = embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
+            let metadata_json = serde_json::to_string(metadata).context("serialize metadata")?;
+            prepared.push((id.as_str(), content.as_str(), blob, metadata_json));
+        }
+
+        let tx = self.db.transaction().context("begin batch transaction")?;
+        {
+            let mut stmt = tx.prepare_cached(
+                "INSERT OR REPLACE INTO memory (id, content, embedding, metadata, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            )?;
+            for (id, content, blob, metadata_json) in &prepared {
+                stmt.execute(params![id, content, blob, metadata_json, created_at.timestamp()])?;
+            }
+        }
+        tx.commit().context("commit batch transaction")?;
+
+        let id_field = self.schema.get_field("id").unwrap();
+        let content_field = self.schema.get_field("content").unwrap();
+        let created_at_field = self.schema.get_field("created_at").unwrap();
+        for (id, content, _, _) in &prepared {
+            self.index_writer.add_document(doc!(
+                id_field => *id,
+                content_field => *content,
+                created_at_field => created_at.timestamp(),
+            ))?;
+        }
+        self.index_writer.commit().context("commit tantivy index")?;
+
+        self.check_and_archive()?;
+        Ok(prepared.len())
+    }
+
     /// Search for relevant memories using hybrid BM25 + vector similarity.
     ///
     /// # Arguments
