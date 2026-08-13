@@ -359,8 +359,8 @@ export function paintDetail(ctx) {
     providerSel.title = lockHeader
       ? "运行中或编辑中不可改通道"
       : hasExplicitProvider
-        ? "默认通道（点选即改）· 实际执行时可能自动路由"
-        : "默认通道（点选即改）· 未显式指定时回退到 Claude";
+        ? "执行通道（点选即改，执行时通道与此一致）"
+        : "执行通道（点选即改）· 未指定时用 Claude，执行时通道与此一致";
     providerSel.onchange = async () => {
       if (
         !cur ||
@@ -376,7 +376,7 @@ export function paintDetail(ctx) {
       try {
         await ctx.vm.setProvider(cur.id, next);
         ctx.pushSelection();
-        toast(`已设「${cur.title || cur.id}」默认通道 → ${engineLabel(next)}（实际执行时可能自动路由）`);
+        toast(`已设「${cur.title || cur.id}」执行通道 → ${engineLabel(next)}`);
         ctx.afterMutate();
         ctx.render();
       } catch (e) {

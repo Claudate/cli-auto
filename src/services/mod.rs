@@ -52,6 +52,7 @@ pub use runs::{
     list_plans, list_runs, load_run, pause_run, preview_plan, remove_proposed_task,
     resume_run_async, retry_task_async, run_doctor, sanitize_proposed_deps, start_plan_job,
     start_rework_from_run, start_run_async, start_run_from_plan, start_run_from_plan_with_route,
+    start_run_from_plan_with_route_opts,
     stop_run, update_proposed_task, PlanJobView, PlanMeta, PlanPreview, ReworkStartResponse,
     RunSummary, SanitizeDepsResult, StartPlanJobRequest, StartRunRequest,
 };

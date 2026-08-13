@@ -315,9 +315,31 @@ pub fn start_run_from_plan_with_route(
     ir: &PlanIR,
     route_report: Option<&crate::domain::worker::RouteFillReport>,
 ) -> Result<String> {
+    start_run_from_plan_with_route_opts(
+        config,
+        project,
+        ir,
+        route_report,
+        crate::app::run::MaterializeRouteOpts::default(),
+    )
+}
+
+/// Same as [`start_run_from_plan_with_route`] but with explicit materialize opts.
+///
+/// Split desk confirm passes `skip_cost_route: true`: by the time the desk shows
+/// a task's provider (after job soft-fill), that value is already the committed
+/// channel the user saw — cost-aware auto-routing must not silently rewrite it
+/// again at open-run (channel shown == channel executed, no exceptions).
+pub fn start_run_from_plan_with_route_opts(
+    config: Config,
+    project: PathBuf,
+    ir: &PlanIR,
+    route_report: Option<&crate::domain::worker::RouteFillReport>,
+    opts: crate::app::run::MaterializeRouteOpts,
+) -> Result<String> {
     // Single materialize path (Ensure closeout + checklist + optional drop + route stamp).
     let (run_id, run_state, ir, _cost_line) =
-        crate::app::run::materialize_run_with_route(&config, project, ir, route_report)?;
+        crate::app::run::materialize_run_with_route_opts(&config, project, ir, route_report, opts)?;
     let run_dir = run_state.run_dir.clone();
 
     let registry = ProviderRegistry::from_config(&config)?;

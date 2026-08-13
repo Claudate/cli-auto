@@ -47,11 +47,17 @@ pub fn confirm(config: Config, job_id: &str, effort: Option<&str>) -> Result<Str
     // UI/CLI depth pick at execute time (split desk · --effort).
     crate::app::run::apply_effort(&mut ir, &config, effort);
     // P1-2: pass soft-fill report so run.json stamps route_source (kept → explicit).
-    let run_id = crate::services::start_run_from_plan_with_route(
+    // skip_cost_route: the split desk already displays each task's committed
+    // provider post soft-fill — cost-aware auto-routing must not rewrite it at
+    // open-run (通道必须统一: shown provider == executed provider, always).
+    let run_id = crate::services::start_run_from_plan_with_route_opts(
         config.clone(),
         job.project.clone(),
         &ir,
         Some(&soft_report),
+        crate::app::run::MaterializeRouteOpts {
+            skip_cost_route: true,
+        },
     )?;
     mark_confirmed(&config, job_id, &run_id, &ir)?;
     // New open-run: clear UI dismiss so project_live binds this run.
