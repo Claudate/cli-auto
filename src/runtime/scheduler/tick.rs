@@ -508,6 +508,10 @@ impl Scheduler {
                         },
                     );
                     self.maybe_open_terminal(&id, &work_dir, &handle)?;
+                    // A3bis: record the worker's declared permission tier so the
+                    // assignment is auditable in events.jsonl. Declaration only —
+                    // does not change what actually spawns (rule 13 routing unchanged).
+                    let permission_tier = provider.default_permission_tier().as_str();
                     self.state.event(
                         "task_start",
                         serde_json::json!({
@@ -517,6 +521,7 @@ impl Scheduler {
                             "pid": handle.pid,
                             "work_dir": work_dir,
                             "attempt": attempt,
+                            "permission_tier": permission_tier,
                         }),
                     )?;
                     self.state.save()?;

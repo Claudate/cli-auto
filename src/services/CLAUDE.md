@@ -3,7 +3,7 @@
 
 成员清单
 mod.rs: re-export live/projects/runs/settings/chat/preview · **A1-7 deprecated facade**（Presentation 应调 `app::*`）
-live.rs: project_live_view（含 inspect_loop · handoff_board/handoff_md_path P2-6 · **P1-3** task.route_source + App 拼 route_label · **P2-1** verification · **W3 browser_evidence** · **H1** `status_one_liner` · **H3** `merge_check` · **auto_commit/auto_commits** 提交记录）· task_logs · open_task_terminal · stop_task（Pending 可停 · SIGTERM+KILL · 整 run 冻 pending→Aborted）
+live.rs: project_live_view（含 inspect_loop · handoff_board/handoff_md_path P2-6 · **P1-3** task.route_source + App 拼 route_label · **P2-1** verification · **W3 browser_evidence** · **H1** `status_one_liner` · **H3** `merge_check` · **auto_commit/auto_commits** 提交记录 · **A1 has_checkpoint** · **A3bis permission_tier_label 人话安全标签**）· task_logs · open_task_terminal · stop_task（Pending 可停 · SIGTERM+KILL · 整 run 冻 pending→Aborted）
 live_status.rs: **H1** 组装 `status_one_liner`（委托 app/domain；**禁止**再堆进 live.rs）
 preview/: **可选本地预览 API**（`detect`/`http_ready` · HTTP 就绪后报 URL · stop/status）；**聊天短句不拦截**，起服由 CLI Bash 真执行；`annotate_false_preview_claims` 仅核验回复里的假 localhost
 projects.rs: list/add/remove projects

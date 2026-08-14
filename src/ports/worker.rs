@@ -139,6 +139,17 @@ pub trait WorkerPort: Send + Sync {
     async fn poll(&self, handle: &WorkerHandle) -> Result<WorkerStatus>;
     async fn stop(&self, handle: &WorkerHandle) -> Result<()>;
     async fn collect(&self, handle: &WorkerHandle) -> Result<TaskResult>;
+    /// Default permission tier this provider declares (Harness-aligned · A3bis).
+    ///
+    /// Override per provider when it natively supports a stricter tier. The
+    /// default `FullAccess` preserves the existing `bypassPermissions` soft-fill
+    /// behavior — this is a *declaration*, not a runtime override: `apply_permission_mode`
+    /// remains the authority on what actually spawns (rule 13 provider routing
+    /// unchanged).
+    fn default_permission_tier(&self) -> crate::domain::worker::PermissionTier {
+        crate::domain::worker::PermissionTier::FullAccess
+    }
+
     /// Decode provider output into a structured success judgement (契约层 T1).
     ///
     /// Default = exit-status mapping for mature providers that keep their own collect

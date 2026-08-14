@@ -140,6 +140,10 @@ pub struct ProjectLiveView {
     /// A1: true when events.jsonl has at least one checkpoint event (granular resume available).
     #[serde(default)]
     pub has_checkpoint: bool,
+    /// A3bis: current worker permission tier as a human safety label
+    /// (rule 23: UI renders this directly, no technical enum on the main path).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission_tier_label: Option<String>,
 }
 
 /// Compact Board row for desktop handoff strip (multi-cli P2-6).
@@ -422,6 +426,15 @@ pub fn project_live_view(
         merge_check,
         browser_evidence,
         has_checkpoint: rs.last_checkpoint_task_id().is_some(),
+        // A3bis: project the configured permission_mode into a human safety label.
+        // Declaration only — does not change what spawns (rule 13 routing unchanged).
+        permission_tier_label: Some(
+            crate::domain::worker::PermissionTier::from_permission_mode(
+                &config.default.permission_mode,
+            )
+            .human_label()
+            .to_string(),
+        ),
     })
 }
 
@@ -449,6 +462,13 @@ fn empty_live_view(project: &Path, name: &str, config: &Config) -> ProjectLiveVi
         merge_check: None,
         browser_evidence: vec![],
         has_checkpoint: false,
+        permission_tier_label: Some(
+            crate::domain::worker::PermissionTier::from_permission_mode(
+                &config.default.permission_mode,
+            )
+            .human_label()
+            .to_string(),
+        ),
     }
 }
 

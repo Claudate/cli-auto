@@ -14,6 +14,7 @@ mod cost_route;
 mod failover;
 mod isolation;
 mod memory_route;
+mod permission;
 mod route;
 mod types;
 
@@ -40,6 +41,7 @@ pub use memory_route::{
     MEMORY_FAILOVER_MIN_SAMPLES,
 };
 pub use isolation::{is_multi_provider, isolation_on_fail, IsolationOnFail};
+pub use permission::PermissionTier;
 pub use route::{
     apply_route_fill, apply_worker_defaults, is_still_default_route, RouteFillMode, RouteFillReport,
 };

@@ -55,6 +55,21 @@ function permissionIsAuto(mode) {
 }
 
 /**
+ * A3bis: map a permission_mode to a human safety tier label.
+ * Mirrors Rust `PermissionTier::from_permission_mode(...).human_label()`.
+ * Rule 23: no technical enum in the main path label.
+ * @param {string} mode
+ * @returns {string}
+ */
+function permissionTierLabel(mode) {
+  const m = String(mode || "");
+  if (m === "bypassPermissions") return "完全访问";
+  if (m === "acceptEdits") return "可读写项目文件";
+  if (m === "dontAsk" || m === "default") return "受限只读";
+  return "完全访问";
+}
+
+/**
  * Paint 任务授权 section from a permission_mode string.
  * @param {string} mode
  * @param {{ skipSelect?: boolean }} [opts]
@@ -101,6 +116,19 @@ export function paintPermissionUi(mode, opts = {}) {
 
   const restore = $("#btn-permission-restore");
   if (restore) restore.hidden = m === "bypassPermissions";
+
+  // A3bis: human safety tier label (rule 23). Always show so users know the
+  // band they're in; warn style when not the recommended WorkspaceWrite band.
+  const tierWrap = $("#s-permission-tier");
+  const tierLabel = $("#s-permission-tier-label");
+  if (tierWrap && tierLabel) {
+    tierLabel.textContent = permissionTierLabel(m);
+    // FullAccess is the current default but wider than Harness's safe default;
+    // ReadOnly risks false Done. Mark both as warn, WorkspaceWrite as ok.
+    const tierState = m === "acceptEdits" ? "ok" : "warn";
+    tierWrap.dataset.state = tierState;
+    tierWrap.hidden = false;
+  }
 }
 
 let _permissionUiWired = false;

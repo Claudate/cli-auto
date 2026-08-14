@@ -3,7 +3,7 @@
 
 成员清单
 mod.rs: ports 根；re-export WorkerPort DTO · HandoffStore · **SplitAgentPort**；A0 marker
-worker.rs: **A1-4** `WorkerPort` trait（start/poll/stop/collect/preflight/capabilities）+ TaskStatus/Capabilities/StartCtx/WorkerHandle/WorkerStatus/TaskResult
+worker.rs: **A1-4** `WorkerPort` trait（start/poll/stop/collect/preflight/capabilities + **A3bis `default_permission_tier()`** 默认 FullAccess 向后兼容）+ TaskStatus/Capabilities/StartCtx/WorkerHandle/WorkerStatus/TaskResult
 handoff.rs: **A1-5** `HandoffStore` trait（write_shell · on_task_start · on_task_end · on_run_end）；实现在 `runtime/handoff::FsHandoffStore`
 split_agent.rs: **OpenHands 落地** `SplitAgentPort` + `SplitRequest` → `CcoSplitJob`（Plan Mode；实现 `plan/split_agent`）
 
