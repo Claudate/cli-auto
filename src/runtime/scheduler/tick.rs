@@ -268,6 +268,8 @@ impl Scheduler {
                                 "error": result.error,
                             }),
                         )?;
+                        // A1: checkpoint event for granular resume
+                        let _ = self.state.event("checkpoint", serde_json::json!({"task_id": id}));
                         self.state.save()?;
                         self.handoff_task_end(&id, &result, Some(&work_dir));
                     } else {
@@ -553,6 +555,8 @@ impl Scheduler {
                                     "attempt": attempt,
                                 }),
                             )?;
+                            // A1: checkpoint event for granular resume
+                            let _ = self.state.event("checkpoint", serde_json::json!({"task_id": id}));
                             self.state.save()?;
                             self.handoff_task_end(&id, &result, Some(&work_dir));
                         } else {

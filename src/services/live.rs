@@ -137,6 +137,9 @@ pub struct ProjectLiveView {
     /// W3: browser automation evidence (shots / report / smoke) under `.cco-out/browser`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub browser_evidence: Vec<crate::runtime::browser_mcp::BrowserEvidenceItem>,
+    /// A1: true when events.jsonl has at least one checkpoint event (granular resume available).
+    #[serde(default)]
+    pub has_checkpoint: bool,
 }
 
 /// Compact Board row for desktop handoff strip (multi-cli P2-6).
@@ -418,6 +421,7 @@ pub fn project_live_view(
         status_one_liner,
         merge_check,
         browser_evidence,
+        has_checkpoint: rs.last_checkpoint_task_id().is_some(),
     })
 }
 
@@ -444,6 +448,7 @@ fn empty_live_view(project: &Path, name: &str, config: &Config) -> ProjectLiveVi
         status_one_liner: super::live_status::latest_job_line(config, project),
         merge_check: None,
         browser_evidence: vec![],
+        has_checkpoint: false,
     }
 }
 

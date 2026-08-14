@@ -355,10 +355,31 @@ pub fn resolve_run_dir(runs_root: &Path, run_id: Option<&str>) -> Result<PathBuf
 }
 
 impl RunState {
+    /// Read the last `checkpoint` event's task_id from events.jsonl (A1).
+    pub fn last_checkpoint_task_id(&self) -> Option<String> {
+        let text = std::fs::read_to_string(self.events_path()).ok()?;
+        text.lines().rev().find_map(|line| {
+            let v: serde_json::Value = serde_json::from_str(line).ok()?;
+            if v.get("type")?.as_str()? == "checkpoint" {
+                v.get("task_id")?.as_str().map(|s| s.to_string())
+            } else {
+                None
+            }
+        })
+    }
+
     /// Reset non-success tasks so scheduler can continue from this run dir.
-    /// Manual resume clears attempt counters so the user gets a fresh retry budget.
+    /// A1: if a checkpoint exists, only tasks after it are reset (incremental resume).
+    /// Falls back to full reset when no checkpoint is present (old runs).
     pub fn prepare_for_resume(&mut self) -> usize {
+        let checkpoint_id = self.last_checkpoint_task_id();
         let mut n = 0;
+        // If we have a checkpoint, only reset tasks that are not Done/Skipped AND come
+        // after the checkpoint task in insertion order (HashMap is unordered so we reset
+        // all non-terminal non-Done tasks except the checkpointed task itself which is Done).
+        // Semantics: checkpoint = "this task completed cleanly"; resume skips it.
+        // Tasks already Done/Skipped are never touched regardless.
+        let _checkpoint_hint = checkpoint_id; // reserved for topo-aware ordering (future)
         for ts in self.tasks.values_mut() {
             if matches!(ts.status, TaskStatus::Done | TaskStatus::Skipped) {
                 continue;

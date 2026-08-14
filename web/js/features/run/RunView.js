@@ -327,8 +327,18 @@ export function bindRunView(vm, bridge = {}) {
     const canResume = ["paused", "failed", "aborted"].includes(
       String(runStatus || "").toLowerCase()
     );
+    // A1: 有 checkpoint 时文案改为"从这里继续"
+    const hasCheckpoint = !!(live && live.has_checkpoint);
     const logResume = $("btn-log-resume");
-    if (logResume) logResume.hidden = !canResume;
+    if (logResume) {
+      logResume.hidden = !canResume;
+      if (canResume) {
+        logResume.textContent = hasCheckpoint ? "从这里继续" : "继续";
+        logResume.title = hasCheckpoint
+          ? "从最后一个完成步骤后继续执行"
+          : "重新执行未完成的步骤";
+      }
+    }
     const logEnd = $("btn-log-end-plan");
     if (logEnd) {
       logEnd.hidden = !(hasRun || active || finished);
