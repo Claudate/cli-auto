@@ -241,7 +241,7 @@ max_cost_usd = 0.5
 
 ---
 
-## 四、UI 影响面（每个方向的桌面交互设计）
+## 五、UI 影响面（每个方向的桌面交互设计）
 
 > 规则接口：`docs/product-mainpath-optimize-2026-07-20.md` 仍有效产品规则（主表面 ≤4 · 概念预算 · 壳层减法）；  
 > 改动只能增量接入现有 split desk / run desk / result desk，**不**重开第三套 UX 计划。
