@@ -15,6 +15,21 @@ use crate::plan::PlanIR;
 use crate::runtime::Scheduler;
 use crate::terminal::SessionKind;
 
+/// B2: completion output format for headless mode.
+#[derive(Clone, Copy)]
+pub(crate) enum OutputKind {
+    Human,
+    Json,
+}
+
+/// B2: headless routing for `run_scheduler_loop`.
+/// `Off` = interactive/normal; `On(kind)` = no TUI, route machine lines to stderr.
+#[derive(Clone, Copy)]
+pub(crate) enum HeadlessMode {
+    Off,
+    On(OutputKind),
+}
+
 /// Mode B: plan job → poll → load proposed PlanIR (CLI `run` prose path, display only).
 ///
 /// Open-run is **not** here — caller uses [`crate::app::split::confirm_materialize`].
@@ -133,11 +148,15 @@ pub(crate) fn resolve_term_kind(
 }
 
 /// Run scheduler foreground (optional TUI) and finish with reports via app.
+///
+/// B2: `headless` routes the completion output — JSON / human summary to stdout,
+/// run_id / run_dir / report path to stderr (so `--output json` stdout is parseable).
 pub(crate) async fn run_scheduler_loop(
     sched: Scheduler,
     config: &Config,
     run_id: &str,
     tui: bool,
+    headless: HeadlessMode,
 ) -> Result<i32> {
     use crate::app::run as run_uc;
 
@@ -155,32 +174,84 @@ pub(crate) async fn run_scheduler_loop(
         let status = join
             .await
             .map_err(|e| anyhow::anyhow!("scheduler join: {e}"))??;
-        print_run_finish_summary(config, run_id, status);
+        print_run_finish(config, run_id, status, headless);
         let code = run_uc::finish_with_reports(config, run_id, status)?;
-        println!(
-            "report: {}",
-            config.runs_dir().join(run_id).join("report.md").display()
-        );
+        report_path_line(config, run_id, headless);
         return Ok(code);
     }
 
     let status = sched.run().await?;
-    print_run_finish_summary(config, run_id, status);
+    print_run_finish(config, run_id, status, headless);
     let code = run_uc::finish_with_reports(config, run_id, status)?;
-    println!(
-        "report: {}",
-        config.runs_dir().join(run_id).join("report.md").display()
-    );
+    report_path_line(config, run_id, headless);
     Ok(code)
 }
 
-/// H0-4 / H1-4: human summary first (StatusOneLiner); machine enum secondary.
-fn print_run_finish_summary(config: &Config, run_id: &str, status: crate::state::RunStatus) {
+/// Emit the completion summary. Headless → stdout (JSON or human one-liner);
+/// interactive → stdout (human block). Matches §U-B2.
+fn print_run_finish(
+    config: &Config,
+    run_id: &str,
+    status: crate::state::RunStatus,
+    headless: HeadlessMode,
+) {
     let run_dir = config.runs_dir().join(run_id);
-    if let Ok(st) = crate::state::RunState::load(&run_dir) {
-        println!("\n{}", crate::app::run::from_run_state(&st).text);
-    } else {
-        println!("\n本轮状态：{:?}", status);
+    let st = crate::state::RunState::load(&run_dir).ok();
+    match headless {
+        HeadlessMode::On(OutputKind::Json) => {
+            // JSON is the UX: stdout gets one JSON object (rule 23: summary first).
+            let plan = st.as_ref().and_then(|s| load_plan_resolved_opt(&s.run_dir));
+            let st = match &st {
+                Some(s) => s,
+                None => {
+                    println!(
+                        "{{\"summary\":\"本轮状态：{:?}\",\"status\":\"failed\",\"tasks\":[],\"failed_tasks\":[],\"exit_code\":1}}",
+                        status
+                    );
+                    return;
+                }
+            };
+            let result = crate::report::headless_result(st, plan.as_ref());
+            match serde_json::to_string(&result) {
+                Ok(json) => println!("{json}"),
+                Err(e) => eprintln!("headless json error: {e:#}"),
+            }
+        }
+        HeadlessMode::On(OutputKind::Human) => {
+            // Human one-liner to stdout; machine enum to stderr (keeps stdout clean).
+            if let Some(s) = &st {
+                println!("{}", crate::report::report_summary_line(s).replace("**", "").trim());
+            } else {
+                println!("本轮状态：{:?}", status);
+            }
+            eprintln!("status: {:?}", status);
+        }
+        HeadlessMode::Off => {
+            if let Some(s) = &st {
+                println!("\n{}", crate::app::run::from_run_state(s).text);
+            } else {
+                println!("\n本轮状态：{:?}", status);
+            }
+            println!("status: {:?}", status);
+        }
     }
-    println!("status: {:?}", status);
+}
+
+/// `report:` path line. Headless → stderr; interactive → stdout.
+fn report_path_line(config: &Config, run_id: &str, headless: HeadlessMode) {
+    let path = config
+        .runs_dir()
+        .join(run_id)
+        .join("report.md")
+        .display()
+        .to_string();
+    match headless {
+        HeadlessMode::On(_) => eprintln!("report: {path}"),
+        HeadlessMode::Off => println!("report: {path}"),
+    }
+}
+
+/// Thin wrapper so `print_run_finish` doesn't re-import the fallback module path.
+fn load_plan_resolved_opt(run_dir: &std::path::Path) -> Option<PlanIR> {
+    crate::report::load_plan_resolved(run_dir)
 }

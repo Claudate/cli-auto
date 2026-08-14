@@ -13,11 +13,15 @@ use cco::cli::{self, Cli};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // B2: tracing → stderr always. stdout is reserved for headless JSON
+    // (`cco run --headless --output json 2>/dev/null` → stdout 纯 JSON) and
+    // for human-readable command output. Logs/log_events never pollute stdout.
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .with_target(false)
+        .with_writer(std::io::stderr)
         .init();
 
     let cli = Cli::parse();

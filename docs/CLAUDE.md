@@ -29,6 +29,7 @@ browser-automation-cco.md: **浏览器自动化契约**（**W0–W3+++ ✅** · 
 harness-inspired-roadmap-2026-08-14.md: **Harness 启示方向参考**（A1 Run Resume · A2 能力预设 · A3 工具门控 · A3bis PermissionTier · B1 事件总线(架构A级) · B2 Headless · §四 UI影响面(U-A1…U-B2) · 不做 Cordis/ACP/遥测；方向参考，非阶段表）
 run-resume-checkpoint-2026-08-14.md: **A1 Run Resume 检查点恢复**（R1 Scheduler checkpoint 事件 ✅ · R2 prepare_for_resume 增量+has_checkpoint ✅ · R3 CLI 透传 ✅ · R4 RunView 按钮文案 ✅；**本能力唯一勾选**；改 finish.rs + state/mod.rs + services/live.rs + RunView.js）
 permission-tier-audit-2026-08-14.md: **A3bis PermissionTier 安全层级审计**（D1 Domain 枚举 ReadOnly/WorkspaceWrite/FullAccess ✅ · D2 WorkerPort default_permission_tier() 默认 FullAccess 向后兼容 ✅ · D3 Scheduler task_start 记 tier 到 events.jsonl ✅ · D4 ProjectLiveView permission_tier_label 人话 ✅ · U-A3bis 设置页人话安全标签 ✅；**本能力唯一勾选**；不破坏 bypassPermissions 默认 · 规则 13 路由不动）
+headless-mode-2026-08-14.md: **B2 Headless 静默执行模式**（H1 `report::headless_result` 观察 DTO ✅ · H2 CLI `--headless`/`--output json` flag ✅ · H3 `commands/run.rs` headless 分流 + JSON 打印 ✅ · H4 跳过 confirm/不起 TUI/stderr 分流 ✅；**本能力唯一勾选**；规则 12 同一 app 路径 · 规则 23 JSON 首字段人话 summary）
 agentmemory-integration-plan-2026-08-12.md: **轻量语义记忆（纯 Rust · P3）**（存储层 ✅ 检索 12.6ms · 场景1 Mode B 注入 ✅ · 场景2 Cost Router failover ✅ 含切换集成测试 · **P3 完成标志 4/4 ✅**：基准 10k 2.31s · 覆盖率 85.9–100% · 双指南；残余=真机 e2e + 真实项目实测 ☐ · P4+ 后置；**本能力唯一勾选**；不引入 Node/Docker）
 agentmemory-integration-summary.md: agentmemory 评估总结（选型对比 · 采用本地纯 Rust 方案的理由；参考，勾选看上行）
 memory-user-guide.md: **语义记忆使用指南**（开关/模型下载/三个行为/数据管理；面向 PM/非开发）

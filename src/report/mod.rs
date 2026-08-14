@@ -21,6 +21,7 @@ use anyhow::Result;
 use serde::Serialize;
 
 use crate::plan::planner::planner_cost_for_run;
+use crate::plan::PlanIR;
 use crate::runtime::handoff::Handoff;
 use crate::runtime::provider::TaskStatus;
 use crate::state::{RunState, RunStatus, TaskState};
@@ -81,6 +82,139 @@ pub fn report_summary_line(state: &RunState) -> String {
         done,
         total
     )
+}
+
+/// B2 Headless: machine-parseable run result (JSON is the UX; rule 23 first field human).
+///
+/// Built from `RunState` (+ optional plan.resolved for human titles). Pure read,
+/// no policy, no IO write — same observation tier as [`report_summary_line`].
+#[derive(Debug, Clone, Serialize)]
+pub struct HeadlessResult {
+    /// Human one-liner first (rule 23: not run_id / VERDICT). Markdown `**` stripped.
+    pub summary: String,
+    /// `completed` | `failed` | `partial` (Paused = partial — resumable).
+    pub status: String,
+    pub tasks: Vec<HeadlessTask>,
+    /// Non-done terminal tasks; empty array (not null) for `jq .failed_tasks[]`.
+    pub failed_tasks: Vec<HeadlessTask>,
+    /// Total run cost when any task/planner reported; else null (never fake 0).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_usd: Option<f64>,
+    /// 0=all done; 1=partial/failed; 2=paused. Matches process exit code.
+    pub exit_code: i32,
+}
+
+/// One task in a headless result (CI-friendly lowercase status).
+#[derive(Debug, Clone, Serialize)]
+pub struct HeadlessTask {
+    pub id: String,
+    /// Human title from plan.resolved when available; else task id.
+    pub title: String,
+    /// `done` | `failed` | `skipped` | `stopped` | `pending` | `running` | …
+    pub status: String,
+    /// Seconds between started_at and finished_at when both known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_s: Option<u64>,
+}
+
+/// Build the B2 headless result DTO from a finished run state.
+///
+/// `plan` (resolved) is optional — used only to enrich task titles. Caller may
+/// pass `load_plan_resolved(&state.run_dir)`. No strategy, no writes (rule 12).
+pub fn headless_result(state: &RunState, plan: Option<&PlanIR>) -> HeadlessResult {
+    let summary = report_summary_line(state)
+        .replace("**", "")
+        .trim()
+        .to_string();
+    let status = headless_status(state.status);
+    let title_of = |id: &str| -> String {
+        plan.and_then(|p| p.tasks.iter().find(|t| t.id == id))
+            .map(|t| t.title.clone())
+            .unwrap_or_else(|| id.to_string())
+    };
+    let mut tasks: Vec<HeadlessTask> = state
+        .tasks
+        .iter()
+        .map(|(id, ts)| HeadlessTask {
+            id: id.clone(),
+            title: title_of(id),
+            status: headless_task_status(ts.status).to_string(),
+            duration_s: task_duration_s(ts),
+        })
+        .collect();
+    tasks.sort_by(|a, b| a.id.cmp(&b.id));
+    let failed_tasks: Vec<HeadlessTask> = tasks
+        .iter()
+        .filter(|t| t.status != "done")
+        .cloned()
+        .collect();
+    HeadlessResult {
+        summary,
+        status: status.into(),
+        tasks,
+        failed_tasks,
+        cost_usd: total_cost(state),
+        exit_code: headless_exit_code(state.status),
+    }
+}
+
+fn headless_status(s: RunStatus) -> &'static str {
+    match s {
+        RunStatus::Completed => "completed",
+        RunStatus::Paused => "partial",
+        RunStatus::Failed | RunStatus::Aborted => "failed",
+        RunStatus::Init | RunStatus::Validated | RunStatus::Running => "running",
+    }
+}
+
+fn headless_task_status(s: TaskStatus) -> &'static str {
+    match s {
+        TaskStatus::Done => "done",
+        TaskStatus::Failed => "failed",
+        TaskStatus::Timeout => "failed",
+        TaskStatus::Stopped => "stopped",
+        TaskStatus::Skipped => "skipped",
+        TaskStatus::Pending | TaskStatus::Queued => "pending",
+        TaskStatus::Starting | TaskStatus::Running => "running",
+    }
+}
+
+fn task_duration_s(ts: &TaskState) -> Option<u64> {
+    let start = ts.started_at?;
+    let fin = ts.finished_at?;
+    let dur = fin.signed_duration_since(start);
+    if dur.num_seconds() < 0 {
+        None
+    } else {
+        Some(dur.num_seconds().max(0) as u64)
+    }
+}
+
+/// Total run cost: planner (Mode B) + exec (workers). None when nothing reported.
+fn total_cost(state: &RunState) -> Option<f64> {
+    let planner = planner_cost_for_run(&state.run_dir);
+    let mut exec = 0.0;
+    let mut has_exec = false;
+    for t in state.tasks.values() {
+        if let Some(c) = t.cost_usd {
+            exec += c;
+            has_exec = true;
+        }
+    }
+    match (planner.is_some(), has_exec) {
+        (true, true) => Some(planner.unwrap_or(0.0) + exec),
+        (true, false) => planner,
+        (false, true) => Some(exec),
+        (false, false) => None,
+    }
+}
+
+fn headless_exit_code(s: RunStatus) -> i32 {
+    match s {
+        RunStatus::Completed => 0,
+        RunStatus::Paused => 2,
+        _ => 1,
+    }
 }
 
 /// Per-provider rollup for report/status (P1-8).

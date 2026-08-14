@@ -14,7 +14,9 @@ use anyhow::Result;
 
 use crate::app::run as run_uc;
 use crate::app::split as split_uc;
-use crate::cli::commands::common::{plan_then_load_ir, resolve_term_kind, run_scheduler_loop};
+use crate::cli::commands::common::{
+    plan_then_load_ir, resolve_term_kind, run_scheduler_loop, HeadlessMode, OutputKind,
+};
 use crate::cli::interactive;
 use crate::cli::TermKindArg;
 use crate::config::Config;
@@ -42,13 +44,15 @@ pub async fn run(
     terminal_kind: Option<TermKindArg>,
     max_budget: Option<f64>,
     effort: Option<String>,
+    headless: bool,
+    output: Option<String>,
 ) -> Result<i32> {
     // Session-level effort override (config clone so we don't mutate shared disk state).
     let mut config = config.clone();
     if let Some(raw) = effort.as_deref() {
         if let Some(n) = crate::config::normalize_effort(raw) {
             config.default.effort = n;
-            println!("effort: {}", config.default.effort);
+            pprintln(headless, format!("effort: {}", config.default.effort));
         } else {
             eprintln!(
                 "warning: unknown --effort {raw:?}; expected low|medium|high|xhigh|max|ultracode (ignored)"
@@ -74,13 +78,13 @@ pub async fn run(
 
     let plan_job_id = if do_skip {
         if auto_skip && !skip_plan {
-            println!("skip-plan: structured plan (adapter={adapter_name}) → direct exec");
+            pprintln(headless, "skip-plan: structured plan (adapter={adapter_name}) → direct exec");
         } else if skip_plan {
-            println!("skip-plan: forced (--skip-plan)");
+            pprintln(headless, "skip-plan: forced (--skip-plan)");
         }
         None
     } else {
-        println!("planning… (adapter={adapter_name} is not structured; Mode B plan job)");
+        pprintln(headless, "planning… (adapter={adapter_name} is not structured; Mode B plan job)");
         let (preview_ir, job_id) = plan_then_load_ir(
             config,
             &project,
@@ -95,10 +99,10 @@ pub async fn run(
         if let Some(report) =
             run_uc::apply_provider_override(&mut preview, provider.clone(), force_provider.clone())
         {
-            println!("{}", report.summary_line());
+            pprintln(headless, report.summary_line());
         }
         apply_mode_parallel(&mut preview, mode.as_ref(), max_parallel);
-        print!("{}", format_graph(&preview));
+        pprint(headless, &format_graph(&preview));
         Some(job_id)
     };
 
@@ -109,14 +113,30 @@ pub async fn run(
         let report =
             run_uc::apply_provider_override(&mut ir, provider.clone(), force_provider.clone());
         if let Some(ref r) = report {
-            println!("{}", r.summary_line());
+            pprintln(headless, r.summary_line());
         }
         apply_mode_parallel(&mut ir, mode.as_ref(), max_parallel);
-        print!("{}", format_graph(&ir));
+        pprint(headless, &format_graph(&ir));
         Some((ir, report))
     } else {
         None
     };
+
+    // B2 headless: validate --output, warn on --tui conflict, force yes (skip proceed?).
+    let output_kind = match output.as_deref() {
+        None => OutputKind::Human,
+        Some("json") => OutputKind::Json,
+        Some(other) => {
+            eprintln!("warning: --output {other:?} not supported (only `json`); ignoring");
+            OutputKind::Human
+        }
+    };
+    if headless && tui {
+        eprintln!("warning: --headless and --tui both set; headless wins (no TUI)");
+    }
+    let tui = if headless { false } else { tui };
+    // headless ⟹ no interactive confirm (CI-friendly; equivalent to --yes).
+    let yes = yes || headless;
 
     if !yes && !dry_run {
         if !interactive::confirm("proceed?", false)? {
@@ -149,12 +169,22 @@ pub async fn run(
         (run_id, st, ir, cost_line)
     };
 
-    println!("run_id: {run_id}");
-    println!("run_dir: {}", run_state.run_dir.display());
-    if let Some(line) = route_line {
-        println!("{line}");
+    // run_id / run_dir / route lines: headless → stderr (keep stdout clean for JSON);
+    // interactive → stdout (human log).
+    let id_lines = {
+        let mut v = vec![format!("run_id: {run_id}"), format!("run_dir: {}", run_state.run_dir.display())];
+        if let Some(line) = route_line {
+            v.push(line);
+        }
+        v
+    };
+    for l in &id_lines {
+        if headless {
+            eprintln!("{l}");
+        } else {
+            println!("{l}");
+        }
     }
-
     let mirror = if mirror_state || config.default.mirror_state {
         let m = project.join(".cco").join("runs");
         std::fs::create_dir_all(&m)?;
@@ -164,7 +194,9 @@ pub async fn run(
     };
 
     let term_kind = resolve_term_kind(terminal_kind, config);
-    let auto_open = auto_open_terminal || config.terminal.auto_open_on_start;
+    // B2 headless suppresses auto_open_terminal (no TTY session in CI).
+    let auto_open = !headless
+        && (auto_open_terminal || config.terminal.auto_open_on_start);
     let opts = run_uc::ForegroundOpts {
         max_parallel,
         yes,
@@ -178,7 +210,12 @@ pub async fn run(
     };
     let sched = run_uc::prepare_scheduler(config, ir, run_state, opts)?;
     run_uc::preflight_plan(&sched.registry, &sched.plan).await?;
-    run_scheduler_loop(sched, config, &run_id, tui).await
+    let headless_mode = if headless {
+        HeadlessMode::On(output_kind)
+    } else {
+        HeadlessMode::Off
+    };
+    run_scheduler_loop(sched, config, &run_id, tui, headless_mode).await
 }
 
 fn apply_mode_parallel(
@@ -194,5 +231,23 @@ fn apply_mode_parallel(
     }
     if let Some(mp) = max_parallel {
         ir.max_parallel = mp;
+    }
+}
+
+/// B2: `println!`-equivalent that routes to stderr when headless (stdout = JSON).
+fn pprintln(headless: bool, msg: impl AsRef<str>) {
+    if headless {
+        eprintln!("{}", msg.as_ref());
+    } else {
+        println!("{}", msg.as_ref());
+    }
+}
+
+/// B2: `print!`-equivalent (no newline) that routes to stderr when headless.
+fn pprint(headless: bool, msg: &str) {
+    if headless {
+        eprint!("{msg}");
+    } else {
+        print!("{msg}");
     }
 }

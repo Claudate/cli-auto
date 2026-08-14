@@ -8,7 +8,7 @@
 use anyhow::Result;
 
 use crate::app::run as run_uc;
-use crate::cli::commands::common::run_scheduler_loop;
+use crate::cli::commands::common::{run_scheduler_loop, HeadlessMode};
 use crate::cli::interactive;
 use crate::config::Config;
 use crate::graph::format_graph;
@@ -51,5 +51,5 @@ pub async fn run(
     };
     let sched = run_uc::prepare_scheduler(config, ir, st, opts)?;
     run_uc::preflight_plan(&sched.registry, &sched.plan).await?;
-    run_scheduler_loop(sched, config, &rid, tui).await
+    run_scheduler_loop(sched, config, &rid, tui, HeadlessMode::Off).await
 }

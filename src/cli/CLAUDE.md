@@ -4,14 +4,14 @@
 成员清单
 mod.rs: clap Commands / TermCommands 枚举 · execute dispatch（D4 已瘦身；**parse --mermaid** P2-7）
 commands/: 子命令实现（doctor/init/plans/parse/plan/run/resume/status/stop/report/logs/term/tui）· common helpers
-commands/run.rs: **A5-1** Mode B → `app::split::confirm_materialize`；ParseOnly → `app::run::materialize_run`；soft-fill → `apply_provider_override`；loop → `prepare_scheduler`
+commands/run.rs: **A5-1** Mode B → `app::split::confirm_materialize`；ParseOnly → `app::run::materialize_run`；soft-fill → `apply_provider_override`；loop → `prepare_scheduler`；**B2** `--headless`/`--output json`（强制 yes · 抑制 TUI/auto_open · 传 `HeadlessMode` 给 loop · 规则 12 同一 app 路径）
 commands/resume.rs: **A5-1** → `app::run::{prepare_resume,prepare_scheduler}`
 commands/stop.rs: **A1-7** 整 run / 单 task → `app::run::{stop,stop_task}`
 commands/plan_cmd.rs: **A1-7** → `app::split::{start_job,get_job}`
 commands/status.rs: **A5-1** → `app::run::{load_by_dir,handoff_paths,format_status_by_provider}`；**H0-5** 首行 `report_summary_line`
 commands/git.rs: `cco git` 薄壳；status/remote/identity/commit/push/doctor → services::git；不 force-push、不写全局 identity
 commands/plans.rs: **A5-1** → `app::run::plans`
-commands/common.rs: plan_then_load_ir → app::split；`run_scheduler_loop`（**H0-4** 结束先 `report_summary_line` 再 status 枚举 + finish_with_reports）；term path helper
+commands/common.rs: plan_then_load_ir → app::split；`run_scheduler_loop`（**B2** 接 `HeadlessMode`：JSON→stdout / 人话 summary→stdout / `run_id`·`run_dir`·`report`·status enum→stderr；H0-4 结束先 `report_summary_line` 再 status 枚举 + finish_with_reports）；term path helper；`HeadlessMode`/`OutputKind` 定义
 interactive.rs: 交互选 project/plan · confirm · 非交互硬要求 --project
 
 ## A5-1 CLI ↔ app 1:1 表（真源）

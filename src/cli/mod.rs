@@ -134,6 +134,14 @@ pub enum Commands {
         /// (ultracode = xhigh + multi-agent thoroughness). Overrides config / CCO_EFFORT.
         #[arg(long)]
         effort: Option<String>,
+        /// B2: run headless — no TUI, no interactive confirm (CI-friendly).
+        /// Equivalent to forcing `--yes`; suppresses `proceed?`.
+        #[arg(long, default_value_t = false)]
+        headless: bool,
+        /// B2: output format for the completion result (only `json` supported).
+        /// Implies a clean stdout; log_events stay on stderr.
+        #[arg(long)]
+        output: Option<String>,
     },
     /// Resume a paused/failed/aborted run from unfinished tasks
     Resume {
@@ -524,6 +532,8 @@ pub async fn execute(cli: Cli) -> Result<i32> {
             terminal_kind,
             max_budget,
             effort,
+            headless,
+            output,
         } => {
             commands::run::run(
                 &config,
@@ -546,6 +556,8 @@ pub async fn execute(cli: Cli) -> Result<i32> {
                 terminal_kind,
                 max_budget,
                 effort,
+                headless,
+                output,
             )
             .await
         }

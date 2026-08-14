@@ -2,7 +2,7 @@
 > L2 | 父级: /src/CLAUDE.md
 
 成员清单
-mod.rs: write_reports(report.md+json · 完整骨架：摘要·对照计划·步骤结果·花费与用时·后续·备注 · 人话 H1 · headline · plan_compare JSON) · plan_short_name · report_headline · report_summary_line · summarize_providers · handoff_paths · format_status_by_provider · print_report_md
+mod.rs: write_reports(report.md+json · 完整骨架：摘要·对照计划·步骤结果·花费与用时·后续·备注 · 人话 H1 · headline · plan_compare JSON) · plan_short_name · report_headline · report_summary_line · summarize_providers · handoff_paths · format_status_by_provider · print_report_md · **B2** `headless_result`/`HeadlessResult`/`HeadlessTask`（观察 DTO · JSON 即 UX · 规则 23 summary 首字段 · exit_code 0/1/2 对齐 finish_with_reports）
 fallback.rs: build_plan_compare · fill_plan_compare · PlanCompareSection/Kind · format_elapsed_human · follow_up_lines · render_plan_compare_md（无 VERDICT 占位不伪造 PASS；复用 handoff inspect_loop_view；**P0-4** headline 与 web inspectCopy 同词；**P2-1** verification 副栏「原计划要验收」）
 write_tests.rs: cfg(test) write_reports 骨架/fallback/FAIL 单测
 
