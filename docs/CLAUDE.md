@@ -26,6 +26,7 @@ browser-automation-cco.md: **浏览器自动化契约**（**W0–W3+++ ✅** · 
 
 ### 还在做（活跃落地 · 可有 ☐）
 
+harness-inspired-roadmap-2026-08-14.md: **Harness 启示方向参考**（A1 Run Resume · A2 能力预设 · A3 工具门控 · A3bis PermissionTier · B1 事件总线(架构A级) · B2 Headless · §四 UI影响面(U-A1…U-B2) · 不做 Cordis/ACP/遥测；方向参考，非阶段表）
 agentmemory-integration-plan-2026-08-12.md: **轻量语义记忆（纯 Rust · P3）**（存储层 ✅ 检索 12.6ms · 场景1 Mode B 注入 ✅ · 场景2 Cost Router failover ✅ 含切换集成测试 · **P3 完成标志 4/4 ✅**：基准 10k 2.31s · 覆盖率 85.9–100% · 双指南；残余=真机 e2e + 真实项目实测 ☐ · P4+ 后置；**本能力唯一勾选**；不引入 Node/Docker）
 agentmemory-integration-summary.md: agentmemory 评估总结（选型对比 · 采用本地纯 Rust 方案的理由；参考，勾选看上行）
 memory-user-guide.md: **语义记忆使用指南**（开关/模型下载/三个行为/数据管理；面向 PM/非开发）
