@@ -12,7 +12,7 @@ use anyhow::Result;
 use tracing::warn;
 
 use super::super::provider::WorkerHandle;
-use super::types::{stdout_len, FailoverKind, ProgressWatch, StallAction};
+use super::types::{last_stream_event_type, stdout_len, FailoverKind, ProgressWatch, StallAction};
 use super::Scheduler;
 use crate::domain::run::{budget_exceeded, effective_retry_max, stall_triggered};
 use crate::domain::worker::FailoverPolicy;
@@ -189,21 +189,33 @@ impl Scheduler {
             .signed_duration_since(entry.last_change)
             .to_std()
             .unwrap_or_default();
-        if !stall_triggered(idle, stall_for) {
+        // Extend grace when a Bash tool call is in flight: content_block_stop means
+        // Claude dispatched the tool and is waiting silently for it to complete.
+        // Long-running dev server / build commands easily exceed 180s with zero output.
+        let effective_stall = if idle > stall_for / 2 {
+            match last_stream_event_type(&handle.stdout_path).as_deref() {
+                Some("content_block_stop") => stall_for * 4,
+                _ => stall_for,
+            }
+        } else {
+            stall_for
+        };
+        if !stall_triggered(idle, effective_stall) {
             return Ok(None);
         }
         let secs = idle.as_secs();
+        let threshold_secs = effective_stall.as_secs();
         warn!(
             task = %id,
             idle_secs = secs,
             log_bytes = bytes,
+            threshold_secs,
             "stall detected — no log growth"
         );
         Ok(Some(StallAction {
             reason_code: "stall".into(),
             reason: format!(
-                "CLI 卡死：日志 {secs}s 无增长（阈值 {}s，stdout {bytes} bytes）",
-                stall_for.as_secs()
+                "CLI 卡死：日志 {secs}s 无增长（阈值 {threshold_secs}s，stdout {bytes} bytes）",
             ),
         }))
     }

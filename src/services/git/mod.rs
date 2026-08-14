@@ -78,9 +78,10 @@ pub fn ensure_can_auto_commit(config: &crate::config::Config, project: &Path) ->
     }
     bail!(
         "已开启自动提交（粒度：{}），但项目目录还不是 git 仓库：\n  {}\n\n\
-        请选择其一：\n  \
-        1) 在该目录运行 `git init`（桌面拆分台会提供「一键初始化 git」按钮）\n  \
-        2) 关闭自动提交：设置 → Git / 版本发布 → 自动提交 → 关",
+        自动提交仅需本地 git，无需 GitHub 或远程仓库。请选择其一：\n  \
+        1) 在该目录运行 `git init`（桌面拆分台提供「一键初始化」）\n  \
+        2) 本次关闭自动提交后直接开始（桌面拆分台提供此选项）\n  \
+        3) 永久关闭：设置 → 自动提交 → 关",
         granularity.as_str(),
         project.display()
     )
@@ -157,7 +158,7 @@ mod auto_commit_gate_tests {
         let msg = err.to_string();
         assert!(msg.contains("还不是 git 仓库"), "msg: {msg}");
         assert!(msg.contains("git init"), "should suggest git init: {msg}");
-        assert!(msg.contains("关闭自动提交"), "should mention turning off: {msg}");
+        assert!(msg.contains("永久关闭") || msg.contains("关闭自动提交"), "should mention turning off: {msg}");
     }
 
     /// init_repo on a fresh dir is idempotent-ish: second call short-circuits.

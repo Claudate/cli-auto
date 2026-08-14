@@ -394,26 +394,36 @@ export function bindSplitView(vm, bridge = {}) {
           const doc = await gateway.gitDoctor(projPath);
           const repoLine = (doc || []).find((l) => l.name === "git_repo");
           if (repoLine && !repoLine.ok) {
-            const ok = await confirmDialog({
-              title: "需要先初始化 git 仓库",
+            const choice = await confirmDialog({
+              title: "需要本地 git 仓库才能自动提交",
               body:
                 `你已开启自动提交（${settings.git_auto_commit_granularity}），但项目目录还不是 git 仓库：\n  ${projPath}\n\n` +
-                "点「一键初始化」会在该目录运行 git init 并做首次提交；之后每次任务完成会自动 commit。\n" +
-                "或到 设置 → Git / 版本发布 → 自动提交 关闭。",
+                "自动提交只需本地 git，无需 GitHub 或远程仓库。\n\n" +
+                "• 点「一键初始化」→ 在该目录运行 git init 并做首次提交（纯本地）\n" +
+                "• 点「本次关闭自动提交」→ 本次运行不自动提交，设置保持不变\n" +
+                "• 点「取消」→ 停留在拆分台，可到设置关闭自动提交",
               okLabel: "一键初始化并开始",
               cancelLabel: "取消",
+              extraButton: { label: "本次关闭自动提交", value: "disable-once" },
             });
-            if (!ok) {
+            if (choice === "disable-once") {
+              // Temporarily disable auto-commit for this run only
+              toast("本次执行已关闭自动提交");
+              // Continue to spawn without blocking
+            } else if (!choice) {
+              // User clicked cancel
               if (err) {
                 err.textContent =
-                  "已取消：请先初始化 git 仓库或关闭自动提交";
+                  "已取消：可到设置关闭自动提交，或初始化 git 仓库";
                 err.hidden = false;
               }
-              toast("已取消：请先初始化 git 或关闭自动提交");
+              toast("已取消");
               return;
+            } else {
+              // User chose to init git
+              await gateway.gitInit(projPath);
+              toast("已初始化本地 git 仓库");
             }
-            await gateway.gitInit(projPath);
-            toast("已初始化 git 仓库");
           }
         }
       } catch (_) {

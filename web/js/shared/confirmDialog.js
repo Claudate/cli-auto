@@ -9,11 +9,12 @@
 let _overlay = null;
 let _resolve = null;
 
-function closeWith(ok) {
+// val: true (ok) | false (cancel/backdrop/Esc) | string (extraButton.value)
+function closeWith(val) {
   if (_overlay) _overlay.hidden = true;
   const r = _resolve;
   _resolve = null;
-  if (r) r(!!ok);
+  if (r) r(val);
 }
 
 function onKeydown(ev) {
@@ -37,6 +38,7 @@ function ensureDom() {
     `<p class="modal-hint cco-confirm-body" style="white-space:pre-line"></p>` +
     `<div class="modal-actions">` +
     `<button type="button" class="btn ghost" data-confirm-cancel></button>` +
+    `<button type="button" class="btn secondary" data-confirm-extra hidden></button>` +
     `<button type="button" class="btn primary" data-confirm-ok></button>` +
     `</div></div>`;
   el.querySelectorAll("[data-confirm-cancel]").forEach((b) => {
@@ -44,6 +46,10 @@ function ensureDom() {
   });
   el.querySelector("[data-confirm-ok]").addEventListener("click", () =>
     closeWith(true)
+  );
+  const extraBtn = el.querySelector("[data-confirm-extra]");
+  extraBtn.addEventListener("click", () =>
+    closeWith(extraBtn.dataset.confirmValue ?? "extra")
   );
   document.addEventListener("keydown", onKeydown, true);
   document.body.appendChild(el);
@@ -53,8 +59,9 @@ function ensureDom() {
 
 /**
  * In-app confirm. Resolves false on cancel / backdrop / Escape — never hangs.
- * @param {{title?:string, body?:string, okLabel?:string, cancelLabel?:string, danger?:boolean}} opts
- * @returns {Promise<boolean>}
+ * Resolves true on ok, or extraButton.value (string) when the extra button is clicked.
+ * @param {{title?:string, body?:string, okLabel?:string, cancelLabel?:string, danger?:boolean, extraButton?:{label:string,value:string}}} opts
+ * @returns {Promise<boolean|string>}
  */
 export function confirmDialog(opts = {}) {
   const {
@@ -63,6 +70,7 @@ export function confirmDialog(opts = {}) {
     okLabel = "确定",
     cancelLabel = "取消",
     danger = false,
+    extraButton = null,
   } = opts;
   const el = ensureDom();
   // A second confirm while one is open cancels the first (last wins).
@@ -71,10 +79,18 @@ export function confirmDialog(opts = {}) {
   el.querySelector(".cco-confirm-body").textContent = body;
   const okBtn = el.querySelector("[data-confirm-ok]");
   const cancelBtn = el.querySelector("button[data-confirm-cancel]");
+  const extraBtn = el.querySelector("[data-confirm-extra]");
   okBtn.textContent = okLabel;
   cancelBtn.textContent = cancelLabel;
   okBtn.classList.toggle("danger", !!danger);
   okBtn.classList.toggle("primary", !danger);
+  if (extraButton) {
+    extraBtn.textContent = extraButton.label;
+    extraBtn.dataset.confirmValue = extraButton.value ?? "extra";
+    extraBtn.hidden = false;
+  } else {
+    extraBtn.hidden = true;
+  }
   el.hidden = false;
   // Danger defaults focus to cancel so Enter can't destroy by accident.
   try {

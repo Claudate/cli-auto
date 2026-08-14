@@ -36,6 +36,25 @@ pub(super) fn stdout_len(path: &Path) -> u64 {
     std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
 }
 
+/// Read the tail of a stream-json stdout file and return the last `type` value seen.
+/// Used by stall patrol to detect tool calls in flight (content_block_stop = tool dispatched).
+pub(super) fn last_stream_event_type(path: &Path) -> Option<String> {
+    use std::io::{BufRead, BufReader, Seek, SeekFrom};
+    const TAIL: u64 = 16 * 1024;
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.seek(SeekFrom::End(0)).ok()?;
+    f.seek(SeekFrom::Start(len.saturating_sub(TAIL))).ok()?;
+    let mut last = None;
+    for line in BufReader::new(f).lines().map_while(Result::ok) {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) {
+            if let Some(t) = v.get("type").and_then(|t| t.as_str()) {
+                last = Some(t.to_string());
+            }
+        }
+    }
+    last
+}
+
 pub(super) fn mirror_run(src: &Path, dst_root: &Path) -> Result<()> {
     let name = src.file_name().context("run dir name")?;
     let dst = dst_root.join(name);
