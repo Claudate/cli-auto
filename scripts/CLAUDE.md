@@ -13,6 +13,7 @@ ensure-v3-cta-smoke.mjs: **Ensure V3 代理冒烟**（失败卡主 CTA=回补并
 clarify-split-visual-smoke.mjs: **澄清+拆分台静态目视契约**（三入口/认领文案 · revision_notes · risk chip · 外发提示 · 链 ensure-v3）；`node scripts/clarify-split-visual-smoke.mjs`；配合 `package-app` 扫包；不进默认 CI
 provider-control-smoke.mjs: **通道下拉冒烟**（P2-17：确认台详头「默认通道」+ 每张任务卡胶囊下拉可开/可选/持久化 · 8 选项 · 步骤切换跟随 · 无页面错误）；`node scripts/provider-control-smoke.mjs`；内建 stub invoke（`__TAURI_INTERNALS__.invoke` + `window.invoke`），无需 Tauri 宿主；不进默认 CI
 path-depth-wave-smoke.mjs: **path-depth 波次静态契约**（无三档英雄 · 场景芯片 · 当前理解 · 认领本波不旁路 · wave 分组/总览/串行 confirm · supersede per path）；`node scripts/path-depth-wave-smoke.mjs`；可代 W1-6 结构项；**不**替代真人桌面清单
+p42-visual-smoke.mjs: **P4-2 两栏壳目视冒烟**（stub invoke 造项目 → 选项目断言 view-ring 出现/无页面错误 · view-ring 段高亮 · 搜索 1/3 · rail 折叠宽度<70px · 暗色非白 sidebar · 截图 light/dark/rail）；`node scripts/p42-visual-smoke.mjs`；需先 `cd web && node build.mjs`；不进 CI
 
 ## 硬规则
 

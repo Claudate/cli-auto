@@ -4,6 +4,7 @@
  * [OUTPUT]: SVG HTML string or element
  * [POS]: web/js/shared — 替换 ＋/☰/📎/× 等字符图标
  * [PROTOCOL]: 变更时更新此头部；路径对齐 Lucide 24 视口 stroke 图标
+ * note: 2026-08-15 P4-2 新增 search / panel-left-close（rail）/ stethoscope（侧栏底设置）
  */
 
 /** Lucide 24×24 stroke paths (MIT License · lucide.dev) */
@@ -16,8 +17,14 @@ const PATHS = {
   "chevron-up": '<path d="m18 15-6-6-6 6"/>',
   "arrow-up": '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
   menu: '<path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/>',
+  search:
+    '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   "panel-right":
     '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>',
+  "panel-left-close":
+    '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>',
+  stethoscope:
+    '<path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/>',
   paperclip:
     '<path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"/>',
   file:

@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 经典 script 已加载的全局（state/showPage/…）+ DOM
- * [OUTPUT]: window.ccoApp / ccoGateway / ccoChat / ccoSplit / ccoRun / ccoResult / ccoSettings / ccoProject / ccoTemplates / ccoSelectUi · phase 壳接线
+ * [OUTPUT]: window.ccoApp / ccoGateway / ccoChat / ccoSplit / ccoRun / ccoResult / ccoSettings / ccoProject / ccoTemplates / ccoSelectUi · phase 壳接线 · P4-2 `#view-ring` 段控委托（wireShellNav · dataset.ccoA2Wired 守卫）
  * [POS]: A2–A5 ESM 入口（type=module）；旧全局仍可用（strangler）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
@@ -468,6 +468,10 @@ function wireShellNav() {
     list.addEventListener(
       "click",
       (ev) => {
+        // P4-2：hover 复制卡内点击只复制，不切项目（复制处理在 shellUi）
+        if (ev.target?.closest?.("[data-copy-path], .project-hover-card")) {
+          return;
+        }
         const btn = ev.target?.closest?.("[data-path]");
         if (!btn) return;
         const path = btn.getAttribute("data-path");
@@ -477,6 +481,30 @@ function wireShellNav() {
           const proj = (s.projects || []).find((p) => p.path === path);
           appVm.selectProject(path, proj?.name || null);
           appVm.syncFromLegacy();
+        }, 0);
+      },
+      true
+    );
+  }
+
+  // P4-2 view-ring 段控：拆分|执行|结果|聊天 → AppViewModel 意图（routes 语义不变）
+  const ring = document.getElementById("view-ring");
+  if (ring && !ring.dataset.ccoA2Wired) {
+    ring.dataset.ccoA2Wired = "1";
+    ring.addEventListener(
+      "click",
+      (ev) => {
+        const btn = ev.target?.closest?.(".view-ring-item");
+        if (!btn?.dataset?.ring) return;
+        ev.preventDefault();
+        setTimeout(() => {
+          const s = legacyState();
+          if (s.selectedPath) appVm.selectProject(s.selectedPath);
+          const target = btn.dataset.ring;
+          if (target === "chat") appVm.goAuthor();
+          else if (target === "split") appVm.goSplit();
+          else if (target === "run") appVm.goRun();
+          else if (target === "result") appVm.goResult();
         }, 0);
       },
       true

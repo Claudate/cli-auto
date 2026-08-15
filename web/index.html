@@ -3,7 +3,7 @@
 <head>
 <!--
 [INPUT]: 无静态依赖；由 Tauri 加载 app.css + web/js/*（D4）+ A2/A3 js/main.js module
-[OUTPUT]: DOM 结构：sidebar · welcome · workspace(plan/monitor) · chat · settings 父级分区两栏（左侧图标菜单 · Git·版本发布 大区）· modals
+[OUTPUT]: DOM 结构：sidebar（P4-2 两栏壳：brand + collapse rail + 新建/搜索 + search + project-list + hover 复制卡 + 底部图标设置）· topbar `#view-ring` 段控 拆分|执行|结果|聊天 · welcome · workspace(plan/monitor) · chat · settings 父级分区两栏（左侧图标菜单 · Git·版本发布 大区）· modals
 [POS]: 桌面壳结构真源；规划相位 spinner · 合并选计划弹窗 · task-dash · 执行看板 · 聊天建计划 · 设置分区
 [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
 note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高级选项
@@ -22,14 +22,30 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
 <body style="background:#F5F5F7;margin:0">
   <div id="app">
     <aside class="sidebar">
-      <div class="brand" id="brand-home" title="返回欢迎页">
-        <img class="logo" src="favicon-32x32.png" alt="轻叶" width="22" height="22" />
-        <div class="tag">轻叶 · 项目任务控制台</div>
+      <div class="sidebar-head">
+        <div class="brand" id="brand-home" title="返回欢迎页">
+          <img class="logo" src="favicon-32x32.png" alt="轻叶" width="22" height="22" />
+          <div class="tag">轻叶 · 项目任务控制台</div>
+        </div>
+        <button id="btn-sidebar-collapse" class="icon-btn" type="button" title="收起侧栏" aria-label="收起侧栏" data-icon="panel-left-close" data-icon-size="16"></button>
+      </div>
+
+      <div class="sidebar-actions">
+        <button id="btn-add-plus" class="btn ghost sm sidebar-new" type="button" title="添加项目" aria-label="添加项目">
+          <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          <span class="sidebar-new-label">新建项目</span>
+        </button>
+        <button id="btn-sidebar-search-toggle" class="icon-btn" type="button" title="搜索项目" aria-label="搜索项目" aria-expanded="false" data-icon="search" data-icon-size="16"></button>
+      </div>
+      <div class="sidebar-search" id="sidebar-search" hidden>
+        <span class="sidebar-search-ico" data-icon="search" data-icon-size="13"></span>
+        <input id="sidebar-search-input" type="text" placeholder="搜索项目名称" autocomplete="off" spellcheck="false" />
+        <button id="sidebar-search-clear" class="icon-btn sm" type="button" title="清除搜索" aria-label="清除搜索" data-icon="x" data-icon-size="13"></button>
       </div>
 
       <div class="sidebar-section-head">
         <span class="section-label">我的项目</span>
-        <button id="btn-add-plus" class="icon-btn" type="button" title="添加项目" aria-label="添加项目" data-icon="plus" data-icon-size="16"></button>
+        <span id="sidebar-count" class="section-count" title="项目数">0</span>
       </div>
 
       <div class="project-list" id="project-list">
@@ -39,9 +55,9 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
       <div class="sidebar-foot">
         <div id="conn-status">就绪中…</div>
         <div class="foot-links">
-          <button type="button" class="linkish" id="btn-open-doctor">环境检查</button>
-          <button type="button" class="linkish" id="btn-open-settings">设置</button>
-          <button type="button" class="linkish" id="btn-open-help">帮助</button>
+          <button type="button" class="linkish" id="btn-open-doctor" title="环境检查"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></svg><span>环境检查</span></button>
+          <button type="button" class="linkish" id="btn-open-settings" title="设置"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>设置</span></button>
+          <button type="button" class="linkish" id="btn-open-help" title="帮助"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg><span>帮助</span></button>
         </div>
       </div>
     </aside>
@@ -54,6 +70,13 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
           <!-- shell-chrome A1: 顶栏阶段条已撤；节点保留供旧脚本 no-op 写 -->
           <div id="flow-strip-global" class="flow-strip-host flow-strip-global" hidden aria-hidden="true"></div>
         </div>
+        <!-- P4-2 view-ring 段控：拆分|执行|结果|聊天（routes.js 语义不变） -->
+        <nav class="view-ring" id="view-ring" aria-label="阶段导航">
+          <button type="button" class="view-ring-item" data-ring="split">拆分</button>
+          <button type="button" class="view-ring-item" data-ring="run">执行</button>
+          <button type="button" class="view-ring-item" data-ring="result">结果</button>
+          <button type="button" class="view-ring-item" data-ring="chat">聊天</button>
+        </nav>
         <div class="top-actions" id="top-actions">
           <button class="icon-btn chat-top-btn" id="btn-open-chat" type="button" hidden title="聊天" aria-label="聊天" data-icon="message-square" data-icon-size="16"></button>
           <button class="btn primary sm" id="btn-pp-analyze" type="button" hidden disabled>拆成步骤</button>

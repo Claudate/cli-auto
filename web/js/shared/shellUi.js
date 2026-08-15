@@ -6,6 +6,7 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
  * note: 不写 Mode B / confirm / soft-fill / optional 策略；纯壳导航 + 列表渲染
+ * note: 2026-08-15 P4-2 —— installSidebarChrome（rail 折叠 · 搜索 + #sidebar-count N/M · hover 路径复制卡）模块级 sidebarQuery 瞬态
  */
 
 function g(name) {
@@ -33,6 +34,9 @@ function $$el(s, el = document) {
 function st() {
   return g("state") || {};
 }
+
+/* P4-2：侧栏搜索词（模块级瞬态；renderProjectList 过滤用） */
+let sidebarQuery = "";
 
 /* ── Run-lock helpers (read state.live · display-only) ── */
 
@@ -361,7 +365,9 @@ export function renderProjectList() {
   const state = st();
   const el = $el("#project-list");
   if (!el) return;
+  const countEl = $el("#sidebar-count");
   if (!state.projects || !state.projects.length) {
+    if (countEl) countEl.textContent = "0";
     const plus =
       typeof window.ccoIcon === "function"
         ? window.ccoIcon("plus", { size: 14 })
@@ -395,8 +401,29 @@ export function renderProjectList() {
     typeof window.ccoIcon === "function"
       ? window.ccoIcon("x", { size: 14, className: "ico-btn" })
       : "×";
+  const copyIco =
+    typeof window.ccoIcon === "function"
+      ? window.ccoIcon("copy", { size: 13 })
+      : "";
 
-  el.innerHTML = state.projects
+  // P4-2：侧栏搜索过滤（名称/路径包含 · 忽略大小写）
+  const total = state.projects.length;
+  const q = sidebarQuery.trim().toLowerCase();
+  const projects = q
+    ? state.projects.filter(
+        (p) =>
+          (p.name || "").toLowerCase().includes(q) ||
+          (p.path || "").toLowerCase().includes(q)
+      )
+    : state.projects;
+  if (countEl) countEl.textContent = q ? `${projects.length}/${total}` : String(total);
+
+  if (!projects.length) {
+    el.innerHTML = `<p class="muted empty-hint">没有匹配的项目</p>`;
+    return;
+  }
+
+  el.innerHTML = projects
     .map((p) => {
       const stt = p.active_status || p.last_status || "";
       const live = p.running_tasks > 0 || isLiveStatus(p.active_status);
@@ -420,15 +447,16 @@ export function renderProjectList() {
         meta = "路径不存在";
       }
       // shell-chrome B1：悬停 × 移除（不删磁盘）；运行中仍显示但 handler 会 toast 锁
+      // P4-2：name-text 供 rail 隐藏文案 · hover 复制卡（路径一键复制）
       return `<div class="project-item-row ${
         isCurrent ? "active" : ""
       }" data-path="${esc(p.path)}">
         <button type="button" class="project-item ${
           isCurrent ? "active" : ""
-        }" data-path="${esc(p.path)}">
-          <div class="name"><span class="dot ${statusDot(stt) || (live ? "live" : "")}"></span>${esc(
+        }" data-path="${esc(p.path)}" title="${esc(p.name)}">
+          <div class="name"><span class="dot ${statusDot(stt) || (live ? "live" : "")}"></span><span class="name-text">${esc(
             p.name
-          )}</div>
+          )}</span></div>
           <div class="path" title="${esc(p.path)}">${esc(shortPath(p.path))}</div>
           <div class="meta">${esc(meta)}</div>
         </button>
@@ -436,7 +464,16 @@ export function renderProjectList() {
           p.path
         )}" title="从列表移除（不删文件夹）" aria-label="从列表移除 ${esc(
         p.name
-      )}"${live ? " data-run-locked=\"1\"" : ""}>${xIco}</button>
+      )}"${live ? ' data-run-locked="1"' : ""}>${xIco}</button>
+        <div class="project-hover-card">
+          <div class="project-hover-label muted">项目路径</div>
+          <div class="project-hover-path" title="${esc(p.path)}">${esc(
+        p.path
+      )}</div>
+          <button type="button" class="btn ghost sm project-copy-path" data-copy-path="${esc(
+        p.path
+      )}">${copyIco}复制路径</button>
+        </div>
       </div>`;
     })
     .join("");
@@ -464,6 +501,107 @@ export function renderProjectList() {
   });
 }
 
+/* ── P4-2 侧栏 chrome：折叠 rail · 搜索 · hover 复制（几何瞬态，不入 localStorage）── */
+
+function installSidebarChrome() {
+  if (typeof document === "undefined") return;
+  const collapse = document.getElementById("btn-sidebar-collapse");
+  if (collapse && !collapse.dataset.ccoA2Wired) {
+    collapse.dataset.ccoA2Wired = "1";
+    collapse.addEventListener("click", () => {
+      const collapsed = document.body.classList.toggle("cco-sidebar-collapsed");
+      const label = collapsed ? "展开侧栏" : "收起侧栏";
+      collapse.title = label;
+      collapse.setAttribute("aria-label", label);
+    });
+  }
+
+  const searchWrap = document.getElementById("sidebar-search");
+  const searchToggle = document.getElementById("btn-sidebar-search-toggle");
+  const searchInput = document.getElementById("sidebar-search-input");
+  const searchClear = document.getElementById("sidebar-search-clear");
+
+  if (searchToggle && searchWrap && !searchToggle.dataset.ccoA2Wired) {
+    searchToggle.dataset.ccoA2Wired = "1";
+    searchToggle.addEventListener("click", () => {
+      // rail 模式点搜索：先展开侧栏再聚焦输入
+      if (document.body.classList.contains("cco-sidebar-collapsed")) {
+        document.body.classList.remove("cco-sidebar-collapsed");
+        collapse.title = "收起侧栏";
+        collapse.setAttribute("aria-label", "收起侧栏");
+      }
+      const open = searchWrap.hidden;
+      searchWrap.hidden = !open;
+      searchToggle.setAttribute("aria-expanded", String(!open));
+      if (open) setTimeout(() => searchInput?.focus(), 0);
+    });
+  }
+  if (searchInput && !searchInput.dataset.ccoA2Wired) {
+    searchInput.dataset.ccoA2Wired = "1";
+    let timer = null;
+    searchInput.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        sidebarQuery = searchInput.value || "";
+        renderProjectList();
+      }, 250);
+    });
+    searchInput.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      sidebarQuery = "";
+      searchInput.value = "";
+      renderProjectList();
+      if (searchWrap) searchWrap.hidden = true;
+      searchToggle?.setAttribute("aria-expanded", "false");
+    });
+  }
+  if (searchClear && !searchClear.dataset.ccoA2Wired) {
+    searchClear.dataset.ccoA2Wired = "1";
+    searchClear.addEventListener("click", () => {
+      sidebarQuery = "";
+      if (searchInput) {
+        searchInput.value = "";
+        searchInput.focus();
+      }
+      renderProjectList();
+    });
+  }
+
+  const list = document.getElementById("project-list");
+  if (list && !list.dataset.ccoCopyWired) {
+    list.dataset.ccoCopyWired = "1";
+    list.addEventListener("click", (ev) => {
+      const copyBtn = ev.target?.closest?.("[data-copy-path]");
+      if (!copyBtn) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const path = copyBtn.getAttribute("data-copy-path");
+      if (!path) return;
+      const done = () => call("toast", "项目路径已复制");
+      const fallback = () => {
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = path;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+          done();
+        } catch (_) {
+          call("toast", "复制失败");
+        }
+      };
+      const clip = typeof navigator !== "undefined" ? navigator.clipboard : null;
+      if (clip?.writeText) {
+        clip.writeText(path).then(done).catch(fallback);
+      } else {
+        fallback();
+      }
+    });
+  }
+}
+
 /**
  * Bridge shell helpers onto window for classic scripts + legacy.js hosts.
  * @param {typeof globalThis} [target]
@@ -471,6 +609,7 @@ export function renderProjectList() {
 export function installShellUi(
   target = typeof window !== "undefined" ? window : globalThis
 ) {
+  installSidebarChrome();
   if (!target) return;
   Object.assign(target, {
     hasActiveRun,

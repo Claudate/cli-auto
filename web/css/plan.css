@@ -1,6 +1,7 @@
 /* [INPUT]: 无；被 index.html 引用
  * [OUTPUT]: plan.css 样式
  * [POS]: web/css D4 自 app.css 纵切
+ * note: 2026-08-15 P4-2 `.top-actions` flex 1:0:1 —— top-title / view-ring / top-actions 对称居中
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -1275,13 +1276,14 @@
 .top-plan-info strong { color: #0b3d91; }
 
 
-/* 顶栏：选择计划 / 分配计划 在刷新左侧 */
+/* 顶栏：选择计划 / 分配计划 在刷新左侧（P4-2：对称 flex，view-ring 居中） */
 .top-actions {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  flex-shrink: 0;
-  margin-left: auto;
+  flex: 1 1 0;
+  justify-content: flex-end;
+  min-width: 0;
 }
 .top-actions .btn.sm {
   white-space: nowrap;
