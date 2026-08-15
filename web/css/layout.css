@@ -211,8 +211,8 @@
   background: var(--muted);
   flex-shrink: 0;
 }
-.dot.live { background: var(--accent); box-shadow: 0 0 0 3px rgba(0,113,227,.16); }
-.dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(52,199,89,.18); }
+.dot.live { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.dot.ok { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
 .dot.warn { background: var(--warn); }
 .dot.err { background: var(--danger); }
 

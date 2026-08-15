@@ -15,6 +15,8 @@ cd "$ROOT"
 STRICT="${STRICT:-0}"
 SOFT_LINES=400
 HARD_LINES=600
+# P4-1：设计系统组件原语体积守门（dsh 原语单文件软 200 行）
+CSS_COMPONENT_MAX=200
 WARN=0
 FAIL=0
 
@@ -88,6 +90,20 @@ for g in "${LEGACY_THICK[@]}"; do
     fi
   fi
 done
+
+# 1c) P4-1 设计系统：components.css 原语体积守门（≤200 行；超限先拆原语再加）
+if [[ -f web/css/components.css ]]; then
+  n=$(wc -l < web/css/components.css | tr -d ' ')
+  if (( n > CSS_COMPONENT_MAX )); then
+    if [[ "$STRICT" == "1" ]]; then
+      fail "web/css/components.css has $n lines (> soft $CSS_COMPONENT_MAX) — split primitives, do not stack"
+    else
+      warn "web/css/components.css has $n lines (> soft $CSS_COMPONENT_MAX) — split primitives, do not stack"
+    fi
+  else
+    note "info: web/css/components.css $n lines (≤ $CSS_COMPONENT_MAX — P4-1 primitives)"
+  fi
+fi
 
 # 2) 新架构目录（若已存在）行数
 if [[ -d src/domain || -d src/app || -d src/ports || -d src/adapters ]]; then

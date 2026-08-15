@@ -58,20 +58,20 @@ export function ensureChatMsgEnhanceStyles() {
 }
 .chat-msg-user.is-folded .chat-msg-fold-bar {
   margin-left: auto;
-  background: color-mix(in srgb, var(--accent, #2563eb) 8%, var(--bg2, #fff));
-  border-color: color-mix(in srgb, var(--accent, #2563eb) 18%, var(--border));
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 8%, var(--bg2, #fff));
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 18%, var(--border));
 }
 .chat-msg-assistant.is-folded .chat-msg-fold-bar,
 .chat-msg-system.is-folded .chat-msg-fold-bar {
   max-width: min(100%, 40rem);
 }
 .chat-msg-fold-bar:hover {
-  border-color: color-mix(in srgb, var(--accent, #2563eb) 40%, var(--border));
-  background: color-mix(in srgb, var(--accent, #2563eb) 6%, var(--bg2, #fff));
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent, #2563eb) 10%, transparent);
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 40%, var(--border));
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 6%, var(--bg2, #fff));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 10%, transparent);
 }
 .chat-msg-fold-bar:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent, #2563eb) 55%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 55%, transparent);
   outline-offset: 2px;
 }
 .chat-msg-fold-role {
@@ -94,7 +94,7 @@ export function ensureChatMsgEnhanceStyles() {
 }
 .chat-msg-fold-cta {
   flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.2rem;
-  font-size: 0.72rem; color: var(--accent, #2563eb);
+  font-size: 0.72rem; color: var(--leaf-alias-brand-primary, #4176E6);
   font-weight: 600; white-space: nowrap; padding: 0.15rem 0.1rem;
   opacity: 0.92;
 }
@@ -121,7 +121,7 @@ export function ensureChatMsgEnhanceStyles() {
 }
 .chat-msg-body-more {
   margin-top: 0.35rem; font: inherit; font-size: 0.78rem;
-  color: var(--accent, #2563eb); background: none; border: none;
+  color: var(--leaf-alias-brand-primary, #4176E6); background: none; border: none;
   cursor: pointer; padding: 0.2rem 0; font-weight: 550;
 }
 .chat-msg-body-more:hover { text-decoration: underline; }
@@ -139,7 +139,7 @@ export function ensureChatMsgEnhanceStyles() {
 }
 .chat-msg-fold-again {
   font: inherit; font-size: 0.78rem;
-  color: var(--accent, #2563eb); background: none; border: none;
+  color: var(--leaf-alias-brand-primary, #4176E6); background: none; border: none;
   cursor: pointer; padding: 0.2rem 0; font-weight: 600;
 }
 .chat-msg-fold-again:hover { text-decoration: underline; }
@@ -148,8 +148,8 @@ export function ensureChatMsgEnhanceStyles() {
   margin: 0.55rem 0 0.25rem;
   padding: 0.65rem 0.75rem 0.7rem;
   border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 22%, var(--border));
-  background: color-mix(in srgb, var(--accent, #2563eb) 5%, var(--bg2, #fff));
+  border: 1px solid color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 22%, var(--border));
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 5%, var(--bg2, #fff));
   text-align: left;
 }
 .chat-quiz-head {
@@ -186,23 +186,23 @@ export function ensureChatMsgEnhanceStyles() {
   display: flex; gap: 0.45rem; align-items: flex-start;
 }
 .chat-quiz-opt:hover {
-  border-color: color-mix(in srgb, var(--accent, #2563eb) 40%, var(--border));
-  background: color-mix(in srgb, var(--accent, #2563eb) 7%, var(--bg2, #fff));
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 40%, var(--border));
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 7%, var(--bg2, #fff));
 }
 .chat-quiz-opt.is-on {
-  border-color: var(--accent, #2563eb);
-  background: color-mix(in srgb, var(--accent, #2563eb) 12%, var(--bg2, #fff));
+  border-color: var(--leaf-alias-brand-primary, #4176E6);
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 12%, var(--bg2, #fff));
   font-weight: 550;
 }
 .chat-quiz-opt .qk {
   flex-shrink: 0; width: 1.35rem; height: 1.35rem;
   border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
   font-size: 0.72rem; font-weight: 700;
-  background: color-mix(in srgb, var(--accent, #2563eb) 12%, transparent);
-  color: var(--accent, #2563eb);
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 12%, transparent);
+  color: var(--leaf-alias-brand-primary, #4176E6);
 }
 .chat-quiz-opt.is-on .qk {
-  background: var(--accent, #2563eb); color: #fff;
+  background: var(--leaf-alias-brand-primary, #4176E6); color: #fff;
 }
 .chat-quiz-opt .qt { flex: 1; min-width: 0; }
 .chat-quiz-foot {

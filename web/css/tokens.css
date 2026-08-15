@@ -1,31 +1,210 @@
 /* [INPUT]: 无；被 index.html 引用
- * [OUTPUT]: tokens.css 样式
- * [POS]: web/css D4 自 app.css 纵切
+ * [OUTPUT]: tokens.css 样式 —— P4-1 设计系统地基（--leaf-* 三层 token）
+ * [POS]: web/css 桌面样式真源（D4 纵切）；tokens.css = 设计 token 唯一真源
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ *
+ * 分层（借鉴 dsh `--dsw-*` 三层）：
+ *   1) 静态色阶  --leaf-static-*    （:root 浅色默认；暗色整体覆写）
+ *   2) 语义别名  --leaf-alias-*    （body 上；组件只准用这一层，禁止写死颜色）
+ *   3) 组件      components.css     （只引用 alias/static）
+ * 过渡期：legacy 变量（--bg/--accent/…）保留为别名指向新值 → CSS 零 break；
+ *         旧变量在暗色下自动跟随（var() 链到 alias，body[data-leaf-theme] 覆写即生效）。
  */
 
-/* [INPUT]: 无；被 index.html 引用
- * [OUTPUT]: 浅色控制台 tokens/layout · mode-plan 日志铺满 · bg-plan-banner · spinner · task-dash
- * [POS]: 桌面样式真源；体量超标（D4 候选）
- * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
- */
-
+/* ============================================================
+ * 1) 静态色阶 — 浅色默认（dsh bluish-neutral + deepseek 蓝；accent=500）
+ * ============================================================ */
 :root {
-  /* 浅色 macOS 风 · A2-3 一体密度 tokens */
-  --bg: #F5F5F7;
-  --bg2: #FFFFFF;
-  --bg3: #F0F0F2;
-  --border: #E5E5EA;
-  --text: #1D1D1F;
-  --muted: #6E6E73;
-  --accent: #0071E3;
-  --accent2: #0071E3;
+  color-scheme: light;
+  /* 表面阶（00…300=浅） */
+  --leaf-static-bg-00: #FFFFFF;
+  --leaf-static-bg-50: #F9FAFB;
+  --leaf-static-bg-75: #F1F3F5;
+  --leaf-static-bg-100: #EBEEF2;
+  --leaf-static-bg-150: #E9ECF2;
+  --leaf-static-bg-200: #E1E5EE;
+  --leaf-static-bg-300: #CFD3D6;
+  /* 文字/描边/深面阶（400…1000） */
+  --leaf-static-bg-400: #ADB2B8;
+  --leaf-static-bg-500: #979DA6;
+  --leaf-static-bg-600: #81858C;
+  --leaf-static-bg-700: #61666B;
+  --leaf-static-bg-800: #43454A;
+  --leaf-static-bg-850: #353638;
+  --leaf-static-bg-875: #2C2C2E;
+  --leaf-static-bg-900: #1B1B1C;
+  --leaf-static-bg-1000: #0F1115;
+  /* 品牌蓝阶（deepseek · 50…600） */
+  --leaf-static-deepseek-50: #EDF3FE;
+  --leaf-static-deepseek-100: #E4EDFD;
+  --leaf-static-deepseek-300: #B7C8FE;
+  --leaf-static-deepseek-450: #5686FE;
+  --leaf-static-deepseek-500: #4176E6;
+  --leaf-static-deepseek-600: #4868B2;
+  /* 状态三色 */
+  --leaf-static-ok-500: #22C55E;
+  --leaf-static-warn-500: #F59E0B;
+  --leaf-static-danger-500: #EF4444;
+}
+
+/* 字体角色五级（沿用现有 --font/--mono 栈；dsh 密度） */
+:root {
+  --leaf-font-caption: 0.72rem;
+  --leaf-font-secondary: 0.8125rem;
+  --leaf-font-body: 0.9375rem;
+  --leaf-font-title: 1.0625rem;
+  --leaf-font-display: 1.375rem;
+}
+
+/* ============================================================
+ * 2) 语义别名 — body 上（浅色）
+ *    组件 CSS 只准引用 --leaf-alias-*；改主题只动本层映射。
+ * ============================================================ */
+body {
+  /* 表面：base=app 底 · layer-1=面板/卡片 · layer-2=微面 · layer-3=深面/表底 */
+  --leaf-alias-bg-base: var(--leaf-static-bg-50);
+  --leaf-alias-bg-layer-1: var(--leaf-static-bg-00);
+  --leaf-alias-bg-layer-2: var(--leaf-static-bg-75);
+  --leaf-alias-bg-layer-3: var(--leaf-static-bg-100);
+  /* 边框四级（l1 最弱 → l4 最强） */
+  --leaf-alias-border-l1: var(--leaf-static-bg-150);
+  --leaf-alias-border-l2: var(--leaf-static-bg-200);
+  --leaf-alias-border-l3: var(--leaf-static-bg-300);
+  --leaf-alias-border-l4: var(--leaf-static-bg-400);
+  /* 文字四角色 */
+  --leaf-alias-label-primary: var(--leaf-static-bg-900);
+  --leaf-alias-label-secondary: var(--leaf-static-bg-700);
+  --leaf-alias-label-tertiary: var(--leaf-static-bg-500);
+  --leaf-alias-label-caption: var(--leaf-static-bg-600);
+  /* 品牌 */
+  --leaf-alias-brand-primary: var(--leaf-static-deepseek-500);
+  --leaf-alias-brand-hover: var(--leaf-static-deepseek-600);
+  --leaf-alias-brand-weak: var(--leaf-static-deepseek-50);
+  --leaf-alias-brand-strong: var(--leaf-static-deepseek-450);
+  /* 按钮 */
+  --leaf-alias-button-primary-bg: var(--leaf-static-deepseek-500);
+  --leaf-alias-button-primary-fg: #FFFFFF;
+  --leaf-alias-button-secondary-bg: var(--leaf-static-bg-00);
+  --leaf-alias-button-secondary-fg: var(--leaf-static-bg-900);
+  --leaf-alias-button-secondary-border: var(--leaf-static-bg-200);
+  --leaf-alias-button-ghost-fg: var(--leaf-static-bg-700);
+  /* 交互底 */
+  --leaf-alias-interactive-bg-hover: var(--leaf-static-bg-50);
+  --leaf-alias-interactive-bg-active: var(--leaf-static-bg-100);
+  /* 状态：运行=蓝（与 ok 绿区分）· 成功=绿 · 等待=琥珀 · 失败=红 */
+  --leaf-alias-status-running: var(--leaf-static-deepseek-500);
+  --leaf-alias-status-ok: var(--leaf-static-ok-500);
+  --leaf-alias-status-warn: var(--leaf-static-warn-500);
+  --leaf-alias-status-danger: var(--leaf-static-danger-500);
+  /* 滚动条 */
+  --leaf-alias-scrollbar-track: transparent;
+  --leaf-alias-scrollbar-thumb: var(--leaf-static-bg-300);
+  --leaf-alias-scrollbar-thumb-hover: var(--leaf-static-bg-500);
+  /* markdown */
+  --leaf-alias-markdown-code-bg: var(--leaf-static-bg-50);
+  --leaf-alias-markdown-code-fg: var(--leaf-static-bg-800);
+  --leaf-alias-markdown-link: var(--leaf-static-deepseek-500);
+  --leaf-alias-markdown-quote-border: var(--leaf-static-bg-300);
+  --leaf-alias-markdown-quote-bg: var(--leaf-static-bg-50);
+  /* 抬升/焦点 */
+  --leaf-alias-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.1);
+  --leaf-alias-shadow-2: 0 4px 12px rgba(16, 24, 40, 0.12);
+  --leaf-alias-focus-ring: 0 0 0 3px color-mix(in srgb, var(--leaf-static-deepseek-500) 28%, transparent);
+}
+
+/* ============================================================
+ * 3) 暗色主题 — body[data-leaf-theme="dark"]（P4-1 建 token；P4-7 提供开关）
+ *    整体覆写 static 阶（bluish 反装：低端=深面 · 高端=亮文字 · 875=面板底），
+ *    再重映射全部 alias → 组件零改动即跟随。
+ * ============================================================ */
+body[data-leaf-theme="dark"] {
+  color-scheme: dark;
+  --leaf-static-bg-00: #141519;
+  --leaf-static-bg-50: #17181D;
+  --leaf-static-bg-75: #1A1C21;
+  --leaf-static-bg-100: #1E2026;
+  --leaf-static-bg-150: #22242B;
+  --leaf-static-bg-200: #262930;
+  --leaf-static-bg-300: #2E313A;
+  --leaf-static-bg-400: #383C46;
+  --leaf-static-bg-500: #424752;
+  --leaf-static-bg-600: #4E5360;
+  --leaf-static-bg-700: #646A78;
+  --leaf-static-bg-800: #848B9A;
+  --leaf-static-bg-850: #9AA0AE;
+  --leaf-static-bg-875: #232324; /* 面板底/表底面 */
+  --leaf-static-bg-900: #C6CAD4;
+  --leaf-static-bg-1000: #F5F5F7; /* 反转为文字 */
+  --leaf-static-deepseek-50: #0D1526;
+  --leaf-static-deepseek-100: #16233F;
+  --leaf-static-deepseek-300: #2E4D8F;
+  --leaf-static-deepseek-450: #7A9BF7;
+  --leaf-static-deepseek-500: #5A86F5;
+  --leaf-static-deepseek-600: #7AA0F8;
+  --leaf-static-ok-500: #34D399;
+  --leaf-static-warn-500: #FBBF24;
+  --leaf-static-danger-500: #F87171;
+  /* 暗色语义别名（全部由 static 重映射） */
+  --leaf-alias-bg-base: var(--leaf-static-bg-00);
+  --leaf-alias-bg-layer-1: var(--leaf-static-bg-50);
+  --leaf-alias-bg-layer-2: var(--leaf-static-bg-75);
+  --leaf-alias-bg-layer-3: var(--leaf-static-bg-875);
+  --leaf-alias-border-l1: var(--leaf-static-bg-300);
+  --leaf-alias-border-l2: var(--leaf-static-bg-400);
+  --leaf-alias-border-l3: var(--leaf-static-bg-500);
+  --leaf-alias-border-l4: var(--leaf-static-bg-600);
+  --leaf-alias-label-primary: var(--leaf-static-bg-1000);
+  --leaf-alias-label-secondary: var(--leaf-static-bg-850);
+  --leaf-alias-label-tertiary: var(--leaf-static-bg-700);
+  --leaf-alias-label-caption: var(--leaf-static-bg-800);
+  --leaf-alias-brand-primary: var(--leaf-static-deepseek-500);
+  --leaf-alias-brand-hover: var(--leaf-static-deepseek-600);
+  --leaf-alias-brand-weak: var(--leaf-static-deepseek-50);
+  --leaf-alias-brand-strong: var(--leaf-static-deepseek-450);
+  --leaf-alias-button-primary-bg: var(--leaf-static-deepseek-500);
+  --leaf-alias-button-primary-fg: #FFFFFF;
+  --leaf-alias-button-secondary-bg: var(--leaf-static-bg-50);
+  --leaf-alias-button-secondary-fg: var(--leaf-static-bg-1000);
+  --leaf-alias-button-secondary-border: var(--leaf-static-bg-400);
+  --leaf-alias-button-ghost-fg: var(--leaf-static-bg-850);
+  --leaf-alias-interactive-bg-hover: var(--leaf-static-bg-100);
+  --leaf-alias-interactive-bg-active: var(--leaf-static-bg-150);
+  --leaf-alias-status-running: var(--leaf-static-deepseek-500);
+  --leaf-alias-status-ok: var(--leaf-static-ok-500);
+  --leaf-alias-status-warn: var(--leaf-static-warn-500);
+  --leaf-alias-status-danger: var(--leaf-static-danger-500);
+  --leaf-alias-scrollbar-track: transparent;
+  --leaf-alias-scrollbar-thumb: var(--leaf-static-bg-400);
+  --leaf-alias-scrollbar-thumb-hover: var(--leaf-static-bg-500);
+  --leaf-alias-markdown-code-bg: var(--leaf-static-bg-75);
+  --leaf-alias-markdown-code-fg: var(--leaf-static-bg-850);
+  --leaf-alias-markdown-link: var(--leaf-static-deepseek-500);
+  --leaf-alias-markdown-quote-border: var(--leaf-static-bg-500);
+  --leaf-alias-markdown-quote-bg: var(--leaf-static-bg-75);
+  --leaf-alias-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
+  --leaf-alias-shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --leaf-alias-focus-ring: 0 0 0 3px color-mix(in srgb, var(--leaf-static-deepseek-500) 38%, transparent);
+}
+
+/* ============================================================
+ * 4) 过渡期：legacy 变量 → 别名指向新值（CSS 零 break · 品牌蓝全量替换 #4176E6）
+ *    旧变量被各页面/JS 引用；暗色下经 var() 链自动跟随 body[data-leaf-theme]。
+ * ============================================================ */
+:root {
+  --bg: var(--leaf-alias-bg-base);
+  --bg2: var(--leaf-alias-bg-layer-1);
+  --bg3: var(--leaf-alias-bg-layer-2);
+  --border: var(--leaf-alias-border-l2);
+  --text: var(--leaf-alias-label-primary);
+  --muted: var(--leaf-alias-label-secondary);
+  --accent: var(--leaf-alias-brand-primary);
+  --accent2: var(--leaf-alias-brand-primary);
   /* 状态色三种（主路径）：进行 / 成功 / 风险 */
-  --ok: #34C759;
-  --warn: #FF9F0A;
-  --danger: #FF3B30;
-  --log-bg: #FAFAFA;
-  --log-text: #1D1D1F;
+  --ok: var(--leaf-alias-status-ok);
+  --warn: var(--leaf-alias-status-warn);
+  --danger: var(--leaf-alias-status-danger);
+  --log-bg: var(--leaf-alias-bg-layer-1);
+  --log-text: var(--leaf-alias-label-primary);
   --radius: 12px;
   --font: "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -34,7 +213,7 @@
   --log-font-size: 0.875rem; /* 14px */
   /* A2-3 主 CTA 单一视觉（primary 按钮共用） */
   --cta-bg: var(--accent);
-  --cta-bg-hover: #0077ED;
+  --cta-bg-hover: var(--leaf-alias-brand-hover);
   --cta-fg: #FFFFFF;
   --cta-radius: 10px;
   --cta-pad-y: 0.55rem;
@@ -44,7 +223,7 @@
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
-  --focus-ring: 0 0 0 3px rgba(0, 113, 227, 0.28);
+  --focus-ring: var(--leaf-alias-focus-ring);
 }
 
 /* 主 CTA 原子：一屏一个主按钮视觉；ghost/次要不抢 */
@@ -101,4 +280,3 @@ body {
   overflow: hidden;
   background: var(--bg);
 }
-

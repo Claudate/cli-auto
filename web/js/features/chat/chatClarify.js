@@ -215,24 +215,24 @@ export function ensureClarifyStyles() {
   transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
 }
 .chat-clarify-entry:hover {
-  border-color: color-mix(in srgb, var(--accent, #0071E3) 45%, var(--border));
-  color: var(--accent, #0071E3);
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 45%, var(--border));
+  color: var(--leaf-alias-brand-primary, #4176E6);
 }
 /* Default path = primary road; others stay quiet chips */
 .chat-clarify-entry.is-default {
   font-size: 0.84rem;
   padding: 0.42rem 0.9rem;
   color: var(--text);
-  border-color: color-mix(in srgb, var(--accent, #0071E3) 35%, var(--border));
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 35%, var(--border));
 }
 .chat-clarify-entry.is-active {
-  border-color: var(--accent, #0071E3);
-  background: color-mix(in srgb, var(--accent, #0071E3) 12%, var(--bg2, #fff));
-  color: var(--accent, #0071E3);
+  border-color: var(--leaf-alias-brand-primary, #4176E6);
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 12%, var(--bg2, #fff));
+  color: var(--leaf-alias-brand-primary, #4176E6);
   font-weight: 600;
 }
 .chat-clarify-entry.is-active.is-default {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #0071E3) 25%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 25%, transparent);
 }
 .chat-clarify-entry:disabled {
   opacity: 0.5;
@@ -288,10 +288,10 @@ export function ensureClarifyStyles() {
   display: inline-block;
 }
 .chat-clarify-progress-dots > i.is-done {
-  background: color-mix(in srgb, var(--accent, #0071E3) 55%, var(--bg3, #E5E5EA));
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 55%, var(--bg3, #E5E5EA));
 }
 .chat-clarify-progress-dots > i.is-current {
-  background: var(--accent, #0071E3);
+  background: var(--leaf-alias-brand-primary, #4176E6);
   transform: scale(1.15);
 }
 .chat-clarify-progress-bar {
@@ -306,7 +306,7 @@ export function ensureClarifyStyles() {
 .chat-clarify-progress-bar > i {
   display: block;
   height: 100%;
-  background: var(--accent, #0071E3);
+  background: var(--leaf-alias-brand-primary, #4176E6);
   border-radius: inherit;
   transition: width 0.15s ease;
 }
@@ -349,12 +349,12 @@ export function ensureClarifyStyles() {
   pointer-events: auto;
 }
 .chat-clarify-option:hover {
-  border-color: color-mix(in srgb, var(--accent, #0071E3) 40%, var(--border));
-  background: color-mix(in srgb, var(--accent, #0071E3) 6%, var(--bg2, #fff));
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 40%, var(--border));
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 6%, var(--bg2, #fff));
 }
 .chat-clarify-option.is-selected {
-  border-color: var(--accent, #0071E3);
-  background: color-mix(in srgb, var(--accent, #0071E3) 12%, var(--bg2, #fff));
+  border-color: var(--leaf-alias-brand-primary, #4176E6);
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 12%, var(--bg2, #fff));
   font-weight: 550;
 }
 /* Soft letter badge — not exam scoring */
@@ -368,8 +368,8 @@ export function ensureClarifyStyles() {
   border-radius: 6px;
   font-size: 0.72rem;
   font-weight: 650;
-  color: var(--accent, #0071E3);
-  background: color-mix(in srgb, var(--accent, #0071E3) 12%, transparent);
+  color: var(--leaf-alias-brand-primary, #4176E6);
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 12%, transparent);
   margin-right: 0.5rem;
 }
 .chat-clarify-actions {
@@ -420,7 +420,7 @@ export function ensureClarifyStyles() {
   border: none;
   padding: 0;
   font: inherit;
-  color: var(--accent, #0071E3);
+  color: var(--leaf-alias-brand-primary, #4176E6);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -533,8 +533,8 @@ export function ensureClarifyStyles() {
   background: color-mix(in srgb, #F5A524 12%, var(--bg2, #fff));
 }
 .chat-brief-tag.is-user {
-  border-color: color-mix(in srgb, var(--accent, #0071E3) 35%, var(--border));
-  color: var(--accent, #0071E3);
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 35%, var(--border));
+  color: var(--leaf-alias-brand-primary, #4176E6);
 }
 .chat-brief-actions {
   display: flex;

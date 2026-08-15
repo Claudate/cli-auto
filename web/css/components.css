@@ -1,0 +1,191 @@
+/* [INPUT]: 依赖 tokens.css 的 --leaf-alias-* / --leaf-static-*（禁止引用 legacy 色变量）
+ * [OUTPUT]: components.css 样式 —— dsh 组件原语（P4-1）
+ * [POS]: web/css 设计系统层；只准用 alias/static token，禁止写死颜色（含暗色自动跟随）
+ * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ * 原语：StateDot · Card · Pill · DisclosureRow · Terminal/Diff/Read · Toast
+ */
+
+/* === StateDot（运行=蓝 · 成功=绿 · 失败=红 · 等待=琥珀；无动效） ===
+ * 扩展现有 .dot 基类（layout.css）；aria-hidden 由调用方渲染 */
+.dot.run {
+  background: var(--leaf-alias-status-running);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--leaf-alias-status-running) 16%, transparent);
+}
+.dot.pending {
+  background: var(--leaf-alias-status-warn);
+}
+.dot.danger {
+  background: var(--leaf-alias-status-danger);
+}
+
+/* === Card（通用表面基类：任务卡/结果卡统一壳） === */
+.leaf-card {
+  background: var(--leaf-alias-bg-layer-1);
+  border: 1px solid var(--leaf-alias-border-l1);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+}
+.leaf-card.is-flat {
+  background: transparent;
+}
+
+/* === Pill（provider/role/scope · plan/波次 chip） === */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-size: var(--leaf-font-caption);
+  line-height: 1.6;
+  white-space: nowrap;
+  color: var(--leaf-alias-label-secondary);
+  background: var(--leaf-alias-bg-layer-2);
+  border: 1px solid var(--leaf-alias-border-l1);
+}
+.pill.is-brand {
+  color: var(--leaf-alias-brand-primary);
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary) 8%, transparent);
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary) 22%, transparent);
+}
+.pill.is-ok {
+  color: var(--leaf-alias-status-ok);
+  background: color-mix(in srgb, var(--leaf-alias-status-ok) 8%, transparent);
+  border-color: color-mix(in srgb, var(--leaf-alias-status-ok) 22%, transparent);
+}
+.pill.is-warn {
+  color: var(--leaf-alias-status-warn);
+  background: color-mix(in srgb, var(--leaf-alias-status-warn) 8%, transparent);
+  border-color: color-mix(in srgb, var(--leaf-alias-status-warn) 22%, transparent);
+}
+.pill.is-danger {
+  color: var(--leaf-alias-status-danger);
+  background: color-mix(in srgb, var(--leaf-alias-status-danger) 8%, transparent);
+  border-color: color-mix(in srgb, var(--leaf-alias-status-danger) 22%, transparent);
+}
+
+/* === DisclosureRow（默认折叠披露行；展开有高度上限 + 内部滚动） === */
+.disclosure-row > summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--leaf-alias-label-tertiary);
+  font-size: var(--leaf-font-caption);
+  user-select: none;
+}
+.disclosure-row > summary::-webkit-details-marker {
+  display: none;
+}
+.disclosure-row > summary:hover {
+  color: var(--leaf-alias-label-secondary);
+}
+.disclosure-row[open] > .disclosure-body {
+  max-height: 240px;
+  overflow-y: auto;
+  border-top: 1px solid var(--leaf-alias-border-l1);
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+}
+
+/* === TerminalBlock（命令+输出+状态 pill；pre 保持对齐） === */
+.terminal-block {
+  background: var(--leaf-alias-bg-layer-3);
+  border: 1px solid var(--leaf-alias-border-l1);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.terminal-block .terminal-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--leaf-alias-border-l1);
+  font-size: var(--leaf-font-caption);
+  color: var(--leaf-alias-label-tertiary);
+}
+.terminal-block pre {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: var(--leaf-font-secondary);
+  line-height: 1.5;
+  color: var(--leaf-alias-label-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* === DiffBlock（逐文件 +/- · 页脚诚实计数） === */
+.diff-block {
+  background: var(--leaf-alias-bg-layer-1);
+  border: 1px solid var(--leaf-alias-border-l1);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.diff-block .diff-line {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.15rem 0.75rem;
+  font-family: var(--mono);
+  font-size: var(--leaf-font-secondary);
+}
+.diff-block .diff-line.del {
+  background: color-mix(in srgb, var(--leaf-alias-status-danger) 8%, transparent);
+  color: var(--leaf-alias-status-danger);
+}
+.diff-block .diff-line.add {
+  background: color-mix(in srgb, var(--leaf-alias-status-ok) 8%, transparent);
+  color: var(--leaf-alias-status-ok);
+}
+.diff-block .diff-foot {
+  padding: 0.3rem 0.75rem;
+  font-size: var(--leaf-font-caption);
+  color: var(--leaf-alias-label-tertiary);
+  border-top: 1px solid var(--leaf-alias-border-l1);
+}
+
+/* === ReadBlock（带行号 gutter + showing N of M） === */
+.read-block {
+  background: var(--leaf-alias-bg-layer-1);
+  border: 1px solid var(--leaf-alias-border-l1);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.read-block .read-gutter {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.3rem 0.75rem;
+  font-family: var(--mono);
+  font-size: var(--leaf-font-secondary);
+}
+.read-block .read-lineno {
+  text-align: right;
+  color: var(--leaf-alias-label-tertiary);
+  user-select: none;
+  min-width: 2.2em;
+}
+.read-block .read-foot {
+  padding: 0.3rem 0.75rem;
+  font-size: var(--leaf-font-caption);
+  color: var(--leaf-alias-label-tertiary);
+  border-top: 1px solid var(--leaf-alias-border-l1);
+}
+
+/* === Toast（顶部横幅 · 3s 保持 · 随 anchor 居中） === */
+.toast {
+  position: fixed;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: 80vw;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius);
+  background: var(--leaf-alias-bg-layer-1);
+  border: 1px solid var(--leaf-alias-border-l2);
+  box-shadow: var(--leaf-alias-shadow-2);
+  font-size: var(--leaf-font-secondary);
+  color: var(--leaf-alias-label-primary);
+}
+.toast.is-ok { border-color: var(--leaf-alias-status-ok); }
+.toast.is-warn { border-color: var(--leaf-alias-status-warn); }
+.toast.is-danger { border-color: var(--leaf-alias-status-danger); }

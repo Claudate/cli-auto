@@ -1,6 +1,6 @@
 # 桌面端 UI 重构计划 — 借鉴 DeepSeek Harness Web UI
 
-> 阶段：**计划**（P4-0 · 未开工）｜真源候选：本文件 + 各页面 L2
+> 阶段：**计划**（P4-0 ✅ · **P4-1 ✅** · P4-2+ 未开工）｜真源候选：本文件 + 各页面 L2
 > 参考对象：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`，MIT）Web UI
 > 已决策：品牌主色 = **dsh DeepSeek 蓝 #4176E6**｜范围 = **全量页面一次规划**｜暗色 = **纳入本次**
 > 已定（2026-08-15 确认）：① 暗色默认 = **跟随系统**；② 次级列（执行/结果台局部）宽约 **320px · 默认折叠可开**；③ 状态色 = **运行沿用蓝**（与成功绿区分）；④ **不做全局第三栏 details**（拆分台已三栏，四栏拥挤）
@@ -192,7 +192,7 @@ Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自
 > **每阶段通用验证**（不重复列出）：① `cd web && node build.mjs` 产物就绪；② `scripts/check-arch.sh`（STRICT=1 时也要绿）；③ Tauri 窗口实测 1280px 与 1024px 双宽度走查 + 明暗双主题 + `prefers-reduced-motion`；④ facade 体积门禁（不新增堆叠）；⑤ 改动只落 Presentation 层、gateway 零新增命令。任一阶段失败可独立回滚。
 
 - **P4-0 分支与地基确认（本轮已做）**：设计真源提交 = `a66c204`；建议开工前切独立分支 `feat/ui-redesign-dsh`（与当前 `complete-fix-split-table-terminal-cli` WIP 解耦）。`--accent` 现被 5 CSS + 2 JS 引用（`chat.css/layout.css/monitor.css/plan.css/select.css` + `chatClarify.js/chatMsgEnhance.js`）。
-- **P4-1 设计系统地基（零行为 diff）**：`tokens.css` 新增 `--leaf-*` 三层；**过渡期保留旧变量为别名指向新值**（`--accent: var(--leaf-alias-brand-primary)` 等），CSS 零 break；JS 侧 2 处 `var(--accent)` 改读新 token。加 `components.css` 原语（StateDot/Card/DisclosureRow/Pill/Terminal/Diff/Read/Toast）。验收：明暗双主题走查 + 全量页面无样式回退 + `check-arch.sh` 绿。
+- **P4-1 设计系统地基 ✅（零行为 diff · 2026-08-15）**：`tokens.css` 三层 `--leaf-*`（static 色阶 → body alias → `body[data-leaf-theme="dark"]` 暗色覆写）+ 字体五级；**过渡期保留旧变量为别名指向新值**（`--accent: var(--leaf-alias-brand-primary)` 等），CSS 零 break；JS 侧 2 文件（chatClarify / chatMsgEnhance）`var(--accent, …)` 改读 `var(--leaf-alias-brand-primary, #4176E6)`。加 `components.css` **191 行**原语（StateDot / Card / Pill / DisclosureRow / Terminal / Diff / Read / Toast）≤200 守门（check-arch 新增 1c 检查项）。验收：`node build.mjs` ✅ · esbuild CSS @import 链解析 ✅ · token 交叉校验（light+dark static 完整、全部 var() 可解析）✅ · `check-arch.sh` STRICT=1 绿（WARN=4 为既有 Rust 文件 soft 超限，非本轮引入）✅ · **明暗双主题目视走查 ☐**（需 P4-2 壳后人工走查）。
 - **P4-2 两栏壳 + 侧栏**：`index.html` 保持两栏 grid；侧栏重做（StateDot 状态点 / 折叠 56px rail / 搜索 / hover 复制卡 / 底部设置）；顶栏加 view-ring 段控 `拆分|执行|结果|聊天`（`routes.js` 语义不变）。**不做全局第三栏**。验收：DOM id 全部保留（`#project-list`/`#page-*` 等），脚本无空引用；窄窗下侧栏折叠正常。
 - **P4-3 拆分台（视觉换，三栏不动）**：任务卡 dsh 语言 + 现有任务详情栏换卡片样式；confirm 条不变。验收：S0–S3 语义回归；optional 勾选停住；confirm 唯一开跑。
 - **P4-4 执行台**：任务流程卡 + Terminal/Diff/Read 卡片原语接入 + **右次级列（折叠默认开）** + 日志次级折叠。验收：停/续/重跑；日志虚拟列表；失败卡 route_label。
