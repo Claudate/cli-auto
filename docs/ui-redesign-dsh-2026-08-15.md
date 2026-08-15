@@ -3,7 +3,7 @@
 > 阶段：**计划**（P4-0 · 未开工）｜真源候选：本文件 + 各页面 L2
 > 参考对象：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`，MIT）Web UI
 > 已决策：品牌主色 = **dsh DeepSeek 蓝 #4176E6**｜范围 = **全量页面一次规划**｜暗色 = **纳入本次**
-> 已定（2026-08-15 确认）：① 暗色默认 = **跟随系统**；② details 默认宽 = **320px · 切 phase 自动收起**；③ 状态色 = **运行沿用蓝**（与成功绿区分）
+> 已定（2026-08-15 确认）：① 暗色默认 = **跟随系统**；② 次级列（执行/结果台局部）宽约 **320px · 默认折叠可开**；③ 状态色 = **运行沿用蓝**（与成功绿区分）；④ **不做全局第三栏 details**（拆分台已三栏，四栏拥挤）
 > 原则：**借视觉语言与交互范式，不借架构与技术栈**；主路径仍 Plan-First（Split 确认唯一开跑）
 
 ---
@@ -14,10 +14,10 @@ dsh 的 webui 是一套「**三栏壳 + 会话流 + 细节栏**」的现代 Agen
 
 Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自由会话**），所以不是照搬 dsh 的「会话即主界面」，而是：
 
-1. **把 dsh 的三栏壳（sidebar｜conversation｜details）映射为 Leaf 的（项目侧栏｜phase 主区｜右细节栏）**；
+1. **把 dsh 的三栏壳（sidebar｜conversation｜details）映射为 Leaf 的（项目侧栏｜phase 主区｜phase 局部次级面板）**——不做全局第三栏（拆分台已三栏，见 §4 修正）；
 2. **把 dsh 的 view-ring 标签页（Chat｜Trajectory）映射为 Leaf 的 phase 段（拆分｜执行｜结果｜聊天）**；
 3. **把 dsh 的卡片/状态点/停靠 dock/披露行等语言全面引入**；
-4. **新增一个右细节栏**——这是本轮最大的结构增量，承接拆分任务详情 / 执行日志 / 巡检对照。
+4. **执行台/结果台引入「phase 局部次级面板」**（详情 / 日志 / 巡检对照）——本轮主要结构增量，仅限真正需要详情/对照的 phase。
 
 > 工程硬规则（L1 §1–26）全部保留：唯一开跑 = `confirm_start`；MVVM；IPC 只经 `gateway`；facade 体积守门；PM/出海人话文案；新概念 ≤3。本计划只动 **Presentation 层**，Domain/Application/Ports 不改。
 
@@ -90,21 +90,22 @@ Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自
 
 ---
 
-## 4. 壳层：三栏 AppFrame（本轮最大结构增量）
+## 4. 壳层：两栏壳 + phase 局部次级面板（结构修正版）
+
+> **结构修正（2026-08-15 自检）**：初稿把 dsh 的 details 栏映射为**全局第三栏**。验证发现拆分台已是三栏（`SplitView.js`「三栏绑定」，plan.css 有 `.confirm-layout`/`.task-list-pane` 多列），外层再套全局 details = 拆分台四栏，1280px 窗口主区被压到 <700px，PM/非开发用户可操作性明显变差。**修正：壳层保持两栏（sidebar｜main），details 语义下沉为「phase 局部次级面板」**——只有确实需要详情/日志/对照的 phase（执行台、结果台）在自己的布局里开一个次级列；拆分台保持自身三栏不动。
 
 ### 4.1 布局
 ```
-┌─────────┬──────────────────────────────────┬───────────┐
-│ sidebar │  main                            │ details   │
-│ 260px   │  topbar                         │ 320px     │
-│ ─(56px) │   ├ 项目名 · 计划名   [拆分|执行|结果|聊天] │ (可收起0) │
-│         │   └ 主区 phase 内容              │           │
-│ 品牌+新建│                                    │           │
-│ 项目列表│                                    │ 拖动把手   │
-│ (状态点)│                                    │           │
-│ ───────│                                    │           │
-│ 设置/环境│                                    │           │
-└─────────┴──────────────────────────────────┴───────────┘
+┌─────────┬──────────────────────────────────────────┐
+│ sidebar  │  main                                   │
+│ 200px   │  topbar                                 │
+│ ─(56px) │   ├ 项目名 · 计划名    [拆分|执行|结果|聊天] │
+│ 品牌+新建│   └ 主区 phase 内容（phase 自管次级面板）   │
+│ 项目列表│   · 拆分台：自身三栏（不动）              │
+│ (状态点)│   · 执行台：任务流 + 右次级日志/详情列     │
+│ ───────│   · 结果台：完成/遗漏 + 右次级巡检对照列   │
+│ 设置/环境│                                        │
+└─────────┴──────────────────────────────────────────┘
 ```
 
 ### 4.2 侧栏（dsh `ui-sidebar` + `ui-workspace` 映射）
@@ -119,13 +120,12 @@ Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自
 - 中：**view-ring 段控** `拆分｜执行｜结果｜聊天`（替代原 phase 隐藏条；`routes.js` 语义不变）。
 - 右：聊天快捷、刷新、计划管理、budget/cost chip（结果台显示）、暗色切换（设置里）。
 
-### 4.4 右细节栏（新增）
-- 每 phase 一个填充组件，容器常驻：
-  - 拆分台 → 选中任务详情卡（要做什么 / 怎样算做完 / acceptance 黄条 / 默认通道）。
-  - 执行台 → 选中任务卡 + 日志卡（TerminalBlock 风格）。
-  - 结果台 → 巡检详情（JsonTree 式对照勾选）。
-- 拖动把手可调宽；切 phase 自动收起；窄窗 concession（先压 details 再自动关闭）。
-- 几何瞬态（不入 localStorage）。
+### 4.4 phase 局部次级面板（替代全局第三栏）
+- **不做全局 details 容器**；由各 phase 在自身布局内实现：
+  - 执行台 → 右次级列（选中任务详情 + 日志卡 TerminalBlock 风格）。
+  - 结果台 → 右次级列（巡检对照勾选）。
+  - 拆分台 → **不动自身三栏**，任务详情仍在其中一栏（现状即如此）。
+- 次级列可折叠（本地 view 状态）；窄窗优先折叠次级列；几何瞬态（不入 localStorage）。
 
 ---
 
@@ -138,25 +138,25 @@ Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自
 - 概念数：添加项目 / 模板 / 帮助 = 3，守 L1 §26。
 
 ### 5.2 拆分台（S0–S3 语义不动，视觉全换）
-- 主栏：顶部 S1 人话条（来源 + badge）→ 波次依赖并行图（S2）→ 任务列表；每任务卡 = **StateDot + 标题 + route pill（provider/role/scope）+ optional 徽标 + 默认通道 chip**，可展开（DisclosureRow 式）。
-- 右细节栏：任务详情卡（要做什么 / 怎样算做完 / acceptance 黄条）+ 「默认通道」下拉（S0 双受众保持）。
+- 布局**保持现有三栏不动**（顶栏 S1 人话条 → 波次依赖并行图 S2 → 任务列表）；只换任务卡视觉语言：每任务卡 = **StateDot + 标题 + route pill（provider/role/scope）+ optional 徽标 + 默认通道 chip**，可展开（DisclosureRow 式）。
+- 任务详情（要做什么 / 怎样算做完 / acceptance 黄条 / 默认通道下拉）留在现有一栏，不新增全局右栏（S0 双受众保持）。
 - 底部确认条：`执行规划` primary + optional 勾选停住（记忆：**never auto-start past optionals**）。confirm 仍唯一开跑。
 
 ### 5.3 执行台
 - 主栏：**任务流程卡**——每卡 = StateDot + 人话进展（`logBoardCard` 既有语义）+ 提交状态（auto-commit hash/files/push/失败，失败卡 route_label）+ 停/续/重跑。运行中蓝追光。
-- 右细节栏：选中任务 → 命令+输出（`TerminalBlock`：状态 pill + 复制 + pre 对齐）+ 文件读写（`ReadBlock`/`DiffBlock`）+ 出错详情；等待审批 → 琥珀接管条。
-- 日志次级：dsh Trajectory 的「日志次级」概念 —— 默认折叠在 details 底部或独立次级面板，`logVirtual` 虚拟列表保留。
+- **右次级列**：选中任务 → 命令+输出（`TerminalBlock`：状态 pill + 复制 + pre 对齐）+ 文件读写（`ReadBlock`/`DiffBlock`）+ 出错详情；等待审批 → 琥珀接管条。次级列可折叠。
+- 日志次级：dsh Trajectory 的「日志次级」概念 —— 默认折叠在右次级列或独立次级面板，`logVirtual` 虚拟列表保留。
 
 ### 5.4 结果台
 - 主栏：完成 / 遗漏（miss）行（带执行方式）+ 验证卡片 + **网页验收证据**（`browserEvidence` 截图卡）+ 回补入口（`startRework` 非 confirm 旁路）+ 结束 CTA。
-- 右细节栏：巡检对照详情（`inspectCopy` 人话 + 对照勾选树）。
+- **右次级列**：巡检对照详情（`inspectCopy` 人话 + 对照勾选树），可折叠。
 - `#result-cost-chip` 保留。
 
 ### 5.5 聊天（计划生成/核对）
 - 会话流：dsh 气泡语言 + **composer dock 链**：
   - TodoDock（order 0）= 当前计划/波次计划条；
   - GoalBar（order 10）= 当前计划目标（可编辑/暂停/恢复/清除）；
-  - QueueDock（order 20）= 排队消息（可编辑/删除/插队）。
+  - **QueueDock（order 20）先做语义核对再定**：现代码 `queue/pending` 是「待发送附件 + 待渲染气泡」语义，**不是多消息排队队列**（`chatState.js`）。若 Leaf 无多消息排队，则不造 QueueDock 空壳——改为只保留「发送中/待发送」状态行，避免为对齐 dsh 加概念（L1 §26）。
 - 输入座：**model/effort 两级菜单**（dsh `ui-model-selection`：provider 分组 → 具体模型 → effort），复用现有 `#s-effort` 语义；plan chip（当前计划 on/off）；发送/停止。
 - 上下文注入 / 召回 → **DisclosureRow 默认折叠**（`上下文注入` / `跨会话召回` 人话标签）。
 - 图片粘贴/拖放 → `DropOverlay` + 限制横幅（复用 `chatImageHydrate`）。
@@ -189,18 +189,19 @@ Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自
 
 ## 7. 实施阶段（P4-x · 每阶段独立可验收）
 
-| 阶段 | 内容 | 主要文件 | 验收 | 风险 |
-|------|------|----------|------|------|
-| **P4-1 设计系统地基** | `tokens.css` → `--leaf-*` 三层 + 暗色；`base.css`；`components.css` 原语（StateDot/Card/DisclosureRow/Pill/Terminal/Diff/Read/Toast） | `web/css/{tokens,base,components}.css`、`app.css` | 明暗双主题走查；`check-arch.sh` 绿；**零行为 diff** | 低（纯样式层） |
-| **P4-2 三栏壳** | `index.html` AppFrame + 侧栏重做（状态点/搜索/折叠 rail/hover 卡）+ 顶栏 view-ring + details 容器 + 每 phase 接管容器 | `web/index.html`、`web/css/layout.css`、`js/features/project/shellChrome.js`、`js/app/routes.js` | 三栏拖拽/折叠/窄窗 concession；phase 切换正常；gateway 无新增 | 中（结构变更） |
-| **P4-3 拆分台** | 任务卡 dsh 语言 + 右细节栏任务详情；confirm 条不变 | `features/split/*`、`css/plan.css` | S0–S3 语义回归；optional 勾选停住；confirm 唯一开跑 | 中 |
-| **P4-4 执行台** | 任务流程卡 + Terminal/Diff/Read 卡片原语接入 + 右细节日志 + 日志次级折叠 | `features/run/*`、`css/{log,monitor}.css` | 停/续/重跑；日志虚拟列表；失败卡 route_label | 中 |
-| **P4-5 结果台** | 验证/证据卡片 + 巡检详情入右栏 | `features/result/*`、`css/monitor.css` | miss 行执行方式；rework 非 confirm 旁路 | 低 |
-| **P4-6 聊天** | composer dock 链（计划条/目标/排队）+ model/effort 两级 + 注入披露折叠 + DropOverlay | `features/chat/*`、`css/chat.css` | 排队/插队/编辑；无策略复制进 JS | 中 |
-| **P4-7 设置** | dsh 视觉 + 权限 presets + 外观（暗色开关） | `features/settings/*`、`css/select.css` | 权限 tier 人话；Full access 风险确认 | 低 |
-| **P4-8 打磨** | 动效/滚动条/焦点/reduced-motion/空态/明暗全走查 + 体积门禁 | 全局 | 走查清单通过；facade 无新增堆叠 | 低 |
+> **每阶段通用验证**（不重复列出）：① `cd web && node build.mjs` 产物就绪；② `scripts/check-arch.sh`（STRICT=1 时也要绿）；③ Tauri 窗口实测 1280px 与 1024px 双宽度走查 + 明暗双主题 + `prefers-reduced-motion`；④ facade 体积门禁（不新增堆叠）；⑤ 改动只落 Presentation 层、gateway 零新增命令。任一阶段失败可独立回滚。
 
-**执行顺序依赖**：P4-1 → P4-2（壳）→ P4-3/4/5（三桌，可并行拆人）→ P4-6 → P4-7 → P4-8。每阶段完成即提交（记忆：plan done → commit）。
+- **P4-0 分支与地基确认（本轮已做）**：设计真源提交 = `a66c204`；建议开工前切独立分支 `feat/ui-redesign-dsh`（与当前 `complete-fix-split-table-terminal-cli` WIP 解耦）。`--accent` 现被 5 CSS + 2 JS 引用（`chat.css/layout.css/monitor.css/plan.css/select.css` + `chatClarify.js/chatMsgEnhance.js`）。
+- **P4-1 设计系统地基（零行为 diff）**：`tokens.css` 新增 `--leaf-*` 三层；**过渡期保留旧变量为别名指向新值**（`--accent: var(--leaf-alias-brand-primary)` 等），CSS 零 break；JS 侧 2 处 `var(--accent)` 改读新 token。加 `components.css` 原语（StateDot/Card/DisclosureRow/Pill/Terminal/Diff/Read/Toast）。验收：明暗双主题走查 + 全量页面无样式回退 + `check-arch.sh` 绿。
+- **P4-2 两栏壳 + 侧栏**：`index.html` 保持两栏 grid；侧栏重做（StateDot 状态点 / 折叠 56px rail / 搜索 / hover 复制卡 / 底部设置）；顶栏加 view-ring 段控 `拆分|执行|结果|聊天`（`routes.js` 语义不变）。**不做全局第三栏**。验收：DOM id 全部保留（`#project-list`/`#page-*` 等），脚本无空引用；窄窗下侧栏折叠正常。
+- **P4-3 拆分台（视觉换，三栏不动）**：任务卡 dsh 语言 + 现有任务详情栏换卡片样式；confirm 条不变。验收：S0–S3 语义回归；optional 勾选停住；confirm 唯一开跑。
+- **P4-4 执行台**：任务流程卡 + Terminal/Diff/Read 卡片原语接入 + **右次级列（折叠默认开）** + 日志次级折叠。验收：停/续/重跑；日志虚拟列表；失败卡 route_label。
+- **P4-5 结果台**：验证/证据卡片 + **右次级列巡检对照**。验收：miss 行执行方式；rework 非 confirm 旁路。
+- **P4-6 聊天**：composer dock 链（TodoDock 计划条 / GoalBar 目标 / **QueueDock 先核对语义**）+ model/effort 两级 + 注入披露折叠 + DropOverlay。验收：计划条/目标可用；QueueDock 语义不符则不实现；无策略复制进 JS。
+- **P4-7 设置**：dsh 视觉 + 权限 presets + 外观（暗色开关）。验收：权限 tier 人话；Full access 风险确认。
+- **P4-8 打磨**：动效/滚动条/焦点/reduced-motion/空态/明暗全走查 + 体积门禁。验收：走查清单通过；facade 无新增堆叠。
+
+**执行顺序依赖**：P4-1 → P4-2 → P4-3/4/5（三桌，可并行拆人）→ P4-6 → P4-7 → P4-8。每阶段完成即提交（记忆：plan done → commit）。
 
 ---
 
@@ -212,6 +213,9 @@ Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自
 - **L1 §15–18**：单文件软 400/硬 600；组件 CSS ≤200；不往 classic facade 堆功能。
 - **L1 §19–22**：MVVM；策略只在 Rust；JS 只渲染 DTO。
 - **L1 §23–26**：主路径人话；高级折叠；TUI 不加第二套拆分台；新概念 ≤3。
+- **构建链路**：每阶段 `cd web && node build.mjs`（`web/dist/` 是 gitignored 产物，不构建则冒烟 404）+ `scripts/check-arch.sh` + 打包 smoke（`scripts/`）。
+- **分支**：开工前切 `feat/ui-redesign-dsh`，不混入当前 WIP 分支。
+- **tokens 过渡**：`--leaf-*` 落地期间旧变量（`--accent` 等）保留为别名，单阶段一次性切引用，禁止跨阶段半替换。
 - **记忆**：optional 勾选停住、拆分台默认停、不静默覆盖 route、icons 用 Lucide 风 SVG、双受众 S0。
 
 ---
@@ -221,10 +225,12 @@ Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自
 | 决策点 | 状态 | 决定 | 说明 |
 |--------|------|------|------|
 | 暗色默认值 | ✅ 已定 | **跟随系统** | dsh `system` 行为；桌面值钱 |
-| details 默认宽度 | ✅ 已定 | **320px / 切 phase 自动收起** | 避免三栏拥挤 |
+| **全局第三栏 details** | ✅ 已定 | **不做**（改 phase 局部次级面板） | 拆分台已三栏，再套全局第三栏 = 四栏拥挤；见 §4 修正 |
+| 次级列宽度/收起 | ✅ 已定 | 约 320px · 默认折叠可开 | 执行/结果台局部；窄窗优先折叠 |
 | 侧栏「计划」二级树 | ⬜ 待定 | 项目内展开分组 | 对应 dsh Workspace→Sessions |
 | 状态色语义 | ✅ 已定 | **运行=蓝**（沿用 dsh 约定） | 与「ok 绿 / 成功绿」区分开 |
-| 品牌蓝全量替换 #0071E3 | ✅ 已定 | 是 | 含图标 hover / focus-ring / CTA |
+| 品牌蓝全量替换 #0071E3 | ✅ 已定 | 是（走 §7 过渡策略） | 含图标 hover / focus-ring / CTA |
+| QueueDock（排队 dock） | ⬜ 待定 | **先核对 Leaf 队列语义** | 现代码是附件/气泡 pending，非多消息排队；语义不符则不实现 |
 | 风险 | — | dsh 是 chat-first，直接照搬会把主路径带偏 | 由 §2 红线 + §8 门禁兜底；每阶段回归拆分台「唯一开跑」 |
 
 ---
@@ -233,7 +239,7 @@ Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自
 
 | dsh | Leaf 等价 |
 |-----|-----------|
-| `AppFrame` 三栏 | `#app` grid → sidebar/main/details |
+| `AppFrame` 三栏 | `#app` grid 保持两栏（sidebar/main）；details 语义 → **phase 局部次级面板** |
 | `ui-sidebar`（56px rail） | 项目侧栏 + 折叠 |
 | `ui-workspace`（分组行/搜索/Show more） | 项目→计划分组列表 |
 | `ui-conversation` view-ring | phase 段控 拆分/执行/结果/聊天 |
