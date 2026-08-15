@@ -2,12 +2,32 @@
  * [INPUT]: PlanJobView DTO · selectedId · live helpers
  * [OUTPUT]: 步骤列 HTML（按波次顺序 · 并行外框 · 不写 IPC）
  * [POS]: A3-1 features/split 纯渲染；策略在 Rust
+ * [P4-3]: 任务卡 dsh 语言 —— StateDot + 标题 + route pill（默认通道 chip / 角色 / 范围）
+ *         + optional 徽标 + 展开 chevron；通道只在详头可改，卡片无 provider 下拉。
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
 function g(name) {
   const w = typeof window !== "undefined" ? window : globalThis;
   return w[name];
+}
+
+/** 卡片 StateDot：运行=蓝 · 成功=绿 · 失败=红 · 等待=琥珀 · 未开始=灰（只读 DTO，不写策略）。 */
+function dotForStatus(st) {
+  const v = String(st || "").toLowerCase();
+  if (!v || v === "pending" || v === "ready") return "muted";
+  if (["queued", "waiting", "stall", "stalled"].includes(v)) return "warn";
+  if (["running", "starting", "validated", "init", "resuming"].includes(v))
+    return "run";
+  if (["completed", "done", "ok", "skipped"].includes(v)) return "ok";
+  if (["failed", "timeout", "err", "error"].includes(v)) return "err";
+  return "muted";
+}
+
+/** Lucide 风展开箭头（共享 icons；无 ccoIcon 时静默缺省）。 */
+function chevronSvg() {
+  const fn = g("ccoIcon");
+  return typeof fn === "function" ? fn("chevron-down", { size: 14 }) : "";
 }
 
 /** 通道枚举：卡片下拉 / 详情头 / 高级折叠共用（视觉文案与 engineLabel 同源）。 */
@@ -253,7 +273,7 @@ export function timelineHtml(layers, byId, selectedId) {
     .join("");
 }
 
-/** Single step card row (shared by wave groups). */
+/** Single step card row (shared by wave groups). P4-3 dsh 视觉语言。 */
 function taskCardHtml(t, byId, opts = {}) {
   const { runLocked, selectedId, liveTask, jobProvider } = opts;
   const id = t.id;
@@ -321,20 +341,38 @@ function taskCardHtml(t, byId, opts = {}) {
             } ${runLocked || !pending ? "disabled" : ""} />
           </label>`
     : `<span class="wave-task-req muted" title="必选">必</span>`;
+  // P4-3 route pill cluster：默认通道 chip（只读 · 详头才是可改下拉）· 角色 · 范围
+  const route = routeSummary(t, { provider: jobProvider });
+  const channelChip = `<span class="pill is-brand split-channel-chip" title="默认执行通道：${esc(route.providerLabel)}（可在详情栏改）">${esc(route.providerLabel)}</span>`;
+  const rolePill = `<span class="pill split-role-pill" title="协作角色：${esc(route.roleLabel)}">${esc(route.roleLabel)}</span>`;
+  const scopePill = route.hasExplicitScope
+    ? `<span class="pill split-scope-pill" title="${esc(route.scopeText)}">${esc(route.scopeText)}</span>`
+    : "";
+  // optional 徽标（勾选停住仍走 .wave-opt-check；这里只是标注）
+  const optHtml = isOpt
+    ? role.kind === "sys"
+      ? `<span class="opt-badge opt-badge-sys">系统</span>`
+      : `<span class="opt-badge">可选</span>`
+    : "";
+  const extraHtml = `${optHtml}${riskHtml}`.trim()
+    ? `<span class="split-card-extra">${optHtml}${riskHtml}</span>`
+    : "";
+  const dotLabel = statusHint || (liveSt ? liveSt : "未开始");
+  const dotHtml =
+    `<span class="dot ${dotForStatus(liveSt)}" aria-hidden="true"></span>` +
+    `<span class="sr-only">${esc(dotLabel)}</span>`;
+  const chevron = `<span class="split-chevron" aria-hidden="true">${chevronSvg()}</span>`;
   return (
     `<div class="wave-task-row split-card${sel}${pending ? "" : " done-ish"}${optClass}" data-id="${esc(id)}">` +
     checkHtml +
     `<button type="button" class="wave-task" data-id="${esc(id)}">` +
     `<div class="split-card-top">` +
-    `<span class="split-role split-role-${role.kind}">${role.label}</span>` +
-    riskHtml +
-    (isOpt
-      ? role.kind === "sys"
-        ? `<span class="opt-badge opt-badge-sys">系统</span>`
-        : `<span class="opt-badge">可选</span>`
-      : "") +
+    dotHtml +
     `<div class="wave-task-title">${esc(t.title || id)}</div>` +
+    extraHtml +
+    chevron +
     `</div>` +
+    `<div class="split-card-pills">${channelChip}${rolePill}${scopePill}</div>` +
     `<div class="split-card-one muted">${esc(one)}</div>` +
     `<div class="wave-task-meta muted">${esc(wait)}${
       statusHint ? " · " + esc(statusHint) : ""

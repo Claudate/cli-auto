@@ -1,7 +1,8 @@
 /**
  * [INPUT]: plan job DTO · legacy helpers (flowModeLabel / humanize / isSystemPost)
- * [OUTPUT]: 拆分台标题/meta/critic 条 + CTA 显隐（无 IPC）
+ * [OUTPUT]: 拆分台标题/meta/critic 条 + CTA 显隐 + 底部确认 dock hint（无 IPC）
  * [POS]: A5-2b 自 plan.js renderConfirmPanel 头抽出；三栏体仍在 SplitView
+ * [P4-3]: 确认条迁入底部 dock（#split-confirm-hint 涂装；optional 停住提示）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
  * 禁止：confirm_start / start_run / soft-fill / optional 策略写这里。
@@ -26,6 +27,21 @@ function isSysPost(t) {
   const fn = g("isSystemPostTask");
   if (typeof fn === "function") return fn(t);
   return isSystemPostTask(t);
+}
+
+/**
+ * P4-3: 确认 dock / meta 共用的人话提示（optional 停住 · 不写策略）。
+ * @returns {string}
+ */
+function confirmHintFor({ runLocked, paused, bizOpt, sysOpt, reused, bizOffCount }) {
+  if (runLocked) return "运行中（只读）";
+  if (paused) return "已暂停 · 仅未执行步骤可编辑";
+  if (bizOpt.length > 0 && bizOffCount > 0)
+    return `${bizOffCount} 个可选步骤未勾选：确认后不会跑。需要的话先在列表里勾选。`;
+  if (bizOpt.length > 0) return "业务可选默认不跑 · 请勾选后再点「执行规划」";
+  if (sysOpt.length > 0) return "系统收尾可勾选 · 外发默认关";
+  if (reused) return "历史拆分：可编辑未执行步骤后再点「执行规划」";
+  return "核对后点「执行规划」";
 }
 
 /**
@@ -128,17 +144,15 @@ export function fillSplitMeta(job, ctx = {}) {
       ? "默认不外发 · 推送/开 PR 需勾选"
       : "会改本地 · 默认不推远端";
 
-  const confirmHint = runLocked
-    ? "运行中（只读）"
-    : paused
-      ? "已暂停 · 仅未执行步骤可编辑"
-      : bizOpt.length > 0
-        ? "业务可选默认不跑 · 请勾选后再点「执行规划」"
-        : sysOpt.length > 0
-          ? "系统收尾可勾选 · 外发默认关"
-          : reused
-            ? "可编辑未执行步骤后再点「执行规划」"
-            : "核对后点「执行规划」";
+  const bizOffCount = bizOpt.filter((t) => t.include === false).length;
+  const confirmHint = confirmHintFor({
+    runLocked,
+    paused,
+    bizOpt,
+    sysOpt,
+    reused,
+    bizOffCount,
+  });
 
   const modeRaw = job.digest_mode || job.digestMode || "";
   // 模式只走 badge 行（label+hint），不塞进 meta，避免「从零落地」双份
@@ -184,6 +198,13 @@ export function fillSplitMeta(job, ctx = {}) {
       optBanner.hidden = true;
       optBanner.textContent = "";
     }
+  }
+
+  // P4-3: 底部确认 dock hint（optional 停住提示 · 人话 · 无策略）
+  const dockHint = $("split-confirm-hint") || $("#split-confirm-hint");
+  if (dockHint) {
+    dockHint.textContent = confirmHint;
+    dockHint.classList.toggle("is-warn", bizOffCount > 0 && !runLocked);
   }
 
   // P1-4: plan acceptance stub/missing — yellow bar; never disables confirm.

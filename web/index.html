@@ -8,6 +8,7 @@
 [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
 note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高级选项
 note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|split|run|result
+note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划」primary 由 `.split-actions` 移入；confirm 仍唯一开跑
 -->
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -264,9 +265,8 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                     aria-label="重新规划时的反馈"
                   />
                 </label>
-                <!-- shell-chrome A2：第一屏「重新规划」+「执行规划」；重拆意见可空 -->
+                <!-- shell-chrome A2：第一屏「重新规划」；「执行规划」已下沉到下方确认 dock（P4-3） -->
                 <button class="btn ghost sm" id="btn-replan" type="button" title="按当前计划再拆一次；可填重拆意见；尽量保留你的修改">重新规划</button>
-                <button class="btn primary" id="btn-confirm-start" type="button" title="核对后开始执行（业务可跑；推送/开 PR 等外发仍看勾选）">执行规划</button>
                 <details class="split-more-actions" id="split-more-actions" hidden>
                   <summary class="btn ghost sm">调整…</summary>
                   <div class="split-more-menu" role="menu">
@@ -339,6 +339,11 @@ note: A2+A3 MVVM — gateway/AppViewModel/features/{chat,split}；phase author|s
                   </label>
                 </div>
               </div>
+            </div>
+            <!-- P4-3: 底部确认 dock —— 执行规划 primary 移入；confirm 仍唯一开跑 -->
+            <div class="confirm-dock">
+              <span class="confirm-dock-hint" id="split-confirm-hint"></span>
+              <button class="btn primary" id="btn-confirm-start" type="button" title="核对后开始执行（业务可跑；推送/开 PR 等外发仍看勾选）">执行规划</button>
             </div>
             <span id="confirm-error" class="err-text" hidden></span>
           </div>

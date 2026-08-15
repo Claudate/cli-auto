@@ -1,6 +1,6 @@
 # 桌面端 UI 重构计划 — 借鉴 DeepSeek Harness Web UI
 
-> 阶段：**计划**（P4-0 ✅ · P4-1 ✅ · **P4-2 ✅** · P4-3+ 未开工）｜真源候选：本文件 + 各页面 L2
+> 阶段：**实施中**（P4-0 ✅ · P4-1 ✅ · P4-2 ✅ · **P4-3 ✅** · P4-4+ 未开工）｜真源候选：本文件 + 各页面 L2
 > 参考对象：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`，MIT）Web UI
 > 已决策：品牌主色 = **dsh DeepSeek 蓝 #4176E6**｜范围 = **全量页面一次规划**｜暗色 = **纳入本次**
 > 已定（2026-08-15 确认）：① 暗色默认 = **跟随系统**；② 次级列（执行/结果台局部）宽约 **320px · 默认折叠可开**；③ 状态色 = **运行沿用蓝**（与成功绿区分）；④ **不做全局第三栏 details**（拆分台已三栏，四栏拥挤）
@@ -194,7 +194,7 @@ Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自
 - **P4-0 分支与地基确认（本轮已做）**：设计真源提交 = `a66c204`；建议开工前切独立分支 `feat/ui-redesign-dsh`（与当前 `complete-fix-split-table-terminal-cli` WIP 解耦）。`--accent` 现被 5 CSS + 2 JS 引用（`chat.css/layout.css/monitor.css/plan.css/select.css` + `chatClarify.js/chatMsgEnhance.js`）。
 - **P4-1 设计系统地基 ✅（零行为 diff · 2026-08-15）**：`tokens.css` 三层 `--leaf-*`（static 色阶 → body alias → `body[data-leaf-theme="dark"]` 暗色覆写）+ 字体五级；**过渡期保留旧变量为别名指向新值**（`--accent: var(--leaf-alias-brand-primary)` 等），CSS 零 break；JS 侧 2 文件（chatClarify / chatMsgEnhance）`var(--accent, …)` 改读 `var(--leaf-alias-brand-primary, #4176E6)`。加 `components.css` **191 行**原语（StateDot / Card / Pill / DisclosureRow / Terminal / Diff / Read / Toast）≤200 守门（check-arch 新增 1c 检查项）。验收：`node build.mjs` ✅ · esbuild CSS @import 链解析 ✅ · token 交叉校验（light+dark static 完整、全部 var() 可解析）✅ · `check-arch.sh` STRICT=1 绿（WARN=4 为既有 Rust 文件 soft 超限，非本轮引入）✅ · **明暗双主题目视走查 ☐**（需 P4-2 壳后人工走查）。
 - **P4-2 两栏壳 + 侧栏 ✅（2026-08-15）**：`index.html` 保持两栏 grid；侧栏重做（StateDot 状态点已 P4-1 落地 / 折叠 56px rail 几何瞬态不入 localStorage / 搜索 / hover 复制卡 / 底部设置带图标）；顶栏加 view-ring 段控 `拆分|执行|结果|聊天`（`body[data-cco-app-phase]` 现有属性驱动高亮，`routes.js` 语义不变）。**不做全局第三栏**。新增 `scripts/p42-visual-smoke.mjs`（一次性目视冒烟，stub invoke，不进 CI）。验收：DOM id 全部保留（`#project-list`/`#page-*` 等），脚本无空引用；窄窗下侧栏折叠正常；`node build.mjs` ✅ · `check-arch.sh` STRICT=1 绿（WARN=4 为既有 Rust soft 超限，未新增；components.css 186 ≤200）✅ · `p42-visual-smoke.mjs` **14/14 pass** ✅（含 rail 折叠宽度 <70px · 搜索 1/3 · hover 复制 · 暗色非白 sidebar）。
-- **P4-3 拆分台（视觉换，三栏不动）**：任务卡 dsh 语言 + 现有任务详情栏换卡片样式；confirm 条不变。验收：S0–S3 语义回归；optional 勾选停住；confirm 唯一开跑。
+- **P4-3 拆分台（视觉换，三栏不动）✅（2026-08-15）**：任务卡 dsh 语言——StateDot + 标题 + route pill 簇（**默认通道 chip** / 角色 / 范围）+ optional 徽标 + 展开 chevron，卡片无 provider 下拉（P2-17 57ab9d6 不回退，通道只在详头可改）；现有任务详情栏换卡片样式（`confirm-detail` 卡片底/描边/圆角）；**底部确认 dock**（`#split-confirm-hint` 涂装 + `执行规划` primary 移入，`#btn-confirm-start` 语义与唯一开跑不变）；optional 勾选停住与 dock hint 在 `splitFillMeta` 只读 DTO 渲染、不写策略。验收：`node build.mjs` ✅ · `check-arch.sh` STRICT=1 绿（**WARN=4 为既有 Rust soft 超限，未新增** · components.css 186 ≤200）✅ · `clarify-split-visual-smoke.mjs` **12/12** ✅ · `provider-control-smoke.mjs` **ALL PASS**（详头下拉 8 选项 · 卡片无下拉复活）✅ · 新增 `scripts/p43-visual-smoke.mjs` **27/27** ✅（StateDot 颜色 · 通道 chip 跟随 provider · optional 徽标 · runLocked dock 禁用 · 明暗 dock 非白）。
 - **P4-4 执行台**：任务流程卡 + Terminal/Diff/Read 卡片原语接入 + **右次级列（折叠默认开）** + 日志次级折叠。验收：停/续/重跑；日志虚拟列表；失败卡 route_label。
 - **P4-5 结果台**：验证/证据卡片 + **右次级列巡检对照**。验收：miss 行执行方式；rework 非 confirm 旁路。
 - **P4-6 聊天**：composer dock 链（TodoDock 计划条 / GoalBar 目标 / **QueueDock 先核对语义**）+ model/effort 两级 + 注入披露折叠 + DropOverlay。验收：计划条/目标可用；QueueDock 语义不符则不实现；无策略复制进 JS。
