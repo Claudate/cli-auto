@@ -1,6 +1,6 @@
 //! Chat session load/list/new/delete + TTL cleanup (`.cco/chat/*.json`).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
@@ -361,4 +361,66 @@ pub(crate) fn save_session(project: &Path, sess: &ChatSession) -> Result<()> {
     std::fs::write(&path, json)
         .with_context(|| format!("write chat session {}", path.display()))?;
     Ok(())
+}
+
+/// B3: chat-phase session event log path (`.cco/chat/{safe}.events.jsonl`).
+/// Reuses RunState::event *shape* but standalone (ChatSession has no run_dir;
+/// state/mod.rs is near hard limit → do not pile there).
+pub(crate) fn session_events_path(project: &Path, session_id: &str) -> PathBuf {
+    let safe = sanitize_session_id(session_id);
+    chat_dir(project).join(format!("{safe}.events.jsonl"))
+}
+
+/// B3: append one event line `{"ts","type",…extra}` to the session event log.
+/// Creates the file on first write (never creates it when no event is emitted).
+pub(crate) fn append_session_event(
+    project: &Path,
+    session_id: &str,
+    type_name: &str,
+    extra: serde_json::Value,
+) -> Result<()> {
+    let dir = chat_dir(project);
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("create chat dir {}", dir.display()))?;
+    let path = session_events_path(project, session_id);
+    let mut evt = serde_json::Map::new();
+    evt.insert("ts".into(), serde_json::Value::String(Utc::now().to_rfc3339()));
+    evt.insert("type".into(), serde_json::Value::String(type_name.to_string()));
+    if let serde_json::Value::Object(map) = extra {
+        for (k, v) in map {
+            evt.insert(k, v);
+        }
+    }
+    let line = serde_json::to_string(&serde_json::Value::Object(evt))?;
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .with_context(|| format!("open session event log {}", path.display()))?;
+    use std::io::Write;
+    writeln!(f, "{line}").with_context(|| format!("write session event {}", path.display()))?;
+    Ok(())
+}
+
+/// B3: read back the last event of `type_name` from the session event log
+/// (reverse scan; mirrors RunState::last_checkpoint_task_id shape). Test/diagnostic use.
+pub(crate) fn last_session_event(
+    project: &Path,
+    session_id: &str,
+    type_name: &str,
+) -> Option<serde_json::Value> {
+    let path = session_events_path(project, session_id);
+    let text = std::fs::read_to_string(&path).ok()?;
+    for line in text.lines().rev() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+            if v.get("type").and_then(|t| t.as_str()) == Some(type_name) {
+                return Some(v);
+            }
+        }
+    }
+    None
 }

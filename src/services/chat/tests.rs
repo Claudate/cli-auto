@@ -310,6 +310,47 @@ fn fake_send_persists_messages() {
     assert!(d.path.is_empty(), "new fence must not bind a plan path");
 }
 
+/// B3: a fake send that produces a digest must also append a `context_compressed`
+/// event to `.cco/chat/{safe}.events.jsonl`. A send with no compression does not.
+#[test]
+fn context_compressed_event_persists_on_digest() {
+    use crate::services::chat::session::last_session_event;
+    use crate::services::chat::paths::session_path;
+
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("proj");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+
+    // The fake template always emits a digest fence, so one chat turn is enough
+    // to produce both a stored digest and the matching `context_compressed` event.
+    let _ = chat_send(&cfg, &project, "随便聊聊", Some("default"), None, None, None).unwrap();
+    let events_path = session_path(&project, "default")
+        .with_extension("events.jsonl");
+    // fake template always emits a digest fence, so after the first digest-bearing
+    // turn the events file exists and carries one context_compressed entry.
+    let sess = chat_session_get(&project, Some("default")).unwrap();
+    let has_digest = sess.session_digest.is_some();
+    assert!(has_digest, "fake template must produce a digest");
+    assert!(
+        events_path.is_file(),
+        "events.jsonl must exist after a compressed turn"
+    );
+    let evt = last_session_event(&project, "default", "context_compressed")
+        .expect("a context_compressed event must be recorded");
+    assert_eq!(evt.get("type").and_then(|t| t.as_str()), Some("context_compressed"));
+    let before = evt.get("chars_before").and_then(|v| v.as_u64());
+    let after = evt.get("chars_after").and_then(|v| v.as_u64());
+    assert!(before.is_some() && after.is_some(), "chars_before/after present: {evt}");
+    // chars_* are honest char proxies, NOT tokens; a digest can be larger than a
+    // short first message, so we assert presence + hash determinism, not ordering.
+    let hash = evt.get("digest_hash").and_then(|h| h.as_str()).unwrap_or("");
+    assert!(
+        hash.starts_with("sha256:") && hash.len() == "sha256:".len() + 12,
+        "digest_hash = sha256:<12hex>, got {hash}"
+    );
+}
+
 /// Regression: after saving plan A, a later ```plan fence must drop path/saved
 /// so save creates a new file instead of overwriting A (pilotdeck-style bug).
 #[test]

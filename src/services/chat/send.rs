@@ -22,7 +22,7 @@ use super::cli_call::{
 };
 use super::commands::{clears_history, local_command, parse_slash_command};
 use super::normalize::chat_normalize_plan;
-use super::session::{chat_session_get, save_session};
+use super::session::{append_session_event, chat_session_get, save_session};
 use super::stream::clear_chat_stream_work;
 use super::types::{ChatAttachment, ChatMessage, ChatSendResponse};
 
@@ -192,7 +192,32 @@ pub fn chat_send(
     if !(used_fake && env_note.is_some()) {
         if let Some(raw_dig) = extract_session_digest_fence(&reply_checked) {
             if session_digest_looks_valid(&raw_dig) {
-                sess.session_digest = Some(truncate_session_digest(&raw_dig));
+                // B3: chars_before = history size before pushing this assistant turn
+                // (honest non-token proxy; chat path has no tokenizer).
+                let chars_before: u64 = sess
+                    .messages
+                    .iter()
+                    .map(|m| m.content.chars().count() as u64)
+                    .sum();
+                let stored = truncate_session_digest(&raw_dig);
+                let chars_after = stored.chars().count() as u64;
+                let digest_hash = digest_hash_short(&stored);
+                sess.session_digest = Some(stored);
+                // Compression happened → record a session-level event (diagnostic,
+                // default off; rules 23/24). Never changes ChatSendResponse.
+                if let Err(e) = append_session_event(
+                    project,
+                    &sess.session_id,
+                    "context_compressed",
+                    serde_json::json!({
+                        "session_id": sess.session_id,
+                        "chars_before": chars_before,
+                        "chars_after": chars_after,
+                        "digest_hash": digest_hash,
+                    }),
+                ) {
+                    tracing::warn!(error = %e, "chat: context_compressed event append failed");
+                }
             } else {
                 tracing::debug!("chat: session-digest fence rejected by shallow check");
             }
@@ -266,3 +291,23 @@ pub fn chat_send(
 
 // Preview short-phrase intercept removed: chat always goes to CLI (product choice).
 // Detached preview APIs remain on app/chat for optional programmatic use.
+
+/// B3: short sha256 fingerprint of a stored digest (dedup/match, not crypto).
+/// Returns `sha256:` + first 12 hex chars.
+fn digest_hash_short(digest: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(digest.as_bytes());
+    let hex = hex_to_lower(&hasher.finalize());
+    format!("sha256:{}", &hex[..12])
+}
+
+fn hex_to_lower(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        out.push(HEX[(b >> 4) as usize] as char);
+        out.push(HEX[(b & 0x0f) as usize] as char);
+    }
+    out
+}

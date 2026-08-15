@@ -52,6 +52,7 @@ ratatui = "0.29"
 crossterm = "0.28"
 reqwest = { version = "0.13.4", features = ["json"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
+sha2 = "0.10"            # B3: session-digest compression event hash (dedup/match, not crypto)
 # P3: Lightweight memory system dependencies
 ort = "2.0.0-rc.13"      # ONNX Runtime for embedding (latest stable RC)
 tantivy = "0.22"         # Full-text search (BM25)
