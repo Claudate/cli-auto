@@ -1,7 +1,7 @@
 /**
  * [INPUT]: RunViewModel · 既有 DOM ids（result-card / stall / task-strip）
  * [OUTPUT]: 进度台绑定 + 计划级自动提交展示 + 意图转发；View 不写 stall 策略
- * [POS]: A4-1 RunView；禁止 invoke / start_run
+ * [POS]: A4-1 RunView；禁止 invoke / start_run；P4-4 renderProgress 尾部渲染右次级列
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -14,6 +14,7 @@ import {
   isFailedStatus,
 } from "./runBuckets.js";
 import { paintLogSecondaryVisibility, syncMonitorLogsFold } from "./logPanel.js";
+import { render as renderRunDetail } from "./runDetail.js";
 
 function g(name) {
   const w = typeof window !== "undefined" ? window : globalThis;
@@ -479,6 +480,12 @@ export function bindRunView(vm, bridge = {}) {
         }
       } catch (e) {
         console.error("[RunView] renderCliBoard", e);
+      }
+      // P4-4 右次级列：选中任务 → Terminal/Diff/Read（渲染幂等，签名不变则跳过）
+      try {
+        renderRunDetail(tasks, live);
+      } catch (e) {
+        console.error("[RunView] renderRunDetail", e);
       }
     }
 

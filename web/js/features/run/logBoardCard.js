@@ -1,7 +1,7 @@
 /**
  * [INPUT]: live task · logContent · logVirtual · logHost
  * [OUTPUT]: stallStripText · upsertCliWindowCard（单窗 chrome + body + 任务级自动提交状态）
- * [POS]: A5-2c features/run；自 logBoard 纵切（P-ship-D）· P1-3 失败卡执行方式
+ * [POS]: A5-2c features/run；自 logBoard 纵切（P-ship-D）· P1-3 失败卡执行方式 · P4-4 is-running 追光
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -395,6 +395,9 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
     const stopBtn = card.querySelector("[data-stop]");
     if (stopBtn) stopBtn.hidden = !isLiveStatus(st);
   }
+
+  // P4-4 运行中蓝追光：live 态每次轮询都刷新（chrome 重建也会带上）
+  card.classList.toggle("is-running", isLiveStatus(st));
 
   const body = card.querySelector(".cli-window-body");
   if (body) {

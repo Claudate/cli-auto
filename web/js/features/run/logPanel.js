@@ -1,7 +1,7 @@
 /**
  * [INPUT]: #monitor · run 上下文
  * [OUTPUT]: 运行端（CLI 看板）可见性；卡内详细日志按需展开
- * [POS]: A4-2 features/run；虚拟列表见 logVirtual.js（A5-2c）
+ * [POS]: A4-2 features/run；虚拟列表见 logVirtual.js（A5-2c）· P4-4 显隐 #run-flow-row
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -24,16 +24,20 @@ export function syncMonitorLogsFold(_bridge = {}) {
 export function paintLogSecondaryVisibility(ctx) {
   const monitor = $("monitor");
   const cliEmpty = $("cli-empty");
+  const flowRow = $("run-flow-row");
   if (ctx.planning) {
     if (monitor) monitor.hidden = true;
     if (cliEmpty) cliEmpty.hidden = true;
+    if (flowRow) flowRow.hidden = true;
     return;
   }
   if (!ctx.hasTasks) {
     if (monitor) monitor.hidden = true;
     if (cliEmpty) cliEmpty.hidden = !!ctx.hasRun;
+    if (flowRow) flowRow.hidden = true;
     return;
   }
   if (monitor) monitor.hidden = false;
   if (cliEmpty) cliEmpty.hidden = true;
+  if (flowRow) flowRow.hidden = false;
 }

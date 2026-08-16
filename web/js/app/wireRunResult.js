@@ -1,13 +1,14 @@
 /**
  * [INPUT]: AppViewModel · legacy state · features/run + features/result
- * [OUTPUT]: window.ccoRun / ccoResult 桥；终态 goResult；回补 goRun
- * [POS]: A4 main 接线抽出（控 main.js 体量）；禁止 start_run 旁路
+ * [OUTPUT]: window.ccoRun / ccoResult / ccoRunDetail 桥；终态 goResult；回补 goRun
+ * [POS]: A4 main 接线抽出（控 main.js 体量）；禁止 start_run 旁路；P4-4 右次级列
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
 import { createRunViewModel } from "../features/run/RunViewModel.js";
 import { bindRunView } from "../features/run/RunView.js";
 import * as runApi from "../features/run/runApi.js";
+import { installRunDetail } from "../features/run/runDetail.js";
 import { createResultViewModel } from "../features/result/ResultViewModel.js";
 import { bindResultView } from "../features/result/ResultView.js";
 import * as resultApi from "../features/result/resultApi.js";
@@ -205,6 +206,9 @@ export function wireRunResult(deps) {
     toggleDash: () => runView.toggleDash(),
     openMonitorWindow: (args) => runVm.openMonitorWindow(args),
   };
+
+  // P4-4 右次级列（Terminal/Diff/Read · wait/stall 琥珀条 · 日志折叠）
+  window.ccoRunDetail = installRunDetail({ vm: runVm });
 
   window.ccoResult = {
     vm: resultVm,

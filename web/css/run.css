@@ -1,0 +1,334 @@
+/* [INPUT]: 依赖 tokens.css 的 --leaf-alias-* / --leaf-static-*（禁止引用 legacy 色变量）
+ * [OUTPUT]: run.css 样式 —— P4-4 执行台（流程卡 dsh 化 · 运行追光 · 右次级列 · 琥珀条）
+ * [POS]: web/css 桌面样式；P4-4 新增样式全落本文件（components.css ≤200 不动）
+ * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ *
+ * 三层 token：静态色阶 → body alias → 本文件组件；暗色经 body[data-leaf-theme] 覆写自动跟随。
+ * 只准用 --leaf-alias-* / --leaf-static-* + color-mix；禁止写死颜色。
+ */
+
+/* ============================================================
+ * P4-4 执行台壳：主列 #monitor + 右次级列 #run-detail-column
+ * index.html 包 #run-flow-row（flex row）→ #monitor(flex:1) + aside(320px)
+ * ============================================================ */
+#workspace-body.mode-running .run-flow-row,
+#workspace-body.mode-done .run-flow-row {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+.run-flow-row {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+.run-flow-row[hidden],
+.run-detail-column[hidden] {
+  display: none !important;
+}
+.run-flow-row > #monitor.monitor {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ── 右次级列：卡片表面 · 320px · 可折叠（几何瞬态不入 localStorage） ── */
+.run-detail-column {
+  flex: 0 0 320px;
+  width: 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--leaf-alias-bg-layer-1);
+  border: 1px solid var(--leaf-alias-border-l1);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.run-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid var(--leaf-alias-border-l1);
+  background: var(--leaf-alias-bg-layer-2);
+}
+.run-detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.run-detail-title {
+  font-size: var(--leaf-font-body);
+  font-weight: 650;
+  color: var(--leaf-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-detail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.6rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  scrollbar-gutter: stable;
+}
+.run-detail-empty {
+  color: var(--leaf-alias-label-tertiary);
+  font-size: var(--leaf-font-secondary);
+  line-height: 1.6;
+  padding: 0.25rem 0.1rem;
+}
+
+/* ============================================================
+ * P4-4 流程卡 dsh 化（.cli-window 走 alias token；覆盖 monitor.css 旧硬色）
+ * ============================================================ */
+.cli-window {
+  background: var(--leaf-alias-bg-layer-1);
+  border-color: var(--leaf-alias-border-l2);
+}
+.cli-window-head {
+  background: var(--leaf-alias-bg-layer-2);
+  border-bottom-color: var(--leaf-alias-border-l1);
+}
+.cli-window.selected {
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary) 55%, transparent);
+}
+.cli-window.failed {
+  border-color: color-mix(in srgb, var(--leaf-alias-status-danger) 55%, transparent);
+}
+.cli-window.stopped {
+  border-color: var(--leaf-alias-border-l3);
+}
+.cli-window-stall {
+  background: color-mix(in srgb, var(--leaf-alias-status-warn) 9%, transparent);
+  color: var(--leaf-alias-status-warn);
+  border-color: color-mix(in srgb, var(--leaf-alias-status-warn) 30%, transparent);
+}
+.cli-window-err {
+  background: color-mix(in srgb, var(--leaf-alias-status-danger) 8%, transparent);
+  color: var(--leaf-alias-status-danger);
+}
+.cli-window-git {
+  background: color-mix(in srgb, var(--leaf-alias-status-ok) 8%, transparent);
+  color: var(--leaf-alias-status-ok);
+}
+.cli-window-git.err {
+  background: color-mix(in srgb, var(--leaf-alias-status-danger) 8%, transparent);
+  color: var(--leaf-alias-status-danger);
+}
+/* 终端底走 alias terminal token（浅色=深面 · 暗色=更暗的表底；tx-line 亮色仍可读） */
+.cli-window-body,
+.cli-window-body.log-console {
+  background: var(--leaf-alias-terminal-bg);
+  color: var(--leaf-alias-terminal-fg);
+  border-color: var(--leaf-alias-terminal-border);
+}
+
+/* ============================================================
+ * 运行中蓝追光：卡片描边 + 头部下沿扫光（--leaf-alias-status-running = 蓝）
+ * ============================================================ */
+.cli-window.is-running {
+  border-color: color-mix(in srgb, var(--leaf-alias-status-running) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--leaf-alias-status-running) 20%, transparent),
+    0 8px 22px -10px color-mix(in srgb, var(--leaf-alias-status-running) 35%, transparent);
+}
+.cli-window.is-running:not(.selected):not(.failed):not(.stopped):not(.stalled) {
+  border-color: color-mix(in srgb, var(--leaf-alias-status-running) 60%, transparent);
+}
+.cli-window.is-running .cli-window-head {
+  position: relative;
+  overflow: hidden;
+}
+.cli-window.is-running .cli-window-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--leaf-alias-status-running) 45%,
+    var(--leaf-alias-status-running) 55%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: cco-run-chase 1.9s linear infinite;
+}
+@keyframes cco-run-chase {
+  0% { background-position: 200% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cli-window.is-running .cli-window-head::after {
+    animation: none;
+    opacity: 0.45;
+  }
+}
+
+/* ============================================================
+ * 右次级列内容：TerminalBlock · DiffBlock · ReadBlock · 琥珀条 · 错误 · 日志折叠
+ * ============================================================ */
+
+/* 等待/卡住琥珀条：只用既有 DTO 语义（wait 排队 / stall 卡住），不造假概念 */
+.run-detail-amber {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  padding: 0.4rem 0.55rem;
+  border-radius: 10px;
+  font-size: var(--leaf-font-caption);
+  line-height: 1.5;
+  color: var(--leaf-alias-status-warn);
+  background: color-mix(in srgb, var(--leaf-alias-status-warn) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--leaf-alias-status-warn) 30%, transparent);
+}
+.run-detail-amber .ico {
+  flex-shrink: 0;
+  margin-top: 0.12rem;
+}
+
+/* 失败错误详情（诚实读 taskErrorSummary 等 DTO 字段） */
+.run-detail-error {
+  padding: 0.45rem 0.55rem;
+  border-radius: 10px;
+  font-size: var(--leaf-font-secondary);
+  line-height: 1.5;
+  color: var(--leaf-alias-status-danger);
+  background: color-mix(in srgb, var(--leaf-alias-status-danger) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--leaf-alias-status-danger) 28%, transparent);
+  word-break: break-word;
+}
+
+/* TerminalBlock（命令 + 输出 · 状态 pill · 复制；命令头用层色，输出用终端色） */
+.run-detail-term {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--leaf-alias-terminal-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--leaf-alias-terminal-bg);
+}
+.run-detail-term-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--leaf-alias-bg-layer-2);
+  border-bottom: 1px solid var(--leaf-alias-terminal-border);
+}
+.run-detail-term-ico {
+  flex-shrink: 0;
+  color: var(--leaf-alias-label-tertiary);
+  display: inline-flex;
+}
+.run-detail-term-cmd {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.12rem 0.45rem;
+  border-radius: 6px;
+  background: var(--leaf-alias-bg-layer-3);
+  color: var(--leaf-alias-label-primary);
+  font-family: var(--mono);
+  font-size: var(--leaf-font-caption);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-detail-term-head .pill {
+  flex-shrink: 0;
+}
+.run-detail-term-out {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  max-height: 210px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: var(--leaf-font-caption);
+  line-height: 1.5;
+  color: var(--leaf-alias-terminal-fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.run-detail-term-empty {
+  padding: 0.5rem 0.6rem;
+  font-size: var(--leaf-font-caption);
+  color: var(--leaf-alias-label-tertiary);
+}
+
+/* DiffBlock / ReadBlock 次级列变体（沿用 components.css 原语，微调字距/上限） */
+.run-detail-body .diff-block,
+.run-detail-body .read-block {
+  border-radius: 10px;
+}
+.run-detail-body .diff-block .diff-line,
+.run-detail-body .read-block .read-gutter {
+  font-size: var(--leaf-font-caption);
+  gap: 0.5rem;
+}
+.run-detail-block-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  font-size: var(--leaf-font-caption);
+  color: var(--leaf-alias-label-tertiary);
+  border-bottom: 1px solid var(--leaf-alias-border-l1);
+}
+.run-detail-block-head .ico {
+  color: var(--leaf-alias-label-tertiary);
+}
+.run-detail-file {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.18rem 0.6rem;
+  font-family: var(--mono);
+  font-size: var(--leaf-font-caption);
+  color: var(--leaf-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-detail-file .file-mark {
+  flex-shrink: 0;
+  color: var(--leaf-alias-label-tertiary);
+}
+
+/* 日志 DisclosureRow（默认折叠 · fillPanelLogBody 保留 logVirtual 虚拟列表） */
+.run-detail-body .disclosure-row > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 8px;
+  background: var(--leaf-alias-bg-layer-2);
+  border: 1px solid var(--leaf-alias-border-l1);
+  margin-bottom: 0;
+}
+.run-detail-body .disclosure-row > summary:hover {
+  background: var(--leaf-alias-interactive-bg-hover);
+}
+.run-detail-body .disclosure-row[open] > summary {
+  margin-bottom: 0.4rem;
+}
+.run-detail-log-console.log-console {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--leaf-alias-terminal-border);
+  border-radius: 8px;
+  background: var(--leaf-alias-terminal-bg);
+  color: var(--leaf-alias-terminal-fg);
+}

@@ -1,7 +1,7 @@
 /**
  * [INPUT]: board DOM · tasks · logActions · logHost · renderCliBoard cb
  * [OUTPUT]: bindCliBoardEvents — 窗内 click/drag 重绑
- * [POS]: A5-2c features/run；自 logBoard 纵切（P-ship-D）
+ * [POS]: A5-2c features/run；自 logBoard 纵切（P-ship-D）· P4-4 聚焦分发同步右次级列
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -44,6 +44,10 @@ export function bindCliBoardEvents(board, tasks, renderCliBoard) {
       if (card) {
         card.style.zIndex = String(Date.now() % 100000);
         card.classList.add("selected");
+      }
+      // P4-4：聚焦同步右次级列
+      if (typeof window.ccoRunDetail?.render === "function") {
+        window.ccoRunDetail.render(tasks);
       }
     };
   });

@@ -23,6 +23,10 @@ const PATHS = {
     '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>',
   "panel-left-close":
     '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>',
+  "panel-right-close":
+    '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/><path d="m8 9 3 3-3 3"/>',
+  "panel-left":
+    '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>',
   stethoscope:
     '<path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/>',
   paperclip:

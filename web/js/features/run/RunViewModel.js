@@ -1,7 +1,7 @@
 /**
  * [INPUT]: runApi · live DTO 展示状态
  * [OUTPUT]: 执行台意图（停 / 续 / 停步 / 开终端）；不写 stall 策略
- * [POS]: A4-1 RunViewModel；IPC 只经 runApi → gateway
+ * [POS]: A4-1 RunViewModel；IPC 只经 runApi → gateway；detailCollapsed 为会话内几何瞬态
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -17,6 +17,7 @@ import { countBuckets, runContext } from "./runBuckets.js";
  *   lastError: string|null,
  *   lastToast: string|null,
  *   dashCollapsed: boolean,
+ *   detailCollapsed: boolean,
  * }} RunSnap
  */
 
@@ -36,6 +37,7 @@ export function createRunViewModel(deps = {}) {
     lastError: null,
     lastToast: null,
     dashCollapsed: false,
+    detailCollapsed: false,
   });
 
   function snap() {
@@ -101,6 +103,15 @@ export function createRunViewModel(deps = {}) {
 
     setDashCollapsed(v) {
       return setPatch({ dashCollapsed: !!v });
+    },
+
+    /** 右次级列折叠：几何瞬态只在会话内，不入 localStorage。 */
+    toggleDetailCollapsed() {
+      return setPatch({ detailCollapsed: !snap().detailCollapsed });
+    },
+
+    setDetailCollapsed(v) {
+      return setPatch({ detailCollapsed: !!v });
     },
 
     /** Display helpers from current live. */

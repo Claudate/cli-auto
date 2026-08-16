@@ -445,7 +445,8 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
             <div class="completion-actions"></div>
           </div>
 
-          <!-- Multi-window CLI 运行端（运行中始终可见；卡内详细日志可按需展开） -->
+          <!-- P4-4: 执行台 = 主列（流程卡 #monitor）+ 右次级列 #run-detail-column（320px · 可折叠） -->
+          <div class="run-flow-row" id="run-flow-row" hidden>
           <div id="monitor" class="monitor board-mode logs-secondary" hidden>
             <div id="flow-strip-running" class="flow-strip-host" hidden aria-hidden="true"></div>
             <div class="board-toolbar">
@@ -464,6 +465,7 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
               <!-- 日志栏右侧：高度 + 工具 + 继续 + 结束计划；「工具」展开日志高级项（视图/字号/导出/自适应高度） -->
               <div class="board-toolbar-side" id="log-toolbar-side">
                 <button type="button" class="cli-h-grip" id="cli-h-grip" title="按住上下拖动调整看板高度；恢复自适应见右侧「工具」"><span data-icon="move-vertical" data-icon-size="14"></span> 高度</button>
+                <button type="button" class="btn ghost sm" id="btn-run-detail-toggle" title="显示或收起右侧详情列" aria-pressed="true">详情</button>
                 <button type="button" class="btn ghost sm" id="btn-log-advanced-toggle" title="日志工具：事件过滤 / 视图 / 字号 / 导出 / 自适应高度">工具</button>
                 <button type="button" class="btn primary sm" id="btn-log-resume" hidden title="继续执行已暂停/中止的计划">继续</button>
                 <button type="button" class="btn ghost sm" id="btn-log-end-plan" hidden title="结束本轮计划">结束计划</button>
@@ -513,6 +515,18 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
             <div id="detail-foot-right" hidden></div>
             <button id="btn-copy-log" type="button" hidden>复制</button>
             <button id="btn-stop-task" type="button" hidden>停止</button>
+          </div>
+          <!-- P4-4 右次级列：选中任务详情（Terminal/Diff/Read · 琥珀条 · 日志折叠）；内容由 features/run/runDetail.js 渲染 -->
+          <aside id="run-detail-column" class="run-detail-column" hidden aria-label="任务详情">
+            <div class="run-detail-head">
+              <div class="run-detail-title-row">
+                <span class="dot" id="run-detail-dot"></span>
+                <strong class="run-detail-title" id="run-detail-title">任务详情</strong>
+              </div>
+              <button type="button" class="icon-btn sm" id="btn-run-detail-close" title="收起详情列" aria-label="收起详情列" data-icon="panel-right-close" data-icon-size="14"></button>
+            </div>
+            <div class="run-detail-body" id="run-detail-body"></div>
+          </aside>
           </div>
 
           <div id="cli-empty" class="empty-state soft" hidden>
