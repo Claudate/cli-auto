@@ -1,0 +1,374 @@
+/**
+ * [INPUT]: --leaf-alias-* tokens · components.css 原语
+ * [OUTPUT]: 结果台卡片 dsh 化 · 浏览器证据网格 · honest footer 提示条
+ * [POS]: P4-5 css/result；components.css 186 ≤200 不动；只走 alias/static token
+ * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   结果台布局
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.result-desk {
+  padding: 1.5rem;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.result-desk-section {
+  margin-bottom: 2rem;
+}
+
+.result-desk-h {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--leaf-alias-label-primary);
+  margin: 0 0 0.75rem 0;
+}
+
+.result-desk-text {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--leaf-alias-label-secondary);
+  margin: 0;
+}
+
+.result-desk-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 900px) {
+  .result-desk-cols {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   完成/遗漏列表卡片化（dsh StateDot + 标题 + 执行方式）
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.result-desk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.result-desk-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--leaf-alias-bg-layer-1);
+  border: 1px solid var(--leaf-alias-border-l2);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--leaf-alias-label-primary);
+}
+
+.result-desk-item.is-done {
+  border-color: var(--leaf-alias-status-ok);
+}
+
+.result-desk-item.is-miss {
+  border-color: var(--leaf-alias-status-danger);
+}
+
+.result-desk-item.is-issue {
+  border-color: var(--leaf-alias-status-warn);
+  background: color-mix(in srgb, var(--leaf-alias-status-warn) 5%, var(--leaf-alias-bg-layer-1));
+}
+
+.result-desk-item.is-plan-check,
+.result-desk-item.is-plan-task {
+  background: var(--leaf-alias-bg-base);
+  border-color: var(--leaf-alias-border-l1);
+}
+
+.result-desk-mark {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--leaf-alias-label-tertiary);
+  font-size: 0.75rem;
+  margin-top: 0.125rem;
+}
+
+.result-desk-item.is-done .result-desk-mark {
+  color: var(--leaf-alias-status-ok);
+}
+
+.result-desk-item.is-miss .result-desk-mark {
+  color: var(--leaf-alias-status-danger);
+}
+
+.result-desk-item.is-issue .result-desk-mark {
+  color: var(--leaf-alias-status-warn);
+}
+
+.result-desk-item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.result-desk-item strong {
+  font-weight: 500;
+  color: var(--leaf-alias-label-primary);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Honest footer（巡检结论提示条）
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.result-desk-honest {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--leaf-alias-bg-layer-1);
+  border: 1px solid var(--leaf-alias-border-l2);
+  border-left: 3px solid var(--leaf-alias-status-warn);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--leaf-alias-label-secondary);
+}
+
+.result-desk-merge {
+  margin: 1.5rem 0;
+  padding: 0.75rem 1rem;
+  background: var(--leaf-alias-bg-layer-1);
+  border: 1px solid var(--leaf-alias-border-l2);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--leaf-alias-label-secondary);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   验收面板（保持 details 可折叠）
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.result-desk-verify {
+  margin: 2rem 0;
+  padding: 1rem;
+  background: var(--leaf-alias-bg-base);
+  border: 1px solid var(--leaf-alias-border-l2);
+  border-radius: 8px;
+}
+
+.result-desk-verify[open] {
+  padding-bottom: 1.25rem;
+}
+
+.result-desk-verify-sum {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--leaf-alias-label-primary);
+  cursor: pointer;
+  list-style: none;
+  padding: 0.5rem 0;
+}
+
+.result-desk-verify-sum::-webkit-details-marker,
+.result-desk-verify-sum::marker {
+  display: none;
+}
+
+.result-desk-verify-sum::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 0.5rem;
+  transition: transform 150ms ease;
+  color: var(--leaf-alias-label-tertiary);
+}
+
+.result-desk-verify[open] .result-desk-verify-sum::before {
+  transform: rotate(90deg);
+}
+
+.result-desk-verify-note {
+  margin: 0.75rem 0 1rem 0;
+  padding: 0.75rem;
+  background: var(--leaf-alias-bg-layer-1);
+  border-left: 3px solid var(--leaf-alias-status-warn);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--leaf-alias-label-secondary);
+}
+
+.result-desk-verify-list,
+.result-desk-verify-tasks {
+  list-style: none;
+  margin: 1rem 0 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   浏览器证据网格（截图卡 + 文本摘录）
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.result-desk-browser {
+  margin: 2rem 0;
+}
+
+.result-desk-browser-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.result-browser-card {
+  background: var(--leaf-alias-bg-layer-1);
+  border: 1px solid var(--leaf-alias-border-l2);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.result-browser-card.is-shot {
+  padding: 0;
+}
+
+.result-browser-card.is-text {
+  padding: 0.75rem;
+}
+
+.result-browser-shot-btn {
+  all: unset;
+  display: block;
+  cursor: pointer;
+  background: var(--leaf-alias-bg-base);
+  border-bottom: 1px solid var(--leaf-alias-border-l2);
+}
+
+.result-browser-shot-btn:hover {
+  background: var(--leaf-alias-interactive-bg-hover);
+}
+
+.result-browser-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 240px;
+  object-fit: cover;
+}
+
+.result-browser-cap {
+  padding: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--leaf-alias-label-secondary);
+}
+
+.result-browser-excerpt {
+  margin: 0.5rem 0 0 0;
+  padding: 0.75rem;
+  background: var(--leaf-alias-bg-base);
+  border: 1px solid var(--leaf-alias-border-l1);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--leaf-alias-label-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.result-browser-path {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.8125rem;
+  color: var(--leaf-alias-label-tertiary);
+}
+
+.result-browser-open {
+  all: unset;
+  cursor: pointer;
+  color: var(--leaf-alias-brand-primary);
+  text-decoration: none;
+  font-size: inherit;
+}
+
+.result-browser-open:hover {
+  text-decoration: underline;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Lightbox（截图放大）
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.result-browser-lightbox {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.result-browser-lightbox-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  cursor: pointer;
+}
+
+.result-browser-lightbox-panel {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  background: var(--leaf-alias-bg-base);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.result-browser-lightbox-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid var(--leaf-alias-border-l2);
+  background: var(--leaf-alias-bg-layer-1);
+}
+
+.result-browser-lightbox-title {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--leaf-alias-label-primary);
+}
+
+.result-browser-lightbox-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(90vh - 60px);
+  object-fit: contain;
+  margin: 0 auto;
+}
