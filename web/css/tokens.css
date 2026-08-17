@@ -203,7 +203,9 @@ body[data-leaf-theme="dark"] {
  * 4) 过渡期：legacy 变量 → 别名指向新值（CSS 零 break · 品牌蓝全量替换 #4176E6）
  *    旧变量被各页面/JS 引用；暗色下经 var() 链自动跟随 body[data-leaf-theme]。
  * ============================================================ */
-:root {
+/* Legacy bridge 必须定义在 body：--leaf-alias-* 也是 body 作用域。
+ * 若定义在 :root，会先于 body 继承解析，导致依赖它的控件声明无效或透明。 */
+body {
   --bg: var(--leaf-alias-bg-base);
   --bg2: var(--leaf-alias-bg-layer-1);
   --bg3: var(--leaf-alias-bg-layer-2);
