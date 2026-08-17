@@ -14,7 +14,7 @@ scheduler/: **A1-3 多文件编排**（经 **A1-4 WorkerPort + domain/worker 策
   · gates.rs: outputs · inspect VERDICT **经 handoff facade + domain inspect_gate_fail_reason**（无正文解析）· handoff_task_end
   · active.rs: --only/--from → domain::run::resolve_active_ids
   · types.rs: ProgressWatch · StallAction · mirror_run
-  · 行为：并行上限 · 预算 · acceptance · **sys-post-git-push 先巡检 PASS** · 卡死巡检/重试 · H4 failover · **P1 cost escalate（先升档再 walk failover_order）** · **P2 spawn 前 budget downgrade（soft/cost_auto）** · **每轮 reload disk：Aborted/Paused → 杀 worker、冻 pending** · Stopped 不进 failed、run 终态 Aborted
+  · 行为：并行上限 · 预算 · acceptance · **sys-post-git-push 先巡检 PASS** · 卡死巡检/重试 · H4 failover · **P1 cost escalate（先升档再 walk failover_order）** · **P2 spawn 前 budget downgrade（soft/cost_auto）** · **platform_error 平台级错误（404/429/auth）识别→跳过同腿重试 + mark unhealthy** · **每轮 reload disk：Aborted/Paused → 杀 worker、冻 pending** · Stopped 不进 failed、run 终态 Aborted
 handoff/: **A1-5 多文件适配器**（单文件 ≤600；实现 `ports::HandoffStore`）
   · mod.rs: facade re-export（稳定 `crate::runtime::handoff::*`）
   · model.rs: Handoff/BoardRow/Fragment · load/save · render_md

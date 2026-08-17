@@ -13,6 +13,12 @@ pub fn is_non_retryable(reason_code: &str) -> bool {
     matches!(reason_code, "stopped" | "ok" | "inspect_fail")
 }
 
+/// Platform/API error (broken endpoint, 429, auth failure) — never retry same provider
+/// (the endpoint is broken, not the task), but still eligible for failover to a healthy peer.
+pub fn is_platform_error(reason_code: &str) -> bool {
+    reason_code == "platform_error"
+}
+
 /// Host inspect gate rewrote Done → Failed with a VERDICT/ISSUES reason.
 pub fn is_inspect_gate_error(error: Option<&str>) -> bool {
     error
@@ -123,6 +129,13 @@ pub fn classify_retry(
     failover_enabled: bool,
 ) -> RetryKind {
     if is_non_retryable(reason_code) {
+        return RetryKind::Permanent;
+    }
+    // Platform error: endpoint is broken, not the task. Skip same-provider retry entirely.
+    if is_platform_error(reason_code) {
+        if failover_enabled && has_next_failover {
+            return RetryKind::TryFailover;
+        }
         return RetryKind::Permanent;
     }
     if attempt <= budget {

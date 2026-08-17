@@ -17,7 +17,7 @@ pub use active::{expand_from_task, resolve_active_ids, ActiveFilter};
 pub use retry::{
     attempt_budget, can_same_provider_retry, classify_retry, default_failover_order,
     effective_retry_max, is_inspect_gate_error, is_non_failover_provider, is_non_retryable,
-    next_failover_target, production_failover_target, RetryKind,
+    is_platform_error, next_failover_target, production_failover_target, RetryKind,
 };
 pub use status::{
     budget_exceeded, is_external_stop, is_live_task_status, merge_disk_terminal,

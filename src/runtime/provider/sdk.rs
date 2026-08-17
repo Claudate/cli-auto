@@ -275,6 +275,7 @@ impl WorkerPort for SdkProvider {
             error: None,
             done_marker: code == Some(0),
             execution_evidence: status.is_success(),
+            platform_error: false,
         })
     }
 }

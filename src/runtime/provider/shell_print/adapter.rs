@@ -419,16 +419,21 @@ impl WorkerPort for ShellPrintProvider {
         let outcome = decode::decode(self.profile.result_kind, &stdout, &meta, exit_code);
 
         let error = if status == TaskStatus::Failed {
-            let stderr = handle
-                .stdout_path
-                .parent()
-                .map(|p| std::fs::read_to_string(p.join("stderr.log")).unwrap_or_default())
-                .unwrap_or_default();
-            Some(if stderr.is_empty() {
-                format!("exit {:?}", exit_code)
+            // Prefer decoder's error_hint (real platform error from stdout) over bare stderr.
+            if let Some(ref hint) = outcome.error_hint {
+                Some(hint.clone())
             } else {
-                stderr.chars().take(500).collect()
-            })
+                let stderr = handle
+                    .stdout_path
+                    .parent()
+                    .map(|p| std::fs::read_to_string(p.join("stderr.log")).unwrap_or_default())
+                    .unwrap_or_default();
+                Some(if stderr.is_empty() {
+                    format!("exit {:?}", exit_code)
+                } else {
+                    stderr.chars().take(500).collect()
+                })
+            }
         } else {
             None
         };
@@ -444,6 +449,7 @@ impl WorkerPort for ShellPrintProvider {
             error,
             done_marker: outcome.done_marker,
             execution_evidence: outcome.execution_evidence,
+            platform_error: outcome.platform_error,
         })
     }
 }

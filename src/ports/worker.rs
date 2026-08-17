@@ -108,6 +108,9 @@ pub struct TaskResult {
     /// Whether output shows evidence of actual execution (tool_use / command / result object). 契约层 T1.
     #[serde(default)]
     pub execution_evidence: bool,
+    /// Platform-level error (API 404/429/auth/endpoint broken). Skip retry, mark unhealthy.
+    #[serde(default)]
+    pub platform_error: bool,
 }
 
 /// Per-decoder outcome for shell-print CLIs — the single "how to judge success" answer.
@@ -124,6 +127,9 @@ pub struct WorkerOutcome {
     pub empty_stdout: bool,
     /// Human-readable hint when a platform "spun" (no execution / empty output).
     pub error_hint: Option<String>,
+    /// Platform-level error (API 404/429/auth/endpoint broken) — not a task-logic failure.
+    /// When true: skip same-provider retry, surface real error, mark provider unhealthy.
+    pub platform_error: bool,
     pub session_id: Option<String>,
     pub cost_usd: Option<f64>,
 }
@@ -173,6 +179,7 @@ pub trait WorkerPort: Send + Sync {
             execution_evidence: status == TaskStatus::Done,
             empty_stdout: stdout.trim().is_empty(),
             error_hint: None,
+            platform_error: false,
             session_id: None,
             cost_usd: None,
         }

@@ -357,6 +357,7 @@ mod tests {
             error: None,
             done_marker: true,
             execution_evidence: false,
+            platform_error: false,
         };
         let s = bare_sched(ir, state);
         s.enforce_success_evidence(&task, &wt, &mut result);
@@ -403,6 +404,7 @@ mod tests {
             error: None,
             done_marker: true,
             execution_evidence: true,
+            platform_error: false,
         };
         let s = bare_sched(ir, state);
         s.enforce_success_evidence(&task, repo.path(), &mut result);
@@ -457,6 +459,7 @@ mod tests {
             error: None,
             done_marker: true,
             execution_evidence: true,
+            platform_error: false,
         };
         let s = bare_sched(ir, state);
         s.enforce_success_evidence(&task, &wt, &mut result);
@@ -495,6 +498,7 @@ mod tests {
             error: None,
             done_marker: true,
             execution_evidence: false,
+            platform_error: false,
         };
         let s = bare_sched(ir, state);
         s.enforce_success_evidence(&task, repo.path(), &mut result);
@@ -534,6 +538,7 @@ mod tests {
             error: None,
             done_marker: true,
             execution_evidence: true,
+            platform_error: false,
         };
         let s = bare_sched(ir, state);
         s.enforce_success_evidence(&task, repo.path(), &mut result);

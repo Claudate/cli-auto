@@ -95,6 +95,7 @@ impl Scheduler {
                         error: Some(format!("external stop collect: {e:#}")),
                         done_marker: true,
                         execution_evidence: false,
+                        platform_error: false,
                     }
                 });
                 result.status = TaskStatus::Stopped;
@@ -193,6 +194,7 @@ impl Scheduler {
                                 error: Some(format!("stall collect: {e:#}")),
                                 done_marker: true,
                                 execution_evidence: false,
+                                platform_error: false,
                             }
                         });
                         result.status = TaskStatus::Timeout;
@@ -230,18 +232,22 @@ impl Scheduler {
 
                     // inspect VERDICT gate FAIL is semantic (needs rework), not a crash:
                     // permanent — do not SameProvider-retry / provider-failover storm.
-                    let reason_code = match other {
-                        WorkerStatus::Timeout => "timeout",
-                        WorkerStatus::Stopped => "stopped",
-                        WorkerStatus::Failed => "fail",
-                        WorkerStatus::Done if result.status != TaskStatus::Done => {
-                            if crate::domain::run::is_inspect_gate_error(result.error.as_deref()) {
-                                "inspect_fail"
-                            } else {
-                                "fail"
+                    let reason_code = if result.platform_error {
+                        "platform_error"
+                    } else {
+                        match other {
+                            WorkerStatus::Timeout => "timeout",
+                            WorkerStatus::Stopped => "stopped",
+                            WorkerStatus::Failed => "fail",
+                            WorkerStatus::Done if result.status != TaskStatus::Done => {
+                                if crate::domain::run::is_inspect_gate_error(result.error.as_deref()) {
+                                    "inspect_fail"
+                                } else {
+                                    "fail"
+                                }
                             }
+                            _ => "ok",
                         }
-                        _ => "ok",
                     };
                     if reason_code == "ok" && result.status == TaskStatus::Done {
                         self.apply_result(&id, &result)?;
@@ -288,7 +294,17 @@ impl Scheduler {
                             _ => "failed",
                         };
                         self.record_task_outcome(&id, outcome).await;
-                        
+
+                        // Platform error: mark provider unhealthy so failover skips it.
+                        if result.platform_error {
+                            let provider_name = self
+                                .plan
+                                .task(&id)
+                                .map(|t| t.provider.clone())
+                                .unwrap_or_default();
+                            self.mark_provider_unhealthy(&provider_name);
+                        }
+
                         let _ = self
                             .finish_or_retry(
                                 &id,
@@ -571,17 +587,24 @@ impl Scheduler {
                                 _ => "failed",
                             };
                             self.record_task_outcome(&id, outcome).await;
-                            let reason = match result.status {
-                                TaskStatus::Timeout => "timeout",
-                                TaskStatus::Stopped => "stopped",
-                                _ if crate::domain::run::is_inspect_gate_error(
-                                    result.error.as_deref(),
-                                ) =>
-                                {
-                                    "inspect_fail"
+                            let reason = if result.platform_error {
+                                "platform_error"
+                            } else {
+                                match result.status {
+                                    TaskStatus::Timeout => "timeout",
+                                    TaskStatus::Stopped => "stopped",
+                                    _ if crate::domain::run::is_inspect_gate_error(
+                                        result.error.as_deref(),
+                                    ) =>
+                                    {
+                                        "inspect_fail"
+                                    }
+                                    _ => "fail",
                                 }
-                                _ => "fail",
                             };
+                            if result.platform_error {
+                                self.mark_provider_unhealthy(&task.provider);
+                            }
                             let _ = self
                                 .finish_or_retry(
                                     &id,
@@ -621,6 +644,7 @@ impl Scheduler {
                         error: Some(format!("{e:#}")),
                         done_marker: false,
                         execution_evidence: false,
+                        platform_error: false,
                     };
                     let retried = self
                         .finish_or_retry(

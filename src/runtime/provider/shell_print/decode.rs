@@ -30,10 +30,14 @@ pub fn decode(kind: ResultKind, stdout: &str, meta: &Value, exit: Option<i32>) -
 ///
 /// 执行证据 = 至少发起过一次 `command_execution`。只有纯 `agent_message`
 /// （无任何命令/工具）→ 无执行证据——这就是「找不到依赖就打印一句退出」的指纹。
+///
+/// 平台错误 = `turn.failed` / `error` 事件中包含 API 级错误指纹（404/429/auth/
+/// reconnect/rate limit）——这不是任务逻辑失败，是中转/鉴权/endpoint 坏了。
 fn decode_codex(stdout: &str, _meta: &Value, exit: Option<i32>) -> WorkerOutcome {
     let mut any_command = false;
     let mut any_item = false;
     let mut agent_messages = 0usize;
+    let mut platform_err_msg: Option<String> = None;
     for line in stdout.lines() {
         let l = line.trim();
         if !l.starts_with('{') {
@@ -43,6 +47,21 @@ fn decode_codex(stdout: &str, _meta: &Value, exit: Option<i32>) -> WorkerOutcome
             continue;
         };
         let ty = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
+
+        // Detect platform-level errors from turn.failed / error events.
+        if (ty == "turn.failed" || ty == "error") && platform_err_msg.is_none() {
+            let msg = v
+                .get("error")
+                .and_then(|e| e.get("message").or(Some(e)))
+                .and_then(|m| m.as_str())
+                .or_else(|| v.get("message").and_then(|m| m.as_str()))
+                .unwrap_or("");
+            if is_platform_error_fingerprint(msg) {
+                platform_err_msg = Some(extract_platform_error_hint(msg));
+            }
+            continue;
+        }
+
         if ty != "item.started" && ty != "item.completed" {
             continue;
         }
@@ -58,14 +77,22 @@ fn decode_codex(stdout: &str, _meta: &Value, exit: Option<i32>) -> WorkerOutcome
     let execution_evidence = any_command;
     let done_marker = any_item || exit == Some(0);
     let empty_stdout = stdout.trim().is_empty();
-    let error_hint = (!empty_stdout && agent_messages > 0 && !any_command)
-        .then(|| "平台空转：codex 仅输出文本（agent_message），无任何命令/工具执行".to_string());
+
+    // Platform error takes precedence over spin hint.
+    let (error_hint, platform_error) = if let Some(ref pe) = platform_err_msg {
+        (Some(pe.clone()), true)
+    } else {
+        let hint = (!empty_stdout && agent_messages > 0 && !any_command)
+            .then(|| "平台空转：codex 仅输出文本（agent_message），无任何命令/工具执行".to_string());
+        (hint, false)
+    };
     WorkerOutcome {
         status,
         done_marker,
         execution_evidence,
         empty_stdout,
         error_hint,
+        platform_error,
         session_id: None,
         cost_usd: None,
     }
@@ -115,6 +142,7 @@ fn decode_codewhale(stdout: &str, _meta: &Value, exit: Option<i32>) -> WorkerOut
         execution_evidence,
         empty_stdout,
         error_hint,
+        platform_error: false,
         session_id: None,
         cost_usd: None,
     }
@@ -152,6 +180,7 @@ fn decode_one_shot(stdout: &str, _meta: &Value, exit: Option<i32>) -> WorkerOutc
         execution_evidence,
         empty_stdout,
         error_hint,
+        platform_error: false,
         session_id: None,
         cost_usd: None,
     }
@@ -173,9 +202,34 @@ fn decode_plain(stdout: &str, _meta: &Value, exit: Option<i32>) -> WorkerOutcome
         execution_evidence,
         empty_stdout,
         error_hint,
+        platform_error: false,
         session_id: None,
         cost_usd: None,
     }
+}
+
+/// Fingerprints that distinguish platform/API errors from task-logic failures.
+/// These indicate the provider's endpoint/auth is broken (not the task prompt).
+fn is_platform_error_fingerprint(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("429") || m.contains("too many requests")
+        || m.contains("rate limit")
+        || m.contains("404 not found")
+        || m.contains("不支持该 api")
+        || m.contains("exceeded retry limit")
+        || m.contains("reconnecting")
+        || m.contains("unauthorized") || m.contains("401")
+        || m.contains("authentication") || m.contains("auth")
+        || m.contains("api key")
+        || m.contains("forbidden") || m.contains("403")
+        || m.contains("connection refused")
+        || m.contains("timeout") && m.contains("connect")
+}
+
+/// Extract a short human-readable hint from a platform error message.
+fn extract_platform_error_hint(msg: &str) -> String {
+    let truncated: String = msg.chars().take(200).collect();
+    format!("平台/API 错误（非任务逻辑）：{truncated}")
 }
 
 /// Last JSON object in a buffer (one-shot JSON wrapped by incidental lines).
@@ -259,6 +313,37 @@ mod tests {
         let o = decode(ResultKind::Plain, "  ", &Value::Null, Some(0));
         assert!(!o.execution_evidence);
         assert!(o.error_hint.is_some());
+    }
+
+    #[test]
+    fn codex_platform_error_429_detected() {
+        // 金样：codex 中转 429/404 → platform_error=true，error_hint 上浮真实错误。
+        let raw = r#"{"type":"thread.started","thread_id":"01a00ec3"}
+{"type":"turn.started"}
+{"type":"error","message":"exceeded retry limit, last status: 429 Too Many Requests, request id: a2c72ffcdfbffa2f-IAD"}
+{"type":"turn.failed","error":{"message":"exceeded retry limit, last status: 429 Too Many Requests, request id: a2c72ffcdfbffa2f-IAD"}}
+"#;
+        let o = decode(ResultKind::CodexItemStream, raw, &Value::Null, Some(1));
+        assert!(o.platform_error, "429 应识别为平台错误");
+        assert!(o.error_hint.is_some(), "应上浮真实错误提示");
+        assert!(o.error_hint.as_deref().unwrap_or("").contains("429"));
+    }
+
+    #[test]
+    fn codex_platform_error_404_detected() {
+        let raw = r#"{"type":"turn.failed","error":{"message":"unexpected status 404 Not Found: 当前平台不支持该 API 路径, url: https://ergouapi.co/v1/responses"}}
+"#;
+        let o = decode(ResultKind::CodexItemStream, raw, &Value::Null, Some(1));
+        assert!(o.platform_error, "404 中转坏应识别为平台错误");
+        assert!(o.error_hint.as_deref().unwrap_or("").contains("404"));
+    }
+
+    #[test]
+    fn codex_command_execution_not_platform_error() {
+        let raw = r#"{"type":"item.completed","item":{"id":"i2","type":"command_execution","command":"/bin/zsh -lc pwd","exit_code":0,"status":"completed"}}
+"#;
+        let o = decode(ResultKind::CodexItemStream, raw, &Value::Null, Some(0));
+        assert!(!o.platform_error, "正常命令执行不应是平台错误");
     }
 }
 
