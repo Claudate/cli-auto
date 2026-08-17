@@ -1,5 +1,5 @@
 /* [INPUT]: 无；被 index.html 引用
- * [OUTPUT]: tokens.css 样式 —— P4-1 设计系统地基（--leaf-* 三层 token）
+ * [OUTPUT]: tokens.css 样式 —— P4-1 设计系统地基（--leaf-* 三层 token + 浮层语义 token）
  * [POS]: web/css 桌面样式真源（D4 纵切）；tokens.css = 设计 token 唯一真源
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
@@ -110,6 +110,9 @@ body {
   --leaf-alias-terminal-bg: var(--leaf-static-bg-1000);
   --leaf-alias-terminal-fg: var(--leaf-static-bg-50);
   --leaf-alias-terminal-border: var(--leaf-static-bg-800);
+  /* 覆盖层：遮罩允许半透明，内容表面必须始终不透明。 */
+  --leaf-alias-overlay-backdrop: rgba(0, 0, 0, 0.28);
+  --leaf-alias-overlay-surface: var(--leaf-static-bg-00);
   /* 抬升/焦点 */
   --leaf-alias-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.1);
   --leaf-alias-shadow-2: 0 4px 12px rgba(16, 24, 40, 0.12);
@@ -189,6 +192,8 @@ body[data-leaf-theme="dark"] {
   --leaf-alias-terminal-bg: var(--leaf-static-bg-00);
   --leaf-alias-terminal-fg: var(--leaf-static-bg-1000);
   --leaf-alias-terminal-border: var(--leaf-static-bg-300);
+  --leaf-alias-overlay-backdrop: rgba(0, 0, 0, 0.28);
+  --leaf-alias-overlay-surface: var(--leaf-static-bg-50);
   --leaf-alias-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
   --leaf-alias-shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5);
   --leaf-alias-focus-ring: 0 0 0 3px color-mix(in srgb, var(--leaf-static-deepseek-500) 38%, transparent);

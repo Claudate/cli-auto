@@ -1878,6 +1878,7 @@ a.md-ext-link:hover {
 /* 图片灯箱 */
 .img-lightbox .img-lightbox-card {
   position: relative;
+  z-index: 1;
   max-width: min(92vw, 960px);
   max-height: 90vh;
   margin: 4vh auto;
@@ -1889,6 +1890,7 @@ a.md-ext-link:hover {
   flex-direction: column;
   align-items: center;
   gap: 0.45rem;
+  isolation: isolate;
 }
 .img-lightbox-close {
   position: absolute;
