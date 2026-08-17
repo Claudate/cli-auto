@@ -1045,6 +1045,12 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
                   <p class="settings-auth-tier field-hint" id="s-permission-tier" hidden>
                     当前安全层级：<span id="s-permission-tier-label">完全访问</span>
                   </p>
+                  <div class="permission-presets" role="group" aria-label="授权预设">
+                    <button type="button" class="permission-preset danger" data-permission-preset="bypassPermissions">完全访问</button>
+                    <button type="button" class="permission-preset" data-permission-preset="acceptEdits">可读写文件</button>
+                    <button type="button" class="permission-preset" data-permission-preset="dontAsk">只读检查</button>
+                    <button type="button" class="permission-preset" data-permission-preset="default">CLI 默认</button>
+                  </div>
                   <label
                     class="settings-row"
                     title="无人值守 worker 的默认权限。推荐开启：自动授权写文件与命令。"

@@ -11,6 +11,13 @@ import * as settingsApi from "./settingsApi.js";
 import * as gateway from "../../shared/gateway.js";
 import { wireSettingsNav, syncPermissionNav } from "./settingsNav.js";
 import {
+  PERMISSION_MODES,
+  createPermissionControls,
+  permissionBlocks,
+  permissionIsAuto,
+  permissionTierLabel,
+} from "./permissionControls.js";
+import {
   loadWorkStyleSetting,
   saveWorkStyleSetting,
   suggestedMaxParallel,
@@ -35,46 +42,12 @@ function escHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
-const PERMISSION_MODES = [
-  "bypassPermissions",
-  "acceptEdits",
-  "dontAsk",
-  "default",
-];
-
-/** Modes that auto-deny tools needing confirmation (unattended write fails). */
-function permissionBlocks(mode) {
-  const m = String(mode || "");
-  return m === "dontAsk" || m === "default";
-}
-
-/** Modes that count as "auto authorize" for the main checkbox. */
-function permissionIsAuto(mode) {
-  const m = String(mode || "bypassPermissions");
-  return m === "bypassPermissions" || m === "acceptEdits";
-}
-
-/**
- * A3bis: map a permission_mode to a human safety tier label.
- * Mirrors Rust `PermissionTier::from_permission_mode(...).human_label()`.
- * Rule 23: no technical enum in the main path label.
- * @param {string} mode
- * @returns {string}
- */
-function permissionTierLabel(mode) {
-  const m = String(mode || "");
-  if (m === "bypassPermissions") return "完全访问";
-  if (m === "acceptEdits") return "可读写项目文件";
-  if (m === "dontAsk" || m === "default") return "受限只读";
-  return "完全访问";
-}
-
 /**
  * Paint 任务授权 section from a permission_mode string.
  * @param {string} mode
  * @param {{ skipSelect?: boolean }} [opts]
  */
-export function paintPermissionUi(mode, opts = {}) {
+function paintPermissionUiRaw(mode, opts = {}) {
   const m = PERMISSION_MODES.includes(String(mode || ""))
     ? String(mode)
     : "bypassPermissions";
@@ -129,42 +102,26 @@ export function paintPermissionUi(mode, opts = {}) {
     tierWrap.dataset.state = tierState;
     tierWrap.hidden = false;
   }
+
+  document.querySelectorAll("[data-permission-preset]").forEach((preset) => {
+    const active = preset.dataset.permissionPreset === m;
+    preset.classList.toggle("active", active);
+    preset.setAttribute("aria-pressed", String(active));
+  });
 }
 
-let _permissionUiWired = false;
+const permissionControls = createPermissionControls({
+  getElement: (id) => $(`#${id}`),
+  paint: paintPermissionUiRaw,
+});
+
+export function paintPermissionUi(mode, opts = {}) {
+  permissionControls.sync(mode, opts);
+}
 
 /** One-time listeners: checkbox ↔ select stay in sync (save still via 保存). */
 function wirePermissionUi() {
-  if (_permissionUiWired) return;
-  _permissionUiWired = true;
-
-  const chk = $("#s-permission-auto");
-  if (chk && !chk.dataset.ccoPermWire) {
-    chk.dataset.ccoPermWire = "1";
-    chk.addEventListener("change", () => {
-      const next = chk.checked ? "bypassPermissions" : "dontAsk";
-      paintPermissionUi(next);
-    });
-  }
-
-  const select = $("#s-permission-mode");
-  if (select && !select.dataset.ccoPermWire) {
-    select.dataset.ccoPermWire = "1";
-    select.addEventListener("change", () => {
-      paintPermissionUi(select.value || "bypassPermissions");
-    });
-  }
-
-  const restore = $("#btn-permission-restore");
-  if (restore && !restore.dataset.ccoPermWire) {
-    restore.dataset.ccoPermWire = "1";
-    restore.addEventListener("click", () => {
-      restoreRecommendedPermission().catch((e) => {
-        const toast = typeof window.toast === "function" ? window.toast : null;
-        if (toast) toast(String(e?.message || e));
-      });
-    });
-  }
+  permissionControls.wire();
 }
 
 /**
@@ -172,7 +129,7 @@ function wirePermissionUi() {
  * @returns {Promise<object|null>} updated settings or null
  */
 export async function restoreRecommendedPermission() {
-  paintPermissionUi("bypassPermissions");
+  if (!(await permissionControls.choose("bypassPermissions"))) return null;
   const updated = await settingsApi.setSettings({
     permission_mode: "bypassPermissions",
   });

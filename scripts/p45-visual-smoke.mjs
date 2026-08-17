@@ -172,7 +172,14 @@ try {
         return Promise.resolve([{ name: "演示项目", path: "/tmp/demo", exists: true }]);
       }
       if (cmd === "get_plan_meta") {
-        return Promise.resolve([{ path: "plans/login.md", title: "登录改版" }]);
+        return Promise.resolve([
+          { path: "plans/login.md", title: "登录改版" },
+          { path: "plans/api.md", title: "接口整理" },
+          { path: "plans/test.md", title: "测试补齐" },
+          { path: "plans/deploy.md", title: "发布准备" },
+          { path: "plans/design.md", title: "设计校对" },
+          { path: "plans/review.md", title: "验收复盘" },
+        ]);
       }
       if (cmd === "get_plans") return Promise.resolve(["plans/login.md"]);
       if (cmd === "get_settings") return Promise.resolve({ permission_mode: "bypassPermissions" });
@@ -214,8 +221,13 @@ try {
 
   // ── P4-8：项目→计划侧栏树 ────────────────────────────────────
   await page.waitForSelector(".sidebar-plan-tree .sidebar-plan-item", { timeout: 8000 });
-  check("侧栏显示项目→计划二级树", (await page.locator(".sidebar-plan-tree .sidebar-plan-item").count()) === 1);
+  check("侧栏显示项目→计划二级树", (await page.locator(".sidebar-plan-tree .sidebar-plan-item").count()) === 5);
   check("侧栏计划名称", (await page.locator(".sidebar-plan-tree .sidebar-plan-item").textContent()).includes("登录改版"));
+  const morePlans = page.locator(".sidebar-plan-more");
+  check("侧栏计划超过五项时折叠", await morePlans.isVisible());
+  await morePlans.click();
+  check("侧栏计划可展开", (await page.locator(".sidebar-plan-tree .sidebar-plan-item").count()) === 6);
+  check("侧栏计划可收起", (await morePlans.textContent()).includes("收起"));
 
   // ── P4-8：结果局部巡检列（1280 默认展开，可收起/恢复） ────────
   const inspectRail = page.locator("#result-inspect-rail");
@@ -227,6 +239,15 @@ try {
   check("巡检列收起状态", (await inspectToggle.getAttribute("aria-pressed")) === "false");
   await inspectToggle.click();
   check("巡检列可恢复", await inspectRail.isVisible());
+
+  // ── P4-7：权限预设与完全访问确认 ────────────────────────────
+  await page.evaluate(() => window.ccoSettings?.loadSettings());
+  await page.locator('[data-permission-preset="acceptEdits"]').click();
+  check("权限预设可切换", (await page.locator("#s-permission-mode").inputValue()) === "acceptEdits");
+  await page.locator('[data-permission-preset="bypassPermissions"]').click();
+  check("完全访问需要确认", await page.locator(".cco-confirm").isVisible());
+  await page.locator("[data-confirm-cancel]").click();
+  check("取消后保留原权限", (await page.locator("#s-permission-mode").inputValue()) === "acceptEdits");
 
   // ── 完成列表卡片化 ────────────────────────────────────────────
   const doneCount = await page.locator("#result-desk-done .result-desk-item.is-done").count();

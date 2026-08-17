@@ -509,7 +509,7 @@ export function renderProjectList() {
     };
   });
   try {
-    installSidebarPlanSelection(el);
+    installSidebarPlanSelection(el, renderProjectList);
     if (typeof window.ccoHydrateIcons === "function") window.ccoHydrateIcons(el);
   } catch (_) {}
 }

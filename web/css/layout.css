@@ -254,6 +254,26 @@
   outline: none;
   box-shadow: var(--leaf-alias-focus-ring);
 }
+.sidebar-plan-more {
+  width: fit-content;
+  margin: 0.1rem 0.35rem;
+  padding: 0.2rem 0.35rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--leaf-alias-brand-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--leaf-font-caption);
+  text-align: left;
+}
+.sidebar-plan-more:hover {
+  background: var(--leaf-alias-interactive-bg-hover);
+}
+.sidebar-plan-more:focus-visible {
+  outline: none;
+  box-shadow: var(--leaf-alias-focus-ring);
+}
 
 .dot {
   width: 8px;

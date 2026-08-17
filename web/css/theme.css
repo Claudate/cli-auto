@@ -58,6 +58,50 @@
   box-shadow: var(--leaf-alias-focus-ring);
 }
 
+.permission-presets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0.55rem 0;
+}
+
+.permission-preset {
+  min-height: 2.25rem;
+  border: 1px solid var(--leaf-alias-border-l2);
+  border-radius: 6px;
+  background: var(--leaf-alias-bg-layer-1);
+  color: var(--leaf-alias-label-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--leaf-font-caption);
+}
+
+.permission-preset:hover {
+  background: var(--leaf-alias-interactive-bg-hover);
+  color: var(--leaf-alias-label-primary);
+}
+
+.permission-preset.active {
+  border-color: var(--leaf-alias-brand-primary);
+  background: var(--leaf-alias-brand-weak);
+  color: var(--leaf-alias-brand-primary);
+}
+
+.permission-preset.danger {
+  color: var(--leaf-alias-status-danger);
+}
+
+.permission-preset.danger.active {
+  border-color: var(--leaf-alias-status-danger);
+  background: color-mix(in srgb, var(--leaf-alias-status-danger) 10%, var(--leaf-alias-bg-layer-1));
+  color: var(--leaf-alias-status-danger);
+}
+
+.permission-preset:focus-visible {
+  outline: none;
+  box-shadow: var(--leaf-alias-focus-ring);
+}
+
 @media (max-width: 560px) {
   .theme-choice-group {
     grid-template-columns: 1fr;

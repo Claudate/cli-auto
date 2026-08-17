@@ -110,7 +110,7 @@ Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自
 
 ### 4.2 侧栏（dsh `ui-sidebar` + `ui-workspace` 映射）
 - **两层级**：项目（= dsh Workspace）→ 计划（= dsh Session，在项目内分组展示）。
-- 项目行：**StateDot**（运行=蓝 / 等待确认=琥珀 / 已完成=绿 / 失败=红）+ 名称 + hover 卡（完整路径 + 一键复制）；「显示更多」超过 5 个计划时出现。
+- 项目行：**StateDot**（运行=蓝 / 等待确认=琥珀 / 已完成=绿 / 失败=红）+ 名称 + hover 卡（完整路径 + 一键复制）；「显示更多」超过 5 个计划时出现（P4-8 已实现，展开态不持久化）。
 - 顶栏：**新建项目**（dsh New Session）+ **搜索**（折叠展开，250ms 防抖）+ 折叠控制。
 - 底部 pin：**设置** + **环境检查**（dsh `sidebar.settings` 座）。
 - 折叠 → 56px rail（150ms fade + 300ms slide）；rail 保留新建/搜索/设置三个 36px 控制。
@@ -165,7 +165,7 @@ Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自
 ### 5.6 设置
 - 两栏布局保留（左图标菜单 + 右滚动区），改 dsh settings 视觉：常规 / 模型 / 发布 / 环境（doctor）。
 - **模型页**：provider 分组（claude/codex/fake）→ 每 provider 卡片 + effort 行（dsh `ui-settings-models`）。
-- **权限 tier**（A3bis）：dsh permission presets —— preset chip 列表 + 当前值高亮 + `danger`（Full access）需显式风险确认。
+- **权限 tier**（A3bis）：dsh permission presets —— preset chip 列表 + 当前值高亮 + `danger`（Full access）需显式风险确认（P4-7 已实现；保存链路不变）。
 - 新增**外观**分区：暗色/浅色/跟随系统。
 - 高级能力默认折叠（L1 §24）。
 
@@ -198,8 +198,8 @@ Leaf 与 dsh 的产品形态不同（**Plan-First 五步闭环 vs Chat-First 自
 - **P4-4 执行台 ✅（2026-08-15）**：主栏任务流程卡 dsh 化（`.cli-window` 走 alias token · 运行中蓝追光 `.is-running` · 卡片语义不变：StateDot / 人话进展 / auto-commit hash·files·push / 失败卡 route_label / 停·续·重跑）· **右次级列 `#run-detail-column`（约 320px · 默认展开、可折叠 · 几何瞬态不入 localStorage · 窄窗优先折叠）**：选中任务 → TerminalBlock（工具命令+输出 · 状态 pill · 复制）· ReadBlock/DiffBlock（读/写文件 · auto-commit files 诚实计数）· 失败错误详情 · 等待琥珀条（DTO 无「等待审批」字段 → 用既有 `wait` 排队 / `stall` 卡住语义承接，不造假概念）· 日志 DisclosureRow 默认折叠（`fillPanelLogBody` 保留 logVirtual 虚拟列表）。CSS 落 **`css/run.css`**（alias token；components.css 186 ≤200 不动）· 新增 `features/run/runDetail.js`（渲染幂等，签名不变不重绘）· `RunView` `renderProgress` 尾部渲染 · 停/续/重跑仍经 `ccoRun`→`runApi`→gateway（stop_run / stop_task / resume_run / retry_task 1:1）· `logBoardCard` `.is-running` 追光 · `logBoardEvents` 聚焦分发同步详情列。验收：`node build.mjs` ✅（FACADE_OK 253/253）· `check-arch.sh` STRICT=1 绿（**WARN=4 为既有 Rust soft 超限，未新增** · components.css 186 ≤200）✅ · 既有三冒烟全绿（`p43-visual-smoke.mjs` **27/27** · `provider-control-smoke.mjs` **ALL PASS** · `clarify-split-visual-smoke.mjs` **12/12**）✅ · 新增 `scripts/p44-visual-smoke.mjs` **38/38** ✅（流程卡 dsh · is-running 追光动画 cco-run-chase · 失败卡执行方式 · 自动提交状态 · 右次级列 Terminal/Diff/Read · wait/stall 琥珀条 · 日志折叠 · 详情列折叠 aria-pressed · 停→stop_task_cmd / 续→resume_run_cmd / 重跑→retry_task_cmd · 明暗非白无页面错误）。
 - **P4-5 结果台 ✅（2026-08-16）**：主栏完成/遗漏列表卡片化（`.result-desk-item` + StateDot check/x 图标 + 标题 + route_label 执行方式 + 失败原因）· issue_preview 卡（icons.js 暂无 alert-triangle → fallback `!`）· 浏览器证据网格 dsh 化（截图卡放大 lightbox + 文本摘录 pre + 打开文件）· honest footer 提示条样式（border-left warn · 巡检对照计划结论）· 验收面板保持现有 `<details>` 可折叠（plan_items 勾选 ☑/☐）· **CSS 走 alias token 落 `css/result.css`**（components.css 186 ≤200 不动；旧 `.result-desk-*` 规则从 `css/plan.css` 清除只留 `[hidden]` 守卫）。验收：`node build.mjs` ✅（FACADE_OK 253/253）· `check-arch.sh` STRICT=1 绿（**WARN=4 为既有 Rust soft 超限，未新增** · components.css 186 ≤200）✅ · 既有四冒烟全绿（`p43-visual-smoke.mjs` **27/27** · `p44-visual-smoke.mjs` **38/38** · `provider-control-smoke.mjs` **ALL PASS** · `clarify-click-smoke.mjs` **12/12**）✅ · 新增 `scripts/p45-visual-smoke.mjs` **32/32** ✅（完成 2 卡 check 图标 · miss 卡 x 图标 + route_label 执行方式 + 网络超时 · issue 卡 `!` + 内容 · honest footer 巡检结论 · 验收面板默认收起→点击展开 · plan_items 3 项 ☑/☐ · 浏览器证据 2 卡截图 img + 文本摘录 · rework 按钮文案「回补并再巡检（第 2/3 轮）」· 明暗非白无页面错误）。
 - **P4-6 聊天 ✅（2026-08-17）**：composer 保持 dock，补 Claude 模型 + 推理深度两级选择；模型以会话覆盖真实下传，非 Claude 通道自动禁用；本轮上下文（项目/计划/附件）以 DisclosureRow 默认收口。QueueDock 语义仍不符，未造空壳；无策略复制进 JS。验收：web build ✅ · cco chat tests 33/33 ✅ · model 覆盖/清空 test ✅ · desktop cargo check ✅。
-- **P4-7 设置 ✅（2026-08-17）**：设置页新增浅色 / 深色 / 跟随系统三态；`themePreference.js` 持久化仅本机的展示偏好，启动前同步解析主题以免闪白；`tokens.css` 与 `theme.css` 覆盖全页明暗 alias 与 reduced-motion，`thinkingOrb` 在减弱动效时静帧。验收：web build ✅ · theme/orb/main 语法检查 ✅ · chat tests 32/32 ✅ · desktop cargo check ✅。
-- **P4-8 打磨（实现完成，视觉终验待受控执行通道恢复）**：补齐侧栏项目→计划二级树（`sidebarPlans.js` 只读 `getPlanMeta/getPlans` 缓存，选项先选项目再选计划）与结果局部巡检列（约 320px、默认展开、1024px 以下默认收起但可手动展开，继续只读 `live.verification`）；全局 reduced-motion 与明暗主题已由 P4-7 落地。`p45-visual-smoke.mjs` 已扩展为 1280/1024、明暗、二级树、巡检列开合契约，但本轮先因沙箱拒绝本地监听（`EPERM`），再因受控执行调度通道 `503` 无可用通道而无法运行；未绕过限制。已验：web build ✅ · JS 语法检查 ✅ · `STRICT=1 ./scripts/check-arch.sh` `FAIL=0`（5 条既有警告）✅。
+- **P4-7 设置 ✅（2026-08-17）**：设置页新增浅色 / 深色 / 跟随系统三态；`themePreference.js` 持久化仅本机的展示偏好，启动前同步解析主题以免闪白；`tokens.css` 与 `theme.css` 覆盖全页明暗 alias 与 reduced-motion，`thinkingOrb` 在减弱动效时静帧。补齐权限 preset chip，切入完全访问必须显式危险确认，仍复用既有保存链路。验收：web build ✅ · theme/orb/main 语法检查 ✅ · chat tests 33/33 ✅ · desktop cargo check ✅。
+- **P4-8 打磨（实现完成，视觉终验待受控执行通道恢复）**：补齐侧栏项目→计划二级树（`sidebarPlans.js` 只读 `getPlanMeta/getPlans` 缓存，默认五项、超过后瞬态展开，选项先选项目再选计划）与结果局部巡检列（约 320px、默认展开、1024px 以下默认收起但可手动展开，继续只读 `live.verification`）；全局 reduced-motion 与明暗主题已由 P4-7 落地。`p45-visual-smoke.mjs` 已扩展为 1280/1024、明暗、二级树、计划展开、权限确认与巡检列开合契约，但本轮先因沙箱拒绝本地监听（`EPERM`），再因受控执行调度通道 `503` 无可用通道而无法运行；未绕过限制。已验：web build ✅ · JS 语法检查 ✅ · `STRICT=1 ./scripts/check-arch.sh` `FAIL=0`（5 条既有警告）✅。
 
 **执行顺序依赖**：P4-1 → P4-2 → P4-3/4/5（三桌，可并行拆人）→ P4-6 → P4-7 → P4-8。每阶段完成即提交（记忆：plan done → commit）。
 

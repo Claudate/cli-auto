@@ -7,6 +7,8 @@
 
 const planCache = new Map();
 const loading = new Set();
+const expandedProjects = new Set();
+const INITIAL_PLAN_COUNT = 5;
 
 function fileName(path) {
   const parts = String(path || "")
@@ -74,9 +76,12 @@ export function sidebarPlansHtml(project, { esc, selectedPlan } = {}) {
   const items = planCache.get(project.path);
   if (!items?.length) return "";
   const escape = typeof esc === "function" ? esc : (value) => String(value || "");
+  const expanded = expandedProjects.has(project.path);
+  const visibleItems = expanded ? items : items.slice(0, INITIAL_PLAN_COUNT);
+  const hiddenCount = items.length - visibleItems.length;
   return `<div class="sidebar-plan-tree" aria-label="${escape(project.name)} 的计划">
     <div class="sidebar-plan-tree-label">计划</div>
-    ${items
+    ${visibleItems
       .map((item) => {
         const selected = String(item.path) === String(selectedPlan || "");
         const title = item.title || fileName(item.path).replace(/\.md$/i, "");
@@ -86,13 +91,24 @@ export function sidebarPlansHtml(project, { esc, selectedPlan } = {}) {
         </button>`;
       })
       .join("")}
+    ${items.length > INITIAL_PLAN_COUNT ? `<button type="button" class="sidebar-plan-more" data-sidebar-plans-more="${escape(project.path)}" aria-expanded="${expanded}">${expanded ? "收起计划" : `显示其余 ${hiddenCount} 项`}</button>` : ""}
   </div>`;
 }
 
-export function installSidebarPlanSelection(root = document) {
+export function installSidebarPlanSelection(root = document, rerender = () => {}) {
   if (root?.dataset?.ccoSidebarPlansWired) return;
   if (root?.dataset) root.dataset.ccoSidebarPlansWired = "1";
   root.addEventListener("click", (event) => {
+    const more = event.target.closest("[data-sidebar-plans-more]");
+    if (more) {
+      event.preventDefault();
+      event.stopPropagation();
+      const project = more.dataset.sidebarPlansMore;
+      if (expandedProjects.has(project)) expandedProjects.delete(project);
+      else expandedProjects.add(project);
+      rerender();
+      return;
+    }
     const item = event.target.closest("[data-sidebar-plan][data-sidebar-project]");
     if (!item) return;
     event.preventDefault();
