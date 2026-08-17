@@ -34,6 +34,7 @@ import {
 import { renderChatPage, renderChatMessages } from "./chatRender.js";
 import { applyPathModeHeadStep, getPathMode } from "./chatPathMode.js";
 import { applyPersonaOpener, getPersonaId } from "./chatPersona.js";
+import { syncChatModelFromResponse } from "./chatControls.js";
 import {
   installClarifyUi,
   selectClarifyEntry,
@@ -337,6 +338,7 @@ export async function sendChatMessage() {
     if (cli) localStorage.setItem("cco.chatCli", cli);
   } catch (_) {}
   const effortEl = $("#chat-effort");
+  const modelEl = $("#chat-model");
     const effortRaw = (effortEl?.value || "").trim().toLowerCase();
     const effortOk = ["low", "medium", "high", "xhigh", "max", "ultracode"].includes(
       effortRaw
@@ -348,6 +350,7 @@ export async function sendChatMessage() {
       attachments: attachments.length ? attachments : null,
       effort: effortOk ? effortRaw : null,
       cli: cli === "claude" ? null : cli,
+      model: modelEl?.value || "",
     };
     // Persist last chat pick so reopen keeps depth
     try {
@@ -378,9 +381,7 @@ export async function sendChatMessage() {
     // `/model <名称>` 在 Rust 侧设置会话默认模型：持久化跟随（无独立选择器，
     // 会话恢复时 `/help` 与 `/models` 可复核当前值）。
     if (resp.model) {
-      try {
-        localStorage.setItem("cco.chatModel", resp.model);
-      } catch (_) {}
+      syncChatModelFromResponse(resp.model);
     }
     // If user switched project mid-send, still write into that project's cache.
     if (state.selectedPath !== projectPath) {

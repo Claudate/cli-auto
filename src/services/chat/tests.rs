@@ -684,6 +684,46 @@ fn slash_effort_persists_session_default() {
 }
 
 #[test]
+fn composer_model_override_persists_and_can_clear() {
+    let dir = tempdir().unwrap();
+    let project = dir.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    let cfg = fake_cfg();
+    let r = chat_send_with_model(
+        &cfg,
+        &project,
+        "帮我写个登录页计划",
+        None,
+        None,
+        None,
+        None,
+        Some("sonnet"),
+    )
+    .unwrap();
+    assert_eq!(r.model.as_deref(), Some("sonnet"));
+    assert_eq!(
+        chat_session_get(&project, Some("default"))
+            .unwrap()
+            .model
+            .as_deref(),
+        Some("sonnet")
+    );
+    let r = chat_send_with_model(
+        &cfg,
+        &project,
+        "继续",
+        None,
+        None,
+        None,
+        None,
+        Some(""),
+    )
+    .unwrap();
+    assert!(r.model.is_none());
+    assert!(chat_session_get(&project, Some("default")).unwrap().model.is_none());
+}
+
+#[test]
 fn slash_rename_titles_session() {
     let dir = tempdir().unwrap();
     let project = dir.path().join("app");

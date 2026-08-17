@@ -1137,10 +1137,12 @@ async fn chat_send_cmd(
     effort: Option<String>,
     // Optional chat CLI provider id (None → claude default; fake → template reply)
     cli: Option<String>,
+    // Optional chat model (empty string clears the session override).
+    model: Option<String>,
 ) -> Result<ChatSendResponse, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
     tokio::task::spawn_blocking(move || {
-        chat_uc::send(
+        chat_uc::send_with_model(
             &config,
             PathBuf::from(project).as_path(),
             &message,
@@ -1148,6 +1150,7 @@ async fn chat_send_cmd(
             attachments,
             effort.as_deref(),
             cli.as_deref(),
+            model.as_deref(),
         )
         .map_err(map_err)
     })

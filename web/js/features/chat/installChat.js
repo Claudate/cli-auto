@@ -19,6 +19,7 @@ import * as planFull from "./planFull.js";
 import * as chatApi from "./chatApi.js";
 import * as chatClarify from "./chatClarify.js";
 import * as chatMsgEnhance from "./chatMsgEnhance.js";
+import { installChatControls } from "./chatControls.js";
 import { createChatViewModel } from "./ChatViewModel.js";
 
 function renderPlanRailCompat() {
@@ -78,6 +79,7 @@ export function installChatHost() {
  */
 export function createChatDesk(opts = {}) {
   installChatHost();
+  installChatControls();
   const vm = createChatViewModel({
     projectPath: opts.projectPath || null,
   });

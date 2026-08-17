@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * P4-5 结果台视觉重构 —— 一次性目视冒烟（不入 CI）
+ * P4-5/P4-8 结果台视觉重构 —— 一次性目视冒烟（不入 CI）
  * 本地起静态服务加载 web/index.html（dist/ 已构建），stub invoke 造 live DTO（含
  * inspect_loop / verification / browser_evidence），渲染结果台 → 断言完成/遗漏列表
  * 卡片化（StateDot · route_label 执行方式）· honest footer 巡检结论 · 验收面板
  * details 可折叠 + plan_items 勾选 ☑/☐ · 浏览器证据网格（截图卡 + 文本摘录）· rework
- * 按钮文案 · 明暗截图。
+ * 按钮文案 · P4-8 巡检次级列（1280 默认展开 / 1024 默认收起可恢复）· 侧栏
+ * 项目→计划二级树 · 明暗截图。
  * 用法：node scripts/p45-visual-smoke.mjs
  */
 import { chromium } from "playwright";
@@ -151,7 +152,7 @@ function check(name, cond, detail = "") {
 }
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1400, height: 860 } });
+const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => {
@@ -167,7 +168,13 @@ try {
     const stub = (cmd, args = {}) => {
       called.push(cmd);
       if (cmd === "meta") return Promise.resolve({ version: "0.0.0-test" });
-      if (cmd === "get_projects") return Promise.resolve([]);
+      if (cmd === "get_projects") {
+        return Promise.resolve([{ name: "演示项目", path: "/tmp/demo", exists: true }]);
+      }
+      if (cmd === "get_plan_meta") {
+        return Promise.resolve([{ path: "plans/login.md", title: "登录改版" }]);
+      }
+      if (cmd === "get_plans") return Promise.resolve(["plans/login.md"]);
       if (cmd === "get_settings") return Promise.resolve({ permission_mode: "bypassPermissions" });
       if (cmd === "doctor_status_cmd" || cmd === "doctor") return Promise.resolve({ ok: true });
       if (cmd === "latest_plan_job_cmd") return Promise.resolve(null);
@@ -204,6 +211,22 @@ try {
   // ── 结果台壳 ──────────────────────────────────────────────────
   check("result-desk 可见", await page.locator("#result-desk").isVisible());
   check("标题「本轮结果」", (await page.locator("#task-dash-heading").textContent()).includes("本轮结果"));
+
+  // ── P4-8：项目→计划侧栏树 ────────────────────────────────────
+  await page.waitForSelector(".sidebar-plan-tree .sidebar-plan-item", { timeout: 8000 });
+  check("侧栏显示项目→计划二级树", (await page.locator(".sidebar-plan-tree .sidebar-plan-item").count()) === 1);
+  check("侧栏计划名称", (await page.locator(".sidebar-plan-tree .sidebar-plan-item").textContent()).includes("登录改版"));
+
+  // ── P4-8：结果局部巡检列（1280 默认展开，可收起/恢复） ────────
+  const inspectRail = page.locator("#result-inspect-rail");
+  const inspectToggle = page.locator("#btn-result-inspect-toggle");
+  check("1280 巡检列默认展开", await inspectRail.isVisible());
+  check("巡检列切换按钮可见", await inspectToggle.isVisible());
+  await page.locator("#btn-result-inspect-close").click();
+  check("巡检列可收起", !(await inspectRail.isVisible()));
+  check("巡检列收起状态", (await inspectToggle.getAttribute("aria-pressed")) === "false");
+  await inspectToggle.click();
+  check("巡检列可恢复", await inspectRail.isVisible());
 
   // ── 完成列表卡片化 ────────────────────────────────────────────
   const doneCount = await page.locator("#result-desk-done .result-desk-item.is-done").count();
@@ -280,7 +303,7 @@ try {
   }
 
   check("无页面错误（亮色）", errors.length === 0, errors.slice(0, 3).join(" | "));
-  await page.screenshot({ path: "/tmp/p45-result-light.png" });
+  await page.screenshot({ path: "/tmp/p48-result-1280-light.png" });
 
   // ── 暗色 ──────────────────────────────────────────────────────
   await page.evaluate(() => {
@@ -292,7 +315,31 @@ try {
   const cardBg = await page.locator("#result-desk-done .result-desk-item.is-done").first().evaluate((n) => getComputedStyle(n).backgroundColor);
   check("暗色卡片背景非白", cardBg !== "rgb(255, 255, 255)", cardBg);
   check("无页面错误（暗色）", errors.length === 0, errors.slice(0, 3).join(" | "));
-  await page.screenshot({ path: "/tmp/p45-result-dark.png" });
+  await page.screenshot({ path: "/tmp/p48-result-1280-dark.png" });
+
+  // 1024px 是次级列的默认收起阈值；reload 让 ResultView 以窄窗初始状态挂载。
+  await page.setViewportSize({ width: 1024, height: 860 });
+  await page.reload({ waitUntil: "load" });
+  await page.waitForFunction(() => window.ccoRun && window.state && window.ccoIcon, null, { timeout: 8000 });
+  await page.evaluate(() => {
+    window.invoke = window.__stubInvoke;
+    window.state.page = "workspace";
+    window.state.phase = "done";
+    window.state.selectedPath = "/tmp/demo";
+    window.state.live = window.__stubLive;
+    if (typeof window.showPage === "function") window.showPage("workspace");
+    if (typeof window.renderWorkspaceShell === "function") window.renderWorkspaceShell();
+    if (typeof window.ccoIcon?.hydrate === "function") window.ccoIcon.hydrate();
+    window.ccoResult?.renderInspectAndResult(window.__stubLive, window.__stubLive.tasks, { finished: true, active: false });
+  });
+  await page.waitForSelector("#result-desk", { timeout: 8000 });
+  check("1024 巡检列默认收起", !(await page.locator("#result-inspect-rail").isVisible()));
+  const narrowToggle = page.locator("#btn-result-inspect-toggle");
+  check("1024 仍可打开巡检列", await narrowToggle.isVisible());
+  await narrowToggle.click();
+  check("1024 巡检列手动展开", await page.locator("#result-inspect-rail").isVisible());
+  check("无页面错误（1024）", errors.length === 0, errors.slice(0, 3).join(" | "));
+  await page.screenshot({ path: "/tmp/p48-result-1024-dark.png" });
 } catch (err) {
   console.error("SMOKE_ERR:", err);
   await page.screenshot({ path: "/tmp/p45-error.png" }).catch(() => {});

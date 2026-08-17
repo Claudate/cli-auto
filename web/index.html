@@ -3,7 +3,7 @@
 <head>
 <!--
 [INPUT]: 无静态依赖；由 Tauri 加载 app.css + web/js/*（D4）+ A2/A3 js/main.js module
-[OUTPUT]: DOM 结构：sidebar（P4-2 两栏壳：brand + collapse rail + 新建/搜索 + search + project-list + hover 复制卡 + 底部图标设置）· topbar `#view-ring` 段控 拆分|执行|结果|聊天 · welcome · workspace(plan/monitor) · chat · settings 父级分区两栏（左侧图标菜单 · Git·版本发布 大区）· modals
+[OUTPUT]: DOM 结构：sidebar（P4-2/P4-8 两栏壳：brand + collapse rail + 新建/搜索 + 项目→计划二级树 + hover 复制卡 + 底部图标设置）· topbar `#view-ring` 段控 拆分|执行|结果|聊天 · welcome · workspace(plan/monitor/result 局部巡检列) · chat · settings 父级分区两栏（左侧图标菜单 · Git·版本发布 大区）· modals
 [POS]: 桌面壳结构真源；规划相位 spinner · 合并选计划弹窗 · task-dash · 执行看板 · 聊天建计划 · 设置分区
 [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
 note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高级选项
@@ -18,9 +18,18 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <link rel="manifest" href="site.webmanifest" />
+  <script>
+    try {
+      const preference = localStorage.getItem("cco.leafTheme") || "system";
+      const resolved = preference === "system"
+        ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+        : preference;
+      document.documentElement.dataset.theme = resolved;
+    } catch (_) {}
+  </script>
   <link rel="stylesheet" href="app.css" />
 </head>
-<body style="background:#F5F5F7;margin:0">
+<body style="margin:0">
   <div id="app">
     <aside class="sidebar">
       <div class="sidebar-head">
@@ -390,35 +399,49 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
             <div id="error-summary-text" class="task-strip-err" hidden></div>
             <!-- 结果台正文（终态 · result.js） -->
             <div id="result-desk" class="result-desk" hidden>
-              <div class="result-desk-section" id="result-desk-summary">
-                <h3 class="result-desk-h">计划要点</h3>
-                <p class="result-desk-text muted" id="result-desk-plan-line"></p>
-              </div>
-              <div class="result-desk-cols">
-                <div class="result-desk-section">
-                  <h3 class="result-desk-h">已完成</h3>
-                  <ul class="result-desk-list" id="result-desk-done"></ul>
+              <div class="result-desk-layout">
+                <button type="button" class="icon-btn sm result-inspect-toggle" id="btn-result-inspect-toggle" title="显示或收起巡检对照" aria-label="显示或收起巡检对照" aria-pressed="true" data-icon="panel-right-close" data-icon-size="14" hidden></button>
+                <div class="result-desk-main">
+                  <div class="result-desk-section" id="result-desk-summary">
+                    <h3 class="result-desk-h">计划要点</h3>
+                    <p class="result-desk-text muted" id="result-desk-plan-line"></p>
+                  </div>
+                  <div class="result-desk-cols">
+                    <div class="result-desk-section">
+                      <h3 class="result-desk-h">已完成</h3>
+                      <ul class="result-desk-list" id="result-desk-done"></ul>
+                    </div>
+                    <div class="result-desk-section">
+                      <h3 class="result-desk-h">遗漏 / 未完成</h3>
+                      <ul class="result-desk-list" id="result-desk-miss"></ul>
+                      <p class="result-desk-honest muted" id="result-desk-honest" hidden></p>
+                    </div>
+                  </div>
+                  <!-- H3: parallel / integrate verify one-liner (app merge_check) -->
+                  <p class="result-desk-merge muted" id="result-desk-merge-check" hidden></p>
+                  <!-- W3: browser automation evidence (live.browser_evidence) -->
+                  <div class="result-desk-browser" id="result-desk-browser" hidden>
+                    <h3 class="result-desk-h">网页验收证据</h3>
+                    <p class="result-desk-text muted" id="result-desk-browser-note" hidden></p>
+                    <div class="result-desk-browser-grid" id="result-desk-browser-grid"></div>
+                  </div>
                 </div>
-                <div class="result-desk-section">
-                  <h3 class="result-desk-h">遗漏 / 未完成</h3>
-                  <ul class="result-desk-list" id="result-desk-miss"></ul>
-                  <p class="result-desk-honest muted" id="result-desk-honest" hidden></p>
-                </div>
-              </div>
-              <!-- H3: parallel / integrate verify one-liner (app merge_check) -->
-              <p class="result-desk-merge muted" id="result-desk-merge-check" hidden></p>
-              <!-- P2-1: plan acceptance checklist vs inspect (live.verification) -->
-              <details class="result-desk-verify" id="result-desk-verify" hidden>
-                <summary class="result-desk-verify-sum" id="result-desk-verify-sum">原计划要验收</summary>
-                <p class="result-desk-verify-note muted" id="result-desk-verify-note" hidden></p>
-                <ul class="result-desk-list result-desk-verify-list" id="result-desk-verify-list"></ul>
-                <ul class="result-desk-list result-desk-verify-tasks" id="result-desk-verify-tasks" hidden></ul>
-              </details>
-              <!-- W3: browser automation evidence (live.browser_evidence) -->
-              <div class="result-desk-browser" id="result-desk-browser" hidden>
-                <h3 class="result-desk-h">网页验收证据</h3>
-                <p class="result-desk-text muted" id="result-desk-browser-note" hidden></p>
-                <div class="result-desk-browser-grid" id="result-desk-browser-grid"></div>
+                <!-- P4-8: result-local inspect rail; verification DTO remains the single source -->
+                <aside class="result-inspect-rail" id="result-inspect-rail" aria-label="巡检对照" hidden>
+                  <div class="result-inspect-rail-head">
+                    <strong>巡检对照</strong>
+                    <button type="button" class="icon-btn sm" id="btn-result-inspect-close" title="收起巡检对照" aria-label="收起巡检对照" data-icon="panel-right-close" data-icon-size="14"></button>
+                  </div>
+                  <div class="result-inspect-rail-body">
+                    <!-- P2-1: plan acceptance checklist vs inspect (live.verification) -->
+                    <details class="result-desk-verify" id="result-desk-verify" hidden>
+                      <summary class="result-desk-verify-sum" id="result-desk-verify-sum">原计划要验收</summary>
+                      <p class="result-desk-verify-note muted" id="result-desk-verify-note" hidden></p>
+                      <ul class="result-desk-list result-desk-verify-list" id="result-desk-verify-list"></ul>
+                      <ul class="result-desk-list result-desk-verify-tasks" id="result-desk-verify-tasks" hidden></ul>
+                    </details>
+                  </div>
+                </aside>
               </div>
             </div>
             <div id="task-strip-body" class="task-dash-body">
@@ -607,6 +630,10 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
               <input type="file" id="chat-file-input" accept="image/*,.pdf,.md,.markdown,.txt,.csv,.json,.yaml,.yml,.toml,.xml,.html,.htm,.css,.rs,.ts,.tsx,.js,.jsx,.py,.go,.java,.c,.h,.cpp,.hpp,.cs,.sql,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.log" multiple hidden />
               <div class="chat-composer-card">
                 <div id="chat-attach-preview" class="chat-attach-preview" hidden></div>
+                <details class="chat-context-disclosure disclosure-row" id="chat-context-disclosure">
+                  <summary id="chat-context-summary">本轮上下文</summary>
+                  <div class="disclosure-body" id="chat-context-body"></div>
+                </details>
                 <textarea
                   id="chat-input"
                   rows="1"
@@ -627,6 +654,15 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
                     ></button>
                   </div>
                   <div class="chat-composer-actions">
+                    <label class="chat-effort-wrap" title="本会话使用的模型；默认使用当前 CLI 的默认模型">
+                      <span class="sr-only">模型</span>
+                      <select id="chat-model" class="chat-effort-select" aria-label="聊天模型">
+                        <option value="">模型 · 默认</option>
+                        <option value="haiku">Claude · Haiku</option>
+                        <option value="sonnet">Claude · Sonnet</option>
+                        <option value="opus">Claude · Opus</option>
+                      </select>
+                    </label>
                     <label
                       class="chat-effort-wrap"
                       title="推理深度：影响本机 Claude 思考力度；ultracode 等同 xhigh 并自动偏多 Agent 穷尽"
@@ -1139,8 +1175,26 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
               <section class="settings-area" id="set-ui" aria-labelledby="area-ui">
                 <header class="settings-area-head">
                   <h2 class="settings-area-title" id="area-ui">界面</h2>
-                  <p class="settings-area-note">状态刷新节奏等外观设置。</p>
+                  <p class="settings-area-note">外观与状态刷新节奏。</p>
                 </header>
+                <section class="settings-group" aria-labelledby="sg-appearance">
+                  <h3 class="settings-group-title" id="sg-appearance">外观</h3>
+                  <fieldset class="theme-choice-group" aria-label="外观模式">
+                    <label class="theme-choice">
+                      <input type="radio" name="leaf-theme" value="light" />
+                      <span>浅色</span>
+                    </label>
+                    <label class="theme-choice">
+                      <input type="radio" name="leaf-theme" value="dark" />
+                      <span>深色</span>
+                    </label>
+                    <label class="theme-choice">
+                      <input type="radio" name="leaf-theme" value="system" checked />
+                      <span>跟随系统</span>
+                    </label>
+                  </fieldset>
+                  <p class="settings-group-note field-hint">立即生效；仅保存本机界面偏好。</p>
+                </section>
                 <section class="settings-group" aria-labelledby="sg-ui">
                   <h3 class="settings-group-title" id="sg-ui">刷新节奏</h3>
                   <label class="settings-row">

@@ -5,6 +5,7 @@
  */
 
 @import url("css/tokens.css");
+@import url("css/theme.css");
 @import url("css/components.css");
 @import url("css/layout.css");
 @import url("css/select.css");

@@ -1251,6 +1251,15 @@ a.md-ext-link:hover {
     border-color 0.12s ease,
     box-shadow 0.12s ease;
 }
+.chat-context-disclosure {
+  margin: -0.1rem 0 0.15rem;
+  padding: 0 0.2rem;
+}
+.chat-context-disclosure .disclosure-body {
+  color: var(--leaf-alias-label-secondary);
+  font-size: var(--leaf-font-caption);
+  line-height: 1.45;
+}
 .chat-composer-card:focus-within {
   border-color: color-mix(in srgb, var(--accent, #2563eb) 45%, var(--border));
   box-shadow:
@@ -1375,7 +1384,8 @@ a.md-ext-link:hover {
   min-width: 5.5rem;
 }
 .chat-effort-select,
-#chat-effort {
+#chat-effort,
+#chat-model {
   min-width: 5.25rem;
   max-width: 8.5rem;
   height: 1.85rem;

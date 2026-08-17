@@ -5,7 +5,7 @@
 //! |-----------------------|----------------------------------|
 //! | fence / title / normalize / stream parse | session JSON · attachment · plan.md · CLI |
 //!
-//! [INPUT]: project path · Config · message · session_id · attachments · plan markdown
+//! [INPUT]: project path · Config · message · session_id · attachments · model/effort/CLI 覆盖 · plan markdown
 //! [OUTPUT]: session / send / stream / save_plan / normalize / cleanup DTOs
 //! [POS]: Application 层；Presentation 应调本模块；**禁止** confirm_start / start_run 旁路
 //! [PROTOCOL]: 主产出散文 plan.md；本地 preview 为独立进程（非 Mode B worker）；搬家时改委托目标即可
@@ -37,7 +37,7 @@ use crate::services::{available_chat_clis, ChatCliInfo};
 use crate::services::{
     chat_cancel, chat_delete_session, chat_list_sessions, chat_new_session, chat_normalize_plan,
     chat_read_image_data_url, chat_rename_session, chat_save_attachment, chat_save_plan,
-    chat_save_wave_bundle, chat_send, chat_session_get, chat_stream_partial,
+    chat_save_wave_bundle, chat_send, chat_send_with_model, chat_session_get, chat_stream_partial,
     cleanup_expired_chat_sessions, preview_start as services_preview_start,
     preview_status as services_preview_status, preview_stop as services_preview_stop,
     read_plan_md as services_read_plan_md, slash_catalog as services_slash_catalog,
@@ -105,6 +105,29 @@ pub fn send(
         attachments,
         effort,
         cli,
+    )
+}
+
+/// One chat round-trip with an explicit composer model override.
+pub fn send_with_model(
+    config: &Config,
+    project: &Path,
+    message: &str,
+    session_id: Option<&str>,
+    attachments: Option<Vec<ChatAttachment>>,
+    effort: Option<&str>,
+    cli: Option<&str>,
+    model: Option<&str>,
+) -> Result<ChatSendResponse> {
+    chat_send_with_model(
+        config,
+        project,
+        message,
+        session_id,
+        attachments,
+        effort,
+        cli,
+        model,
     )
 }
 

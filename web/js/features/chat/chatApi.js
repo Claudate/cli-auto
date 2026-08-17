@@ -24,6 +24,7 @@ export function listSessions(project) {
  *   sessionId?: string,
  *   attachments?: unknown[]|null,
  *   effort?: string|null,
+ *   model?: string|null,
  * }} args
  */
 export function sendMessage(args) {
@@ -35,6 +36,9 @@ export function sendMessage(args) {
   };
   if (args.effort) payload.effort = args.effort;
   if (args.cli) payload.cli = args.cli;
+  if (Object.prototype.hasOwnProperty.call(args, "model")) {
+    payload.model = args.model || "";
+  }
   return gateway.chatSend(payload);
 }
 

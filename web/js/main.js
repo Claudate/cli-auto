@@ -30,6 +30,7 @@ import { installMarkdown } from "./shared/markdown.js";
 import { installShellUi } from "./shared/shellUi.js";
 import { installConfirmDialog } from "./shared/confirmDialog.js";
 import { installSelectUi } from "./shared/selectUi.js";
+import { installThemePreference } from "./shared/themePreference.js";
 import { installIconsGlobal, hydrateIcons } from "./shared/icons.js";
 import { installClickOutsideGlobal } from "./shared/clickOutside.js";
 import {
@@ -65,8 +66,9 @@ try {
 } catch (_) {}
 /** shell-chrome B2：展开的 details/菜单点空白收起 */
 try {
-  installClickOutsideGlobal(window);
+installClickOutsideGlobal(window);
 } catch (_) {}
+installThemePreference();
 /** Shared form control: macOS-style selects (keep native .value / change). */
 installSelectUi();
 

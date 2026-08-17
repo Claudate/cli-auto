@@ -11,8 +11,55 @@
 
 .result-desk {
   padding: 1.5rem;
-  max-width: 960px;
+  max-width: 1180px;
   margin: 0 auto;
+}
+
+/* P4-8：结果主列 + 局部巡检次级列；窄窗默认由 JS 收起。 */
+.result-desk-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1rem;
+  align-items: start;
+}
+.result-desk-main {
+  min-width: 0;
+}
+.result-inspect-toggle {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+.result-inspect-rail {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  max-height: min(680px, calc(100vh - 11rem));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--leaf-alias-bg-layer-1);
+  border: 1px solid var(--leaf-alias-border-l1);
+  border-radius: 8px;
+}
+.result-inspect-rail[hidden] {
+  display: none !important;
+}
+.result-inspect-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid var(--leaf-alias-border-l1);
+  background: var(--leaf-alias-bg-layer-2);
+  color: var(--leaf-alias-label-primary);
+  font-size: var(--leaf-font-body);
+}
+.result-inspect-rail-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.65rem;
+  scrollbar-gutter: stable;
 }
 
 .result-desk-section {
@@ -161,7 +208,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 .result-desk-verify {
-  margin: 2rem 0;
+  margin: 0;
   padding: 1rem;
   background: var(--leaf-alias-bg-base);
   border: 1px solid var(--leaf-alias-border-l2);
@@ -225,6 +272,17 @@
 
 .result-desk-browser {
   margin: 2rem 0;
+}
+
+@media (max-width: 1100px) {
+  .result-desk-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .result-inspect-rail {
+    grid-column: 1;
+    grid-row: auto;
+    max-height: none;
+  }
 }
 
 .result-desk-browser-grid {

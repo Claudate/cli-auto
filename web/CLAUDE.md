@@ -142,6 +142,12 @@ invoke 散落 → gateway 方法表：见 `js/shared/gateway.js`（命令名 1:1
 | **A5-4** | L1/L2/门禁/总账 GEB | **✅ 2026-07-21** · 串行收口 |
 | **A5-5** | workspace crates（可选） | **本轮不做** · 评估 docs only |
 
+P4-6：composer 使用 chatControls 提供模型选择与本轮上下文 DisclosureRow；模型通过 chatApi 作为会话覆盖下传，CLI/effort 既有语义不变。
+
+P4-7：`shared/themePreference.js` + `css/theme.css` 提供浅色/深色/跟随系统三态与全局 reduced-motion；仅持久化本机展示偏好。
+
+P4-8：`shared/sidebarPlans.js` 以 gateway 计划元数据缓存渲染项目→计划二级树；`ResultView` 将 `live.verification` 置入结果局部巡检列（约 320px，窄窗默认收起），不复制 DTO 或业务规则。
+
 法则: 成员完整·一行一文件·父级链接·技术词前置
 
 [PROTOCOL]: 变更时更新此头部，然后检查 /CLAUDE.md

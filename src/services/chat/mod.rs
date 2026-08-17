@@ -46,7 +46,7 @@ mod tests;
 pub use attachment::{chat_read_image_data_url, chat_save_attachment};
 pub use normalize::chat_normalize_plan;
 pub use plan_md::{chat_save_plan, chat_save_wave_bundle, read_plan_md};
-pub use send::chat_send;
+pub use send::{chat_send, chat_send_with_model};
 pub use session::{
     chat_delete_session, chat_list_sessions, chat_new_session, chat_rename_session,
     chat_session_get, cleanup_expired_chat_sessions,

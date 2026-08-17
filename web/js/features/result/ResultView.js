@@ -7,7 +7,7 @@
  * P0-4: 对照计划用语经 inspectCopy（与 report fallback 同词）。
  * 费用展示在标题右侧 #result-cost-chip（shellChrome.updateBudgetChip）。
  * P1-3: miss 行展示 live.route_label（App 拼好人话）；主路径不露 raw route_source enum。
- * P2-1: live.verification → 可折叠「原计划要验收」副栏（巡检为准 / 未自动对照）。
+ * P2-1/P4-8: live.verification → 结果局部可折叠巡检次级列（巡检为准 / 未自动对照）。
  * W3: live.browser_evidence → 网页验收证据（截图 data URL / 摘录）。
  * 第一屏标题固定「本轮结果」，不写 run_id。
  */
@@ -93,6 +93,51 @@ function routeLine(t) {
  * @param {object} [bridge]
  */
 export function bindResultView(vm, bridge = {}) {
+  let inspectCollapsed =
+    typeof window !== "undefined" && window.innerWidth < 1100;
+
+  function applyInspectRail() {
+    const rail = $("result-inspect-rail");
+    const toggle = $("btn-result-inspect-toggle");
+    const hasVerification = rail?.dataset.hasVerification === "1";
+    if (rail) rail.hidden = !hasVerification || inspectCollapsed;
+    if (toggle) {
+      toggle.hidden = !hasVerification;
+      toggle.setAttribute("aria-pressed", String(!inspectCollapsed));
+      toggle.dataset.icon = inspectCollapsed ? "panel-right-open" : "panel-right-close";
+      toggle.title = inspectCollapsed ? "显示巡检对照" : "收起巡检对照";
+      toggle.setAttribute("aria-label", toggle.title);
+      const icon = g("ccoIcon");
+      if (typeof icon === "function") {
+        toggle.innerHTML = icon(toggle.dataset.icon, {
+          size: 14,
+          className: "ico-btn",
+          label: toggle.title,
+        });
+      }
+    }
+  }
+
+  function installInspectRail() {
+    const toggle = $("btn-result-inspect-toggle");
+    const close = $("btn-result-inspect-close");
+    const flip = () => {
+      inspectCollapsed = !inspectCollapsed;
+      applyInspectRail();
+    };
+    if (toggle && !toggle.dataset.ccoResultInspectWired) {
+      toggle.dataset.ccoResultInspectWired = "1";
+      toggle.addEventListener("click", flip);
+    }
+    if (close && !close.dataset.ccoResultInspectWired) {
+      close.dataset.ccoResultInspectWired = "1";
+      close.addEventListener("click", flip);
+    }
+    applyInspectRail();
+  }
+
+  installInspectRail();
+
   function legacy() {
     return (typeof bridge.getLegacy === "function" && bridge.getLegacy()) || {};
   }
@@ -307,6 +352,7 @@ export function bindResultView(vm, bridge = {}) {
    */
   function renderVerificationPanel(verification) {
     const panel = $("result-desk-verify");
+    const rail = $("result-inspect-rail");
     const sum = $("result-desk-verify-sum");
     const note = $("result-desk-verify-note");
     const list = $("result-desk-verify-list");
@@ -333,10 +379,14 @@ export function bindResultView(vm, bridge = {}) {
         note.hidden = true;
         note.textContent = "";
       }
+      if (rail) rail.dataset.hasVerification = "0";
+      applyInspectRail();
       return;
     }
 
     panel.hidden = false;
+    if (rail) rail.dataset.hasVerification = "1";
+    applyInspectRail();
     // Summary: count + source hint (no raw VERDICT).
     if (sum) {
       if (source === "inspect") {

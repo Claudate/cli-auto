@@ -42,6 +42,28 @@ pub fn chat_send(
     effort: Option<&str>,
     cli: Option<&str>,
 ) -> Result<ChatSendResponse> {
+    chat_send_with_model(
+        config,
+        project,
+        message,
+        session_id,
+        attachments,
+        effort,
+        cli,
+        None,
+    )
+}
+
+pub fn chat_send_with_model(
+    config: &Config,
+    project: &Path,
+    message: &str,
+    session_id: Option<&str>,
+    attachments: Option<Vec<ChatAttachment>>,
+    effort: Option<&str>,
+    cli: Option<&str>,
+    model: Option<&str>,
+) -> Result<ChatSendResponse> {
     if !project.is_dir() {
         bail!("project path is not a directory: {}", project.display());
     }
@@ -77,6 +99,10 @@ pub fn chat_send(
 
     let sid = session_id.unwrap_or(DEFAULT_SESSION);
     let mut sess = chat_session_get(project, Some(sid))?;
+    if let Some(value) = model {
+        let value = value.trim();
+        sess.model = (!value.is_empty()).then(|| value.to_string());
+    }
     let now = Utc::now().to_rfc3339();
     let user_content = if atts.is_empty() {
         msg.to_string()

@@ -34,7 +34,7 @@ function $$ (sel) {
 }
 
 /**
- * Intention table only — no raw invoke / __TAURI__.
+ * Intent table only — all calls stay behind the shared presentation bridge.
  * Settings/doctor/monitor go through ccoSettings / ccoRun when present.
  */
 export function createUiActions() {

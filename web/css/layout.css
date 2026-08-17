@@ -204,6 +204,57 @@
   opacity: 0.35;
 }
 
+/* P4-8：项目内计划二级树；仅展示层，不维护计划状态。 */
+.sidebar-plan-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  margin: -0.05rem 0 0.35rem 1.05rem;
+  padding: 0.2rem 0 0.1rem 0.55rem;
+  border-left: 1px solid var(--leaf-alias-border-l1);
+}
+.sidebar-plan-tree-label {
+  padding: 0.1rem 0.35rem;
+  color: var(--leaf-alias-label-tertiary);
+  font-size: var(--leaf-font-caption);
+  font-weight: 600;
+}
+.sidebar-plan-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.3rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--leaf-alias-label-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--leaf-font-caption);
+  text-align: left;
+}
+.sidebar-plan-item span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-plan-item:hover {
+  background: var(--leaf-alias-interactive-bg-hover);
+  color: var(--leaf-alias-label-primary);
+}
+.sidebar-plan-item.active {
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary) 30%, transparent);
+  background: var(--leaf-alias-brand-weak);
+  color: var(--leaf-alias-brand-primary);
+}
+.sidebar-plan-item:focus-visible {
+  outline: none;
+  box-shadow: var(--leaf-alias-focus-ring);
+}
+
 .dot {
   width: 8px;
   height: 8px;
@@ -1739,6 +1790,7 @@ body[data-cco-app-phase="author"] .view-ring-item[data-ring="chat"] {
   body.cco-sidebar-collapsed .project-item .name-text,
   body.cco-sidebar-collapsed .project-item .path,
   body.cco-sidebar-collapsed .project-item .meta,
+  body.cco-sidebar-collapsed .sidebar-plan-tree,
   body.cco-sidebar-collapsed .project-item-remove,
   body.cco-sidebar-collapsed .sidebar-foot #conn-status {
     display: none;

@@ -7,7 +7,7 @@
  * 移植来源：Jakub Antalik · thinking-orbs（MIT）
  *   https://orbs.jakubantalik.com · https://github.com/Jakubantalik/thinking-orbs
  * 纯移植剥离 React；数学与配置未改。isDark 仅翻转墨色亮度。
- * 始终 rAF 自转（等待态功能性动画）；不因 prefers-reduced-motion 退化成单帧静态图。
+ * 默认 rAF 自转；prefers-reduced-motion 时退化成单帧静态图。
  * 暗色判定：优先显式 `dark` 选项 → 祖先 data-theme/class 标记 → 默认浅色。
  * 不回退 prefers-color-scheme（本 app 纯浅色；避免 OS 深色时白点画浅底不可见）。
  */
@@ -746,26 +746,39 @@ export function startThinkingOrb(canvas, opts = {}) {
   const dark =
     opts.dark != null ? !!opts.dark : _detectDark(canvas) ?? false;
 
+  const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let reducedMotion = motionQuery.matches;
   let raf = 0;
-  let last = 0;
   let io = null;
 
-  function frame(ts) {
+  function drawFrame(ts) {
     draw(ctx, size, (ts / 1000) * rate, dark, preset);
-    raf = requestAnimationFrame(frame);
+  }
+
+  function frame(ts) {
+    drawFrame(ts);
+    if (!reducedMotion) raf = requestAnimationFrame(frame);
+  }
+
+  function onMotionChange(event) {
+    reducedMotion = event.matches;
+    cancelAnimationFrame(raf);
+    if (reducedMotion) drawFrame(0);
+    else raf = requestAnimationFrame(frame);
   }
 
   const stop = () => {
     cancelAnimationFrame(raf);
+    motionQuery.removeEventListener("change", onMotionChange);
     if (io) io.disconnect();
     ctx.clearRect(0, 0, size, size);
     delete canvas.dataset.ccoOrb;
     delete canvas._ccoOrbStop;
   };
 
-  // 始终动画：这是「等待中」的功能性自转指示器，不因 prefers-reduced-motion 退化成一帧静态图
-  //（否则在开启「减弱动态效果」/ macOS 减少动态效果 的 Tauri webview 里会静止不转）。
-  raf = requestAnimationFrame(frame);
+  if (reducedMotion) drawFrame(0);
+  else raf = requestAnimationFrame(frame);
+  motionQuery.addEventListener("change", onMotionChange);
 
   canvas.dataset.ccoOrb = "1";
   canvas._ccoOrbStop = stop;

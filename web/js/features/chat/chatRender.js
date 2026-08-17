@@ -23,6 +23,7 @@ import {
   stashChatSession,
 } from "./chatState.js";
 import { chatEsc, chatFormatBody, chatFormatStreamBody } from "./chatFormat.js";
+import { renderChatComposerContext } from "./chatControls.js";
 import { renderChatAttachPreview } from "./chatAttachments.js";
 import {
   renderChatSessionSelect,
@@ -636,6 +637,7 @@ export function renderChatPage() {
   renderChatMessages();
   renderChatEnvBar();
   renderChatReadyBar();
+  renderChatComposerContext();
   host.renderPlanRail();
   host.renderPlanFullView();
 }

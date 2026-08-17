@@ -9,6 +9,12 @@
  * note: 2026-08-15 P4-2 —— installSidebarChrome（rail 折叠 · 搜索 + #sidebar-count N/M · hover 路径复制卡）模块级 sidebarQuery 瞬态
  */
 
+import {
+  installSidebarPlanSelection,
+  queueSidebarPlans,
+  sidebarPlansHtml,
+} from "./sidebarPlans.js";
+
 function g(name) {
   return typeof window !== "undefined" ? window[name] : undefined;
 }
@@ -423,6 +429,8 @@ export function renderProjectList() {
     return;
   }
 
+  queueSidebarPlans(projects, renderProjectList);
+
   el.innerHTML = projects
     .map((p) => {
       const stt = p.active_status || p.last_status || "";
@@ -474,6 +482,7 @@ export function renderProjectList() {
         p.path
       )}">${copyIco}复制路径</button>
         </div>
+        ${sidebarPlansHtml(p, { esc, selectedPlan: state.selectedPlan })}
       </div>`;
     })
     .join("");
@@ -499,6 +508,10 @@ export function renderProjectList() {
       }
     };
   });
+  try {
+    installSidebarPlanSelection(el);
+    if (typeof window.ccoHydrateIcons === "function") window.ccoHydrateIcons(el);
+  } catch (_) {}
 }
 
 /* ── P4-2 侧栏 chrome：折叠 rail · 搜索 · hover 复制（几何瞬态，不入 localStorage）── */

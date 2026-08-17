@@ -14,7 +14,7 @@ chat/: **A1-6 多文件 IO 适配**（单文件 ≤600；出巨石榜）
   · mod.rs: facade re-export + domain pure re-export
   · types.rs: ChatSession/Message/Draft/Send/Stream/Normalize DTO
   · session.rs: get/list/new/rename/delete · save · cleanup 48h · **B3** `append_session_event`/`last_session_event`（`.cco/chat/{safe}.events.jsonl` 会话级事件日志 · 诊断默认关）
-  · send.rs: chat_send（fake/soft-fallback · draft from fence · **内置 session_digest 抽/存/剥** · **B3 压缩成立写 `context_compressed` 事件**）
+  · send.rs: chat_send（fake/soft-fallback · draft from fence · CLI/effort/model 会话覆盖 · **内置 session_digest 抽/存/剥** · **B3 压缩成立写 `context_compressed` 事件**）
   · stream.rs: chat_stream_partial
   · plan_md.rs: chat_save_plan · read_plan_md
   · attachment.rs: chat_save_attachment · **chat_read_image_data_url**（项目内图片 → data URL · 聊天内联）

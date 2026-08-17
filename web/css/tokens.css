@@ -124,7 +124,8 @@ body {
  *    整体覆写 static 阶（bluish 反装：低端=深面 · 高端=亮文字 · 875=面板底），
  *    再重映射全部 alias → 组件零改动即跟随。
  * ============================================================ */
-body[data-leaf-theme="dark"] {
+body[data-leaf-theme="dark"],
+:root[data-theme="dark"] body {
   color-scheme: dark;
   --leaf-static-bg-00: #141519;
   --leaf-static-bg-50: #17181D;
@@ -294,4 +295,15 @@ body {
   min-height: 0;
   overflow: hidden;
   background: var(--bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

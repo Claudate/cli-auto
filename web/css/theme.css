@@ -1,0 +1,65 @@
+/**
+ * [INPUT]: tokens.css 的 alias token · 设置页外观 radio controls
+ * [OUTPUT]: 三态外观分段控件 · 全局 reduced-motion 退化
+ * [POS]: web/css 的展示偏好样式；不含业务状态
+ * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
+ */
+
+.theme-choice-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.25rem;
+  margin: 0.25rem 0 0.55rem;
+  padding: 0.2rem;
+  border: 1px solid var(--leaf-alias-border-l2);
+  border-radius: 8px;
+  background: var(--leaf-alias-bg-layer-2);
+}
+
+.theme-choice {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.theme-choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.theme-choice span {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--leaf-alias-label-secondary);
+  font-size: var(--leaf-font-secondary);
+  font-weight: 600;
+  text-align: center;
+}
+
+.theme-choice:hover span {
+  background: var(--leaf-alias-interactive-bg-hover);
+  color: var(--leaf-alias-label-primary);
+}
+
+.theme-choice input:checked + span {
+  background: var(--leaf-alias-bg-layer-1);
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary) 40%, var(--leaf-alias-border-l2));
+  box-shadow: var(--leaf-alias-shadow-1);
+  color: var(--leaf-alias-brand-primary);
+}
+
+.theme-choice input:focus-visible + span {
+  box-shadow: var(--leaf-alias-focus-ring);
+}
+
+@media (max-width: 560px) {
+  .theme-choice-group {
+    grid-template-columns: 1fr;
+  }
+}
