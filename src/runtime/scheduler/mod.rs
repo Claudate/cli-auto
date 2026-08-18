@@ -97,14 +97,13 @@ impl Scheduler {
     pub async fn run(mut self) -> Result<RunStatus> {
         self.state.status = RunStatus::Validated;
         self.state.save()?;
-        self.state.event(
-            "run_start",
-            serde_json::json!({
-                "run_id": self.state.run_id,
-                "project": self.state.project_root,
-                "plan": self.state.plan_path,
-            }),
-        )?;
+        let run_start_payload = serde_json::json!({
+            "run_id": self.state.run_id,
+            "project": self.state.project_root,
+            "plan": self.state.plan_path,
+        });
+        self.state.event("run_start", run_start_payload.clone())?;
+        self.emit_event("run_start", run_start_payload);
 
         let resolved = self.state.run_dir.join("plan.resolved.json");
         std::fs::write(&resolved, serde_json::to_string_pretty(&self.plan)?)?;
@@ -190,10 +189,9 @@ impl Scheduler {
             if failed.contains("__budget__") && running.is_empty() {
                 self.state.status = RunStatus::Paused;
                 self.state.save()?;
-                self.state.event(
-                    "run_end",
-                    serde_json::json!({"status": "paused", "reason": "budget_exceeded"}),
-                )?;
+                let budget_payload = serde_json::json!({"status": "paused", "reason": "budget_exceeded"});
+                self.state.event("run_end", budget_payload.clone())?;
+                self.emit_event("run_end", budget_payload);
                 let _ = handoff::on_run_end(&self.plan, &self.state, RunStatus::Paused);
                 return Ok(RunStatus::Paused);
             }
@@ -202,10 +200,9 @@ impl Scheduler {
                 if running.is_empty() {
                     self.state.status = RunStatus::Paused;
                     self.state.save()?;
-                    self.state.event(
-                        "run_end",
-                        serde_json::json!({"status": "paused", "failed": failed}),
-                    )?;
+                    let pause_payload = serde_json::json!({"status": "paused", "failed": failed});
+                    self.state.event("run_end", pause_payload.clone())?;
+                    self.emit_event("run_end", pause_payload);
                     let _ = handoff::on_run_end(&self.plan, &self.state, RunStatus::Paused);
                     return Ok(RunStatus::Paused);
                 }
@@ -257,12 +254,9 @@ impl Scheduler {
         self.state.finished_at = Some(chrono::Utc::now());
         self.auto_commit_plan(status);
         self.state.save()?;
-        self.state.event(
-            "run_end",
-            serde_json::json!({
-                "status": status,
-            }),
-        )?;
+        let end_payload = serde_json::json!({"status": status});
+        self.state.event("run_end", end_payload.clone())?;
+        self.emit_event("run_end", end_payload);
         let _ = handoff::on_run_end(&self.plan, &self.state, status);
 
         if let Some(mirror) = &self.mirror_state {
@@ -270,5 +264,12 @@ impl Scheduler {
         }
 
         Ok(status)
+    }
+
+    /// B1-0: Bridge disk events to optional frontend emitter.
+    fn emit_event(&self, type_name: &str, payload: serde_json::Value) {
+        if let Some(emitter) = &self.event_emitter {
+            let _ = emitter.emit_run_event(&self.state.run_id, type_name, payload);
+        }
     }
 }

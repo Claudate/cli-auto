@@ -138,17 +138,16 @@ impl Scheduler {
             self.state.finished_at = Some(chrono::Utc::now());
         }
         self.state.save()?;
-        self.state.event(
-            "run_end",
-            serde_json::json!({
-                "status": match disk.status {
-                    RunStatus::Aborted => "aborted",
-                    RunStatus::Paused => "paused",
-                    _ => "stopped",
-                },
-                "via": "external_stop",
-            }),
-        )?;
+        let stop_payload = serde_json::json!({
+            "status": match disk.status {
+                RunStatus::Aborted => "aborted",
+                RunStatus::Paused => "paused",
+                _ => "stopped",
+            },
+            "via": "external_stop",
+        });
+        self.state.event("run_end", stop_payload.clone())?;
+        self.emit_event("run_end", stop_payload);
         let _ = handoff::on_run_end(&self.plan, &self.state, disk.status);
         Ok(Some(disk.status))
     }
@@ -263,19 +262,20 @@ impl Scheduler {
                         }
                         // P3 memory pilot: record success (best-effort).
                         self.record_task_outcome(&id, "success").await;
-                        
+
                         info!(task = %id, cost = ?result.cost_usd, "task done");
-                        self.state.event(
-                            "task_end",
-                            serde_json::json!({
-                                "task_id": id,
-                                "status": result.status,
-                                "cost_usd": result.cost_usd,
-                                "error": result.error,
-                            }),
-                        )?;
+                        let task_end_payload = serde_json::json!({
+                            "task_id": id,
+                            "status": result.status,
+                            "cost_usd": result.cost_usd,
+                            "error": result.error,
+                        });
+                        self.state.event("task_end", task_end_payload.clone())?;
+                        self.emit_event("task_end", task_end_payload);
                         // A1: checkpoint event for granular resume
-                        let _ = self.state.event("checkpoint", serde_json::json!({"task_id": id}));
+                        let checkpoint_payload = serde_json::json!({"task_id": id});
+                        let _ = self.state.event("checkpoint", checkpoint_payload.clone());
+                        self.emit_event("checkpoint", checkpoint_payload);
                         self.state.save()?;
                         self.handoff_task_end(&id, &result, Some(&work_dir));
                     } else {
@@ -486,15 +486,14 @@ impl Scheduler {
                 }
                 done.insert(id.clone());
                 started.insert(id.clone());
-                let _ = self.state.event(
-                    "task_end",
-                    serde_json::json!({
-                        "task_id": id,
-                        "status": "skipped",
-                        "error": reason,
-                        "gate": "system_push_inspect",
-                    }),
-                );
+                let skip_payload = serde_json::json!({
+                    "task_id": id,
+                    "status": "skipped",
+                    "error": reason,
+                    "gate": "system_push_inspect",
+                });
+                let _ = self.state.event("task_end", skip_payload.clone());
+                self.emit_event("task_end", skip_payload);
                 let _ = self.state.save();
                 continue;
             }
@@ -528,18 +527,17 @@ impl Scheduler {
                     // assignment is auditable in events.jsonl. Declaration only —
                     // does not change what actually spawns (rule 13 routing unchanged).
                     let permission_tier = provider.default_permission_tier().as_str();
-                    self.state.event(
-                        "task_start",
-                        serde_json::json!({
-                            "task_id": id,
-                            "provider": task.provider,
-                            "mode": task.mode,
-                            "pid": handle.pid,
-                            "work_dir": work_dir,
-                            "attempt": attempt,
-                            "permission_tier": permission_tier,
-                        }),
-                    )?;
+                    let task_start_payload = serde_json::json!({
+                        "task_id": id,
+                        "provider": task.provider,
+                        "mode": task.mode,
+                        "pid": handle.pid,
+                        "work_dir": work_dir,
+                        "attempt": attempt,
+                        "permission_tier": permission_tier,
+                    });
+                    self.state.event("task_start", task_start_payload.clone())?;
+                    self.emit_event("task_start", task_start_payload);
                     self.state.save()?;
                     if let Err(e) = handoff::on_task_start(&self.plan, &self.state, &id) {
                         warn!(task = %id, err = %e, "handoff task_start failed");
@@ -567,17 +565,18 @@ impl Scheduler {
                             self.auto_commit_task(&id, &result);
                             done.insert(id.clone());
                             self.record_task_outcome(&id, "success").await;
-                            self.state.event(
-                                "task_end",
-                                serde_json::json!({
-                                    "task_id": id,
-                                    "status": result.status,
-                                    "cost_usd": result.cost_usd,
-                                    "attempt": attempt,
-                                }),
-                            )?;
+                            let fast_end_payload = serde_json::json!({
+                                "task_id": id,
+                                "status": result.status,
+                                "cost_usd": result.cost_usd,
+                                "attempt": attempt,
+                            });
+                            self.state.event("task_end", fast_end_payload.clone())?;
+                            self.emit_event("task_end", fast_end_payload);
                             // A1: checkpoint event for granular resume
-                            let _ = self.state.event("checkpoint", serde_json::json!({"task_id": id}));
+                            let fast_checkpoint_payload = serde_json::json!({"task_id": id});
+                            let _ = self.state.event("checkpoint", fast_checkpoint_payload.clone());
+                            self.emit_event("checkpoint", fast_checkpoint_payload);
                             self.state.save()?;
                             self.handoff_task_end(&id, &result, Some(&work_dir));
                         } else {
@@ -777,17 +776,16 @@ impl Scheduler {
         if let Ok(text) = serde_json::to_string_pretty(&self.plan) {
             let _ = std::fs::write(&resolved, text);
         }
-        let _ = self.state.event(
-            "cost_budget",
-            serde_json::json!({
-                "task_id": id,
-                "from": previous,
-                "to": pick.provider,
-                "spent": spent,
-                "cap": cap,
-                "tier": pick.tier.as_str(),
-            }),
-        );
+        let budget_payload = serde_json::json!({
+            "task_id": id,
+            "from": previous,
+            "to": pick.provider,
+            "spent": spent,
+            "cap": cap,
+            "tier": pick.tier.as_str(),
+        });
+        let _ = self.state.event("cost_budget", budget_payload.clone());
+        self.emit_event("cost_budget", budget_payload);
         info!(
             task = %id,
             from = %previous,
