@@ -35,7 +35,7 @@ ui-redesign-dsh-2026-08-15.md: **DSH UI 收口**（P4-8 视觉终验待授权通
 ### 还在做（活跃落地 · 可有 ☐）
 
 harness-inspired-roadmap-2026-08-14.md: **Harness 启示方向参考**（A1 Run Resume · A2 能力预设 · A3 工具门控 · A3bis PermissionTier · B1 事件总线(架构A级) · B2 Headless · §四 UI影响面(U-A1…U-B2) · 不做 Cordis/ACP/遥测；方向参考，非阶段表）
-event-bus-landing-2026-08-18.md: **B1 事件总线落地**（events.jsonl → Tauri emit → 前端订阅；M3 事件派生+轮询降级 · 消除 2s 双源不一致 · A1/A3bis/B3 前端基座 · 单独立项不与 DSH 混跑；**本能力唯一勾选**）；UX 配套 [`event-bus-ux-2026-08-18.md`](./event-bus-ux-2026-08-18.md)（U1-U6 用户操作流/易用性/防抖/降级体感/安全标签默认关）
+event-bus-landing-2026-08-18.md: **B1 事件总线落地**（**B1-0/1/2/3 ✅ 全部完成** · events.jsonl → Tauri emit → 前端订阅；M3 事件派生+轮询降级 · 消除 2s 双源不一致 · A1/A3bis/B3 前端基座 · 金样测试 4 用例 · 架构门禁通过；**本能力唯一勾选**）；UX 配套 [`event-bus-ux-2026-08-18.md`](./event-bus-ux-2026-08-18.md)（U1-U6 用户操作流/易用性/防抖/降级体感/安全标签默认关 · P0/P1 ✅）
 run-resume-checkpoint-2026-08-14.md: **A1 Run Resume 检查点恢复**（R1 Scheduler checkpoint 事件 ✅ · R2 prepare_for_resume 增量+has_checkpoint ✅ · R3 CLI 透传 ✅ · R4 RunView 按钮文案 ✅；**本能力唯一勾选**；改 finish.rs + state/mod.rs + services/live.rs + RunView.js）
 permission-tier-audit-2026-08-14.md: **A3bis PermissionTier 安全层级审计**（D1 Domain 枚举 ReadOnly/WorkspaceWrite/FullAccess ✅ · D2 WorkerPort default_permission_tier() 默认 FullAccess 向后兼容 ✅ · D3 Scheduler task_start 记 tier 到 events.jsonl ✅ · D4 ProjectLiveView permission_tier_label 人话 ✅ · U-A3bis 设置页人话安全标签 ✅；**本能力唯一勾选**；不破坏 bypassPermissions 默认 · 规则 13 路由不动）
 headless-mode-2026-08-14.md: **B2 Headless 静默执行模式**（H1 `report::headless_result` 观察 DTO ✅ · H2 CLI `--headless`/`--output json` flag ✅ · H3 `commands/run.rs` headless 分流 + JSON 打印 ✅ · H4 跳过 confirm/不起 TUI/stderr 分流 ✅；**本能力唯一勾选**；规则 12 同一 app 路径 · 规则 23 JSON 首字段人话 summary）

@@ -182,6 +182,65 @@ if [[ -d src/domain ]] && command -v rg >/dev/null 2>&1; then
   fi
 fi
 
+# 6) B1 event bus checks (波次 3 架构门禁)
+note "== B1 event bus checks =="
+
+# 6a) state.js 行数不增（规则 18 — D9+ 桥/瘦 ~230 行，禁止再堆）
+if [[ -f web/js/state.js ]]; then
+  state_n=$(wc -l < web/js/state.js | tr -d ' ')
+  # D9+ baseline ~230; allow small fluctuation but catch significant growth
+  STATE_BASELINE=250
+  if (( state_n > STATE_BASELINE )); then
+    if [[ "$STRICT" == "1" ]]; then
+      fail "web/js/state.js has $state_n lines (> baseline $STATE_BASELINE) — B1 event subscription must go through gateway, not state.js"
+    else
+      warn "web/js/state.js has $state_n lines (> baseline $STATE_BASELINE) — B1 event subscription should not increase state.js size"
+    fi
+  else
+    note "info: web/js/state.js has $state_n lines (≤ $STATE_BASELINE — B1 compliant)"
+  fi
+fi
+
+# 6b) RunState struct 不得包含 AppHandle 字段（B1 纠正：AppHandle 在 Scheduler，不在 RunState）
+if [[ -f src/state/mod.rs ]] && command -v rg >/dev/null 2>&1; then
+  if rg -n 'pub struct RunState' -A 30 src/state/mod.rs 2>/dev/null | rg -q 'app_handle.*AppHandle'; then
+    fail "src/state/mod.rs RunState must not contain AppHandle field (B1: AppHandle goes in Scheduler, not RunState)"
+  else
+    note "info: RunState struct does not contain AppHandle field (B1 compliant)"
+  fi
+fi
+
+# 6c) gateway.js 应导出 subscribeRunEvents（B1 前端订阅入口）
+if [[ -f web/js/shared/gateway.js ]]; then
+  if ! grep -q 'subscribeRunEvents' web/js/shared/gateway.js 2>/dev/null; then
+    if [[ "$STRICT" == "1" ]]; then
+      fail "web/js/shared/gateway.js should export subscribeRunEvents (B1 event subscription)"
+    else
+      warn "web/js/shared/gateway.js should export subscribeRunEvents (B1 event subscription)"
+    fi
+  else
+    note "info: gateway.js exports subscribeRunEvents (B1 event subscription present)"
+  fi
+fi
+
+# 6d) features/ 文件无散落 __TAURI__.event.listen（规则 20 — IPC 唯一出口 gateway）
+if [[ -n "$FEAT_ROOT" ]] && command -v rg >/dev/null 2>&1; then
+  if rg -n --glob '*.js' '__TAURI__.*event.*listen' "$FEAT_ROOT" 2>/dev/null \
+    | rg -v 'gateway' >/tmp/cco-arch-tauri-listen.txt 2>/dev/null; then
+    if [[ -s /tmp/cco-arch-tauri-listen.txt ]]; then
+      if [[ "$STRICT" == "1" ]]; then
+        fail "B1: __TAURI__.event.listen found outside gateway under $FEAT_ROOT (rule 20):"
+        cat /tmp/cco-arch-tauri-listen.txt
+      else
+        warn "B1: __TAURI__.event.listen under $FEAT_ROOT should go through gateway:"
+        head -10 /tmp/cco-arch-tauri-listen.txt
+      fi
+    fi
+  else
+    note "info: no scattered __TAURI__.event.listen in features/ (B1 compliant)"
+  fi
+fi
+
 note "-- summary: WARN=$WARN FAIL=$FAIL --"
 if (( FAIL > 0 )); then
   exit 1

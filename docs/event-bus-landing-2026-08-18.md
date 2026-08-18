@@ -517,9 +517,9 @@ B1 通管道后，以下已落地但「写了没人读」的能力**价值释放
 | 阶段 | 状态 | 说明 |
 |------|------|------|
 | B1-0 Rust emit 桥 | ✅ | trait 抽象 · Scheduler.event_emitter · TauriEmitter 50ms coalescing |
-| B1-1 前端订阅 | ☐ | `gateway.js` + `RunViewModel.js` |
-| B1-2 降级 + 一致性 | ☐ | `shellBoot.js` + `run_end` 全量刷新 |
-| B1-3 金样测试 | ☐ | `tests/event_bus_golden.rs` + `check-arch.sh` |
+| B1-1 前端订阅 | ✅ | `gateway.js` + `RunViewModel.js` + `shellBoot.js` 事件订阅 |
+| B1-2 降级 + 一致性 | ✅ | `shellBoot.js` 降级逻辑 + `run_end` 300ms 延迟刷新 + checkpoint 按钮 |
+| B1-3 金样测试 | ✅ | `tests/event_bus_golden.rs` 4 用例全绿 + `check-arch.sh` B1 门禁通过 |
 
 ---
 
@@ -532,3 +532,4 @@ B1 通管道后，以下已落地但「写了没人读」的能力**价值释放
 | 2026-08-18 | 初版立项；M3 事件派生 + 轮询降级；单独立项不与 DSH 混跑 |
 | 2026-08-18 | 审查修订：AppHandle 挂 Scheduler 不挂 RunState；chat 相事件后置；task_failed 不存在；前端订阅放 shellBoot 不放 RunViewModel；加多窗口/softSync/jobPoll 待澄清项 |
 | 2026-08-18 | UX 配套：新增 §5.3 UX 验收（U1-U6）+ §5.4 验证口令补充；详见 [`event-bus-ux-2026-08-18.md`](./event-bus-ux-2026-08-18.md) |
+| 2026-08-18 | B1-3 完成：`tests/event_bus_golden.rs` 4 用例（事件序列/并发防抖/失败可见性/permission_tier）· `check-arch.sh` B1 门禁（state.js 行数/RunState 无 AppHandle/gateway 导出/无散落 listen）· **波次 0-3 全部完成 ✅** |
