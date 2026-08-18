@@ -39,6 +39,14 @@ export function createSplitViewModel(deps = {}) {
     lastToast: null,
   });
 
+  /**
+   * Job-snapshot signature for setJob no-op guard.
+   * Prevents the 2s poll tick (softSyncFromLegacy) from churning the store
+   * with a structurally-identical planJob, which would trigger unnecessary
+   * re-renders on every tick. Computed from job identity + opts.
+   */
+  let lastJobSig = "";
+
   function snap() {
     return store.get();
   }
@@ -73,7 +81,20 @@ export function createSplitViewModel(deps = {}) {
      * @param {{ jobId?: string|null, selectedTaskId?: string|null, editing?: boolean }} [opts]
      */
     setJob(job, opts = {}) {
+      // No-op guard: skip when the job + opts signature hasn't changed.
+      // The 2s poll tick calls this every cycle; without the guard, each
+      // tick replaces the store object (new reference) → triggers subscribers
+      // → full SplitView.render() → innerHTML churn even when nothing moved.
       const jobId = opts.jobId ?? jobIdOf(job, snap().jobId);
+      const sig =
+        `${job?.job_id || job?.jobId || jobId || ""}|${job?.status || ""}|${
+          job?.tasks?.length || 0
+        }|${opts.selectedTaskId ?? ""}|${opts.editing ?? ""}`;
+      if (sig === lastJobSig && !snap().busy) {
+        // Structural unchanged and not mid-mutation: skip store churn.
+        return snap();
+      }
+      lastJobSig = sig;
       let selected =
         opts.selectedTaskId !== undefined
           ? opts.selectedTaskId

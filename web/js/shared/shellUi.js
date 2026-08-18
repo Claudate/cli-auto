@@ -179,9 +179,8 @@ export function showPage(name) {
       sub.hidden = false;
       sub.textContent = "添加项目 → 写计划 → 拆成步骤 → 执行规划";
     }
-    try {
-      call("renderPlanPicker");
-    } catch (_) {}
+    // Only render picker when entering author/split phases (not every page switch).
+    // Reduces navigation jank from re-reading + re-rendering plan list.
   } else if (name === "workspace") {
     updateWorkspaceTitle();
     try {
@@ -203,9 +202,6 @@ export function showPage(name) {
       // 后台 Mode B 态只走顶栏监控 ghost / 可关 banner，副标题不再夹「待确认/返回确认」
       sub.textContent = label ? `和 AI 一起写计划 · ${label}` : "和 AI 一起写计划";
     }
-    try {
-      call("renderPlanPicker");
-    } catch (_) {}
   } else if (name === "plans") {
     const title = $el("#page-title");
     if (title) title.textContent = "计划管理";
@@ -223,9 +219,6 @@ export function showPage(name) {
         ? `选中 · 预览 · 编辑 · 拆成步骤 · ${label}`
         : "选中计划后预览、编辑或拆成步骤";
     }
-    try {
-      call("renderPlanPicker");
-    } catch (_) {}
   } else if (name === "doctor") {
     const title = $el("#page-title");
     if (title) title.textContent = "环境检查";
@@ -234,9 +227,6 @@ export function showPage(name) {
       sub.textContent = "确认本机 CLI 与依赖就绪";
     }
     // 系统页：重算顶栏（隐藏业务 CTA / 阶段条）
-    try {
-      call("renderPlanPicker");
-    } catch (_) {}
   } else if (name === "help") {
     const title = $el("#page-title");
     if (title) title.textContent = "帮助";
@@ -244,9 +234,6 @@ export function showPage(name) {
       sub.hidden = false;
       sub.textContent = "";
     }
-    try {
-      call("renderPlanPicker");
-    } catch (_) {}
   } else if (name === "settings") {
     const title = $el("#page-title");
     if (title) title.textContent = "设置";
@@ -254,9 +241,6 @@ export function showPage(name) {
       sub.hidden = false;
       sub.textContent = "常用优先 · 高级默认折叠";
     }
-    try {
-      call("renderPlanPicker");
-    } catch (_) {}
   }
 }
 

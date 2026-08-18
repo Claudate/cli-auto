@@ -305,15 +305,23 @@ fn plan_acceptance_fields(job: &PlanJob) -> (bool, Option<String>) {
 pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJobView> {
     let mut layers = Vec::new();
     let mut tasks = Vec::new();
-    if matches!(
+    // Populate tasks for Planned/Confirmed (normal) AND PlanFailed (so desk
+    // shows the failed graph + error, not a misleading "共 0 步" empty state).
+    // Planning/Cancelled stay empty (no artifact yet / user cancelled).
+    let should_load_tasks = matches!(
         job.status,
-        PlanJobStatus::Planned | PlanJobStatus::Confirmed
-    ) {
+        PlanJobStatus::Planned | PlanJobStatus::Confirmed | PlanJobStatus::PlanFailed
+    );
+    if should_load_tasks {
         // Prefer cco split SoT (full desk fields: summary/wave/done_when/body).
         if let Ok(Some(doc)) = crate::state::cco_split_store::load_cco_split(config, &job.job_id) {
-            layers = crate::plan::split_topo_layers(&doc);
-            tasks = doc.tasks.iter().map(task_view_from_cco).collect();
-        } else {
+            if !doc.tasks.is_empty() {
+                layers = crate::plan::split_topo_layers(&doc);
+                tasks = doc.tasks.iter().map(task_view_from_cco).collect();
+            }
+        }
+        // Fallback: plan.proposed.json / plan.resolved.json (also for PlanFailed salvage).
+        if tasks.is_empty() {
             let ir_loaded = load_proposed(config, &job.job_id).or_else(|_| {
                 let path = job_dir(config, &job.job_id).join("plan.resolved.json");
                 let text = std::fs::read_to_string(&path)
@@ -323,18 +331,20 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
                 Ok::<PlanIR, anyhow::Error>(ir)
             });
             if let Ok(ir) = ir_loaded {
-                layers = topo_layers(&ir);
-                tasks = ir.tasks.iter().map(task_view).collect();
-                // Annotate waves from topo layers for desk.
-                for (wi, layer) in layers.iter().enumerate() {
-                    for id in layer {
-                        if let Some(tv) = tasks.iter_mut().find(|t| t.id == *id) {
-                            tv.wave = Some(wi as i32);
+                if !ir.tasks.is_empty() {
+                    layers = topo_layers(&ir);
+                    tasks = ir.tasks.iter().map(task_view).collect();
+                    // Annotate waves from topo layers for desk.
+                    for (wi, layer) in layers.iter().enumerate() {
+                        for id in layer {
+                            if let Some(tv) = tasks.iter_mut().find(|t| t.id == *id) {
+                                tv.wave = Some(wi as i32);
+                            }
                         }
                     }
-                }
-                for (i, tv) in tasks.iter_mut().enumerate() {
-                    tv.ord = Some(i as i32);
+                    for (i, tv) in tasks.iter_mut().enumerate() {
+                        tv.ord = Some(i as i32);
+                    }
                 }
             }
         }

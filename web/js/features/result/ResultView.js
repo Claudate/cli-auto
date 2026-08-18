@@ -243,64 +243,73 @@ export function bindResultView(vm, bridge = {}) {
       planLine.textContent = bits.join(" · ");
     }
 
-    if (doneList) {
-      if (!done.length) {
-        doneList.innerHTML = `<li class="muted">本轮没有标记为已完成的步骤</li>`;
-      } else {
-        doneList.innerHTML = done
-          .map((t) => {
-            const icon = typeof g("ccoIcon") === "function" ? g("ccoIcon")("check", { size: 14 }) : "✓";
-            return `<div class="result-desk-item is-done">
-              <span class="result-desk-mark" aria-hidden="true">${icon}</span>
+    // Signature guard: skip full innerHTML rebuild when nothing changed.
+    // Same pattern as RunView.js:383-393 — prevents poll-time jank.
+    const doneSig = done.map((t) => `${t.task_id}:${t.status}`).join("|");
+    const missSig = miss.map((t) => `${t.task_id}:${t.status}:${t.route_label || ""}`).join("|");
+    const resultSig = `${doneSig}|${missSig}|${live?.run_status || ""}`;
+    const sigEl = doneList || missList;
+    if (sigEl && sigEl.dataset.resultSig === resultSig) {
+      // State unchanged — skip rebuild of done/miss lists.
+    } else {
+      if (sigEl) sigEl.dataset.resultSig = resultSig;
+
+      if (doneList) {
+        if (!done.length) {
+          doneList.innerHTML = `<li class="muted">本轮没有标记为已完成的步骤</li>`;
+        } else {
+          doneList.innerHTML = done
+            .map((t) => {
+              const icon = typeof g("ccoIcon") === "function" ? g("ccoIcon")("check", { size: 14 }) : "✓";
+              return `<div class="result-desk-item is-done">
+                <span class="result-desk-mark" aria-hidden="true">${icon}</span>
+                <div class="result-desk-item-body">
+                  <strong>${esc(taskTitle(t))}</strong>
+                </div>
+              </div>`;
+            })
+            .join("");
+        }
+      }
+
+      if (missList) {
+        const rows = [];
+        miss.forEach((t) => {
+          const b = taskBucket(t.status, t);
+          const st = fiveStateLabel(b);
+          const sum = taskErrorSummary(t);
+          const route = routeLine(t);
+          // P1-3 + P4-5: 步骤状态 + 执行方式 + 原因（概念 ≤3；不露 raw enum）
+          const bits = [st];
+          if (route) bits.push(route);
+          if (sum) bits.push(sum);
+          const xMark = typeof g("ccoIcon") === "function" ? g("ccoIcon")("x", { size: 14 }) : "×";
+          rows.push(
+            `<div class="result-desk-item is-miss">
+              <span class="result-desk-mark" aria-hidden="true">${xMark}</span>
               <div class="result-desk-item-body">
                 <strong>${esc(taskTitle(t))}</strong>
+                ${bits.length > 0 ? `<span class="muted">${esc(bits.join(" · "))}</span>` : ""}
               </div>
-            </div>`;
-          })
-          .join("");
-      }
-    }
-
-    const loop = live?.inspect_loop;
-    const issuePreview = (loop && loop.issue_preview) || [];
-
-    if (missList) {
-      const rows = [];
-      miss.forEach((t) => {
-        const b = taskBucket(t.status, t);
-        const st = fiveStateLabel(b);
-        const sum = taskErrorSummary(t);
-        const route = routeLine(t);
-        // P1-3 + P4-5: 步骤状态 + 执行方式 + 原因（概念 ≤3；不露 raw enum）
-        const bits = [st];
-        if (route) bits.push(route);
-        if (sum) bits.push(sum);
-        const xMark = typeof g("ccoIcon") === "function" ? g("ccoIcon")("x", { size: 14 }) : "×";
-        rows.push(
-          `<div class="result-desk-item is-miss">
-            <span class="result-desk-mark" aria-hidden="true">${xMark}</span>
-            <div class="result-desk-item-body">
-              <strong>${esc(taskTitle(t))}</strong>
-              ${bits.length > 0 ? `<span class="muted">${esc(bits.join(" · "))}</span>` : ""}
-            </div>
-          </div>`
-        );
-      });
-      issuePreview.slice(0, 6).forEach((line) => {
-        // P4-5: icons.js 暂无 alert-triangle，用 fallback "!"
-        const warnIcon = "!";
-        rows.push(
-          `<div class="result-desk-item is-issue">
-            <span class="result-desk-mark" aria-hidden="true">${warnIcon}</span>
-            <div class="result-desk-item-body">${esc(String(line))}</div>
-          </div>`
-        );
-      });
-      if (!rows.length) {
-        // P0-4: point at plan-compare footer (honest), not "验收" jargon alone
-        missList.innerHTML = `<li class="muted">没有步骤失败；对照计划结论见下方</li>`;
-      } else {
-        missList.innerHTML = rows.join("");
+            </div>`
+          );
+        });
+        issuePreview.slice(0, 6).forEach((line) => {
+          // P4-5: icons.js 暂无 alert-triangle，用 fallback "!"
+          const warnIcon = "!";
+          rows.push(
+            `<div class="result-desk-item is-issue">
+              <span class="result-desk-mark" aria-hidden="true">${warnIcon}</span>
+              <div class="result-desk-item-body">${esc(String(line))}</div>
+            </div>`
+          );
+        });
+        if (!rows.length) {
+          // P0-4: point at plan-compare footer (honest), not "验收" jargon alone
+          missList.innerHTML = `<li class="muted">没有步骤失败；对照计划结论见下方</li>`;
+        } else {
+          missList.innerHTML = rows.join("");
+        }
       }
     }
 

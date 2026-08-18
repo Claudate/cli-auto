@@ -109,9 +109,17 @@ export function bindSplitView(vm, bridge = {}) {
 
     const waves = $("confirm-waves");
     if (waves) {
-      const rebuildWaves = true;
-      if (rebuildWaves) {
+      // Signature guard: skip full innerHTML rebuild when nothing changed.
+      // Same pattern as RunView.js:383-393 — prevents click-time jank.
+      const taskSig = (job.tasks || [])
+        .map((t) => `${t.id}:${t.title}:${t.include ?? ""}:${t.optional ?? ""}:${selectedId === t.id ? "1" : "0"}`)
+        .join("|");
+      const liveSig = liveIsThisJob ? Object.keys(g("state")?.live?.tasks || {}).length : 0;
+      const sig = `${taskSig}|${runLocked ? "1" : "0"}|${liveSig}`;
+      const needsRebuild = waves.dataset.sig !== sig;
+      if (needsRebuild) {
         wavesDirty = false;
+        waves.dataset.sig = sig;
         waves.innerHTML = cardsHtml(job, byId, {
           runLocked,
           selectedId,
@@ -162,11 +170,6 @@ export function bindSplitView(vm, bridge = {}) {
           };
           cb.onclick = (ev) => ev.stopPropagation();
         });
-      } else {
-        if (!wavesDirty) {
-          wavesDirty = true;
-          setTimeout(() => { if (wavesDirty) render(); }, 300);
-        }
       }
     }
 
