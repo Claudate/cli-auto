@@ -111,7 +111,7 @@ fn shell_and_task_lifecycle() {
         error: None,
         done_marker: true,
         execution_evidence: true,
-        platform_error: false,
+        platform_error: None,
     };
     on_task_end(&plan, &state, &plan.tasks[0], &result, Some(tmp.path())).unwrap();
     let h = Handoff::load(&run_dir).unwrap();
@@ -183,7 +183,7 @@ fn prompt_prefix_includes_depends_on_fragment() {
         error: None,
         done_marker: true,
         execution_evidence: true,
-        platform_error: false,
+        platform_error: None,
     };
     on_task_end(&plan, &state, &plan.tasks[0], &result, Some(tmp.path())).unwrap();
 
@@ -270,7 +270,7 @@ fn on_task_end_folds_issues_on_verdict_fail() {
         error: Some("inspect VERDICT=FAIL (2 ISSUES line(s) for rework)".into()),
         done_marker: false,
         execution_evidence: false,
-        platform_error: false,
+        platform_error: None,
     };
     on_task_end(&plan, &state, &plan.tasks[0], &result, Some(tmp.path())).unwrap();
 

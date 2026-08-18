@@ -539,6 +539,51 @@ export function attachDocumentClick(deps) {
         toast("结果台未就绪，请稍后重试");
         return;
       }
+      // 「切换通道」: open a quick provider picker and retry with the selected channel.
+      const switchBtn = el?.closest?.("[data-switch]");
+      if (switchBtn?.dataset?.switch) {
+        e.preventDefault();
+        e.stopPropagation();
+        const taskId = switchBtn.dataset.switch;
+        const st = state();
+        if (st) st.selectedTaskId = taskId;
+        const cco = typeof window !== "undefined" ? window.ccoRun : null;
+        if (!cco || typeof cco.retryTask !== "function") {
+          toast("执行台未就绪，请稍后重试");
+          return;
+        }
+        const settings = st?.settings || {};
+        const order = Array.isArray(settings.failover_order) ? settings.failover_order : [];
+        const providers = Object.entries(settings.providers || {}).map(([id, v]) => ({
+          id,
+          ...(typeof v === "object" && v ? v : {}),
+        }));
+        const enabled = providers.filter((p) => p.enabled !== false);
+        const candidates = [...new Set([...order, ...enabled.map((p) => p.id)])].filter(Boolean);
+        const current = String(
+          (st?.live?.tasks?.[taskId] || {}).provider || ""
+        );
+        const choices = candidates.filter((p) => p !== current);
+        if (choices.length === 0) {
+          toast("没有其他可用通道，请先在设置中启用更多 provider");
+          return;
+        }
+        const pick = window.prompt
+          ? window.prompt(
+              `切换通道（当前 ${current || "未知"}），可选：\n${choices.join(" / ")}\n\n输入通道名：`
+            )
+          : null;
+        if (!pick || !pick.trim()) return;
+        const target = pick.trim().toLowerCase();
+        if (!choices.map((c) => c.toLowerCase()).includes(target)) {
+          toast(`未知通道：${pick}（可选：${choices.join(" / ")}）`);
+          return;
+        }
+        Promise.resolve(cco.retryTask(taskId, { provider: target })).catch((err) =>
+          toast(String(err?.message || err))
+        );
+        return;
+      }
       const rerunBtn = el?.closest?.("[data-rerun]");
       if (rerunBtn?.dataset?.rerun) {
         e.preventDefault();

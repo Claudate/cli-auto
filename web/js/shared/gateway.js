@@ -117,9 +117,13 @@ export const stopRun = (runId) => raw("stop_run_cmd", { runId });
 export const stopTask = (runId, taskId) =>
   raw("stop_task_cmd", { runId, taskId });
 export const resumeRun = (runId) => raw("resume_run_cmd", { runId });
-/** Manual re-run of one failed task (same run; not re-split / not confirm). */
-export const retryTask = (runId, taskId) =>
-  raw("retry_task_cmd", { runId, taskId });
+/** Manual re-run of one failed task (same run; not re-split / not confirm).
+ *  @param {string} runId
+ *  @param {string} taskId
+ *  @param {{ provider?: string }} [opts] — optional channel override.
+ */
+export const retryTask = (runId, taskId, opts) =>
+  raw("retry_task_cmd", { runId, taskId, provider: opts?.provider || null });
 export const startRework = (runId) => raw("start_rework_cmd", { runId });
 export const acceptResidual = (runId, note) =>
   raw("accept_residual_cmd", { runId, note: note || null });

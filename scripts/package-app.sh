@@ -70,7 +70,7 @@ cp -R "$ROOT/web" "$APP/Contents/web"
 # 防逆向：移除打包产物中的明文源码与构建依赖，只保留 dist/ 混淆产物
 for W in "$APP/Contents/MacOS/web" "$APP/Contents/web"; do
   rm -rf "$W/node_modules" "$W/js" "$W/build.mjs" "$W/package.json" "$W/package-lock.json" "$W/mock-tauri-ipc.js"
-  rm -f "$W/dist/app.bundle.js"   # esbuild 未混淆中间产物，只保留 terser 后的 app.js
+  rm -f "$W/dist/app.bundle.js"
 done
 
 # 防逆向闸门：app 内不得残留明文源码 / 未混淆中间产物 / 构建依赖
@@ -86,7 +86,16 @@ if [[ -n "$LEAK" ]]; then
 fi
 echo "PURGE_OK: app 内仅 dist/ 混淆产物"
 
-cp -f "$ROOT/src-tauri/icons/icon.icns" "$APP/Contents/Resources/AppIcon.icns" 2>/dev/null || true
+# === App icon: CFBundleIconFile=AppIcon → Resources/AppIcon.icns ===
+if [[ ! -f "$ROOT/src-tauri/icons/icon.icns" ]]; then
+  echo "ICON_FAIL: missing src-tauri/icons/icon.icns" >&2
+  exit 1
+fi
+cp -f "$ROOT/src-tauri/icons/icon.icns" "$APP/Contents/Resources/AppIcon.icns"
+cp -f "$ROOT/src-tauri/icons/icon.png" "$APP/Contents/Resources/icon.png"
+# 刷新 Finder/Dock 图标缓存线索（用户仍可能需重登或 `killall Dock`）
+touch "$APP" "$APP/Contents/Info.plist" "$APP/Contents/Resources/AppIcon.icns"
+ls -la "$APP/Contents/Resources/AppIcon.icns" "$APP/Contents/MacOS/web/favicon-32x32.png"
 
 # runtime-prompts: disk path for MacOS/../Resources (also include_str-embedded in binary)
 rm -rf "$APP/Contents/Resources/runtime-prompts"

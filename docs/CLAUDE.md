@@ -18,7 +18,15 @@ runtime-prompts/: **软件内底层提示真源**（Markdown 加载 · 聊天/�
 ../examples/site-floor/: **可运行高端站点底板**（非注入 LLM · shell×kit·R-* demos；绿野 UI 起步；与 recipes 同构）
 split-product-rules.md: **拆分产品规则短真源**（改拆分/拆分台/confirm 行为；**无**平行阶段表；全文波次史见 archive）
 cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**（顺序/并发/是否执行 + 完整任务字段；**S3/S4 ✅ 核销** · S2/S5/S6 ☐ 可选/中长期 · 文末唯一勾选）
+architecture-redesign-2026-07-20.md: **系统架构大改 · A0–A5 ✅ 收口**（Ports&Adapters · App 用例 · Domain · 桌面 MVVM · Worker/Split/Run/Inspect · **P2-17 t58** · **A5-5 可选不做**；**本轮架构/实施真源**）
+a5-5-workspace-crates-eval-2026-07-21.md: **A5-5** workspace/`cco-domain`/`cco-app` 评估 — **本轮不做 / 不落 crate**；门槛=A5-2+A5-4+Store DI
+contracts/: A0 契约冻结（behavior-golden · run-dir · plan-job · README）
+runtime-prompts/: **软件内底层提示真源**（Markdown 加载 · 聊天/拆分/规划器 · **chat-visual-review** 截图验收 · **ui-delivery-recipes** 效果配方 · layout/color/type/**copy**/motion · **backend-architecture** · **landing-gates**；覆盖序见目录 README）
+../examples/site-floor/: **可运行高端站点底板**（非注入 LLM · shell×kit·R-* demos；绿野 UI 起步；与 recipes 同构）
+split-product-rules.md: **拆分产品规则短真源**（改拆分/拆分台/confirm 行为；**无**平行阶段表；全文波次史见 archive）
+cco-split-format-sqlite-2026-07-21.md: **cco 独立拆分格式 + SQLite SoT**（顺序/并发/是否执行 + 完整任务字段；**S3/S4 ✅ 核销** · S2/S5/S6 ☐ 可选/中长期 · 文末唯一勾选）
 browser-automation-cco.md: **浏览器自动化契约**（**W0–W3+++ ✅** · 默认证据 outputs · 设置引擎/预览门闩 · 点图放大 · 非 Claude soft · **本能力唯一勾选**）
+ui-redesign-dsh-2026-08-15.md: **DSH UI 收口**（P4-8 视觉终验待授权通道恢复；借鉴 DeepSeek Harness 三栏壳 + StateDot + 组件原语 + 局部次级面板；**Presentation 层**；**A5-2 收口**）
 
 ---
 
@@ -27,6 +35,7 @@ browser-automation-cco.md: **浏览器自动化契约**（**W0–W3+++ ✅** · 
 ### 还在做（活跃落地 · 可有 ☐）
 
 harness-inspired-roadmap-2026-08-14.md: **Harness 启示方向参考**（A1 Run Resume · A2 能力预设 · A3 工具门控 · A3bis PermissionTier · B1 事件总线(架构A级) · B2 Headless · §四 UI影响面(U-A1…U-B2) · 不做 Cordis/ACP/遥测；方向参考，非阶段表）
+event-bus-landing-2026-08-18.md: **B1 事件总线落地**（events.jsonl → Tauri emit → 前端订阅；M3 事件派生+轮询降级 · 消除 2s 双源不一致 · A1/A3bis/B3 前端基座 · 单独立项不与 DSH 混跑；**本能力唯一勾选**）；UX 配套 [`event-bus-ux-2026-08-18.md`](./event-bus-ux-2026-08-18.md)（U1-U6 用户操作流/易用性/防抖/降级体感/安全标签默认关）
 run-resume-checkpoint-2026-08-14.md: **A1 Run Resume 检查点恢复**（R1 Scheduler checkpoint 事件 ✅ · R2 prepare_for_resume 增量+has_checkpoint ✅ · R3 CLI 透传 ✅ · R4 RunView 按钮文案 ✅；**本能力唯一勾选**；改 finish.rs + state/mod.rs + services/live.rs + RunView.js）
 permission-tier-audit-2026-08-14.md: **A3bis PermissionTier 安全层级审计**（D1 Domain 枚举 ReadOnly/WorkspaceWrite/FullAccess ✅ · D2 WorkerPort default_permission_tier() 默认 FullAccess 向后兼容 ✅ · D3 Scheduler task_start 记 tier 到 events.jsonl ✅ · D4 ProjectLiveView permission_tier_label 人话 ✅ · U-A3bis 设置页人话安全标签 ✅；**本能力唯一勾选**；不破坏 bypassPermissions 默认 · 规则 13 路由不动）
 headless-mode-2026-08-14.md: **B2 Headless 静默执行模式**（H1 `report::headless_result` 观察 DTO ✅ · H2 CLI `--headless`/`--output json` flag ✅ · H3 `commands/run.rs` headless 分流 + JSON 打印 ✅ · H4 跳过 confirm/不起 TUI/stderr 分流 ✅；**本能力唯一勾选**；规则 12 同一 app 路径 · 规则 23 JSON 首字段人话 summary）

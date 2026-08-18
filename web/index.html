@@ -3,7 +3,7 @@
 <head>
 <!--
 [INPUT]: 无静态依赖；由 Tauri 加载 app.css + web/js/*（D4）+ A2/A3 js/main.js module
-[OUTPUT]: DOM 结构：sidebar（P4-2/P4-8 两栏壳：brand + collapse rail + 新建/搜索 + 项目→计划二级树 + hover 复制卡 + 底部图标设置）· topbar `#view-ring` 段控 拆分|执行|结果|聊天 · welcome · workspace(plan/monitor/result 局部巡检列) · chat · settings 父级分区两栏（左侧图标菜单 · Git·版本发布 大区）· modals
+[OUTPUT]: DOM 结构：sidebar（P4-2 两栏壳：brand + collapse rail + 新建/搜索 + 项目列表 + hover 复制卡 + 底部图标设置；不嵌计划树）· topbar `#view-ring` 段控 拆分|执行|结果|聊天 · welcome · workspace(plan/monitor/result 局部巡检列) · chat · settings 父级分区两栏（左侧图标菜单 · Git·版本发布 大区）· modals
 [POS]: 桌面壳结构真源；规划相位 spinner · 合并选计划弹窗 · task-dash · 执行看板 · 聊天建计划 · 设置分区
 [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
 note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高级选项

@@ -3,6 +3,7 @@
  * [POS]: web/css D4 自 app.css 纵切
  * note: 2026-07-22 三区视觉 — sidebar 独立列 · topbar 白底底边 · page 独占滚动
  * note: 2026-08-15 P4-2 两栏壳 — `#view-ring` 段控（phase 高亮 · workspace/chat 页显示）· 侧栏 rail 折叠（`body.cco-sidebar-collapsed` 56px · ≥901px 几何瞬态）· `.project-hover-card` 路径复制卡 · token 化旧硬色 → `--leaf-alias-*`
+ * note: 2026-08-17 侧栏只列项目，不嵌计划树
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -26,6 +27,12 @@
   height: 22px;
   object-fit: contain;
   flex: none;
+}
+/* 深色侧栏上官方深色叶标近黑不可见：反色成浅色叶标（仅用官方图标，不另存浅色副本） */
+html[data-theme="dark"] .brand .logo,
+body[data-leaf-theme="dark"] .brand .logo {
+  filter: brightness(0) invert(1);
+  opacity: 0.94;
 }
 .brand .tag { color: var(--muted); font-size: 0.75rem; margin-top: 0.1rem; }
 
@@ -167,6 +174,13 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  min-width: 0;
+}
+.project-item .name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 .project-item .path {
   color: var(--muted);
@@ -202,77 +216,6 @@
 }
 .project-item-remove[data-run-locked="1"] {
   opacity: 0.35;
-}
-
-/* P4-8：项目内计划二级树；仅展示层，不维护计划状态。 */
-.sidebar-plan-tree {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  min-width: 0;
-  margin: -0.05rem 0 0.35rem 1.05rem;
-  padding: 0.2rem 0 0.1rem 0.55rem;
-  border-left: 1px solid var(--leaf-alias-border-l1);
-}
-.sidebar-plan-tree-label {
-  padding: 0.1rem 0.35rem;
-  color: var(--leaf-alias-label-tertiary);
-  font-size: var(--leaf-font-caption);
-  font-weight: 600;
-}
-.sidebar-plan-item {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  width: 100%;
-  min-width: 0;
-  padding: 0.3rem 0.35rem;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--leaf-alias-label-secondary);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--leaf-font-caption);
-  text-align: left;
-}
-.sidebar-plan-item span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sidebar-plan-item:hover {
-  background: var(--leaf-alias-interactive-bg-hover);
-  color: var(--leaf-alias-label-primary);
-}
-.sidebar-plan-item.active {
-  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary) 30%, transparent);
-  background: var(--leaf-alias-brand-weak);
-  color: var(--leaf-alias-brand-primary);
-}
-.sidebar-plan-item:focus-visible {
-  outline: none;
-  box-shadow: var(--leaf-alias-focus-ring);
-}
-.sidebar-plan-more {
-  width: fit-content;
-  margin: 0.1rem 0.35rem;
-  padding: 0.2rem 0.35rem;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--leaf-alias-brand-primary);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--leaf-font-caption);
-  text-align: left;
-}
-.sidebar-plan-more:hover {
-  background: var(--leaf-alias-interactive-bg-hover);
-}
-.sidebar-plan-more:focus-visible {
-  outline: none;
-  box-shadow: var(--leaf-alias-focus-ring);
 }
 
 .dot {
@@ -1810,7 +1753,6 @@ body[data-cco-app-phase="author"] .view-ring-item[data-ring="chat"] {
   body.cco-sidebar-collapsed .project-item .name-text,
   body.cco-sidebar-collapsed .project-item .path,
   body.cco-sidebar-collapsed .project-item .meta,
-  body.cco-sidebar-collapsed .sidebar-plan-tree,
   body.cco-sidebar-collapsed .project-item-remove,
   body.cco-sidebar-collapsed .sidebar-foot #conn-status {
     display: none;

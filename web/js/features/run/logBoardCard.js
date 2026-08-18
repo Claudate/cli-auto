@@ -266,7 +266,10 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
               }
               return `<button type="button" class="btn primary sm cli-rerun-btn" data-rerun="${esc(
                 t.task_id
-              )}" title="再跑这一步">再跑一次</button>`;
+              )}" title="再跑这一步">再跑一次</button>
+              <button type="button" class="btn ghost sm cli-switch-btn" data-switch="${esc(
+                t.task_id
+              )}" title="切换到其他通道并重跑">切换通道</button>`;
             })()
           }
           <button type="button" class="btn ghost sm cli-log-toggle" data-log-toggle="${esc(t.task_id)}" title="展开或折叠详细日志">${

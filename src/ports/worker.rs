@@ -109,8 +109,11 @@ pub struct TaskResult {
     #[serde(default)]
     pub execution_evidence: bool,
     /// Platform-level error (API 404/429/auth/endpoint broken). Skip retry, mark unhealthy.
+    ///
+    /// Changed from `bool` to `Option<PlatformErrorKind>` (A: doctor enhancement).
+    /// `None` = no platform error (backward-compatible default).
     #[serde(default)]
-    pub platform_error: bool,
+    pub platform_error: Option<crate::runtime::provider::shell_print::decode::PlatformErrorKind>,
 }
 
 /// Per-decoder outcome for shell-print CLIs — the single "how to judge success" answer.
@@ -128,8 +131,9 @@ pub struct WorkerOutcome {
     /// Human-readable hint when a platform "spun" (no execution / empty output).
     pub error_hint: Option<String>,
     /// Platform-level error (API 404/429/auth/endpoint broken) — not a task-logic failure.
-    /// When true: skip same-provider retry, surface real error, mark provider unhealthy.
-    pub platform_error: bool,
+    /// When Some: skip same-provider retry, surface real error, mark provider unhealthy.
+    #[serde(default)]
+    pub platform_error: Option<crate::runtime::provider::shell_print::decode::PlatformErrorKind>,
     pub session_id: Option<String>,
     pub cost_usd: Option<f64>,
 }
@@ -179,7 +183,7 @@ pub trait WorkerPort: Send + Sync {
             execution_evidence: status == TaskStatus::Done,
             empty_stdout: stdout.trim().is_empty(),
             error_hint: None,
-            platform_error: false,
+            platform_error: None,
             session_id: None,
             cost_usd: None,
         }

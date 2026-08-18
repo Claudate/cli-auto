@@ -126,8 +126,9 @@ pub fn resume(config: Config, run_id: &str) -> Result<()> {
 /// Manual re-run of **one** failed/stopped/timeout task (same run dir).
 ///
 /// Not a new Mode B open-run and not re-split. Done tasks stay Done.
-pub fn retry_task(config: Config, run_id: &str, task_id: &str) -> Result<()> {
-    retry_task_async(config, run_id, task_id)
+/// `provider_override`: when Some, switches the task to a new channel before retry.
+pub fn retry_task(config: Config, run_id: &str, task_id: &str, provider_override: Option<&str>) -> Result<()> {
+    retry_task_async(config, run_id, task_id, provider_override)
 }
 
 /// List recent runs (newest first).

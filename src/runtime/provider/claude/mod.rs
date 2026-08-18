@@ -354,7 +354,7 @@ impl WorkerProvider for ClaudeProvider {
             error,
             done_marker: exit_code == Some(0),
             execution_evidence: status == TaskStatus::Done,
-            platform_error: false,
+            platform_error: None,
         })
     }
 }

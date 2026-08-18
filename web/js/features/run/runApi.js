@@ -30,9 +30,10 @@ export function resumeRun(runId) {
  * Re-run one failed/stopped/timeout task in the same run (not re-split).
  * @param {string} runId
  * @param {string} taskId
+ * @param {{ provider?: string }} [opts] — optional channel override.
  */
-export function retryTask(runId, taskId) {
-  return gateway.retryTask(runId, taskId);
+export function retryTask(runId, taskId, opts) {
+  return gateway.retryTask(runId, taskId, opts);
 }
 
 /** @param {Record<string, unknown>} args open_task_terminal_cmd payload */

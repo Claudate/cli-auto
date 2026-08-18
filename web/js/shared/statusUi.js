@@ -206,11 +206,65 @@ export function formatElapsed(startedAt, finishedAt, nowMs) {
 
 export function taskErrorSummary(t) {
   if (!t) return "";
-  if (t.error) return String(t.error).split("\n")[0].slice(0, 160);
+  if (t.error) {
+    // Platform error classification (A: doctor enhancement · step 8).
+    const hint = platformErrorHint(t.error);
+    if (hint) return hint;
+    return String(t.error).split("\n")[0].slice(0, 160);
+  }
+  // Classify by last_retry_reason if it's a platform error kind.
+  const reason = String(t.last_retry_reason || "");
+  const reasonHint = platformErrorHintByReason(reason);
+  if (reasonHint) return reasonHint;
   if (isFailedStatus(t.status) && t.log_tail) {
     const lines = String(t.log_tail).trim().split("\n").filter(Boolean);
     return (lines[lines.length - 1] || "").slice(0, 160);
   }
+  return "";
+}
+
+/**
+ * Map platform error text → human-readable classified hint.
+ * Detects auth_invalid / insufficient_funds / rate_limited / endpoint_broken.
+ * @param {string} text
+ * @returns {string} classified hint, or "" if not a platform error.
+ */
+export function platformErrorHint(text) {
+  const t = String(text || "").toLowerCase();
+  if (!t) return "";
+  // Insufficient funds / quota exhausted (check before auth — 403 can be either).
+  if (t.includes("402") || t.includes("insufficient") || t.includes("quota")
+      || t.includes("余额") || t.includes("额度") || t.includes("payment")) {
+    return "余额不足 — 请充值或切换到其他通道";
+  }
+  // Auth invalid (401 / unauthorized / invalid token / api key).
+  if (t.includes("401") || t.includes("unauthorized") || t.includes("invalid token")
+      || t.includes("api key") || t.includes("authentication")) {
+    return "通道 Key 失效 — 请到环境检查更换 Key 或切换通道";
+  }
+  // Rate limited (429).
+  if (t.includes("429") || t.includes("rate limit") || t.includes("too many requests")) {
+    return "限流中，稍后自动重试";
+  }
+  // Endpoint broken (404 / reconnecting / connection refused).
+  if (t.includes("404") || t.includes("reconnecting") || t.includes("connection refused")
+      || t.includes("不支持该 api") || t.includes("exceeded retry limit")) {
+    return "通道接口异常";
+  }
+  return "";
+}
+
+/**
+ * Map last_retry_reason string (from task_end event) → human hint.
+ * @param {string} reason
+ * @returns {string}
+ */
+export function platformErrorHintByReason(reason) {
+  const r = String(reason || "").toLowerCase();
+  if (r === "auth_invalid") return "通道 Key 失效 — 请到环境检查更换 Key 或切换通道";
+  if (r === "insufficient_funds") return "余额不足 — 请充值或切换到其他通道";
+  if (r === "rate_limited") return "限流中，稍后自动重试";
+  if (r === "endpoint_broken") return "通道接口异常";
   return "";
 }
 
@@ -240,6 +294,8 @@ export function installStatusUi(g = typeof window !== "undefined" ? window : glo
     statusDot,
     formatElapsed,
     taskErrorSummary,
+    platformErrorHint,
+    platformErrorHintByReason,
   });
 }
 

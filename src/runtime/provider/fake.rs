@@ -354,7 +354,7 @@ impl WorkerProvider for FakeProvider {
             error: None,
             done_marker: code == Some(0),
             execution_evidence: status.is_success(),
-            platform_error: false,
+            platform_error: None,
         })
     }
 }

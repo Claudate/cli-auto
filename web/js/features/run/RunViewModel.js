@@ -222,8 +222,9 @@ export function createRunViewModel(deps = {}) {
     /**
      * Re-run one failed/stopped/timeout task (same run; not re-split).
      * @param {string} [taskId]
+     * @param {{ provider?: string }} [opts] — optional channel override.
      */
-    async retryTask(taskId) {
+    async retryTask(taskId, opts) {
       const live = snap().live;
       const runId = runIdOf(live);
       const id = taskId || snap().selectedTaskId;
@@ -238,8 +239,8 @@ export function createRunViewModel(deps = {}) {
       if (snap().busy) return null;
       setPatch({ busy: true, lastError: null, selectedTaskId: id });
       try {
-        await runApi.retryTask(runId, id);
-        toast(`正在再跑 ${id}…`);
+        await runApi.retryTask(runId, id, opts);
+        toast(opts?.provider ? `已切换到 ${opts.provider}，正在再跑 ${id}…` : `正在再跑 ${id}…`);
         if (typeof deps.onPhaseRun === "function") {
           try {
             deps.onPhaseRun();

@@ -65,6 +65,27 @@ function detailCellHtml(line) {
 }
 
 /**
+ * Channel status cell from probe result.
+ * @param {{ probe?: { probe_status?: string, hint?: string } }} line
+ */
+function channelCellHtml(line) {
+  const p = line.probe;
+  if (!p) return '<td class="muted">—</td>';
+  const status = p.probe_status || "not_supported";
+  const hint = esc(p.hint || "");
+  const map = {
+    ok: { cls: "ok", label: "通道可用" },
+    auth_invalid: { cls: "failed", label: "Key 失效" },
+    insufficient_funds: { cls: "warn", label: "余额不足" },
+    rate_limited: { cls: "warn", label: "限流中" },
+    endpoint_broken: { cls: "failed", label: "接口异常" },
+    not_supported: { cls: "muted", label: "—" },
+  };
+  const m = map[status] || { cls: "muted", label: status };
+  return `<td class="doctor-channel"><span class="badge ${m.cls}" title="${hint}">${m.label}</span></td>`;
+}
+
+/**
  * Doctor page table from doctor_cmd DTO.
  */
 export async function loadDoctor() {
@@ -77,7 +98,7 @@ export async function loadDoctor() {
     const list = $("#doctor-list");
     if (list) {
       list.innerHTML = `<table>
-      <thead><tr><th>检查项</th><th>结果</th><th>详情</th></tr></thead>
+      <thead><tr><th>检查项</th><th>结果</th><th>详情</th><th>通道状态</th></tr></thead>
       <tbody>
         ${lines
           .map(
@@ -85,6 +106,7 @@ export async function loadDoctor() {
           <td>${esc(l.name)}</td>
           <td>${l.ok ? badge("ok") : badge("failed")}</td>
           ${detailCellHtml(l)}
+          ${channelCellHtml(l)}
         </tr>`
           )
           .join("")}
@@ -93,7 +115,7 @@ export async function loadDoctor() {
     <p class="muted" style="margin-top:.75rem">${
       d.ok
         ? "全部检查通过"
-        : "存在失败项：未安装的 CLI 可点「官网下载」；装好后点重新检查"
+        : "存在失败项：未安装的 CLI 可点「官网下载」；Key 失效请更换；装好后点重新检查"
     }</p>`;
     }
     renderDoctorWarn();

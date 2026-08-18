@@ -7,13 +7,8 @@
  *
  * note: 不写 Mode B / confirm / soft-fill / optional 策略；纯壳导航 + 列表渲染
  * note: 2026-08-15 P4-2 —— installSidebarChrome（rail 折叠 · 搜索 + #sidebar-count N/M · hover 路径复制卡）模块级 sidebarQuery 瞬态
+ * note: 2026-08-17 侧栏只列项目，不嵌计划树（菜单栏不堆计划信息）
  */
-
-import {
-  installSidebarPlanSelection,
-  queueSidebarPlans,
-  sidebarPlansHtml,
-} from "./sidebarPlans.js";
 
 function g(name) {
   return typeof window !== "undefined" ? window[name] : undefined;
@@ -429,8 +424,6 @@ export function renderProjectList() {
     return;
   }
 
-  queueSidebarPlans(projects, renderProjectList);
-
   el.innerHTML = projects
     .map((p) => {
       const stt = p.active_status || p.last_status || "";
@@ -482,7 +475,6 @@ export function renderProjectList() {
         p.path
       )}">${copyIco}复制路径</button>
         </div>
-        ${sidebarPlansHtml(p, { esc, selectedPlan: state.selectedPlan })}
       </div>`;
     })
     .join("");
@@ -509,7 +501,6 @@ export function renderProjectList() {
     };
   });
   try {
-    installSidebarPlanSelection(el, renderProjectList);
     if (typeof window.ccoHydrateIcons === "function") window.ccoHydrateIcons(el);
   } catch (_) {}
 }

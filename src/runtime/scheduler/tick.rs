@@ -95,7 +95,7 @@ impl Scheduler {
                         error: Some(format!("external stop collect: {e:#}")),
                         done_marker: true,
                         execution_evidence: false,
-                        platform_error: false,
+                        platform_error: None,
                     }
                 });
                 result.status = TaskStatus::Stopped;
@@ -194,7 +194,7 @@ impl Scheduler {
                                 error: Some(format!("stall collect: {e:#}")),
                                 done_marker: true,
                                 execution_evidence: false,
-                                platform_error: false,
+                                platform_error: None,
                             }
                         });
                         result.status = TaskStatus::Timeout;
@@ -232,8 +232,8 @@ impl Scheduler {
 
                     // inspect VERDICT gate FAIL is semantic (needs rework), not a crash:
                     // permanent — do not SameProvider-retry / provider-failover storm.
-                    let reason_code = if result.platform_error {
-                        "platform_error"
+                    let reason_code = if let Some(ref pe_kind) = result.platform_error {
+                        pe_kind.reason_str()
                     } else {
                         match other {
                             WorkerStatus::Timeout => "timeout",
@@ -296,7 +296,7 @@ impl Scheduler {
                         self.record_task_outcome(&id, outcome).await;
 
                         // Platform error: mark provider unhealthy so failover skips it.
-                        if result.platform_error {
+                        if result.platform_error.is_some() {
                             let provider_name = self
                                 .plan
                                 .task(&id)
@@ -587,8 +587,8 @@ impl Scheduler {
                                 _ => "failed",
                             };
                             self.record_task_outcome(&id, outcome).await;
-                            let reason = if result.platform_error {
-                                "platform_error"
+                            let reason = if let Some(ref pe_kind) = result.platform_error {
+                                pe_kind.reason_str()
                             } else {
                                 match result.status {
                                     TaskStatus::Timeout => "timeout",
@@ -602,7 +602,7 @@ impl Scheduler {
                                     _ => "fail",
                                 }
                             };
-                            if result.platform_error {
+                            if result.platform_error.is_some() {
                                 self.mark_provider_unhealthy(&task.provider);
                             }
                             let _ = self
@@ -644,7 +644,7 @@ impl Scheduler {
                         error: Some(format!("{e:#}")),
                         done_marker: false,
                         execution_evidence: false,
-                        platform_error: false,
+                        platform_error: None,
                     };
                     let retried = self
                         .finish_or_retry(

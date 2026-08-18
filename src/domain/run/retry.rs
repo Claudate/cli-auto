@@ -15,8 +15,15 @@ pub fn is_non_retryable(reason_code: &str) -> bool {
 
 /// Platform/API error (broken endpoint, 429, auth failure) — never retry same provider
 /// (the endpoint is broken, not the task), but still eligible for failover to a healthy peer.
+///
+/// Recognizes the legacy `"platform_error"` reason code **and** the classified kinds
+/// (`auth_invalid` / `insufficient_funds` / `rate_limited` / `endpoint_broken`) emitted by
+/// [`PlatformErrorKind::reason_str`](crate::runtime::provider::shell_print::decode::PlatformErrorKind::reason_str).
 pub fn is_platform_error(reason_code: &str) -> bool {
-    reason_code == "platform_error"
+    matches!(
+        reason_code,
+        "platform_error" | "auth_invalid" | "insufficient_funds" | "rate_limited" | "endpoint_broken"
+    )
 }
 
 /// Host inspect gate rewrote Done → Failed with a VERDICT/ISSUES reason.
@@ -150,6 +157,34 @@ pub fn classify_retry(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn platform_error_reasons_skip_same_provider() {
+        // Legacy literal still recognized.
+        assert!(is_platform_error("platform_error"));
+        // Classified kinds (PlatformErrorKind::reason_str) also recognized.
+        assert!(is_platform_error("auth_invalid"));
+        assert!(is_platform_error("insufficient_funds"));
+        assert!(is_platform_error("rate_limited"));
+        assert!(is_platform_error("endpoint_broken"));
+        // Ordinary failures are not platform errors.
+        assert!(!is_platform_error("fail"));
+        assert!(!is_platform_error("timeout"));
+
+        // Platform error → TryFailover (not SameProvider) when a peer is available.
+        for reason in ["auth_invalid", "insufficient_funds", "rate_limited", "endpoint_broken"] {
+            assert_eq!(
+                classify_retry(reason, 1, 3, true, true),
+                RetryKind::TryFailover,
+                "{reason} should skip same-provider retry"
+            );
+        }
+        // No failover available → Permanent (never same-provider retry a broken endpoint).
+        assert_eq!(
+            classify_retry("auth_invalid", 1, 3, false, true),
+            RetryKind::Permanent
+        );
+    }
 
     #[test]
     fn stop_never_retries() {

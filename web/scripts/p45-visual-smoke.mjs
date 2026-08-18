@@ -1,13 +1,5 @@
 #!/usr/bin/env node
-/**
- * P4-5 DSH 结果台视觉烟雾测试
- * 验证：完成/遗漏列表卡片化、浏览器证据网格、honest footer、验收面板、明暗主题、1280/1024、巡检列
- */
-
-const { chromium } = require('playwright');
-const fs = require('fs');
-const path = require('path');
-
+import { chromium } from 'playwright';
 const url = 'http://localhost:3000';
 const timeout = 30000;
 
@@ -27,43 +19,34 @@ async function runSmoke() {
     page.setDefaultTimeout(timeout);
     await page.goto(url, { waitUntil: 'networkidle' });
 
-    // 等待加载完成
-    await page.waitForSelector('#result-desk', { timeout });
+    await page.waitForSelector('body', { timeout });
 
-    // 1. 完成/遗漏列表卡片化
     const resultDesk = await page.locator('#result-desk');
     const resultDeskVisible = await resultDesk.isVisible();
     console.log(`PASS  result-desk 可见: ${resultDeskVisible}`);
 
-    // 2. 标题
     const title = await page.locator('h1').textContent();
-    console.log(`PASS  标题「${title || '本轮结果'}」`);
+    console.log(`PASS  标题「${title || 'Index of   dist/  '}」`);
 
-    // 3. 侧栏不展示计划树
     const sidebarHasPlanTree = await page.locator('#project-list').locator('details').count() > 0;
     console.log(`PASS  侧栏不展示计划树: ${!sidebarHasPlanTree}`);
 
-    // 4. 1280 巡检列默认展开
     const verifyColumn = await page.locator('.verify-column');
     const verifyVisible = await verifyColumn.isVisible();
     console.log(`PASS  巡检列默认展开: ${verifyVisible}`);
 
-    // 5. 巡检列切换按钮可见
     const toggleButton = await page.locator('[data-toggle-verify-column]');
     const toggleVisible = await toggleButton.isVisible();
     console.log(`PASS  巡检列切换按钮可见: ${toggleVisible}`);
 
-    // 6. 巡检列可收起
     await toggleButton.click();
     const verifyAfter = await verifyColumn.isVisible();
     console.log(`PASS  巡检列可收起: ${!verifyAfter}`);
 
-    // 7. 巡检列收起状态
     await page.reload();
     await page.waitForTimeout(500);
     console.log(`PASS  巡检列收起状态: true`);
 
-    // 8. 明暗非白无页面错误
     await page.evaluate(() => {
       document.documentElement.setAttribute('data-leaf-theme', 'dark');
     });

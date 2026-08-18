@@ -70,6 +70,12 @@ struct DoctorLineDto {
     /// Official docs / download page when CLI missing (desktop 「官网下载」).
     #[serde(skip_serializing_if = "Option::is_none")]
     help_url: Option<String>,
+    /// Check category: "binary" | "auth" | "info".
+    #[serde(default)]
+    kind: String,
+    /// Provider probe result (auth/balance). None for legacy info lines.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    probe: Option<cco::doctor::ProbeResult>,
 }
 
 #[tauri::command]
@@ -244,6 +250,8 @@ async fn doctor_cmd(
             ok: l.ok,
             detail: l.detail,
             help_url: l.help_url,
+            kind: l.kind,
+            probe: l.probe,
         })
         .collect();
     Ok(json!({ "ok": report.ok, "lines": lines }))
@@ -422,14 +430,16 @@ fn resume_run_cmd(
 }
 
 /// Manual re-run of one failed/stopped/timeout task (same run; not re-split).
+/// `provider`: optional channel override (user-initiated switch from UI).
 #[tauri::command]
 fn retry_task_cmd(
     state: tauri::State<'_, AppState>,
     #[allow(non_snake_case)] runId: String,
     #[allow(non_snake_case)] taskId: String,
+    provider: Option<String>,
 ) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
-    run_uc::retry_task(config, &runId, &taskId).map_err(map_err)?;
+    run_uc::retry_task(config, &runId, &taskId, provider.as_deref()).map_err(map_err)?;
     Ok(json!({
         "ok": true,
         "run_id": runId,

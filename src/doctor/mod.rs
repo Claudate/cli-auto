@@ -14,6 +14,9 @@ use crate::config::Config;
 use crate::runtime::provider::shell_print::provider_docs_url;
 use crate::runtime::provider::ProviderRegistry;
 
+mod provider_probe;
+pub use provider_probe::{probe_provider, ProbeResult};
+
 #[derive(Debug, Clone, Serialize)]
 pub struct DoctorReport {
     pub lines: Vec<CheckLine>,
@@ -28,6 +31,12 @@ pub struct CheckLine {
     /// Optional official docs / download page (desktop 「官网下载」).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub help_url: Option<String>,
+    /// Check category: "binary" | "auth" | "info" (default "info", backward compatible).
+    #[serde(default)]
+    pub kind: String,
+    /// Provider probe result (auth/balance). None for legacy info lines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub probe: Option<ProbeResult>,
 }
 
 impl CheckLine {
@@ -37,6 +46,8 @@ impl CheckLine {
             ok: true,
             detail: detail.into(),
             help_url: None,
+            kind: "info".into(),
+            probe: None,
         }
     }
 
@@ -50,6 +61,30 @@ impl CheckLine {
             ok: false,
             detail: detail.into(),
             help_url,
+            kind: "info".into(),
+            probe: None,
+        }
+    }
+
+    fn binary_line(name: impl Into<String>, ok: bool, detail: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ok,
+            detail: detail.into(),
+            help_url: None,
+            kind: "binary".into(),
+            probe: None,
+        }
+    }
+
+    fn auth_line(name: impl Into<String>, ok: bool, detail: impl Into<String>, probe: ProbeResult) -> Self {
+        Self {
+            name: name.into(),
+            ok,
+            detail: detail.into(),
+            help_url: None,
+            kind: "auth".into(),
+            probe: Some(probe),
         }
     }
 }
@@ -113,38 +148,64 @@ pub async fn run_doctor(config: &Config, project_root: Option<&Path>) -> Result<
     // providers
     let registry = ProviderRegistry::from_config(config)?;
     let mut any_provider_ok = false;
-    for (name, res) in registry.preflight_all().await {
+    let preflight_results = registry.preflight_all().await;
+    for (name, res) in &preflight_results {
+        let binary_name = format!("provider:{name}:binary");
         match res {
             Ok(()) => {
                 any_provider_ok = true;
-                lines.push(CheckLine::ok_line(format!("provider:{name}"), "ok"));
+                lines.push(CheckLine::binary_line(binary_name, true, "ok"));
             }
             Err(e) => {
-                // 非默认 provider 的失败降为提示；默认 provider 失败才拉红
-                let is_default = name == config.default.default_provider;
-                let help = provider_help_url(&name);
+                let help = provider_help_url(name);
                 let detail = if let Some(url) = help.as_deref() {
                     format!("{e:#} · 下载: {url}")
                 } else {
                     format!("{e:#}")
                 };
                 lines.push(CheckLine {
-                    name: format!("provider:{name}"),
-                    ok: !is_default,
+                    name: binary_name,
+                    ok: false,
                     detail,
                     help_url: help,
+                    kind: "binary".into(),
+                    probe: None,
                 });
             }
         }
     }
-    // 汇总：默认 provider 不可用则整体失败；否则通过
+
+    // Auth/balance probe per enabled provider (A: doctor enhancement).
+    for (name, _binary_ok) in &preflight_results {
+        // fake is a drill/demo stub — always ok, no key to probe.
+        if name == "fake" {
+            continue;
+        }
+        let probe = probe_provider(name, config).await;
+        let auth_name = format!("provider:{name}:auth");
+        let is_default = name.as_str() == config.default.default_provider.as_str();
+        let ok = probe.is_ok();
+        let detail = probe.detail_line();
+        lines.push(CheckLine::auth_line(auth_name, ok || !is_default, detail, probe));
+    }
+
+    // 汇总：默认 provider binary 不可用则整体失败；否则通过
     let default_name = config.default.default_provider.as_str();
-    let default_line_ok = lines
+    let default_binary_ok = preflight_results
         .iter()
-        .find(|l| l.name == format!("provider:{default_name}"))
-        .map(|l| l.ok)
+        .find(|(n, _)| n == default_name)
+        .map(|(_, r)| r.is_ok())
         .unwrap_or(any_provider_ok);
-    if !default_line_ok {
+    if !default_binary_ok {
+        ok = false;
+    }
+    // 默认 provider auth 失败也拉红（Key 无效/余额耗尽 → 必须处理）
+    let default_auth_ok = lines
+        .iter()
+        .find(|l| l.name == format!("provider:{default_name}:auth"))
+        .map(|l| l.ok)
+        .unwrap_or(true);
+    if !default_auth_ok {
         ok = false;
     }
     // git binary (worktree)
@@ -175,6 +236,8 @@ pub async fn run_doctor(config: &Config, project_root: Option<&Path>) -> Result<
             format!("{browser_detail} (提示，不挡无浏览器计划)")
         },
         help_url: browser_help,
+        kind: "info".into(),
+        probe: None,
     });
 
     Ok(DoctorReport { lines, ok })

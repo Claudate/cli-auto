@@ -11,10 +11,49 @@
 //!             log_events/stream_parse 散落 if-branch。
 
 use serde_json::Value;
+use serde::{Deserialize, Serialize};
 
 use crate::ports::worker::{TaskStatus, WorkerOutcome};
 use super::profiles::ResultKind;
 use crate::runtime::provider::task_status_from_exit;
+
+/// Classified platform error kind (A: doctor enhancement · step 7).
+///
+/// Distinguishes auth failure vs insufficient funds vs rate limit vs broken endpoint.
+/// Used by both doctor probe and runtime decode → surfaces as event `reason`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PlatformErrorKind {
+    /// 401 / Unauthorized / Invalid token / api key invalid.
+    AuthInvalid,
+    /// 402 / insufficient quota / 余额不足 / payment required.
+    InsufficientFunds,
+    /// 429 / too many requests / rate limit.
+    RateLimited,
+    /// 404 / connection refused / endpoint broken / reconnecting exhausted.
+    EndpointBroken,
+}
+
+impl PlatformErrorKind {
+    /// Machine-readable event reason string (task_end.reason).
+    pub fn reason_str(&self) -> &'static str {
+        match self {
+            Self::AuthInvalid => "auth_invalid",
+            Self::InsufficientFunds => "insufficient_funds",
+            Self::RateLimited => "rate_limited",
+            Self::EndpointBroken => "endpoint_broken",
+        }
+    }
+
+    /// Human-readable hint for the UI log card.
+    pub fn human_hint(&self) -> &'static str {
+        match self {
+            Self::AuthInvalid => "通道 Key 失效 — 请到环境检查更换 Key 或切换通道",
+            Self::InsufficientFunds => "余额不足 — 请充值或切换到其他通道",
+            Self::RateLimited => "限流中，稍后自动重试",
+            Self::EndpointBroken => "通道接口异常",
+        }
+    }
+}
 
 /// Entry point: dispatch by result kind (adapter calls this once per collect).
 pub fn decode(kind: ResultKind, stdout: &str, meta: &Value, exit: Option<i32>) -> WorkerOutcome {
@@ -80,11 +119,12 @@ fn decode_codex(stdout: &str, _meta: &Value, exit: Option<i32>) -> WorkerOutcome
 
     // Platform error takes precedence over spin hint.
     let (error_hint, platform_error) = if let Some(ref pe) = platform_err_msg {
-        (Some(pe.clone()), true)
+        let kind = classify_platform_error(pe);
+        (Some(pe.clone()), kind)
     } else {
         let hint = (!empty_stdout && agent_messages > 0 && !any_command)
             .then(|| "平台空转：codex 仅输出文本（agent_message），无任何命令/工具执行".to_string());
-        (hint, false)
+        (hint, None)
     };
     WorkerOutcome {
         status,
@@ -142,7 +182,7 @@ fn decode_codewhale(stdout: &str, _meta: &Value, exit: Option<i32>) -> WorkerOut
         execution_evidence,
         empty_stdout,
         error_hint,
-        platform_error: false,
+        platform_error: None,
         session_id: None,
         cost_usd: None,
     }
@@ -180,7 +220,7 @@ fn decode_one_shot(stdout: &str, _meta: &Value, exit: Option<i32>) -> WorkerOutc
         execution_evidence,
         empty_stdout,
         error_hint,
-        platform_error: false,
+        platform_error: None,
         session_id: None,
         cost_usd: None,
     }
@@ -202,35 +242,79 @@ fn decode_plain(stdout: &str, _meta: &Value, exit: Option<i32>) -> WorkerOutcome
         execution_evidence,
         empty_stdout,
         error_hint,
-        platform_error: false,
+        platform_error: None,
         session_id: None,
         cost_usd: None,
     }
 }
 
+/// Classify a platform/API error message into a specific kind.
+///
+/// Order matters: check funds (402/quota/余额) before auth (401) because
+/// some providers return 403 for both quota-exhausted and forbidden.
+pub fn classify_platform_error(msg: &str) -> Option<PlatformErrorKind> {
+    let m = msg.to_ascii_lowercase();
+    // Insufficient funds / quota exhausted.
+    if m.contains("402")
+        || m.contains("insufficient")
+        || m.contains("quota")
+        || m.contains("余额")
+        || m.contains("额度")
+        || m.contains("payment")
+    {
+        return Some(PlatformErrorKind::InsufficientFunds);
+    }
+    // Auth invalid (401 / unauthorized / invalid token / api key).
+    if m.contains("401")
+        || m.contains("unauthorized")
+        || m.contains("invalid token")
+        || m.contains("api key")
+        || m.contains("authentication")
+        || m.contains("authentication fails")
+    {
+        return Some(PlatformErrorKind::AuthInvalid);
+    }
+    // Rate limited (429).
+    if m.contains("429")
+        || m.contains("too many requests")
+        || m.contains("rate limit")
+    {
+        return Some(PlatformErrorKind::RateLimited);
+    }
+    // Endpoint broken (404 / connection refused / reconnecting exhausted).
+    // Note: 403/forbidden is classified above as InsufficientFunds (aligns with doctor probe).
+    if m.contains("404")
+        || m.contains("not found")
+        || m.contains("不支持该 api")
+        || m.contains("connection refused")
+        || m.contains("reconnecting")
+        || m.contains("exceeded retry limit")
+    {
+        return Some(PlatformErrorKind::EndpointBroken);
+    }
+    // Timeout with connect.
+    if m.contains("timeout") && m.contains("connect") {
+        return Some(PlatformErrorKind::EndpointBroken);
+    }
+    None
+}
+
 /// Fingerprints that distinguish platform/API errors from task-logic failures.
 /// These indicate the provider's endpoint/auth is broken (not the task prompt).
 fn is_platform_error_fingerprint(msg: &str) -> bool {
-    let m = msg.to_ascii_lowercase();
-    m.contains("429") || m.contains("too many requests")
-        || m.contains("rate limit")
-        || m.contains("404 not found")
-        || m.contains("不支持该 api")
-        || m.contains("exceeded retry limit")
-        || m.contains("reconnecting")
-        || m.contains("unauthorized") || m.contains("401")
-        || m.contains("authentication") || m.contains("auth")
-        || m.contains("api key")
-        || m.contains("forbidden") || m.contains("403")
-        || m.contains("connection refused")
-        || m.contains("timeout") && m.contains("connect")
+    classify_platform_error(msg).is_some()
 }
 
-/// Extract a short human-readable hint from a platform error message.
+/// Extract a short human-readable hint from a platform error message,
+/// prefixed with the classified kind.
 fn extract_platform_error_hint(msg: &str) -> String {
     let truncated: String = msg.chars().take(200).collect();
-    format!("平台/API 错误（非任务逻辑）：{truncated}")
+    match classify_platform_error(msg) {
+        Some(kind) => format!("{}：{truncated}", kind.human_hint()),
+        None => format!("平台/API 错误（非任务逻辑）：{truncated}"),
+    }
 }
+
 
 /// Last JSON object in a buffer (one-shot JSON wrapped by incidental lines).
 fn last_json_value(raw: &str) -> Option<Value> {
@@ -317,14 +401,15 @@ mod tests {
 
     #[test]
     fn codex_platform_error_429_detected() {
-        // 金样：codex 中转 429/404 → platform_error=true，error_hint 上浮真实错误。
+        // 金样：codex 中转 429/404 → platform_error=Some(RateLimited)，error_hint 上浮真实错误。
         let raw = r#"{"type":"thread.started","thread_id":"01a00ec3"}
 {"type":"turn.started"}
 {"type":"error","message":"exceeded retry limit, last status: 429 Too Many Requests, request id: a2c72ffcdfbffa2f-IAD"}
 {"type":"turn.failed","error":{"message":"exceeded retry limit, last status: 429 Too Many Requests, request id: a2c72ffcdfbffa2f-IAD"}}
 "#;
         let o = decode(ResultKind::CodexItemStream, raw, &Value::Null, Some(1));
-        assert!(o.platform_error, "429 应识别为平台错误");
+        assert!(o.platform_error.is_some(), "429 应识别为平台错误");
+        assert_eq!(o.platform_error, Some(PlatformErrorKind::RateLimited));
         assert!(o.error_hint.is_some(), "应上浮真实错误提示");
         assert!(o.error_hint.as_deref().unwrap_or("").contains("429"));
     }
@@ -334,8 +419,65 @@ mod tests {
         let raw = r#"{"type":"turn.failed","error":{"message":"unexpected status 404 Not Found: 当前平台不支持该 API 路径, url: https://ergouapi.co/v1/responses"}}
 "#;
         let o = decode(ResultKind::CodexItemStream, raw, &Value::Null, Some(1));
-        assert!(o.platform_error, "404 中转坏应识别为平台错误");
+        assert!(o.platform_error.is_some(), "404 中转坏应识别为平台错误");
+        assert_eq!(o.platform_error, Some(PlatformErrorKind::EndpointBroken));
         assert!(o.error_hint.as_deref().unwrap_or("").contains("404"));
+    }
+
+    #[test]
+    fn codex_platform_error_401_auth_invalid() {
+        // 金样：401 Unauthorized / Invalid token → AuthInvalid.
+        let raw = r#"{"type":"error","message":"Reconnecting... 1/5 (unexpected status 401 Unauthorized: Invalid token, url: https://api.b.ai/v1/responses)"}
+{"type":"turn.failed","error":{"message":"unexpected status 401 Unauthorized: Invalid token"}}
+"#;
+        let o = decode(ResultKind::CodexItemStream, raw, &Value::Null, Some(1));
+        assert_eq!(o.platform_error, Some(PlatformErrorKind::AuthInvalid));
+        assert!(o.error_hint.as_deref().unwrap_or("").contains("Key 失效"));
+    }
+
+    #[test]
+    fn codex_platform_error_401_invalid_token_classified() {
+        let raw = r#"{"type":"turn.failed","error":{"message":"unexpected status 401 Unauthorized: Authentication Fails, Your api key: ****b930 is invalid"}}
+"#;
+        let o = decode(ResultKind::CodexItemStream, raw, &Value::Null, Some(1));
+        assert_eq!(o.platform_error, Some(PlatformErrorKind::AuthInvalid));
+    }
+
+    #[test]
+    fn codex_platform_error_402_insufficient_funds() {
+        let raw = r#"{"type":"turn.failed","error":{"message":"unexpected status 402 Payment Required: insufficient quota"}}
+"#;
+        let o = decode(ResultKind::CodexItemStream, raw, &Value::Null, Some(1));
+        assert_eq!(o.platform_error, Some(PlatformErrorKind::InsufficientFunds));
+    }
+
+    #[test]
+    fn classify_platform_error_direct() {
+        assert_eq!(
+            classify_platform_error("401 Unauthorized: Invalid token"),
+            Some(PlatformErrorKind::AuthInvalid)
+        );
+        assert_eq!(
+            classify_platform_error("402 Payment Required: insufficient quota"),
+            Some(PlatformErrorKind::InsufficientFunds)
+        );
+        assert_eq!(
+            classify_platform_error("429 Too Many Requests"),
+            Some(PlatformErrorKind::RateLimited)
+        );
+        assert_eq!(
+            classify_platform_error("404 Not Found: 不支持该 API 路径"),
+            Some(PlatformErrorKind::EndpointBroken)
+        );
+        assert_eq!(
+            classify_platform_error("余额不足，请充值"),
+            Some(PlatformErrorKind::InsufficientFunds)
+        );
+        assert_eq!(
+            classify_platform_error("Authentication Fails, Your api key is invalid"),
+            Some(PlatformErrorKind::AuthInvalid)
+        );
+        assert_eq!(classify_platform_error("正常任务错误"), None);
     }
 
     #[test]
@@ -343,7 +485,7 @@ mod tests {
         let raw = r#"{"type":"item.completed","item":{"id":"i2","type":"command_execution","command":"/bin/zsh -lc pwd","exit_code":0,"status":"completed"}}
 "#;
         let o = decode(ResultKind::CodexItemStream, raw, &Value::Null, Some(0));
-        assert!(!o.platform_error, "正常命令执行不应是平台错误");
+        assert!(o.platform_error.is_none(), "正常命令执行不应是平台错误");
     }
 }
 

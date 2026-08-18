@@ -524,7 +524,7 @@ pub fn pause_run(config: &Config, run_id: &str) -> Result<()> {
 }
 
 pub fn resume_run_async(config: Config, run_id: &str) -> Result<()> {
-    spawn_resume(config, run_id, None)
+    spawn_resume(config, run_id, None, None)
 }
 
 /// Manual re-run of **one** failed/stopped/timeout task in an existing run dir.
@@ -532,16 +532,32 @@ pub fn resume_run_async(config: Config, run_id: &str) -> Result<()> {
 /// Does **not** open a new Mode B plan or re-split. Done tasks stay Done; only
 /// `task_id` is reset to Pending (fresh attempt budget) and the scheduler
 /// continues from this run. Refuses while the run is still marked Running.
-pub fn retry_task_async(config: Config, run_id: &str, task_id: &str) -> Result<()> {
+///
+/// `provider_override`: when Some, overrides the task's provider before retry
+/// (user-initiated channel switch from the UI).
+pub fn retry_task_async(
+    config: Config,
+    run_id: &str,
+    task_id: &str,
+    provider_override: Option<&str>,
+) -> Result<()> {
     if task_id.trim().is_empty() {
         bail!("task_id 不能为空");
     }
-    spawn_resume(config, run_id, Some(task_id.to_string()))
+    spawn_resume(config, run_id, Some(task_id.to_string()), provider_override)
 }
 
 /// Shared background resume/retry spawn. `only_task = None` → whole-run resume
 /// (all non-Done); `Some(id)` → single-task manual retry.
-fn spawn_resume(config: Config, run_id: &str, only_task: Option<String>) -> Result<()> {
+///
+/// `provider_override`: when Some, overrides the task's provider in plan.resolved.json
+/// before spawning the scheduler (user-initiated channel switch).
+fn spawn_resume(
+    config: Config,
+    run_id: &str,
+    only_task: Option<String>,
+    provider_override: Option<&str>,
+) -> Result<()> {
     let dir = state::resolve_run_dir(&config.runs_dir(), Some(run_id))?;
     let mut rs = RunState::load(&dir)?;
     if matches!(rs.status, RunStatus::Running) {
@@ -551,17 +567,35 @@ fn spawn_resume(config: Config, run_id: &str, only_task: Option<String>) -> Resu
     if !plan_path.exists() {
         bail!("缺少 plan.resolved.json");
     }
-    let ir: PlanIR = serde_json::from_str(&std::fs::read_to_string(&plan_path)?)?;
+    let mut ir: PlanIR = serde_json::from_str(&std::fs::read_to_string(&plan_path)?)?;
     if let Some(ref tid) = only_task {
         rs.prepare_task_retry(tid)?;
-        let _ = rs.event(
-            "task_retry",
-            serde_json::json!({
-                "task_id": tid,
-                "reason": "manual",
-                "via": "desktop",
-            }),
-        );
+        // User-initiated provider override: patch the task's provider in plan.resolved.json.
+        if let Some(new_provider) = provider_override.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            if let Some(task) = ir.tasks.iter_mut().find(|t| t.id == *tid) {
+                let old = task.provider.clone();
+                task.provider = new_provider.to_string();
+                let _ = rs.event(
+                    "task_retry",
+                    serde_json::json!({
+                        "task_id": tid,
+                        "reason": "manual",
+                        "via": "desktop",
+                        "provider_override": new_provider,
+                        "from_provider": old,
+                    }),
+                );
+            }
+        } else {
+            let _ = rs.event(
+                "task_retry",
+                serde_json::json!({
+                    "task_id": tid,
+                    "reason": "manual",
+                    "via": "desktop",
+                }),
+            );
+        }
     } else {
         let _n = rs.prepare_for_resume();
     }
@@ -571,6 +605,11 @@ fn spawn_resume(config: Config, run_id: &str, only_task: Option<String>) -> Resu
         }
     }
     rs.save()?;
+
+    // Persist plan.resolved.json with the provider override applied (if any).
+    if provider_override.is_some() {
+        let _ = std::fs::write(&plan_path, serde_json::to_string_pretty(&ir)?);
+    }
 
     let registry = ProviderRegistry::from_config(&config)?;
     let max_parallel = ir.max_parallel;
