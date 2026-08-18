@@ -89,6 +89,10 @@ export async function loadLive(deps = {}) {
     return null;
   }
 
+  // P0 防串显：记住在 IPC 往返期间不能再被其它项目覆盖。
+  // 如果在 fetch 期间用户切了项目，本 tick 的结果必须丢弃，不能写进新项目。
+  const fetchProjectPath = state.selectedPath;
+
   state.now = Date.now();
 
   // 规划中时顺带刷新 plan job，防止 setInterval 被卡住时永远转圈
@@ -114,10 +118,24 @@ export async function loadLive(deps = {}) {
       ? deps.getProjectLive
       : (project, opts) => gateway.getProjectLive(project, opts);
 
+  // P2: log budget scales by phase. Active run needs full logs for the CLI
+  // board; idle / planning / done with no tasks need almost nothing. This
+  // cuts a 96KB serialized blob per poll tick when the project is idle.
+  const phaseNeedsLogs =
+    state.phase === "running" ||
+    (state.phase === "done" && hasActiveRun());
+  const logMax =
+    deps.logMaxBytes ?? (phaseNeedsLogs ? 96000 : 0);
+
   // SoT = SQLite dismissed_run_id；project_live_view 已在服务端过滤
-  let live = await fetchLive(state.selectedPath, {
-    logMaxBytes: deps.logMaxBytes ?? 96000,
+  let live = await fetchLive(fetchProjectPath, {
+    logMaxBytes: logMax,
   });
+  // P0 防串显：IPC 往返期间用户可能切了项目。结果属于旧项目时直接丢弃，
+  // 不能写进 state.live 否则新项目会显示旧项目的任务板/结果。
+  if (state.selectedPath !== fetchProjectPath) {
+    return null;
+  }
   const path = state.selectedPath;
   // 防抖：执行/结果台轮询偶发 empty live 时勿抹掉上一次任务板 → #cli-empty
   // （run 刚失败/完成瞬间 list 竞态、或短暂 IO 失败都会返回 run_id=null）

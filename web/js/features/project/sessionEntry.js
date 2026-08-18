@@ -78,6 +78,12 @@ export function isPlanSessionActive(phase = state.phase) {
 export function liveBelongsToOpenPlan() {
   const live = state.live;
   if (!live?.run_id) return false;
+  // P0 兜底：live 的 project_path 必须属于当前 selectedPath，否则一律不算本轮。
+  // 防止切项目后旧 live 残留导致串显。
+  if (live.project_path && state.selectedPath &&
+      String(live.project_path) !== String(state.selectedPath)) {
+    return false;
+  }
   // dismiss SoT = SQLite last_dismissed；已结束本轮不回绑结果/运行台
   try {
     const proj = (state.projects || []).find((p) => p.path === state.selectedPath);
@@ -775,6 +781,14 @@ export async function selectProject(path) {
 
   state.selectedPath = path;
   state.logStick = true;
+  // P0 防串显：切项目瞬间立即清旧项目 live / task 选择 / 日志签名。
+  // 数据加载是异步的，在新 live 到达前任何渲染都会拿旧项目数据画新项目 UI。
+  // 同步清空后执行台/结果台显示 idle 态，而非旧项目的任务板。
+  state.live = null;
+  state.selectedTaskId = null;
+  state.logPanelSig = {};
+  state.cliLogExpanded = {};
+  state.closedPanels = {};
   // P0-B: best-effort 恢复本项目 persona/芯片（无项目/无存储不报错）
   try {
     restorePersonaForProject(path).catch(() => {});

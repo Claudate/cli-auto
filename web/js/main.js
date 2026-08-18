@@ -52,7 +52,7 @@ import {
   ensureSelectedTask as ensureSelectedTaskFeature,
 } from "./features/run/loadLive.js";
 import { createLogDesk } from "./features/run/logDesk.js";
-import { installSettingsHost } from "./features/settings/installSettings.js";
+import { installSettingsHost, setSoftSyncHook } from "./features/settings/installSettings.js";
 import { installTemplatesHost } from "./features/templates/installTemplates.js";
 
 /** D9: display + shell chrome on window before boot renders lists/pages. */
@@ -580,13 +580,18 @@ function softSyncFromLegacy() {
   const path = s.selectedPath || null;
   if (path !== chatVm.getSnapshot().projectPath) {
     chatVm.setProject(path);
-    // Trigger session list + current session load when project changes so history renders
-    if (typeof chatDesk.loadChatSessionList === "function") {
-      chatDesk.loadChatSessionList().catch(() => {});
-    }
-    // Also load current session messages (needed when switching to chat page)
-    if (typeof chatDesk.loadChatSession === "function") {
-      chatDesk.loadChatSession().catch(() => {});
+    // P2: chat session list/messages are now event-driven (open chat page /
+    // switch project / send message). Only mirror projectPath here so the VM
+    // stays in sync; do NOT pull session list + session every 2s poll tick.
+    // Previous softSync called loadChatSessionList + loadChatSession on every
+    // tick — 2 extra IPC roundtrips per 2s, plus a full chat re-render.
+    if (s.page === "chat") {
+      // Only when the user is already looking at chat do we mirror the project
+      // into the chat VM so the next page paint is correct. Session loading is
+      // triggered by openChatPage / sendChatMessage paths, not by polling.
+      if (typeof chatDesk.loadChatSession === "function") {
+        chatDesk.loadChatSession().catch(() => {});
+      }
     }
   }
   if (s.planJob && (s.phase === "confirm" || s.phase === "planning")) {
@@ -600,8 +605,20 @@ function softSyncFromLegacy() {
   }
 }
 
+/**
+ * softSync is invoked by shellBoot.startPolling on the same 2s tick (passed via
+ * deps.softSync). No second setInterval here — it used to double IPC + double
+ * render every 2s and was the main cause of click latency under load.
+ */
 function boot() {
   wireShellNav();
+  // Register softSync into the single 2s poll tick (replaces duplicate setInterval)
+  try {
+    setSoftSyncHook(() => {
+      if (document.hidden) return;
+      softSyncFromLegacy();
+    });
+  } catch (_) {}
   try {
     hydrateIcons(document);
   } catch (_) {}
@@ -624,12 +641,6 @@ function boot() {
       } catch (_) {}
     }, ms);
   });
-  setInterval(() => {
-    if (document.hidden) return; // 后台窗口不做镜像同步，回前台自动恢复
-    try {
-      softSyncFromLegacy();
-    } catch (_) {}
-  }, 2000);
 }
 
 if (document.readyState === "loading") {

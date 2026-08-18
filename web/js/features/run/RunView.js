@@ -380,6 +380,17 @@ export function bindRunView(vm, bridge = {}) {
       list.innerHTML = `<div class="task-dash-empty muted">暂无拆分任务</div>`;
       return;
     }
+    // P1 签名守卫：任务集合+状态未变时跳过 innerHTML 全量重绘，避免 2s 轮询
+    // 每次换 DOM 导致点击目标丢失 / 滚动跳顶 / 选中态闪烁。
+    const sel = selectedTaskId || "";
+    const sig =
+      sel +
+      "|" +
+      tasks
+        .map((t) => `${t.task_id}:${t.status}:${t.cost_usd ?? ""}:${t.route_label || ""}`)
+        .join("|");
+    if (list.dataset.sig === sig) return;
+    list.dataset.sig = sig;
     list.innerHTML = sortTasksByStatus(tasks)
       .map((t) => {
         const b = taskBucket(t);
@@ -508,7 +519,7 @@ export function bindRunView(vm, bridge = {}) {
     stopAll: () => vm.stopAll(),
     resume: () => vm.resume(),
     stopTask: (id) => vm.stopTask(id),
-    retryTask: (id) => vm.retryTask(id),
+    retryTask: (id, opts) => vm.retryTask(id, opts),
     toggleDash: () => {
       vm.toggleDashCollapsed();
       if (typeof bridge.syncLegacy === "function") {

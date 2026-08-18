@@ -225,16 +225,17 @@ pub fn project_live_view(
         .map(|(tid, ts)| {
             let stdout = rs.task_dir(tid).join("stdout.json");
             let stderr = rs.task_dir(tid).join("stderr.log");
-            // Prefer stdout (JSONL / result); append stderr if present.
-            // Prefer a large stdout window so transcript keeps tool/assistant lines.
-            let stdout_budget = log_max_bytes.max(96_000);
-            let (stdout_tail, log_bytes) = if stdout.exists() {
+            // P2: honor caller budget. Frontend passes 0 when idle/done to skip
+            // the heavy log tail read; only enforce the 96KB floor when a real
+            // budget was requested (>0). This cuts serialization cost on idle polls.
+            let stdout_budget = if log_max_bytes == 0 { 0 } else { log_max_bytes.max(96_000) };
+            let (stdout_tail, log_bytes) = if stdout_budget > 0 && stdout.exists() {
                 read_log_tail(&stdout, stdout_budget)
             } else {
                 (String::new(), 0)
             };
             // stderr: small tail for raw; parser will collapse to one summary event.
-            let stderr_tail = if stderr.exists() {
+            let stderr_tail = if log_max_bytes > 0 && stderr.exists() {
                 read_log_tail(&stderr, 12_000.min(log_max_bytes / 4).max(4_000)).0
             } else {
                 String::new()

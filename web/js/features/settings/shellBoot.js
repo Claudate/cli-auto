@@ -42,6 +42,17 @@ async function settingsPollMs(fallbackMs = 2000) {
   return fallbackMs;
 }
 
+/**
+ * softSync hook: main.js registers AppViewModel/chat session mirror here so
+ * the single 2s poll tick also runs VM sync (replaces main.js's duplicate
+ * setInterval that doubled IPC + render every tick).
+ * @type {null | (() => void)}
+ */
+let softSyncHook = null;
+export function setSoftSyncHook(fn) {
+  softSyncHook = typeof fn === "function" ? fn : null;
+}
+
 /** Workspace / plan-job poll tick (no business policy). */
 export function startPolling(intervalMs = 2000) {
   const st = state();
@@ -60,6 +71,12 @@ export function startPolling(intervalMs = 2000) {
         window.refreshPlanJob().catch(() => {});
       }
       return;
+    }
+    // single softSync per tick (replaces main.js duplicate setInterval)
+    if (softSyncHook) {
+      try {
+        softSyncHook();
+      } catch (_) {}
     }
     // 规划轮询不绑死 workspace：切到设置/帮助/环境检查也继续
     if (st.planJobId && st.phase === "planning") {

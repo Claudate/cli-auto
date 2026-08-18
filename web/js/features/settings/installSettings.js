@@ -28,6 +28,7 @@ import {
   boot,
   waitTauri,
   parseCcoWindowBoot,
+  setSoftSyncHook,
 } from "./shellBoot.js";
 import { createUiActions, backFromSubpage } from "./uiActions.js";
 import { bindGlobalUI, wire } from "./bindUi.js";
@@ -95,6 +96,7 @@ export function installSettingsHost(opts = {}) {
   window.boot = desk.boot;
   window.waitTauri = desk.waitTauri;
   window.parseCcoWindowBoot = parseCcoWindowBoot;
+  window.setSoftSyncHook = setSoftSyncHook;
 
   if (opts.autoBoot) {
     // Immediate bind + wait Tauri (same as classic doctor.js tail)
@@ -104,3 +106,5 @@ export function installSettingsHost(opts = {}) {
 
   return desk;
 }
+
+export { setSoftSyncHook };

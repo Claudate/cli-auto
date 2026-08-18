@@ -66,30 +66,44 @@ export async function loadLive() {
     state.live = null;
     return null;
   }
+  // P0 防串显：记住 fetch 时的项目路径，IPC 往返期间切了项目则丢弃结果。
+  const fetchProjectPath = state.selectedPath;
   state.now = Date.now();
   if (state.phase === "planning" && state.planJobId) {
     await host.refreshPlanJob().catch(() => {});
   }
   const prevLive = hasActiveRun();
+  // P2: 对齐 features/run/loadLive — idle 态不拉日志（0 字节预算）
+  const phaseNeedsLogs =
+    state.phase === "running" ||
+    (state.phase === "done" && hasActiveRun());
+  const logMax = phaseNeedsLogs ? 96000 : 0;
   let live;
   if (window.ccoGateway?.getProjectLive) {
-    live = await window.ccoGateway.getProjectLive(state.selectedPath, {
-      logMaxBytes: 96000,
+    live = await window.ccoGateway.getProjectLive(fetchProjectPath, {
+      logMaxBytes: logMax,
     });
   } else {
-    live = await requireGateway().getProjectLive(state.selectedPath, {
-      logMaxBytes: 96000,
+    live = await requireGateway().getProjectLive(fetchProjectPath, {
+      logMaxBytes: logMax,
     });
+  }
+  // P0 防串显：fetch 期间切了项目 → 丢弃，不写 state.live
+  if (state.selectedPath !== fetchProjectPath) {
+    return null;
   }
   const path = state.selectedPath;
   // 与 features/run/loadLive 同：执行/结果台勿被空 live 抹掉
   const prevSnapshot = state.live;
   const emptyIncoming = !live || !live.run_id;
-  if (
+  const keepPrevOnDesk =
     emptyIncoming &&
     prevSnapshot?.run_id &&
-    (state.phase === "running" || state.phase === "done")
-  ) {
+    (state.phase === "running" || state.phase === "done") &&
+    (!path ||
+      !prevSnapshot.project_path ||
+      String(prevSnapshot.project_path) === String(path));
+  if (keepPrevOnDesk) {
     live = prevSnapshot;
   }
   if (path && live?.run_id) {
