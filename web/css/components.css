@@ -5,8 +5,11 @@
  * 原语：StateDot（.run/.pending/.danger + P4-2 别名 .live/.ok/.warn/.err/.muted）· Card · Pill · DisclosureRow · Terminal/Diff/Read · Toast
  */
 
-/* === StateDot（运行=蓝 · 成功=绿 · 失败=红 · 等待=琥珀 · 静默=灰；无动效） ===
+/* === StateDot（运行=蓝 · 成功=绿 · 失败=红 · 等待=琥珀 · 静默=灰；B1 事件总线 120ms 平滑过渡） ===
  * 扩展现有 .dot 基类（layout.css）；类名约定：run/live=运行中 · ok · warn/pending=等待 · danger/err=失败 · muted */
+.dot {
+  transition: background 120ms ease-out, box-shadow 120ms ease-out;
+}
 .dot.run, .dot.live { background: var(--leaf-alias-status-running); box-shadow: 0 0 0 3px color-mix(in srgb, var(--leaf-alias-status-running) 16%, transparent); }
 .dot.ok { background: var(--leaf-alias-status-ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--leaf-alias-status-ok) 18%, transparent); }
 .dot.warn, .dot.pending { background: var(--leaf-alias-status-warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--leaf-alias-status-warn) 18%, transparent); }
@@ -184,3 +187,32 @@
 .toast.is-ok { border-color: var(--leaf-alias-status-ok); }
 .toast.is-warn { border-color: var(--leaf-alias-status-warn); }
 .toast.is-danger { border-color: var(--leaf-alias-status-danger); }
+
+/* === B2: Event Degradation Banner（降级小条：可关·不阻塞·琥珀警告） === */
+.event-degradation-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: color-mix(in srgb, var(--leaf-alias-status-warn) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--leaf-alias-status-warn) 22%, transparent);
+  border-radius: var(--radius);
+  font-size: var(--leaf-font-caption);
+  color: var(--leaf-alias-status-warn);
+}
+.event-degradation-close {
+  background: transparent;
+  border: none;
+  color: var(--leaf-alias-label-tertiary);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  opacity: 0.7;
+}
+.event-degradation-close:hover {
+  opacity: 1;
+  color: var(--leaf-alias-label-primary);
+}

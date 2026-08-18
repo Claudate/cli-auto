@@ -208,7 +208,7 @@ pub async fn run(
         terminal_kind: term_kind,
         max_budget,
     };
-    let sched = run_uc::prepare_scheduler(config, ir, run_state, opts)?;
+    let sched = run_uc::prepare_scheduler(config, ir, run_state, opts, None)?;
     run_uc::preflight_plan(&sched.registry, &sched.plan).await?;
     let headless_mode = if headless {
         HeadlessMode::On(output_kind)

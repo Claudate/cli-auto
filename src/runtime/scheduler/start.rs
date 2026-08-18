@@ -292,6 +292,7 @@ mod tests {
                 provider_unhealthy: Vec::new(),
         collab_bus: None,
         memory: None,
+                event_emitter: None,
             };
             // t3 depends on [t1, t2] → newest committed branch t2 wins.
             let base = scheduler.fork_base_for(&ir.tasks[2]);
@@ -337,6 +338,7 @@ mod tests {
             provider_unhealthy: Vec::new(),
         collab_bus: None,
         memory: None,
+                event_emitter: None,
         };
         // No dependency done yet → fall back to main HEAD (None).
         assert_eq!(scheduler.fork_base_for(&ir.tasks[1]), None);

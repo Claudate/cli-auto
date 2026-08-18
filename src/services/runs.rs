@@ -281,7 +281,11 @@ pub async fn run_doctor(config: &Config, project: Option<&Path>) -> Result<Docto
 
 /// Start a run on a background tokio task; returns run_id immediately.
 /// Loads plan from disk (legacy path). Prefer plan-job `confirm_start` for mode B.
-pub fn start_run_async(config: Config, req: StartRunRequest) -> Result<String> {
+pub fn start_run_async(
+    config: Config,
+    req: StartRunRequest,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
+) -> Result<String> {
     if !req.project.is_dir() {
         bail!("项目路径不是目录: {}", req.project.display());
     }
@@ -293,7 +297,7 @@ pub fn start_run_async(config: Config, req: StartRunRequest) -> Result<String> {
     ir.default_provider = req.provider.clone();
     ir.default_mode = req.mode.clone();
     let project = req.project.canonicalize().context("canonicalize project")?;
-    start_run_from_plan(config, project, &ir)
+    start_run_from_plan(config, project, &ir, event_emitter)
 }
 
 /// Start scheduler from an already-built PlanIR (used by plan-job confirm).
@@ -303,8 +307,13 @@ pub fn start_run_async(config: Config, req: StartRunRequest) -> Result<String> {
 /// ran `materialize_selected_tasks` — re-apply is idempotent.
 ///
 /// Route provenance: see [`start_run_from_plan_with_route`].
-pub fn start_run_from_plan(config: Config, project: PathBuf, ir: &PlanIR) -> Result<String> {
-    start_run_from_plan_with_route(config, project, ir, None)
+pub fn start_run_from_plan(
+    config: Config,
+    project: PathBuf,
+    ir: &PlanIR,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
+) -> Result<String> {
+    start_run_from_plan_with_route(config, project, ir, None, event_emitter)
 }
 
 /// Same as [`start_run_from_plan`] but stamps `route_source` from an optional
@@ -314,6 +323,7 @@ pub fn start_run_from_plan_with_route(
     project: PathBuf,
     ir: &PlanIR,
     route_report: Option<&crate::domain::worker::RouteFillReport>,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
 ) -> Result<String> {
     start_run_from_plan_with_route_opts(
         config,
@@ -321,6 +331,7 @@ pub fn start_run_from_plan_with_route(
         ir,
         route_report,
         crate::app::run::MaterializeRouteOpts::default(),
+        event_emitter,
     )
 }
 
@@ -336,6 +347,7 @@ pub fn start_run_from_plan_with_route_opts(
     ir: &PlanIR,
     route_report: Option<&crate::domain::worker::RouteFillReport>,
     opts: crate::app::run::MaterializeRouteOpts,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
 ) -> Result<String> {
     // Single materialize path (Ensure closeout + checklist + optional drop + route stamp).
     let (run_id, run_state, ir, _cost_line) =
@@ -367,6 +379,7 @@ pub fn start_run_from_plan_with_route_opts(
     let browser_cfg = config.browser.clone();
     let memory_port = crate::app::memory::semantic_port(&config);
     let config_for_ensure = config.clone();
+    let emitter = event_emitter;
 
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -413,6 +426,7 @@ pub fn start_run_from_plan_with_route_opts(
                 provider_unhealthy: Vec::new(),
                 collab_bus: None,
                 memory: memory_port,
+                event_emitter: emitter,
             };
             match sched.run().await {
                 Ok(status) => {
@@ -444,8 +458,12 @@ pub use crate::plan::planner::{
 ///
 /// A1 facade: business entry lives in [`crate::app::split::confirm`]; this
 /// symbol stays for CLI/Tauri/tests until all call sites migrate.
-pub fn confirm_start(config: Config, job_id: &str) -> Result<String> {
-    crate::app::split::confirm(config, job_id, None)
+pub fn confirm_start(
+    config: Config,
+    job_id: &str,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
+) -> Result<String> {
+    crate::app::split::confirm(config, job_id, None, event_emitter)
 }
 
 pub fn stop_run(config: &Config, run_id: &str) -> Result<()> {
@@ -523,8 +541,12 @@ pub fn pause_run(config: &Config, run_id: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn resume_run_async(config: Config, run_id: &str) -> Result<()> {
-    spawn_resume(config, run_id, None, None)
+pub fn resume_run_async(
+    config: Config,
+    run_id: &str,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
+) -> Result<()> {
+    spawn_resume(config, run_id, None, None, event_emitter)
 }
 
 /// Manual re-run of **one** failed/stopped/timeout task in an existing run dir.
@@ -540,11 +562,12 @@ pub fn retry_task_async(
     run_id: &str,
     task_id: &str,
     provider_override: Option<&str>,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
 ) -> Result<()> {
     if task_id.trim().is_empty() {
         bail!("task_id 不能为空");
     }
-    spawn_resume(config, run_id, Some(task_id.to_string()), provider_override)
+    spawn_resume(config, run_id, Some(task_id.to_string()), provider_override, event_emitter)
 }
 
 /// Shared background resume/retry spawn. `only_task = None` → whole-run resume
@@ -557,6 +580,7 @@ fn spawn_resume(
     run_id: &str,
     only_task: Option<String>,
     provider_override: Option<&str>,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
 ) -> Result<()> {
     let dir = state::resolve_run_dir(&config.runs_dir(), Some(run_id))?;
     let mut rs = RunState::load(&dir)?;
@@ -636,6 +660,7 @@ fn spawn_resume(
     let browser_cfg = config.browser.clone();
     let memory_port = crate::app::memory::semantic_port(&config);
     let config_for_ensure = config.clone();
+    let emitter = event_emitter;
 
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -669,6 +694,7 @@ fn spawn_resume(
                 provider_unhealthy: Vec::new(),
                 collab_bus: None,
                 memory: memory_port,
+                event_emitter: emitter,
             };
             let status = sched.run().await;
             if let Ok(st) = RunState::load(&runs_dir.join(&rid)) {
@@ -700,7 +726,11 @@ pub struct ReworkStartResponse {
 /// Generate a rework PlanIR from inspect ISSUES of `source_run_id` and start a new run.
 ///
 /// Rounds capped at [`REWORK_MAX_ROUNDS`]. Does not auto-merge/PR.
-pub fn start_rework_from_run(config: Config, source_run_id: &str) -> Result<ReworkStartResponse> {
+pub fn start_rework_from_run(
+    config: Config,
+    source_run_id: &str,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
+) -> Result<ReworkStartResponse> {
     let dir = state::resolve_run_dir(&config.runs_dir(), Some(source_run_id))?;
     let rs = RunState::load(&dir)?;
     if matches!(
@@ -787,7 +817,7 @@ pub fn start_rework_from_run(config: Config, source_run_id: &str) -> Result<Rewo
         ),
     );
 
-    let new_run_id = start_run_from_plan(config, project, &rework_ir)?;
+    let new_run_id = start_run_from_plan(config, project, &rework_ir, event_emitter)?;
     Ok(ReworkStartResponse {
         run_id: new_run_id,
         source_run_id: source_run_id.into(),

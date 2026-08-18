@@ -15,6 +15,7 @@ pub mod plan_cmd;
 pub mod plans;
 pub mod report;
 pub mod resume;
+pub mod retry;
 pub mod run;
 pub mod status;
 pub mod stop;

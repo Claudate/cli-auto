@@ -49,10 +49,80 @@ use cco::services::ChatCliInfo;
 use cco::state::{ProjectLastSummary, ProjectMemoryView, ProjectPin};
 use serde::Serialize;
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 struct AppState {
     config: Mutex<Config>,
+}
+
+/// B1: Tauri-backed EventEmitter with 50ms coalescing (UX §3.1/§10 U-C3).
+/// Same (run_id, task_id, type) within 50ms → only last payload emits.
+/// task_end with Failed/Timeout status bypasses coalescing (UX §3.2).
+#[derive(Clone)]
+struct TauriEmitter {
+    app: AppHandle,
+    pending: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, (serde_json::Value, std::time::Instant)>>>,
+}
+
+impl TauriEmitter {
+    fn new(app: AppHandle) -> Self {
+        Self {
+            app,
+            pending: Default::default(),
+        }
+    }
+}
+
+impl cco::ports::EventEmitter for TauriEmitter {
+    fn emit_run_event(&self, run_id: &str, type_name: &str, payload: serde_json::Value) {
+        // task_end failed/timeout: immediate emit, no coalesce (UX §3.2).
+        let is_failure = type_name == "task_end" && {
+            let st = payload.get("status").and_then(|v| v.as_str()).unwrap_or("");
+            matches!(st, "Failed" | "Timeout" | "failed" | "timeout")
+        };
+        let task_id = payload.get("task_id").and_then(|v| v.as_str()).unwrap_or("");
+        let key = format!("{run_id}\x00{task_id}\x00{type_name}");
+
+        if is_failure {
+            // Cancel any pending coalesced emit for same key, send now.
+            if let Ok(mut m) = self.pending.lock() {
+                m.remove(&key);
+            }
+            let event = json!({
+                "run_id": run_id,
+                "type": type_name,
+                "payload": payload,
+            });
+            let _ = self.app.emit("cco:run_event", event);
+            return;
+        }
+
+        // Coalesce: store payload + timestamp, spawn 50ms flush thread.
+        let now = std::time::Instant::now();
+        let event = json!({
+            "run_id": run_id,
+            "type": type_name,
+            "payload": payload,
+        });
+
+        if let Ok(mut m) = self.pending.lock() {
+            m.insert(key.clone(), (event, now));
+        }
+
+        let app = self.app.clone();
+        let pending = self.pending.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            if let Ok(mut m) = pending.lock() {
+                if let Some((evt, ts)) = m.get(&key) {
+                    if *ts == now {
+                        let _ = app.emit("cco:run_event", evt.clone());
+                        m.remove(&key);
+                    }
+                }
+            }
+        });
+    }
 }
 
 /// System-level second window for live CLI board (P2-4).
@@ -260,7 +330,11 @@ async fn doctor_cmd(
 /// Legacy ParseOnly / direct disk plan start (IPC name kept for web compatibility).
 /// Mode B open-run is **only** [`confirm_start_cmd`] → app::split::confirm.
 #[tauri::command]
-fn start_run(state: tauri::State<'_, AppState>, req: StartRunRequest) -> Result<Value, String> {
+fn start_run(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+    req: StartRunRequest,
+) -> Result<Value, String> {
     let mut config = state.config.lock().map_err(|e| e.to_string())?;
     let _ = add_project(&mut config, req.project.clone(), None);
     if let Some(proj) = config.projects.iter_mut().find(|p| p.path == req.project) {
@@ -269,7 +343,8 @@ fn start_run(state: tauri::State<'_, AppState>, req: StartRunRequest) -> Result<
     }
     let cfg = config.clone();
     drop(config);
-    let run_id = run_uc::start_from_request(cfg, req).map_err(map_err)?;
+    let emitter = Some(std::sync::Arc::new(TauriEmitter::new(app)) as std::sync::Arc<dyn cco::ports::EventEmitter>);
+    let run_id = run_uc::start_from_request(cfg, req, emitter).map_err(map_err)?;
     Ok(json!({
         "run_id": run_id,
         "status": "started",
@@ -374,6 +449,7 @@ fn sanitize_plan_deps_cmd(
 /// `effort`: optional execute-time pick from split desk (low…max|ultracode).
 #[tauri::command]
 fn confirm_start_cmd(
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
     #[allow(non_snake_case)] jobId: String,
     effort: Option<String>,
@@ -390,7 +466,8 @@ fn confirm_start_cmd(
     }
     let cfg = config.clone();
     drop(config);
-    let run_id = split_uc::confirm(cfg, &jobId, effort.as_deref()).map_err(map_err)?;
+    let emitter = Some(std::sync::Arc::new(TauriEmitter::new(app)) as std::sync::Arc<dyn cco::ports::EventEmitter>);
+    let run_id = split_uc::confirm(cfg, &jobId, effort.as_deref(), emitter).map_err(map_err)?;
     Ok(json!({
         "run_id": run_id,
         "status": "started",
@@ -421,11 +498,13 @@ fn pause_run_cmd(
 
 #[tauri::command]
 fn resume_run_cmd(
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
     #[allow(non_snake_case)] runId: String,
 ) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
-    run_uc::resume(config, &runId).map_err(map_err)?;
+    let emitter = Some(std::sync::Arc::new(TauriEmitter::new(app)) as std::sync::Arc<dyn cco::ports::EventEmitter>);
+    run_uc::resume(config, &runId, emitter).map_err(map_err)?;
     Ok(json!({ "ok": true, "run_id": runId, "status": "resuming" }))
 }
 
@@ -433,13 +512,15 @@ fn resume_run_cmd(
 /// `provider`: optional channel override (user-initiated switch from UI).
 #[tauri::command]
 fn retry_task_cmd(
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
     #[allow(non_snake_case)] runId: String,
     #[allow(non_snake_case)] taskId: String,
     provider: Option<String>,
 ) -> Result<Value, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
-    run_uc::retry_task(config, &runId, &taskId, provider.as_deref()).map_err(map_err)?;
+    let emitter = Some(std::sync::Arc::new(TauriEmitter::new(app)) as std::sync::Arc<dyn cco::ports::EventEmitter>);
+    run_uc::retry_task(config, &runId, &taskId, provider.as_deref(), emitter).map_err(map_err)?;
     Ok(json!({
         "ok": true,
         "run_id": runId,
@@ -450,11 +531,13 @@ fn retry_task_cmd(
 
 #[tauri::command]
 fn start_rework_cmd(
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
     #[allow(non_snake_case)] runId: String,
 ) -> Result<ReworkStartResponse, String> {
     let config = state.config.lock().map_err(|e| e.to_string())?.clone();
-    run_uc::start_rework(config, &runId).map_err(map_err)
+    let emitter = Some(std::sync::Arc::new(TauriEmitter::new(app)) as std::sync::Arc<dyn cco::ports::EventEmitter>);
+    run_uc::start_rework(config, &runId, emitter).map_err(map_err)
 }
 
 #[tauri::command]

@@ -3,8 +3,8 @@
 
 成员清单
 mod.rs: 子模块与 re-export（Scheduler · LogEvent · ProviderRegistry · WorkerPort · handoff）
-scheduler/: **A1-3 多文件编排**（经 **A1-4 WorkerPort + domain/worker 策略**；读取 `auto_commit.json` 执行 host 自动提交；memory.rs P3 记忆试点 — 终态 outcome 录入 + spawn 前预防性 failover，`Scheduler.memory: Option<Arc<dyn MemoryPort>>` 默认 None · Explicit route 不动）
-  · mod.rs: Scheduler 结构 + `run()` 主循环；**per_task worktree 从已提交依赖分支 fork**（后置任务可见前置产物）
+scheduler/: **A1-3 多文件编排**（经 **A1-4 WorkerPort + domain/worker 策略**；读取 `auto_commit.json` 执行 host 自动提交；memory.rs P3 记忆试点 — 终态 outcome 录入 + spawn 前预防性 failover，`Scheduler.memory: Option<Arc<dyn MemoryPort>>` 默认 None · Explicit route 不动；**B1 emit 桥** `event_emitter: Option<Arc<dyn EventEmitter>>` — CLI/TUI 传 None，桌面传 TauriEmitter）
+  · mod.rs: Scheduler 结构 + `run()` 主循环；**per_task worktree 从已提交依赖分支 fork**（后置任务可见前置产物）；**B1 emit_event helper**（先写盘 state.event，再调 event_emitter.emit_run_event）
   · tick.rs: external_stop · reap · spawn_ready · exit 谓词 · **noop guard**（implement Done 前零产出→Failed）· **A3bis task_start 记 `permission_tier` 到 events.jsonl（provider.default_permission_tier 声明 · 不改 soft-fill · 规则 13）**
   · collab_gate.rs: collab 输出发布（`collab_pos` 游标，spawn 预写内容也发）+ **非阻塞 wait_for 门**（命中→spawn · 依赖存活未命中→下轮重查 · 依赖终态未命中→Failed；禁止 inline await——发布方=同一循环，会死锁）
   · start.rs: start_task · **fork_base_for**（取最新已提交依赖分支）· isolation_on_fail → worktree · terminal open · WorkerPort slot

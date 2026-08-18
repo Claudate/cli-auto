@@ -85,25 +85,27 @@ impl ProbeResult {
 /// caller uses it for one HTTP request then drops it.
 fn resolve_key(provider: &str) -> Option<(String, String)> {
     match provider {
-        "claude" => std::env::var("ANTHROPIC_API_KEY")
-            .ok()
-            .filter(|s| !s.trim().is_empty())
-            .map(|v| (v, "env:ANTHROPIC_API_KEY".into())),
-        "sdk" => std::env::var("CCO_SDK_API_KEY")
-            .ok()
-            .filter(|s| !s.trim().is_empty())
-            .map(|v| (v, "env:CCO_SDK_API_KEY".into()))
-            .or_else(|| {
-                std::env::var("ANTHROPIC_API_KEY")
-                    .ok()
-                    .filter(|s| !s.trim().is_empty())
-                    .map(|v| (v, "env:ANTHROPIC_API_KEY".into()))
-            }),
+        "claude" => env_key("ANTHROPIC_API_KEY"),
+        "sdk" => env_key("CCO_SDK_API_KEY").or_else(|| env_key("ANTHROPIC_API_KEY")),
         "codex" => read_codex_auth().map(|k| (k, "file:~/.codex/auth.json".into())),
         "deepseek" => read_codewhale_secret()
             .map(|k| (k, "file:~/.codewhale/secrets/secrets.json".into())),
+        "gemini" => env_key("GEMINI_API_KEY")
+            .or_else(|| env_key("GOOGLE_API_KEY")),
+        "qwen" => env_key("DASHSCOPE_API_KEY"),
+        "kimi" => env_key("MOONSHOT_API_KEY"),
+        "copilot" => env_key("GITHUB_TOKEN"),
+        "codebuddy" => env_key("CODEBUDDY_API_KEY"),
         _ => None,
     }
+}
+
+/// Read an API key from an environment variable.
+fn env_key(var: &str) -> Option<(String, String)> {
+    std::env::var(var)
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .map(|v| (v, format!("env:{var}")))
 }
 
 /// Read OPENAI_API_KEY from ~/.codex/auth.json.
@@ -210,6 +212,30 @@ pub async fn probe_provider(provider: &str, _config: &Config) -> ProbeResult {
             let base = "https://api.deepseek.com".to_string();
             probe_openai_compat(&base, &key).await
         }
+        "gemini" => {
+            probe_gemini(&key).await
+        }
+        "qwen" => {
+            probe_openai_compat("https://dashscope.aliyuncs.com/compatible-mode/v1", &key).await
+        }
+        "kimi" => {
+            probe_openai_compat("https://api.moonshot.cn/v1", &key).await
+        }
+        "copilot" => {
+            // GitHub Copilot uses GitHub auth, not a standard API endpoint.
+            // We can only check key presence — no lightweight probe endpoint.
+            ProbeResult {
+                auth_status: "present".into(),
+                key_source: Some(source.clone()),
+                key_tail: tail.clone(),
+                probe_status: "ok".into(),
+                hint: Some("GitHub Token 已设置（无探活端点，仅查 Key 存在）".into()),
+                http_status: None,
+            }
+        }
+        "codebuddy" => {
+            probe_openai_compat("https://api.codebuddy.ai/v1", &key).await
+        }
         _ => ProbeResult {
             auth_status: "present".into(),
             key_source: Some(source.clone()),
@@ -257,16 +283,31 @@ async fn probe_anthropic(provider: &str, key: &str) -> ProbeResult {
     probe_post_json(&url, key, &body, AuthStyle::XApiKey).await
 }
 
-/// Probe OpenAI-compatible endpoint (codex / deepseek).
-/// Sends a minimal responses request.
+/// Probe OpenAI-compatible endpoint (codex / deepseek / qwen / kimi / codebuddy).
+/// Sends a minimal chat completions request.
 async fn probe_openai_compat(base_url: &str, key: &str) -> ProbeResult {
-    let url = format!("{}/responses", base_url.trim_end_matches('/'));
+    let base = base_url.trim_end_matches('/');
+    // Try /chat/completions first (standard OpenAI); fall back to /responses.
+    let url = format!("{base}/chat/completions");
     let body = serde_json::json!({
-        "model": "deepseek-chat",
-        "input": ".",
-        "max_output_tokens": 1,
+        "model": "auto",
+        "messages": [{"role": "user", "content": "."}],
+        "max_tokens": 1,
     });
     probe_post_json(&url, key, &body, AuthStyle::Bearer).await
+}
+
+/// Probe Google Gemini API. Uses `?key=` query parameter auth style.
+async fn probe_gemini(key: &str) -> ProbeResult {
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
+    );
+    let body = serde_json::json!({
+        "contents": [{"parts": [{"text": "."}]}],
+        "generationConfig": {"maxOutputTokens": 1}
+    });
+    // Gemini uses key-in-URL, no Authorization header needed.
+    probe_post_json_no_auth(&url, &body).await
 }
 
 #[derive(Clone, Copy)]
@@ -277,19 +318,9 @@ enum AuthStyle {
 
 /// Send a minimal POST to probe auth/balance status.
 async fn probe_post_json(url: &str, key: &str, body: &Value, auth: AuthStyle) -> ProbeResult {
-    let client = match reqwest::Client::builder()
-        .timeout(Duration::from_secs(PROBE_TIMEOUT_SECS))
-        .build()
-    {
+    let client = match build_probe_client() {
         Ok(c) => c,
-        Err(e) => {
-            return ProbeResult {
-                auth_status: "present".into(),
-                probe_status: "endpoint_broken".into(),
-                hint: Some(format!("HTTP 客户端构建失败: {e}")),
-                ..Default::default()
-            };
-        }
+        Err(e) => return e,
     };
 
     let mut req = client.post(url).json(body);
@@ -300,6 +331,32 @@ async fn probe_post_json(url: &str, key: &str, body: &Value, auth: AuthStyle) ->
         AuthStyle::Bearer => req.header("Authorization", format!("Bearer {key}")),
     };
 
+    send_and_classify(req).await
+}
+
+/// POST without Authorization header (key in URL query param, e.g. Gemini).
+async fn probe_post_json_no_auth(url: &str, body: &Value) -> ProbeResult {
+    let client = match build_probe_client() {
+        Ok(c) => c,
+        Err(e) => return e,
+    };
+    let req = client.post(url).json(body);
+    send_and_classify(req).await
+}
+
+fn build_probe_client() -> Result<reqwest::Client, ProbeResult> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(PROBE_TIMEOUT_SECS))
+        .build()
+        .map_err(|e| ProbeResult {
+            auth_status: "present".into(),
+            probe_status: "endpoint_broken".into(),
+            hint: Some(format!("HTTP 客户端构建失败: {e}")),
+            ..Default::default()
+        })
+}
+
+async fn send_and_classify(req: reqwest::RequestBuilder) -> ProbeResult {
     let resp = match req.send().await {
         Ok(r) => r,
         Err(e) if e.is_timeout() => {

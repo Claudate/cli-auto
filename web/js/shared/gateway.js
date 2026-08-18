@@ -149,6 +149,37 @@ export const guideSessionStart = (project, mode, entry, rolePack) =>
 /** Guide G0: get one guided session by id. */
 export const guideSessionGet = (sessionId) =>
   raw("guide_session_get_cmd", { sessionId });
+
+/* ── B1: Event Bus ── */
+/**
+ * Subscribe to run events from Tauri.
+ * @param {(evt: object) => void} handler
+ * @returns {() => void} unsubscribe function
+ */
+export function subscribeRunEvents(handler) {
+  const w = typeof window !== "undefined" ? window : globalThis;
+  if (!w.__TAURI__?.event?.listen) {
+    // Not in Tauri environment — return no-op
+    return () => {};
+  }
+  let unlisten = null;
+  w.__TAURI__.event.listen("cco:run_event", (e) => {
+    if (typeof handler === "function") {
+      handler(e.payload);
+    }
+  }).then((fn) => {
+    unlisten = fn;
+  }).catch(() => {});
+
+  return () => {
+    if (unlisten) {
+      try {
+        unlisten();
+      } catch (_) {}
+    }
+  };
+}
+
 /** Get persona preferences (persona_id, clarify_depth, split_grain). best-effort, no project check -> null */
 export const getProjectPersona = (project) => raw("get_project_persona_cmd", { project });
 /** Set persona preferences (any of the three may be omitted). best-effort. */
@@ -298,6 +329,7 @@ export async function dialogOpen(options) {
 export const gateway = {
   raw,
   isTauriReady,
+  subscribeRunEvents,
   getProjects,
   addProject,
   removeProject,

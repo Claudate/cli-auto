@@ -119,16 +119,26 @@ pub fn stop_task(config: &Config, run_id: &str, task_id: Option<&str>) -> Result
 }
 
 /// Resume a paused/aborted run in background (desktop) or via CLI scheduler loop.
-pub fn resume(config: Config, run_id: &str) -> Result<()> {
-    resume_run_async(config, run_id)
+pub fn resume(
+    config: Config,
+    run_id: &str,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
+) -> Result<()> {
+    resume_run_async(config, run_id, event_emitter)
 }
 
 /// Manual re-run of **one** failed/stopped/timeout task (same run dir).
 ///
 /// Not a new Mode B open-run and not re-split. Done tasks stay Done.
 /// `provider_override`: when Some, switches the task to a new channel before retry.
-pub fn retry_task(config: Config, run_id: &str, task_id: &str, provider_override: Option<&str>) -> Result<()> {
-    retry_task_async(config, run_id, task_id, provider_override)
+pub fn retry_task(
+    config: Config,
+    run_id: &str,
+    task_id: &str,
+    provider_override: Option<&str>,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
+) -> Result<()> {
+    retry_task_async(config, run_id, task_id, provider_override, event_emitter)
 }
 
 /// List recent runs (newest first).
@@ -178,21 +188,34 @@ pub fn plan_preview(project: &Path, plan_rel: &Path, config: &Config) -> Result<
 /// **Not** Mode B open-run. Mode B must use [`super::split::confirm`]. Soft-fill
 /// policy is inside the request's provider wipe today (historical); new callers
 /// should prefer plan job + confirm.
-pub fn start_from_request(config: Config, req: StartRunRequest) -> Result<String> {
-    start_run_async(config, req)
+pub fn start_from_request(
+    config: Config,
+    req: StartRunRequest,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
+) -> Result<String> {
+    start_run_async(config, req, event_emitter)
 }
 
 /// Start scheduler from an already-built PlanIR (used by split confirm + rework).
 ///
 /// Presentation must **not** call this to open Mode B runs — only
 /// [`super::split::confirm`] and internal rework.
-pub fn start_from_plan(config: Config, project: PathBuf, ir: &PlanIR) -> Result<String> {
-    start_run_from_plan(config, project, ir)
+pub fn start_from_plan(
+    config: Config,
+    project: PathBuf,
+    ir: &PlanIR,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
+) -> Result<String> {
+    start_run_from_plan(config, project, ir, event_emitter)
 }
 
 /// P-loop: build rework wave from inspect ISSUES and start a new run.
-pub fn start_rework(config: Config, source_run_id: &str) -> Result<ReworkStartResponse> {
-    start_rework_from_run(config, source_run_id)
+pub fn start_rework(
+    config: Config,
+    source_run_id: &str,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
+) -> Result<ReworkStartResponse> {
+    start_rework_from_run(config, source_run_id, event_emitter)
 }
 
 /// User accepts residual open risks.

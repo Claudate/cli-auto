@@ -140,7 +140,7 @@ pub fn maybe_auto_rework(config: &Config, run_id: &str) -> Result<Option<ReworkS
         let _ = h.save(&dir);
     }
 
-    let resp = start_rework_from_run(config.clone(), run_id)?;
+    let resp = start_rework_from_run(config.clone(), run_id, None)?;
     // Persist auto_rework_run_id for live DTO / UI.
     let marker = dir.join("auto_rework.json");
     let _ = std::fs::write(

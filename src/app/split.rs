@@ -42,7 +42,12 @@ use crate::state::RunState;
 ///
 /// Desktop / async path. CLI foreground uses [`confirm_materialize`] then
 /// `app::run::prepare_scheduler` so the same materialize + optional-drop runs.
-pub fn confirm(config: Config, job_id: &str, effort: Option<&str>) -> Result<String> {
+pub fn confirm(
+    config: Config,
+    job_id: &str,
+    effort: Option<&str>,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
+) -> Result<String> {
     let (job, mut ir, soft_report) = load_proposed_for_exec(&config, job_id)?;
     // UI/CLI depth pick at execute time (split desk · --effort).
     crate::app::run::apply_effort(&mut ir, &config, effort);
@@ -58,6 +63,7 @@ pub fn confirm(config: Config, job_id: &str, effort: Option<&str>) -> Result<Str
         crate::app::run::MaterializeRouteOpts {
             skip_cost_route: true,
         },
+        event_emitter,
     )?;
     mark_confirmed(&config, job_id, &run_id, &ir)?;
     // New open-run: clear UI dismiss so project_live binds this run.
@@ -267,7 +273,7 @@ mod tests {
         let view = wait_planned(&cfg, &view.job_id);
         assert_eq!(view.status, "planned", "err={:?}", view.error);
 
-        let run_id = confirm(cfg.clone(), &view.job_id, None).unwrap();
+        let run_id = confirm(cfg.clone(), &view.job_id, None, None).unwrap();
         let run_json = cfg.runs_dir().join(&run_id).join("run.json");
         assert!(run_json.exists());
         // P1-2: new runs stamp route_source on each task.

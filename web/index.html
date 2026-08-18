@@ -358,6 +358,11 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
           </div>
 
           <!-- 执行台/结果台：进度为主（R1/R3）；日志在 #monitor 次级 -->
+          <!-- B2: 降级小条（可关·不阻塞） -->
+          <div id="event-degradation-banner" class="event-degradation-banner" hidden role="status">
+            <span>实时连接已降级</span>
+            <button type="button" class="event-degradation-close" onclick="this.parentElement.hidden=true" aria-label="关闭" title="关闭提示">×</button>
+          </div>
           <div id="result-card" class="task-dash" hidden>
             <div class="task-dash-head">
               <div class="task-dash-title-row">

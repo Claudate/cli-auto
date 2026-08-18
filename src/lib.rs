@@ -31,6 +31,7 @@ pub mod tui;
 
 pub use config::Config;
 pub use plan::{PlanIR, TaskIR, TaskRole, TaskScope};
+pub use ports::EventEmitter;
 pub use runtime::provider::{
     Capabilities, ProviderRegistry, StartCtx, TaskResult, TaskStatus, WorkerHandle, WorkerPort,
     WorkerProvider, WorkerStatus,

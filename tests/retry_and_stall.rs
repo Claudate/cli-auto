@@ -40,6 +40,7 @@ fn sched(
         failover_enabled,
         fallback_extra_attempts,
         failover_order: vec![],
+        event_emitter: None,
         cost_escalate_enabled: false,
         browser: cco::config::BrowserConfig::default(),
         provider_unhealthy: Vec::new(),

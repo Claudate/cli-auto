@@ -65,10 +65,21 @@ function detailCellHtml(line) {
 }
 
 /**
- * Channel status cell from probe result.
- * @param {{ probe?: { probe_status?: string, hint?: string } }} line
+ * Extract provider short name from a doctor line name like "provider:codex:auth".
+ * @param {string} name
+ * @returns {string|null}
  */
-function channelCellHtml(line) {
+function extractProviderName(name) {
+  const m = (name || "").match(/^provider:([^:]+):/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Channel status cell from probe result, with optional「设为默认」button.
+ * @param {{ name?: string, probe?: { probe_status?: string, hint?: string }, kind?: string }} line
+ * @param {string} [currentDefault] - current default_provider from settings
+ */
+function channelCellHtml(line, currentDefault) {
   const p = line.probe;
   if (!p) return '<td class="muted">—</td>';
   const status = p.probe_status || "not_supported";
@@ -82,7 +93,16 @@ function channelCellHtml(line) {
     not_supported: { cls: "muted", label: "—" },
   };
   const m = map[status] || { cls: "muted", label: status };
-  return `<td class="doctor-channel"><span class="badge ${m.cls}" title="${hint}">${m.label}</span></td>`;
+  // "Set as default" shortcut: show when probe ok, kind=auth, and not already default.
+  const provName = extractProviderName(line.name);
+  const isAuth = (line.kind || "") === "auth";
+  const isDefault = provName && currentDefault && provName.toLowerCase() === currentDefault.toLowerCase();
+  const showSetDefault = isAuth && provName && status === "ok" && !isDefault;
+  const setBtn = showSetDefault
+    ? ` <button class="linkish doctor-set-default" data-provider="${esc(provName)}" title="将 ${esc(provName)} 设为默认通道">设为默认</button>`
+    : "";
+  const defaultTag = isAuth && isDefault ? ' <span class="badge muted" style="font-size:.75rem">当前默认</span>' : "";
+  return `<td class="doctor-channel"><span class="badge ${m.cls}" title="${hint}">${m.label}</span>${defaultTag}${setBtn}</td>`;
 }
 
 /**
@@ -95,6 +115,9 @@ export async function loadDoctor() {
     const d = await settingsApi.runDoctor(st.selectedPath || null);
     st.doctorCache = { ok: !!d.ok, at: Date.now(), lines: d.lines || [] };
     const lines = d.lines || [];
+    // Read current default_provider from settings cache or DOM.
+    const provSel = $("#s-default-provider");
+    const currentDefault = provSel ? provSel.value : "";
     const list = $("#doctor-list");
     if (list) {
       list.innerHTML = `<table>
@@ -106,7 +129,7 @@ export async function loadDoctor() {
           <td>${esc(l.name)}</td>
           <td>${l.ok ? badge("ok") : badge("failed")}</td>
           ${detailCellHtml(l)}
-          ${channelCellHtml(l)}
+          ${channelCellHtml(l, currentDefault)}
         </tr>`
           )
           .join("")}
@@ -117,6 +140,24 @@ export async function loadDoctor() {
         ? "全部检查通过"
         : "存在失败项：未安装的 CLI 可点「官网下载」；Key 失效请更换；装好后点重新检查"
     }</p>`;
+      // Bind "set as default" buttons.
+      list.querySelectorAll(".doctor-set-default").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const prov = btn.dataset.provider;
+          if (!prov) return;
+          try {
+            await settingsApi.setSettings({ default_provider: prov });
+            if (provSel) provSel.value = prov;
+            if (typeof window.toast === "function") {
+              window.toast(`已将默认通道切换为 ${prov}`);
+            }
+            // Reload doctor to refresh badges.
+            await loadDoctor();
+          } catch (e) {
+            if (typeof window.toast === "function") window.toast(String(e));
+          }
+        });
+      });
     }
     renderDoctorWarn();
     return st.doctorCache;

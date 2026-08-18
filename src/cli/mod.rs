@@ -155,6 +155,15 @@ pub enum Commands {
         #[arg(long)]
         max_budget: Option<f64>,
     },
+    /// Re-run one failed/stopped/timeout task (not re-split). Optional --provider switches channel.
+    Retry {
+        run_id: String,
+        #[arg(long)]
+        task: String,
+        /// Switch the task to this provider before retry (e.g. codex, claude, deepseek).
+        #[arg(long)]
+        provider: Option<String>,
+    },
     /// Show run status
     Status { run_id: Option<String> },
     /// Stop a run or task (kills worker pid when known)
@@ -569,6 +578,9 @@ pub async fn execute(cli: Cli) -> Result<i32> {
             max_budget,
         } => commands::resume::run(&config, run_id, yes, max_parallel, tui, max_budget).await,
         Commands::Status { run_id } => commands::status::run(&config, run_id),
+        Commands::Retry { run_id, task, provider } => {
+            commands::retry::run(&config, run_id, task, provider)
+        }
         Commands::Stop { run_id, task } => commands::stop::run(&config, run_id, task),
         Commands::Report { run_id } => commands::report::run(&config, run_id),
         Commands::Logs {

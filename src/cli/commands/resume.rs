@@ -49,7 +49,7 @@ pub async fn run(
         terminal_kind: SessionKind::Embedded,
         max_budget,
     };
-    let sched = run_uc::prepare_scheduler(config, ir, st, opts)?;
+    let sched = run_uc::prepare_scheduler(config, ir, st, opts, None)?;
     run_uc::preflight_plan(&sched.registry, &sched.plan).await?;
     run_scheduler_loop(sched, config, &rid, tui, HeadlessMode::Off).await
 }

@@ -53,13 +53,82 @@ export function setSoftSyncHook(fn) {
   softSyncHook = typeof fn === "function" ? fn : null;
 }
 
+/**
+ * B1: Global event subscription state (once per session, not per-VM).
+ */
+let unsubscribeRunEvents = null;
+let eventStaleCounter = 0; // B1: consecutive ticks without events
+let eventFailureCounter = 0; // B2: consecutive event failures (for degradation)
+let isDegraded = false; // B2: degradation state flag
+
+/**
+ * B2: Show degradation banner (dismissible, non-blocking).
+ */
+function showDegradationBanner() {
+  if (isDegraded) return; // Already showing
+  isDegraded = true;
+  const banner = document.getElementById("event-degradation-banner");
+  if (banner) {
+    banner.hidden = false;
+    banner.textContent = "实时连接已降级";
+  }
+}
+
+/**
+ * B2: Hide degradation banner.
+ */
+function hideDegradationBanner() {
+  if (!isDegraded) return; // Already hidden
+  isDegraded = false;
+  const banner = document.getElementById("event-degradation-banner");
+  if (banner) {
+    banner.hidden = true;
+  }
+}
+
+/**
+ * B1: Handle incoming run event and dispatch to ccoRun.
+ * @param {object} evt
+ */
+function handleRunEvent(evt) {
+  const st = state();
+  if (!st) return;
+  // Only handle when on run page and have a selected project
+  if (st.page !== "workspace" || !st.selectedPath) return;
+  // Dispatch to RunViewModel if available
+  if (window.ccoRun?.handleRunEvent) {
+    window.ccoRun.handleRunEvent(evt);
+  }
+  // Reset stale counter: event arrived
+  eventStaleCounter = 0;
+  // B2: Reset failure counter on successful event
+  eventFailureCounter = 0;
+  // B2: Hide degradation banner if event stream recovered
+  hideDegradationBanner();
+}
+
 /** Workspace / plan-job poll tick (no business policy). */
 export function startPolling(intervalMs = 2000) {
   const st = state();
   if (!st) return;
   clearInterval(st.pollTimer);
+
+  // B1: Subscribe to run events once (global, not per-VM)
+  if (!unsubscribeRunEvents && typeof window !== "undefined") {
+    import("../../shared/gateway.js").then(({ subscribeRunEvents }) => {
+      if (!subscribeRunEvents) return;
+      unsubscribeRunEvents = subscribeRunEvents((evt) => {
+        handleRunEvent(evt);
+      });
+    }).catch(() => {});
+  }
+
   st.pollTimer = setInterval(() => {
     st.now = Date.now();
+
+    // B1: Increment stale counter each tick
+    eventStaleCounter += 1;
+
     // 窗口在后台时降频：只保留规划轮询（拆分完成要自动接续），
     // 项目/live 刷新等回到前台的下一个 tick 再恢复。
     if (typeof document !== "undefined" && document.hidden) {
@@ -84,12 +153,32 @@ export function startPolling(intervalMs = 2000) {
         window.refreshPlanJob().catch(() => {});
       }
     }
+
+    // B2: Degradation logic — consecutive failures trigger fallback to polling
+    // 1-3 failures: continue attempting event stream
+    // 4+ failures: degrade to 2s polling + show dismissible banner
+    if (unsubscribeRunEvents && eventStaleCounter >= 1) {
+      eventFailureCounter += 1;
+      if (eventFailureCounter >= 4) {
+        showDegradationBanner();
+      }
+    }
+
+    // B1: Reconciliation logic — if 3+ ticks without events, force loadLive
+    const shouldReconcile = eventStaleCounter >= 3;
+    // B2: When degraded (4+ failures) OR no event subscription, always poll
+    const shouldPoll = !unsubscribeRunEvents || eventFailureCounter >= 4 || shouldReconcile;
+
     if (st.page === "workspace" && st.selectedPath) {
       if (typeof window.loadProjects === "function") {
         window.loadProjects().catch(() => {});
       }
-      if (typeof window.loadLive === "function") {
-        window.loadLive().catch(() => {});
+      // B1/B2: Poll when degraded OR stale counter hit threshold
+      if (shouldPoll) {
+        if (typeof window.loadLive === "function") {
+          window.loadLive().catch(() => {});
+        }
+        eventStaleCounter = 0; // Reset after reconciliation
       }
     } else if (st.page === "chat" && st.selectedPath) {
       // Keep live SoT fresh while authoring so plan-card canExec unlocks when

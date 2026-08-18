@@ -89,6 +89,8 @@ pub struct Scheduler {
     pub collab_bus: Option<Arc<CollabBus>>,
     /// P3 memory pilot: outcome recording + preventive failover (None = disabled).
     pub memory: Option<Arc<dyn crate::ports::MemoryPort>>,
+    /// B1: optional frontend event emitter (None on CLI/TUI → emit silently skipped).
+    pub event_emitter: Option<Arc<dyn crate::ports::EventEmitter>>,
 }
 
 impl Scheduler {

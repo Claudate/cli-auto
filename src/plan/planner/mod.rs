@@ -225,7 +225,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(view.status, "planned");
-        let run_id = crate::services::confirm_start(cfg.clone(), &view.job_id).unwrap();
+        let run_id = crate::services::confirm_start(cfg.clone(), &view.job_id, None).unwrap();
         assert!(!run_id.is_empty());
         let job = PlanJob::load(&cfg, &view.job_id).unwrap();
         assert_eq!(job.status, PlanJobStatus::Confirmed);

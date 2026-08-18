@@ -46,6 +46,7 @@ fn make_scheduler(
         failover_enabled: false,
         fallback_extra_attempts: 1,
         failover_order: vec![],
+        event_emitter: None,
         cost_escalate_enabled: false,
         browser: cco::config::BrowserConfig::default(),
         provider_unhealthy: vec![],

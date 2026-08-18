@@ -2,10 +2,11 @@
 > L2 | 父级: /src/CLAUDE.md
 
 成员清单
-mod.rs: ports 根；re-export WorkerPort DTO · HandoffStore · **SplitAgentPort**；A0 marker
+mod.rs: ports 根；re-export WorkerPort DTO · HandoffStore · **SplitAgentPort** · **EventEmitter**；A0 marker
 worker.rs: **A1-4** `WorkerPort` trait（start/poll/stop/collect/preflight/capabilities + **A3bis `default_permission_tier()`** 默认 FullAccess 向后兼容）+ TaskStatus/Capabilities/StartCtx/WorkerHandle/WorkerStatus/TaskResult（**platform_error** 平台级错误信号）
 handoff.rs: **A1-5** `HandoffStore` trait（write_shell · on_task_start · on_task_end · on_run_end）；实现在 `runtime/handoff::FsHandoffStore`
 split_agent.rs: **OpenHands 落地** `SplitAgentPort` + `SplitRequest` → `CcoSplitJob`（Plan Mode；实现 `plan/split_agent`）
+event_bus.rs: **B1 波次 0** `EventEmitter` trait（emit_run_event 前端事件桥；实现在 src-tauri TauriEmitter 包装 AppHandle；CLI/TUI 传 None 静默跳过）
 
 目标（architecture-redesign 附录 B，未建勿假造）：
 PlanJobStore · RunStore · ChatStore（A1-6 未建，chat 用 free-fn facade）· PlannerPort · ProcessPort · WorktreePort · Clock

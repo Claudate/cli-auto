@@ -2,7 +2,7 @@
 > L2 | 父级: /CLAUDE.md
 
 成员清单
-src/lib.rs: Tauri commands **薄壳 → cco::app**（A1-7 ✅）· chat/split/run/plan-job/stop/resume/rework 无业务策略；chat_send 支持 CLI、effort、model 会话覆盖；live/projects/settings/doctor 仍 thin services 适配；open_monitor_window 系统窗
+src/lib.rs: Tauri commands **薄壳 → cco::app**（A1-7 ✅）· chat/split/run/plan-job/stop/resume/rework 无业务策略；chat_send 支持 CLI、effort、model 会话覆盖；live/projects/settings/doctor 仍 thin services 适配；open_monitor_window 系统窗；**B1 TauriEmitter**（实现 `cco::ports::EventEmitter` 包装 AppHandle · 50ms coalescing 同 task_id+type 只发最后一条 · task_end Failed/Timeout 立即发不合并）
 src/main.rs: 桌面二进制入口 → cco_desktop_lib::run
 Cargo.toml: cco-desktop crate · 依赖 cco 库
 tauri.conf.json: 窗口/标识；frontendDist=../web
@@ -13,11 +13,11 @@ build.rs: tauri build 钩子
 
 | Tauri command | Application |
 |---------------|-------------|
-| confirm_start_cmd | app::split::confirm |
+| confirm_start_cmd | app::split::confirm + **B1 TauriEmitter** |
 | start_plan_job_cmd / get_plan_job_cmd / latest_plan_job_cmd / latest_plan_job_for_plan_cmd / list_plan_split_index_cmd | app::split::* |
 | update/remove/sanitize plan task | app::split::* |
-| stop_run_cmd / stop_task_cmd / resume_run_cmd / **retry_task_cmd** / rework / residual | app::run::* |
-| get_runs / get_run / plan meta / preview / start_run（ParseOnly） | app::run::* |
+| stop_run_cmd / stop_task_cmd / resume_run_cmd / **retry_task_cmd + B1** / rework **+ B1** / residual | app::run::* |
+| get_runs / get_run / plan meta / preview / start_run（ParseOnly **+ B1**） | app::run::* |
 | chat_* / read_plan_md / **chat_read_image_data_url** / preview_start|stop|status | app::chat::* |
 | git_status / git_remote_* / git_set_identity / git_commit / git_push / git_doctor | services::git thin（host-level Git 操作） |
 | live / projects / settings / doctor | services thin（未建 app 模块） |

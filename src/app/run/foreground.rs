@@ -54,6 +54,7 @@ pub fn prepare_scheduler(
     ir: PlanIR,
     state: RunState,
     opts: ForegroundOpts,
+    event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
 ) -> Result<Scheduler> {
     let registry = ProviderRegistry::from_config(config)?;
     let max_parallel = opts.max_parallel.unwrap_or(ir.max_parallel);
@@ -101,6 +102,7 @@ pub fn prepare_scheduler(
         collab_bus: None, // Collaboration bus created on-demand when wait_for is used
         // P3 memory pilot: outcome recording + preventive failover (config.memory.enabled 门控).
         memory: crate::app::memory::semantic_port(config),
+        event_emitter,
     })
 }
 

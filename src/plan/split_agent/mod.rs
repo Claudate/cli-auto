@@ -274,7 +274,7 @@ mod tests {
         assert!(!sot.tasks.is_empty());
         assert!(crate::plan::run_gate_ok(&sot).is_ok());
 
-        let run_id = crate::app::split::confirm(cfg.clone(), &view.job_id, None).unwrap();
+        let run_id = crate::app::split::confirm(cfg.clone(), &view.job_id, None, None).unwrap();
         assert!(!run_id.is_empty());
         let job = crate::plan::planner::PlanJob::load(&cfg, &view.job_id).unwrap();
         assert_eq!(job.status, crate::plan::planner::PlanJobStatus::Confirmed);
@@ -342,7 +342,7 @@ mod tests {
             1
         );
 
-        let run_id = crate::app::split::confirm(cfg.clone(), &view.job_id, None).unwrap();
+        let run_id = crate::app::split::confirm(cfg.clone(), &view.job_id, None, None).unwrap();
         assert!(!run_id.is_empty());
     }
 

@@ -309,6 +309,7 @@ mod tests {
             provider_unhealthy: Vec::new(),
             collab_bus: None,
             memory: None,
+            event_emitter: None,
         }
     }
 

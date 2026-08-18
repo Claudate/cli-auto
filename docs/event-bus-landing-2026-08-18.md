@@ -422,12 +422,19 @@ cargo test -p cco --test event_bus_golden
 
 ### 波次 0 · Rust 侧 emit 桥（成本：低）
 
-- [ ] `scheduler/mod.rs` 加 `app_handle: Option<tauri::AppHandle>` 字段
-- [ ] `scheduler/tick.rs` 在 `state.event()` 后调 `handle.emit()`（含 `use tauri::Emitter`）
-- [ ] `app/run/foreground.rs` `prepare_scheduler` 签名加 `app_handle` 参数
-- [ ] `src-tauri/src/lib.rs` `start_run` / `resume` command 参数加 `app: AppHandle`
-- [ ] CLI 路径 `app_handle = None` 验证（`cco run` / `cco resume` 行为不变）
-- [ ] `RunState` **不**加字段（保持磁盘模型纯净）
+- [x] ~~`scheduler/mod.rs` 加 `app_handle: Option<tauri::AppHandle>` 字段~~（改：trait 抽象 `EventEmitter`）
+- [x] `ports/event_bus.rs` 新增 `EventEmitter` trait（`emit_run_event` 纯接口）
+- [x] `scheduler/mod.rs` 加 `event_emitter: Option<Arc<dyn EventEmitter>>` 字段 + `emit_event` helper
+- [x] `scheduler/*.rs` 替换所有 `state.event()` → `emit_event()`（~20 处）
+- [x] `app/run/foreground.rs` `prepare_scheduler` 签名加 `event_emitter` 参数
+- [x] `services/runs.rs` 8 个函数签名加 `event_emitter` 参数下传
+- [x] `app/run/mod.rs` 5 个 facade + `app/split::confirm` 加 `event_emitter` 参数
+- [x] `src-tauri/lib.rs` 实现 `TauriEmitter`（50ms coalescing · task_end Failed/Timeout 立即发）
+- [x] `src-tauri/lib.rs` 5 个 command 加 `app: AppHandle` 参数传 `Some(TauriEmitter::new(app))`
+- [x] CLI 路径 `app_handle = None` 验证（`cco run` / `cco resume` 行为不变）
+- [x] `RunState` **不**加字段（保持磁盘模型纯净）
+
+**修订记录**：2026-08-18 trait 抽象方案 · coalescer 在 src-tauri · CLI 传 None 静默跳过
 
 ### 波次 1 · 前端订阅 + 增量更新（成本：中）
 
@@ -509,7 +516,7 @@ B1 通管道后，以下已落地但「写了没人读」的能力**价值释放
 
 | 阶段 | 状态 | 说明 |
 |------|------|------|
-| B1-0 Rust emit 桥 | ☐ | `state/mod.rs` + `tick.rs` + `lib.rs` |
+| B1-0 Rust emit 桥 | ✅ | trait 抽象 · Scheduler.event_emitter · TauriEmitter 50ms coalescing |
 | B1-1 前端订阅 | ☐ | `gateway.js` + `RunViewModel.js` |
 | B1-2 降级 + 一致性 | ☐ | `shellBoot.js` + `run_end` 全量刷新 |
 | B1-3 金样测试 | ☐ | `tests/event_bus_golden.rs` + `check-arch.sh` |
@@ -520,6 +527,8 @@ B1 通管道后，以下已落地但「写了没人读」的能力**价值释放
 
 | 日期 | 说明 |
 |------|------|
+| 2026-08-18 | 初版 · 明确方案 A（command 参数 AppHandle）· 50ms coalescing · 失败立即发 |
+| 2026-08-18 | B1-0 完成：trait 抽象方案落地 · ports/EventEmitter · TauriEmitter std::thread coalescing · 707/708 测试通过 · check-arch 绿 |
 | 2026-08-18 | 初版立项；M3 事件派生 + 轮询降级；单独立项不与 DSH 混跑 |
 | 2026-08-18 | 审查修订：AppHandle 挂 Scheduler 不挂 RunState；chat 相事件后置；task_failed 不存在；前端订阅放 shellBoot 不放 RunViewModel；加多窗口/softSync/jobPoll 待澄清项 |
 | 2026-08-18 | UX 配套：新增 §5.3 UX 验收（U1-U6）+ §5.4 验证口令补充；详见 [`event-bus-ux-2026-08-18.md`](./event-bus-ux-2026-08-18.md) |

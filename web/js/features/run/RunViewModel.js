@@ -58,6 +58,23 @@ export function createRunViewModel(deps = {}) {
     }
   }
 
+  /**
+   * B1: Patch a single task in the live object (functional update).
+   * @param {object} live
+   * @param {string} taskId
+   * @param {object} patch
+   */
+  function patchTask(live, taskId, patch) {
+    if (!live || !Array.isArray(live.tasks)) return;
+    const updated = {
+      ...live,
+      tasks: live.tasks.map((t) =>
+        t.task_id === taskId ? { ...t, ...patch } : t
+      ),
+    };
+    setPatch({ live: updated });
+  }
+
   async function after() {
     if (typeof deps.onAfterMutate === "function") {
       try {
@@ -91,6 +108,62 @@ export function createRunViewModel(deps = {}) {
         patch.dashCollapsed = !!opts.dashCollapsed;
       }
       return setPatch(patch);
+    },
+
+    /**
+     * B1: Handle incoming run event (incremental state update).
+     * @param {object} evt - { type, payload, run_id }
+     */
+    handleRunEvent(evt) {
+      const current = snap();
+      const live = current.live;
+      if (!live || !evt || !evt.type) return;
+
+      // Only process events for the current run
+      if (evt.run_id && live.run_id && evt.run_id !== live.run_id) return;
+
+      switch (evt.type) {
+        case "task_start":
+          if (evt.payload?.task_id) {
+            patchTask(live, evt.payload.task_id, { status: "running" });
+          }
+          break;
+
+        case "task_end":
+          if (evt.payload?.task_id && evt.payload?.status) {
+            patchTask(live, evt.payload.task_id, { status: evt.payload.status });
+          }
+          break;
+
+        case "checkpoint":
+          // A1: Set checkpoint flag to unlock "从这里继续" button
+          setPatch({ live: { ...live, has_checkpoint: true } });
+          break;
+
+        case "permission_tier":
+          // A3bis: Set permission tier for safety label
+          if (evt.payload?.tier) {
+            setPatch({ live: { ...live, permission_tier: evt.payload.tier } });
+          }
+          break;
+
+        case "run_end":
+          // B2: Delay 300ms before full refresh to allow RunState to persist
+          setTimeout(() => {
+            if (typeof window.loadLive === "function") {
+              window.loadLive().catch(() => {});
+            }
+          }, 300);
+          break;
+
+        case "run_start":
+          // Skip: run_start handled by full loadLive after navigation
+          break;
+
+        default:
+          // Unknown event type: ignore
+          break;
+      }
     },
 
     selectTask(taskId) {
@@ -279,6 +352,23 @@ export function createRunViewModel(deps = {}) {
         toast(e?.message || String(e));
         return null;
       }
+    },
+
+    /**
+     * B1: Incremental patch one task (event-driven state update).
+     * @param {string} taskId
+     * @param {Partial<Task>} patch
+     */
+    patchTask(taskId, patch) {
+      const prev = snap();
+      if (!prev.live?.tasks) return;
+      const nextTasks = prev.live.tasks.map((t) =>
+        t.id === taskId ? { ...t, ...patch } : t
+      );
+      store.set({
+        ...prev,
+        live: { ...prev.live, tasks: nextTasks },
+      });
     },
   };
 }
