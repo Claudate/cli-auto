@@ -590,4 +590,44 @@ mod tests {
             Some(RouteSource::SoftFill)
         );
     }
+
+    /// P2-17 regression: CLI ParseOnly / Tauri start_run pass an explicit provider
+    /// (`--provider fake`) — cost-aware routing must never rewrite it to a real CLI.
+    /// Two independent guards: skip_cost_route (last-write) AND the domain now never
+    /// auto-rewrites a task currently on an explicit non-auto channel (fake/mock/sdk).
+    #[test]
+    fn materialize_keeps_explicit_fake_after_soft_fill() {
+        use crate::domain::worker::{apply_route_fill, RouteFillMode};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        std::fs::create_dir_all(project.join("docs/plans")).unwrap();
+        let cfg = test_cfg(tmp.path());
+        // Soft-fill to fake makes default_provider == "fake", which is exactly what
+        // used to fool is_still_default_route into rewriting these tasks to a real CLI.
+        let mut ir = sample_ir(&project);
+        let report = apply_route_fill(&mut ir, "fake", RouteFillMode::Soft).unwrap();
+
+        // Guard #1: CLI ParseOnly path passes skip_cost_route: true.
+        let (_, st1, out1, _) = materialize_run_with_route_opts(
+            &cfg,
+            project.clone(),
+            &ir,
+            Some(&report),
+            MaterializeRouteOpts {
+                skip_cost_route: true,
+            },
+        )
+        .unwrap();
+        assert!(st1.tasks.values().all(|t| t.provider == "fake"));
+        assert!(out1.tasks.iter().all(|t| t.provider == "fake"));
+
+        // Guard #2 (domain): even without skip, a task on fake is never auto-rewritten.
+        let (_run_id, _st2, out2, cost) =
+            materialize_run_with_route(&cfg, project, &ir, Some(&report)).unwrap();
+        assert!(
+            out2.tasks.iter().all(|t| t.provider == "fake"),
+            "explicit fake must never be rewritten even on the bare path: {cost:?}"
+        );
+    }
 }

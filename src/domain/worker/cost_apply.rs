@@ -12,7 +12,8 @@ use super::cost_budget::{
 };
 use super::cost_intent::effective_tier;
 use super::cost_route::{
-    default_cost_catalog, role_default_tier, CostRouteChange, CostRouteReport, ProviderCostEntry,
+    default_cost_catalog, is_non_auto_provider, role_default_tier, CostRouteChange, CostRouteReport,
+    ProviderCostEntry,
 };
 use super::route::is_still_default_route;
 
@@ -123,6 +124,14 @@ pub fn apply_cost_aware_routing_with_opts(
             )
         };
         if !is_still_default_route(&provider, &default) {
+            continue;
+        }
+        // An explicit non-auto channel (fake/mock/sdk) is never auto-rewritten,
+        // even when it equals the current default (soft-fill sets default=the filled
+        // value, which would otherwise fool is_still_default_route into a real CLI —
+        // see CLI ParseOnly / Tauri start_run skip_cost_route wiring). Empty stays
+        // "still default" so genuine default-only tasks keep being auto-routed.
+        if !provider.is_empty() && is_non_auto_provider(&provider) {
             continue;
         }
         if let Some(implied) = crate::domain::plan::tag_implied_provider(&tags) {

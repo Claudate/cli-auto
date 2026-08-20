@@ -100,7 +100,7 @@ async fn golden_prose_md_plan_confirm_exec() {
     let ir = load_proposed(&cfg, &view.job_id).unwrap();
     ir.validate().unwrap();
 
-    let run_id = confirm_start(cfg.clone(), &view.job_id).unwrap();
+    let run_id = confirm_start(cfg.clone(), &view.job_id, None).unwrap();
     wait_run_terminal(&cfg, &run_id);
 
     let st = state::RunState::load(&cfg.runs_dir().join(&run_id)).unwrap();
@@ -162,7 +162,7 @@ async fn golden_serial_prompts_plan_confirm_exec() {
     assert!(ir.task("t3").unwrap().depends_on.len() >= 1);
     ir.validate().unwrap();
 
-    let run_id = confirm_start(cfg.clone(), &view.job_id).unwrap();
+    let run_id = confirm_start(cfg.clone(), &view.job_id, None).unwrap();
     wait_run_terminal(&cfg, &run_id);
     let st = state::RunState::load(&cfg.runs_dir().join(&run_id)).unwrap();
     assert!(
@@ -230,7 +230,7 @@ async fn golden_cco_v1_plan_confirm_exec() {
     )
     .unwrap();
 
-    let run_id = confirm_start(cfg.clone(), &view.job_id).unwrap();
+    let run_id = confirm_start(cfg.clone(), &view.job_id, None).unwrap();
     wait_run_terminal(&cfg, &run_id);
 
     let st = state::RunState::load(&cfg.runs_dir().join(&run_id)).unwrap();

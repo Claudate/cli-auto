@@ -96,7 +96,7 @@ async fn a0_confirm_start_is_mode_b_run_entry() {
     let view = wait_planned(&cfg, &view.job_id);
     assert_eq!(view.status, "planned", "err={:?}", view.error);
 
-    let run_id = confirm_start(cfg.clone(), &view.job_id).unwrap();
+    let run_id = confirm_start(cfg.clone(), &view.job_id, None).unwrap();
     let run_dir = cfg.runs_dir().join(&run_id);
     assert!(
         run_dir.join("run.json").exists(),
@@ -272,7 +272,7 @@ tasks:
         "soft-fill must not overwrite explicit route on proposed"
     );
 
-    let run_id = confirm_start(cfg.clone(), &view.job_id).unwrap();
+    let run_id = confirm_start(cfg.clone(), &view.job_id, None).unwrap();
     let resolved_path = cfg.runs_dir().join(&run_id).join("plan.resolved.json");
     // Wait briefly for start_run_from_plan to write resolved (it writes before spawn).
     for _ in 0..40 {
@@ -377,7 +377,7 @@ tasks:
     )
     .unwrap();
 
-    let run_id = confirm_start(cfg.clone(), &view.job_id).unwrap();
+    let run_id = confirm_start(cfg.clone(), &view.job_id, None).unwrap();
     let resolved_path = cfg.runs_dir().join(&run_id).join("plan.resolved.json");
     for _ in 0..40 {
         if resolved_path.exists() {

@@ -297,7 +297,18 @@ pub fn start_run_async(
     ir.default_provider = req.provider.clone();
     ir.default_mode = req.mode.clone();
     let project = req.project.canonicalize().context("canonicalize project")?;
-    start_run_from_plan(config, project, &ir, event_emitter)
+    // req.provider is an explicit user-chosen channel → last write; cost-aware
+    // auto-routing must not rewrite it (mirrors split confirm / CLI --provider).
+    start_run_from_plan_with_route_opts(
+        config,
+        project,
+        &ir,
+        None,
+        crate::app::run::MaterializeRouteOpts {
+            skip_cost_route: true,
+        },
+        event_emitter,
+    )
 }
 
 /// Start scheduler from an already-built PlanIR (used by plan-job confirm).

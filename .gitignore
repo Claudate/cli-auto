@@ -14,3 +14,7 @@ src-tauri/gen/
 
 # one-off icon/debug scratch (CodeWhale workspace)
 .codewhale/
+
+# 本地参考资料与临时截图（不入库）
+public/MotionSites会员版/
+tmp-fig1.png
