@@ -604,7 +604,7 @@ export function shouldFoldMessage(msgIndex, total, content, opts = {}) {
 
   const { chars, lines } = contentStats(content);
   const role = String(opts.role || "");
-  // Short user pings / short AI acks stay visible — folding them into pills is hostile
+  // Short user pings / short leaf acks stay visible — folding them into pills is hostile
   if (role === "user" && chars <= SHORT_MSG_CHARS * 1.5) return false;
   // 折了必须真省空间：不够长的内容折成摘要条，展开只多一两行，正是被抱怨的行为
   if (chars < FOLD_WORTHY_CHARS && lines < FOLD_WORTHY_LINES) return false;
@@ -671,7 +671,7 @@ export function renderFoldBarHtml(roleLabel, content, msgIndex, opts = {}) {
   const meta = lines > 3 ? `${lines} 行` : "展开";
   const role = String(opts.role || "");
   const aria =
-    role === "user" ? "展开我的这条消息" : "展开 AI 的这条消息";
+    role === "user" ? "展开我的这条消息" : "展开小叶的这条消息";
   return (
     `<button type="button" class="chat-msg-fold-bar" data-chat-msg-unfold="${chatEsc(
       key
@@ -804,7 +804,7 @@ export function sendChatQuizDraft(msgKey) {
   // Defer to send path (busy-safe)
   try {
     if (state.chatBusy) {
-      toast("AI 还在回复，已填入输入框，稍后再发");
+      toast("小叶还在回复，已填入输入框，稍后再发");
       return;
     }
     if (typeof window !== "undefined" && window.ccoChat?.sendChatMessage) {

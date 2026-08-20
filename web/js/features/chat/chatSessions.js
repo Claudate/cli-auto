@@ -27,16 +27,16 @@ export function chatWaitLabel() {
     return "正在整理你的想法…";
   }
   const started = state.chatWaitStartedAt || 0;
-  if (!started) return "AI 正在思考…";
+  if (!started) return "小叶正在思考…";
   const sec = Math.max(0, Math.floor((Date.now() - started) / 1000));
-  if (sec < 5) return "AI 正在思考…";
-  if (sec < 60) return `AI 正在思考…（已等 ${sec}s）`;
+  if (sec < 5) return "小叶正在思考…";
+  if (sec < 60) return `小叶正在思考…（已等 ${sec}s）`;
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   if (m >= 3) {
-    return `AI 正在思考…（已等 ${m}分${s}s，等太久可点「停止」重新提问）`;
+    return `小叶正在思考…（已等 ${m}分${s}s，等太久可点「停止」重新提问）`;
   }
-  return `AI 正在思考…（已等 ${m}分${s}s，可稍候）`;
+  return `小叶正在思考…（已等 ${m}分${s}s，可稍候）`;
 }
 
 /** Paint the pending assistant bubble (thinking orb + wait label, or streaming partial as rendered md). */
@@ -436,7 +436,7 @@ export async function switchChatSession(sessionId) {
     return;
   }
   if (state.chatBusy) {
-    toast("AI 正在回复，请稍后再切换会话");
+    toast("小叶正在回复，请稍后再切换会话");
     renderChatSessionSelect();
     return;
   }
@@ -467,7 +467,7 @@ export async function newChatSession() {
     return;
   }
   if (state.chatBusy) {
-    toast("AI 正在回复，请稍后再新建");
+    toast("小叶正在回复，请稍后再新建");
     return;
   }
   const cur = state.chatSession?.session_id || "default";
@@ -481,6 +481,7 @@ export async function newChatSession() {
       draft_plan: sess?.draft_plan || null,
       title: sess?.title || null,
       clarify: sess?.clarify || null,
+      model: sess?.model || null,
     };
     state.chatDraftPlan = null;
     state.chatFake = false;
@@ -517,7 +518,7 @@ export async function deleteChatSession(sessionId) {
     return;
   }
   if (state.chatBusy) {
-    toast("AI 正在回复，请稍后再删");
+    toast("小叶正在回复，请稍后再删");
     return;
   }
   const cur = state.chatSession?.session_id || "default";

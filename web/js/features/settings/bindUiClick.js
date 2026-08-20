@@ -651,7 +651,7 @@ export function attachDocumentClick(deps) {
             ? call("aiLogPlainText", t)
             : "";
         Promise.resolve(navigator.clipboard.writeText(text || ""))
-          .then(() => toast(text ? "AI 日志已复制" : "暂无 AI 交互可复制"))
+          .then(() => toast(text ? "小叶日志已复制" : "暂无小叶交互可复制"))
           .catch(() => toast("复制失败"));
         return;
       }

@@ -133,6 +133,7 @@ export function stashChatSession(path, sessionId) {
     draftPath: state.chatDraftPlan || null,
     fake: !!state.chatFake,
     envNote: state.chatEnvNote || null,
+    model: state.chatSession?.model || null,
     busy: !!state.chatBusy,
     waitStartedAt: state.chatWaitStartedAt || 0,
     title: state.chatSession?.title || null,
@@ -186,6 +187,7 @@ export function restoreChatSession(path, sessionId) {
     draft_plan: c.draft_plan ? { ...c.draft_plan } : null,
     title: c.title || null,
     clarify: c.clarify ? { ...c.clarify } : state.chatSession?.clarify || null,
+    model: c.model || null,
   };
   // Only restore path when draft is actually saved; unsaved fence must not revive
   // a stale draftPath from an older cache entry.
@@ -244,6 +246,7 @@ export function applyChatDraftFromSession(sess) {
     draft_plan: d,
     title: sess.title || null,
     clarify: sess.clarify || null,
+    model: sess.model || null,
   };
   // Server draft is source of truth for plan file identity.
   // Unsaved draft (new fence after prior save) MUST clear chatDraftPlan so the

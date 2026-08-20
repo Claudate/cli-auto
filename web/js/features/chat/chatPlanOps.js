@@ -117,7 +117,7 @@ export async function saveChatPlan(opts) {
     }
   }
   if (!md) {
-    toast("还没有可保存的计划草稿，请先让 AI 生成计划");
+    toast("还没有可保存的计划草稿，请先让小叶生成计划");
     return;
   }
   // Overwrite only when re-saving the *same* already-saved draft body (H1 未执行可改).
@@ -211,7 +211,7 @@ export async function assignFromChat() {
     return;
   }
   if (state.chatFake) {
-    toast("注意：当前计划来自本地模板（非真实 AI），确认后仍将进入执行");
+    toast("注意：当前计划来自本地模板（非真实小叶），确认后仍将进入执行");
   }
   try {
     await selectPlan(state.chatDraftPlan);

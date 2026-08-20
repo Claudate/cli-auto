@@ -200,7 +200,7 @@ export function showPage(name) {
           ? String(state.selectedPath).split(/[/\\]/).filter(Boolean).pop()
           : "");
       // 后台 Mode B 态只走顶栏监控 ghost / 可关 banner，副标题不再夹「待确认/返回确认」
-      sub.textContent = label ? `和 AI 一起写计划 · ${label}` : "和 AI 一起写计划";
+      sub.textContent = label ? `和小叶一起写计划 · ${label}` : "和小叶一起写计划";
     }
   } else if (name === "plans") {
     const title = $el("#page-title");

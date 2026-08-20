@@ -299,7 +299,7 @@ export async function sendChatMessage() {
   const hasAtt = (state.chatPendingAttachments || []).length > 0;
   if (!text && !hasAtt) return;
   if (state.chatBusy) {
-    toast("AI 正在回复，等本轮结束再发；等太久可点红色按钮停止");
+    toast("小叶正在回复，等本轮结束再发；等太久可点红色按钮停止");
     return;
   }
 
@@ -335,7 +335,7 @@ export async function sendChatMessage() {
     input.style.height = "auto";
   }
   const pendingSnap = (state.chatPendingAttachments || []).slice();
-  // optimistic user bubble + pending AI bubble (renderChatMessages)
+  // optimistic user bubble + pending leaf bubble (renderChatMessages)
   const optContent =
     text ||
     (pendingSnap.length ? `（附件 ${pendingSnap.length} 个）` : "");
@@ -383,7 +383,6 @@ export async function sendChatMessage() {
     if (cli) localStorage.setItem("cco.chatCli", cli);
   } catch (_) {}
   const effortEl = $("#chat-effort");
-  const modelEl = $("#chat-model");
     const effortRaw = (effortEl?.value || "").trim().toLowerCase();
     const effortOk = ["low", "medium", "high", "xhigh", "max", "ultracode"].includes(
       effortRaw
@@ -395,7 +394,6 @@ export async function sendChatMessage() {
       attachments: attachments.length ? attachments : null,
       effort: effortOk ? effortRaw : null,
       cli: cli === "claude" ? null : cli,
-      model: modelEl?.value || "",
     };
     // Persist last chat pick so reopen keeps depth
     try {
@@ -423,8 +421,8 @@ export async function sendChatMessage() {
         localStorage.setItem("cco.chatEffort", resp.effort);
       } catch (_) {}
     }
-    // `/model <名称>` 在 Rust 侧设置会话默认模型：持久化跟随（无独立选择器，
-    // 会话恢复时 `/help` 与 `/models` 可复核当前值）。
+    // `/model <名称>` 在 Rust 侧设置会话默认模型：「本轮上下文」右侧只读徽标跟随；
+    // 切换唯一入口是斜杠命令，composer 不再有模型选择器。
     if (resp.model) {
       syncChatModelFromResponse(resp.model);
     }
@@ -443,6 +441,7 @@ export async function sendChatMessage() {
             : null,
         fake: !!resp.fake,
         envNote: resp.env_note || null,
+        model: resp.model || null,
         busy: false,
         waitStartedAt: 0,
       };
@@ -453,16 +452,17 @@ export async function sendChatMessage() {
         session_id: resp.session_id,
         messages: resp.messages,
         draft_plan: resp.draft_plan,
+        model: resp.model || null,
       });
       // applyChatDraftFromSession already mirrors server saved path / clears unsaved.
       // Do not re-promote a stale chatDraftPlan when the new fence is unsaved.
-      // 有 markdown 时记 fake；真实 AI 成功则清掉
+      // 有 markdown 时记 fake；真实小叶成功则清掉
       state.chatFake = !!resp.fake;
       // 生产 soft-fallback：env_note 进系统条；forced fake 无 env_note 时用简短 mock 提示
       if (resp.env_note) {
         state.chatEnvNote = String(resp.env_note);
       } else if (resp.fake) {
-        state.chatEnvNote = "本地模板联调（CCO_CHAT_FAKE / provider=fake）· 非真实 AI";
+        state.chatEnvNote = "本地模板联调（CCO_CHAT_FAKE / provider=fake）· 非真实小叶";
       } else {
         state.chatEnvNote = null;
       }
@@ -477,7 +477,7 @@ export async function sendChatMessage() {
       if (resp.env_note) {
         toast("本机 Claude CLI 暂不可用，请查看上方环境提示");
       } else {
-        toast("当前是本地模板联调（非真实 AI）");
+        toast("当前是本地模板联调（非真实小叶）");
       }
     }
   } catch (e) {
@@ -563,6 +563,6 @@ export async function cancelChatMessage() {
     await chatApi.cancelMessage(project);
   } catch (_) {
     // best-effort; send() will finish on its own
-    toast("停止请求没有送达，会等 AI 自己结束这轮");
+    toast("停止请求没有送达，会等小叶自己结束这轮");
   }
 }

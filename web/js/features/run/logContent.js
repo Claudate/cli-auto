@@ -209,15 +209,15 @@ export function aiLogPlainText(t) {
       .join("\n");
   }
   // 无结构化事件时：不回落整段 log_tail，避免系统噪音污染
-  if (isLiveStatus(t?.status)) return "AI 运行中，等待交互输出…";
-  if (isFailedStatus(t?.status)) return t?.error ? String(t.error) : "任务失败，无 AI 交互日志。";
+  if (isLiveStatus(t?.status)) return "小叶运行中，等待交互输出…";
+  if (isFailedStatus(t?.status)) return t?.error ? String(t.error) : "任务失败，无小叶交互日志。";
   if (
     (typeof isStoppedStatus === "function" && isStoppedStatus(t?.status)) ||
     ["stopped", "aborted", "cancelled", "canceled"].includes(
       String(t?.status || "").toLowerCase()
     )
   ) {
-    return "本步已停止，无更多 AI 交互日志。";
+    return "本步已停止，无更多小叶交互日志。";
   }
   return "";
 }
@@ -234,7 +234,7 @@ export function panelLogContent(t) {
     .filter((e) => eventPassesFilter(e, S().logEventFilter));
   const mode = S().logViewMode || "term";
 
-  // 默认 term / pretty：只渲染 AI 事件，绝不 dump 原始 log_tail
+  // 默认 term / pretty：只渲染小叶事件，绝不 dump 原始 log_tail
   // result 摘要不进黑区（成功态窗外徽章已表达）
   const viewEvents = events.filter((e) => String(e.kind || "").toLowerCase() !== "result");
   if (mode !== "raw") {
@@ -243,7 +243,7 @@ export function panelLogContent(t) {
         return {
           mode,
           empty: true,
-          html: '<div class="cli-empty-ai muted">AI 运行中，等待交互输出…</div>',
+          html: '<div class="cli-empty-ai muted">小叶运行中，等待交互输出…</div>',
         };
       }
       if (isFailedStatus(st)) {
@@ -303,7 +303,7 @@ export function panelLogContent(t) {
       return {
         mode,
         empty: true,
-        html: '<div class="cli-empty-ai muted">AI 运行中，等待交互输出…</div>',
+        html: '<div class="cli-empty-ai muted">小叶运行中，等待交互输出…</div>',
       };
     }
     if (isFailedStatus(st)) {

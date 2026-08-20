@@ -395,7 +395,7 @@ export function renderChatMessages(opts = {}) {
   }
   // Every assistant ```plan card stays actionable until saved+alreadySplit
   // (or stream partials, which force activePlan:false). Earlier "last assistant
-  // only" froze unexecuted drafts after any later AI turn / preview reply.
+  // only" froze unexecuted drafts after any later leaf turn / preview reply.
   // t3: inline clarify strip when still in clarify flow with messages present
   applyPathModeHeadStep(getPathMode());
   applyPersonaOpener(getPersonaId());
@@ -415,7 +415,7 @@ export function renderChatMessages(opts = {}) {
   let html = (understandBar || "") + (clarifyInline || "") + msgsNow
     .map((m, idx) => {
       const role = m.role === "assistant" ? "assistant" : m.role === "system" ? "system" : "user";
-      const label = role === "assistant" ? "AI" : role === "system" ? "系统" : "我";
+      const label = role === "assistant" ? "小叶" : role === "system" ? "系统" : "我";
       const content = m.content || "";
       const atts = Array.isArray(m.attachments) ? m.attachments : [];
       const attHtml = atts.length
@@ -507,14 +507,14 @@ export function renderChatMessages(opts = {}) {
         : null;
     if (stream) {
       html += `<div class="chat-msg chat-msg-assistant chat-msg-pending" aria-live="polite">
-      <div class="chat-msg-role">AI</div>
+      <div class="chat-msg-role">小叶</div>
       <div class="chat-msg-body chat-msg-body-pending chat-msg-streaming md-body">${chatFormatStreamBody(
         stream
       )}<span class="chat-stream-cursor" aria-hidden="true">▍</span></div>
     </div>`;
     } else {
       html += `<div class="chat-msg chat-msg-assistant chat-msg-pending" aria-live="polite">
-      <div class="chat-msg-role">AI</div>
+      <div class="chat-msg-role">小叶</div>
       <div class="chat-msg-body chat-msg-body-pending chat-msg-body-wait-only">
         <span class="chat-orb"><canvas class="thinking-orb" aria-hidden="true"></canvas></span>
         <span class="chat-wait-label">${chatEsc(clarifyLoading || chatWaitLabel())}</span>
@@ -643,7 +643,7 @@ export function renderChatPage(opts = {}) {
     input.placeholder = !state.selectedPath
       ? "请先在左侧选择项目"
       : state.chatBusy
-        ? "AI 正在回复，可先写下一条…"
+        ? "小叶正在回复，可先写下一条…"
         : _planDone
           ? "直接说哪里需要调整，或点「这版作数」继续…"
           : "说清目标与约束，或拖入文件…";

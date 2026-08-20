@@ -143,7 +143,7 @@ export async function startExecuteFromSelection(planPath, opts = {}) {
     return;
   }
   if (opts.fakeNote || state.chatFake) {
-    toast("注意：当前计划来自本地模板（非真实 AI），确认后仍将进入执行");
+    toast("注意：当前计划来自本地模板（非真实小叶），确认后仍将进入执行");
   }
 
   // Explicit path from chat / full-view / plans: this is the plan to split.

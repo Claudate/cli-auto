@@ -58,7 +58,7 @@ export function bindCliBoardEvents(board, tasks, renderCliBoard) {
       const text = aiLogPlainText(t);
       try {
         await navigator.clipboard.writeText(text || "");
-        toast(text ? "AI 日志已复制" : "暂无 AI 交互可复制");
+        toast(text ? "小叶日志已复制" : "暂无小叶交互可复制");
       } catch (_) {
         toast("复制失败");
       }

@@ -346,7 +346,7 @@ export function updateBudgetChip() {
   bits.push(`规划 ${hasPlan ? fmt(planCost) : "—"}`);
   bits.push(`执行 ${hasExec ? fmt(execCost) : "—"}`);
   costEl.textContent = bits.join(" · ");
-  costEl.title = "规划成本（AI 拆分）与执行成本（worker）分栏";
+  costEl.title = "规划成本（小叶拆分）与执行成本（worker）分栏";
 }
 
 export function updateTopPlanInfo() {

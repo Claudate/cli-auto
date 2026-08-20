@@ -142,7 +142,7 @@ invoke 散落 → gateway 方法表：见 `js/shared/gateway.js`（命令名 1:1
 | **A5-4** | L1/L2/门禁/总账 GEB | **✅ 2026-07-21** · 串行收口 |
 | **A5-5** | workspace crates（可选） | **本轮不做** · 评估 docs only |
 
-P4-6：composer 使用 chatControls 提供模型选择与本轮上下文 DisclosureRow；模型通过 chatApi 作为会话覆盖下传，CLI/effort 既有语义不变。
+P4-6：composer 无模型选择器；「本轮上下文」summary 右侧只读徽标显示会话模型（无覆盖显示「默认」· 不可点/不可编辑），切换唯一入口 = `/model <名称>` 斜杠命令（resp.model 回流同步徽标与 state.chatSession.model）；CLI/effort 既有语义不变。
 
 P4-7：`shared/themePreference.js` + `css/theme.css` 提供浅色/深色/跟随系统三态与全局 reduced-motion；设置页以 preset chip 展示权限层级，完全访问需危险确认；仅持久化本机展示偏好。
 

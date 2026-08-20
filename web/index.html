@@ -113,7 +113,7 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
         <div class="empty-state" id="welcome-empty">
           <p class="welcome-kicker muted">给 PM / 出海 / 非开发的本机任务控制台</p>
           <h2>写清计划 → 拆成步骤 → 并行推进 → 对照收口</h2>
-          <p class="muted">添加项目后和 AI 写计划，或选已有文档。默认会停在<strong>拆分台</strong>看清波次，再点「执行规划」。</p>
+          <p class="muted">添加项目后和小叶写计划，或选已有文档。默认会停在<strong>拆分台</strong>看清波次，再点「执行规划」。</p>
           <ol class="welcome-steps muted">
             <li>添加本机项目文件夹</li>
             <li>聊天写计划或从模板开始</li>
@@ -561,7 +561,7 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
             <p class="muted">选一份计划 →「拆成步骤」→ 核对波次后「执行规划」。</p>
             <p class="muted" style="margin-top:.5rem">
               没有计划？
-              <button type="button" class="linkish" id="btn-empty-to-chat">和 AI 聊聊先写一份</button>
+              <button type="button" class="linkish" id="btn-empty-to-chat">和小叶聊聊先写一份</button>
               （默认聊天主窗，不必先自备 md）
             </p>
           </div>
@@ -623,7 +623,7 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
               </div>
             </div>
             <div id="chat-ready-bar" class="chat-ready-bar" hidden>
-              <span id="chat-ready-fake-note" class="chat-ready-fake-note" hidden>本地模板 · 非真实 AI</span>
+              <span id="chat-ready-fake-note" class="chat-ready-fake-note" hidden>本地模板 · 非真实小叶</span>
               <span id="chat-saved-path" class="chat-ready-path">—</span>
               <div class="chat-ready-actions">
                 <!-- 未保存 primary=保存；已保存 primary=拆成步骤（E1 / F2） -->
@@ -636,7 +636,7 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
               <div class="chat-composer-card">
                 <div id="chat-attach-preview" class="chat-attach-preview" hidden></div>
                 <details class="chat-context-disclosure disclosure-row" id="chat-context-disclosure">
-                  <summary id="chat-context-summary">本轮上下文</summary>
+                  <summary id="chat-context-summary"><span id="chat-context-summary-text">本轮上下文</span><span id="chat-context-model" class="chat-context-model" aria-label="当前模型"></span></summary>
                   <div class="disclosure-body" id="chat-context-body"></div>
                 </details>
                 <textarea
@@ -659,15 +659,6 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
                     ></button>
                   </div>
                   <div class="chat-composer-actions">
-                    <label class="chat-effort-wrap" title="本会话使用的模型；默认使用当前 CLI 的默认模型">
-                      <span class="sr-only">模型</span>
-                      <select id="chat-model" class="chat-effort-select" aria-label="聊天模型">
-                        <option value="">模型 · 默认</option>
-                        <option value="haiku">Claude · Haiku</option>
-                        <option value="sonnet">Claude · Sonnet</option>
-                        <option value="opus">Claude · Opus</option>
-                      </select>
-                    </label>
                     <label
                       class="chat-effort-wrap"
                       title="推理深度：影响本机 Claude 思考力度；ultracode 等同 xhigh 并自动偏多 Agent 穷尽"
@@ -1270,7 +1261,7 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
           </ol>
           <p class="muted">默认会停在拆分台，不会自动开跑。可选步骤需你勾选才会执行。拆分台默认用<strong>智能拆分</strong>；来源会在拆分台标明。欢迎页可跳过选择「我更常拿轻叶干什么」，也可在设置里改。点左侧步骤看完整说明；可编辑后再执行规划。</p>
           <h3>计划是什么？</h3>
-          <p>计划 = 用大白话写的「要干什么」。优先 <code>.md</code> 文档；也可先和 AI 一起写，再拆成步骤并行推进。</p>
+          <p>计划 = 用大白话写的「要干什么」。优先 <code>.md</code> 文档；也可先和小叶一起写，再拆成步骤并行推进。</p>
           <h3>常见操作</h3>
           <ul>
             <li><strong>重新规划</strong>：保留你在拆分台上的修改，再拆一次</li>

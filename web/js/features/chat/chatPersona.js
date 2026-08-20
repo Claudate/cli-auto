@@ -204,7 +204,7 @@ export const PERSONA_PROFILES = Object.freeze({
     id: "admin",
     label: "行政/HR",
     pathBias: "M",
-    opener: "文件给谁看、是否正式发布、哪几条表述不能 AI 擅改？",
+    opener: "文件给谁看、是否正式发布、哪几条表述不能让小叶擅改？",
     coach: "先出草案，你确认前系统不会当正式发布去跑。",
     examples: [
       {

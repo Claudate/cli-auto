@@ -1,56 +1,50 @@
 /**
- * [INPUT]: legacy.state · composer DOM · localStorage
- * [OUTPUT]: 模型选择同步 · 本轮上下文 DisclosureRow
- * [POS]: features/chat 的 composer 控件层；只维护展示偏好与发送参数，不写会话/规划策略
+ * [INPUT]: legacy.state · composer DOM
+ * [OUTPUT]: 本轮上下文 DisclosureRow（右侧只读模型名徽标 · 仅 /model 斜杠命令切换）
+ * [POS]: features/chat 的 composer 控件层；只维护展示，不写会话/规划策略
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
 import { state } from "./legacy.js";
 
-const MODEL_KEY = "cco.chatModel";
-
 function $(id) {
   return document.getElementById(id);
 }
 
-function savedModel() {
-  try {
-    return localStorage.getItem(MODEL_KEY) || "";
-  } catch (_) {
-    return "";
-  }
+/**
+ * 会话模型只读徽标：不可点击、不可编辑；无覆盖时显示「默认」。
+ * 切换唯一入口 = 聊天输入框的 /model <名称> 斜杠命令。
+ */
+function paintChatModelBadge() {
+  const badge = $("chat-context-model");
+  if (!badge) return;
+  const model = String(state.chatSession?.model || "").trim();
+  badge.textContent = model || "默认";
+  badge.title = model
+    ? `当前模型：${model} · 在输入框输入 /model <名称> 切换`
+    : "使用 CLI 默认模型 · 在输入框输入 /model <名称> 切换";
 }
 
-function persistModel(value) {
-  try {
-    localStorage.setItem(MODEL_KEY, value || "");
-  } catch (_) {}
-}
-
-function syncModelAvailability() {
-  const cli = $("chat-cli")?.value || "claude";
-  const model = $("chat-model");
-  if (!model) return;
-  const supported = cli === "claude";
-  model.disabled = !supported;
-  model.title = supported
-    ? "本会话使用的模型；默认使用当前 CLI 的默认模型"
-    : "当前通道不接受 Claude 模型参数";
-}
-
+/** `/model` 切换后由 resp.model 回流：更新会话快照与徽标（无选择器）。 */
 export function syncChatModelFromResponse(model) {
   const value = String(model || "").trim();
-  const select = $("chat-model");
-  if (select && [...select.options].some((option) => option.value === value)) {
-    select.value = value;
+  if (value) {
+    if (!state.chatSession || typeof state.chatSession !== "object") {
+      state.chatSession = {
+        session_id: "default",
+        messages: [],
+        draft_plan: null,
+      };
+    }
+    state.chatSession.model = value;
   }
-  persistModel(value);
+  paintChatModelBadge();
 }
 
 export function renderChatComposerContext() {
-  const summary = $("chat-context-summary");
+  const summaryText = $("chat-context-summary-text");
   const body = $("chat-context-body");
-  if (!summary || !body) return;
+  if (!summaryText || !body) return;
   const project =
     String(state.selectedPath || "").split(/[/\\]/).filter(Boolean).pop() ||
     "未选择项目";
@@ -61,7 +55,7 @@ export function renderChatComposerContext() {
   const attachmentCount = Array.isArray(state.chatPendingAttachments)
     ? state.chatPendingAttachments.length
     : 0;
-  summary.textContent = attachmentCount
+  summaryText.textContent = attachmentCount
     ? "本轮上下文 · 附件 " + attachmentCount
     : "本轮上下文";
   body.textContent =
@@ -70,23 +64,18 @@ export function renderChatComposerContext() {
     " · 计划：" +
     planName +
     (attachmentCount ? " · 附件：" + attachmentCount : "");
+  paintChatModelBadge();
 }
 
 export function installChatControls() {
-  const model = $("chat-model");
-  const cli = $("chat-cli");
-  if (model && !model.dataset.ccoBound) {
-    model.dataset.ccoBound = "1";
-    const initial = savedModel();
-    if ([...model.options].some((option) => option.value === initial)) {
-      model.value = initial;
-    }
-    model.addEventListener("change", () => persistModel(model.value));
+  const badge = $("chat-context-model");
+  if (badge && !badge.dataset.ccoModelGuard) {
+    badge.dataset.ccoModelGuard = "1";
+    // 徽标不可点击：吞掉点击，避免触发 summary 的展开/收起
+    badge.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
   }
-  if (cli && !cli.dataset.ccoModelBound) {
-    cli.dataset.ccoModelBound = "1";
-    cli.addEventListener("change", syncModelAvailability);
-  }
-  syncModelAvailability();
   renderChatComposerContext();
 }

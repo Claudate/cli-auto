@@ -24,7 +24,7 @@ export async function renameChatSession(sessionId, title) {
     return null;
   }
   if (state.chatBusy) {
-    toast("AI 正在回复，请稍后再改名");
+    toast("小叶正在回复，请稍后再改名");
     return null;
   }
   const sid = String(sessionId || "").trim() || "default";

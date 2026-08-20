@@ -118,7 +118,7 @@ assert(
 );
 
 // Fold bar summary strips md — single line + line count meta
-const bar = renderFoldBarHtml("AI", `## 标题 **加粗** 内容说明\n${"细节行\n".repeat(5)}`, 0, {
+const bar = renderFoldBarHtml("小叶", `## 标题 **加粗** 内容说明\n${"细节行\n".repeat(5)}`, 0, {
   role: "assistant",
 });
 assert(bar.includes("标题 加粗"), "summary strips md markers");

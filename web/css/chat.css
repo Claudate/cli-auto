@@ -1255,6 +1255,28 @@ a.md-ext-link:hover {
   margin: -0.1rem 0 0.15rem;
   padding: 0 0.2rem;
 }
+.chat-context-disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+/* 只读模型徽标：不可点击不可编辑；切换唯一入口 = /model 斜杠命令 */
+.chat-context-model {
+  font-family: var(--mono);
+  font-size: var(--leaf-font-caption);
+  color: var(--leaf-alias-label-secondary);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  border: 1px solid var(--leaf-alias-border-l1, var(--border));
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  cursor: default;
+  user-select: none;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .chat-context-disclosure .disclosure-body {
   color: var(--leaf-alias-label-secondary);
   font-size: var(--leaf-font-caption);
@@ -1384,8 +1406,7 @@ a.md-ext-link:hover {
   min-width: 5.5rem;
 }
 .chat-effort-select,
-#chat-effort,
-#chat-model {
+#chat-effort {
   min-width: 5.25rem;
   max-width: 8.5rem;
   height: 1.85rem;
