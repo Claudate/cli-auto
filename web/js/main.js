@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 经典 script 已加载的全局（state/showPage/…）+ DOM
- * [OUTPUT]: window.ccoApp / ccoGateway / ccoChat / ccoSplit / ccoRun / ccoResult / ccoSettings / ccoProject / ccoTemplates / ccoSelectUi · phase 壳接线 · P4-2 `#view-ring` 段控委托（wireShellNav · dataset.ccoA2Wired 守卫）
+ * [OUTPUT]: window.ccoApp / ccoGateway / ccoChat / ccoSplit / ccoRun / ccoResult / ccoSettings / ccoProject / ccoTemplates / ccoSelectUi · phase 壳接线 · P4-2 `#view-ring` 段控委托（wireShellNav · dataset.ccoA2Wired 守卫）· **F3** ring 空态 confirmDialog（仅用户点击 · 程序化 go* 不拦）
  * [POS]: A2–A5 ESM 入口（type=module）；旧全局仍可用（strangler）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
@@ -27,8 +27,13 @@
 import gateway from "./shared/gateway.js";
 import { installStatusUi } from "./shared/statusUi.js";
 import { installMarkdown } from "./shared/markdown.js";
-import { installShellUi } from "./shared/shellUi.js";
-import { installConfirmDialog } from "./shared/confirmDialog.js";
+import {
+  installShellUi,
+  hasActiveRun,
+  isRunPaused,
+  openModal,
+} from "./shared/shellUi.js";
+import { installConfirmDialog, confirmDialog } from "./shared/confirmDialog.js";
 import { installSelectUi } from "./shared/selectUi.js";
 import { installThemePreference } from "./shared/themePreference.js";
 import { installIconsGlobal, hydrateIcons } from "./shared/icons.js";
@@ -37,6 +42,7 @@ import {
   paintWorkStyleChooser,
   applyTemplateOrder,
 } from "./shared/workStyle.js";
+import { guardViewRingClick } from "./shared/tabEmptyGuard.js";
 import { createAppViewModel } from "./app/AppViewModel.js";
 import { wireRunResult } from "./app/wireRunResult.js";
 import { createChatViewModel } from "./features/chat/ChatViewModel.js";
@@ -495,33 +501,51 @@ function wireShellNav() {
     );
   }
 
-  // P4-2 view-ring 段控：聊天|拆分|执行|结果 → AppViewModel 意图（纯切换 · 不做重渲染）
+  // P4-2 view-ring 段控：聊天|拆分|执行|结果 → AppViewModel 意图
+  // F3：仅此用户点击路径判空 + confirmDialog；程序化 go* / jobPoll 不拦
   const ring = document.getElementById("view-ring");
   if (ring && !ring.dataset.ccoA2Wired) {
     ring.dataset.ccoA2Wired = "1";
+    let ringGuardBusy = false;
+    const syncAfterRing = () => {
+      requestAnimationFrame(() => {
+        try {
+          const s = legacyState();
+          if (s.selectedPath) appVm.selectProject(s.selectedPath);
+          appVm.syncFromLegacy();
+        } catch (_) {}
+      });
+    };
     ring.addEventListener(
       "click",
       (ev) => {
         const btn = ev.target?.closest?.(".view-ring-item");
         if (!btn?.dataset?.ring) return;
         const target = btn.dataset.ring;
-        if (target === "chat") {
-          appVm.goAuthor();
-        } else if (target === "split") {
-          appVm.goSplit();
-        } else if (target === "run") {
-          appVm.goRun();
-        } else if (target === "result") {
-          appVm.goResult();
+        if (ringGuardBusy) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
         }
-        // 切页后下一帧再同步：只同步选中项目/ phase，不触发聊天/拆分台重建
-        requestAnimationFrame(() => {
-          try {
-            const s = legacyState();
-            if (s.selectedPath) appVm.selectProject(s.selectedPath);
-            appVm.syncFromLegacy();
-          } catch (_) {}
-        });
+        ringGuardBusy = true;
+        guardViewRingClick(target, {
+          getState: legacyState,
+          hasActiveRun,
+          isRunPaused,
+          confirmDialog,
+          openModal,
+          goAuthor: () => appVm.goAuthor(),
+          goSplit: () => appVm.goSplit(),
+          goRun: () => appVm.goRun(),
+          goResult: () => appVm.goResult(),
+        })
+          .then((navigated) => {
+            if (navigated) syncAfterRing();
+          })
+          .catch(() => {})
+          .finally(() => {
+            ringGuardBusy = false;
+          });
       },
       true
     );

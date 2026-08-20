@@ -1,9 +1,10 @@
 /**
  * [INPUT]: legacy · chatState · format · sessions · attachments · host
- * [OUTPUT]: renderChat* · fillChatExample · env-bar helpers
+ * [OUTPUT]: renderChat* · fillChatExample · env-bar helpers · F4 R1–R3 density
  * [POS]: A5-2a features/chat；自 chatActions 纵切（P-ship-D）
  * note: P0-B setPersonaAndPaint 时 best-effort 保存项目 persona/芯片（chatPersonaSync）
  * note: 渲染后 hydrateChatImages — 本地截图/附件 path → data URL 内联
+ * note: F4 R1 顶栏 env+ready 合并（ready 常隐）· R2 last_summary 与 brief_ready 二选一 · R3 场景 chips「换个例子」折
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 import {
@@ -53,7 +54,6 @@ import {
 import { hydrateChatImages } from "./chatImageHydrate.js";
 import {
   pathModeSegmentHtml,
-  pathModeCoachHtml,
   pathModeClarifyWeight,
   thinClaimSuccessHtml,
   applyPathModeHeadStep,
@@ -203,7 +203,24 @@ export async function claimWaveBundle(btn) {
 }
 
 /**
- * P2-2: one-line last_summary banner for author empty state.
+ * F4 R3: scene chips behind default-collapsed「换个例子」(keep info, cut stack).
+ * Lives in chatRender so chatPersona stays free for F1 pathBias export.
+ */
+function sceneChipsFoldHtml() {
+  const inner = sceneChipsHtml();
+  if (!inner) return "";
+  return (
+    `<details class="chat-scene-fold">` +
+    `<summary class="chat-scene-fold-sum">换个例子</summary>` +
+    `<div class="chat-scene-fold-body">${inner}</div>` +
+    `</details>`
+  );
+}
+
+/**
+ * P2-2 + F4 R2: one-line last_summary banner for author empty state.
+ * Exclusive with sticky ready-bar (always hidden) and with unclaimed Brief panel
+ * (brief_ready already answers「我们聊到哪了」).
  * @param {string|null|undefined} text
  */
 export function renderLastSummaryBanner(text) {
@@ -217,6 +234,11 @@ export function renderLastSummaryBanner(text) {
   ensureChatState();
   const msgs = state.chatSession.messages || [];
   if (msgs.length || state.chatBusy) return;
+  // F4 R2: unclaimed Brief → clarify panel is the resume signal; skip banner.
+  const phase = String(state.chatClarify?.phase || "");
+  if (phase === "brief_ready") return;
+  // Ensure ready-bar never co-shows (R1/R2 single strip).
+  renderChatReadyBar();
   const short = t.length > 120 ? t.slice(0, 119) + "…" : t;
   const bar = document.createElement("div");
   bar.className = "chat-last-summary";
@@ -339,31 +361,34 @@ export function renderChatMessages(opts = {}) {
       // Thin success only — plan card appears once messages hydrate
       clarifyBlock = thinClaimSuccessHtml();
     } else {
-      // W0-8: 无 L/M/H 英雄键；输入心智 + 场景芯片 + 画像例；delivery 仅高级折
-      lead =
-        pathModeCoachHtml() +
-        sceneChipsHtml() +
-        personaExampleChipsHtml() +
-        pathModeSegmentHtml({ advanced: true });
+      // F4 R3: idle 首屏 = coach一句 + 示例 chips +「换个例子」折；delivery 仅高级折
+      // activeClarify / brief_ready：澄清面板独占（R2），不与 coach/场景并堆
       const rawClarify = renderClarifyPanelHtml({ mode: "empty" });
       const weight = pathModeClarifyWeight();
       if (activeClarify) {
+        lead = "";
         clarifyBlock = rawClarify;
-      } else if (weight === "hide") {
-        clarifyBlock = "";
       } else {
-        clarifyBlock =
-          `<details class="chat-clarify-fold">` +
-          `<summary class="chat-clarify-fold-sum">先问关键的（可跳过）</summary>` +
-          rawClarify +
-          `</details>`;
+        lead =
+          personaExampleChipsHtml() +
+          sceneChipsFoldHtml() +
+          pathModeSegmentHtml({ advanced: true });
+        if (weight === "hide") {
+          clarifyBlock = "";
+        } else {
+          clarifyBlock =
+            `<details class="chat-clarify-fold">` +
+            `<summary class="chat-clarify-fold-sum">先问关键的（可跳过）</summary>` +
+            rawClarify +
+            `</details>`;
+        }
       }
       // Templates stay tertiary; persona examples already in lead
       const legacyEmpty =
         typeof planTemplateChatEmptyHtml === "function"
           ? planTemplateChatEmptyHtml()
           : "";
-      if (legacyEmpty) {
+      if (legacyEmpty && !activeClarify) {
         // Only keep template chips row if present — strip duplicate coach if any
         secondary =
           `<div class="chat-empty-secondary chat-empty-templates">` +
@@ -568,16 +593,20 @@ export function renderChatMessages(opts = {}) {
   }
 }
 
+/**
+ * F4 R1: single top status strip — env abnormal only; ready always collapsed.
+ */
 export function renderChatEnvBar() {
+  renderChatReadyBar();
   const bar = $("#chat-env-bar");
   if (!bar) return;
   ensureChatState();
-  const note = state.chatEnvNote;
-  // forced fake 联调也可显示简短 mock 条；有 env_note 优先
-  const show = !!(note && String(note).trim());
+  const note = String(state.chatEnvNote || "").trim();
+  const show = !!note;
   bar.hidden = !show;
+  bar.classList.toggle("is-env-alert", show);
   const noteEl = $("#chat-env-note");
-  if (noteEl && show) noteEl.textContent = String(note).trim();
+  if (noteEl && show) noteEl.textContent = note;
 }
 
 export function dismissChatEnvBar() {
@@ -599,25 +628,22 @@ export function openChatEnvDoctor() {
   } catch (_) {}
 }
 
-/**
- * Sticky ready-bar retired: save / re-save / execute live only on the plan card
- * footer inside the assistant reply (bottom of that message). Keep this function
- * so old call sites stay safe; always hide the bar and its fixed buttons.
- */
+/** F4 R1/R2: ready-bar DOM compat only — CTAs on plan cards; never co-show. */
 export function renderChatReadyBar() {
   const bar = $("#chat-ready-bar");
   if (bar) {
     bar.hidden = true;
     bar.classList.remove("is-fake");
   }
-  const saveBtn = $("#btn-chat-save");
-  const assignBtn = $("#btn-chat-assign");
-  const previewBtn = $("#btn-chat-preview");
-  const normalizeBtn = $("#btn-chat-normalize");
-  if (saveBtn) saveBtn.hidden = true;
-  if (assignBtn) assignBtn.hidden = true;
-  if (previewBtn) previewBtn.hidden = true;
-  if (normalizeBtn) normalizeBtn.hidden = true;
+  for (const id of [
+    "#btn-chat-save",
+    "#btn-chat-assign",
+    "#btn-chat-preview",
+    "#btn-chat-normalize",
+  ]) {
+    const el = $(id);
+    if (el) el.hidden = true;
+  }
 }
 
 /**
@@ -682,11 +708,19 @@ export function renderChatPage(opts = {}) {
   }
   renderChatSessionSelect();
   renderChatAttachPreview();
+  // F4 R1: renderChatEnvBar collapses ready-bar; single top strip
   renderChatEnvBar();
-  renderChatReadyBar();
   renderChatComposerContext();
   host.renderPlanRail();
   host.renderPlanFullView();
+  // F1: mode chips above composer (chatMode; no-op until install)
+  try {
+    const paint =
+      (typeof window !== "undefined" && window.ccoChat?.paintChatMode) ||
+      (typeof window !== "undefined" && window.paintChatMode) ||
+      host.paintChatMode;
+    if (typeof paint === "function") paint();
+  } catch (_) {}
   if (opts.skipMessages) return;
   renderChatMessages();
 }

@@ -103,4 +103,16 @@ export default defineConfig({
 
   /* Folder for test artifacts such as screenshots, videos, traces, etc. */
   outputDir: '.cco-out/playwright-artifacts/',
+
+  /*
+   * F3/F5 tab-empty-guard + w1-6: serve web/ on :3456 so page.goto works without a manual server.
+   * Prefers existing listener (reuseExistingServer) when you already `python3 -m http.server` in web/.
+   * Requires web/dist (run `cd web && node build.mjs` once after JS changes).
+   */
+  webServer: {
+    command: 'python3 -m http.server 3456 --directory web',
+    url: 'http://localhost:3456/index.html',
+    reuseExistingServer: !process.env.CI,
+    timeout: 60_000,
+  },
 });

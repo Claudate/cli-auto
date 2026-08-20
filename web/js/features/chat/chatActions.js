@@ -57,6 +57,7 @@ import {
   CLARIFY_COPY,
   DEFAULT_CLARIFY_ENTRY,
 } from "./chatClarify.js";
+import { prepareFastSendIfNeeded } from "./chatMode.js";
 // Note: Brief+Claim functions (claimBriefToPlan, rechatFromBrief, etc.) live in chatClarify.js.
 
 // Re-export surfaces so installChat `...chatActions` stays stable.
@@ -301,6 +302,13 @@ export async function sendChatMessage() {
   if (state.chatBusy) {
     toast("小叶正在回复，等本轮结束再发；等太久可点红色按钮停止");
     return;
+  }
+
+  // F1 §4.5: fast 首 send 前 skip+假设；不预 claim 空模板
+  try {
+    prepareFastSendIfNeeded();
+  } catch (err) {
+    console.warn("prepareFastSendIfNeeded failed", err);
   }
 
   const projectPath = state.selectedPath;

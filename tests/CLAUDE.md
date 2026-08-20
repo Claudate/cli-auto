@@ -16,8 +16,10 @@ mixed_provider_smoke.rs: 同 run 多 provider · 非法 mix 校验
 collab_runtime_wait.rs: CollabBus 直测（wait_condition output_match/step_done/timeout · CCO_STEP 解析）
 integration_collab_e2e.rs: wait_for 端到端（无 depends_on 等输出行开跑 · 不可满足等待快速判 Failed 不挂死）
 fixtures/: fake-claude · serial-prompts-sample.md · stream-json
+l2-interaction/tab-empty-guard.spec.js: **F3/F5** view-ring 空态 confirmDialog（无计划弹层 · draft 不弹 · 同因二次不弹 · CTA 去聊天→author）；mock-tauri + playwright；`npx playwright test tab-empty-guard`
+l2-interaction/w1-6-checklist.spec.js: path-depth W1-6 桌面交互清单骨架
 
 法则: 成员完整·一行一文件·父级链接·技术词前置
-注: 缺桌面 E2E（可选增强）；Mode B 金样 P1-6 已闭环；A0 红线见 a0_behavior_golden
+注: 桌面 E2E 可选增强（playwright l2-interaction）；Mode B 金样 P1-6 已闭环；A0 红线见 a0_behavior_golden
 
 [PROTOCOL]: 变更时更新此头部，然后检查 /CLAUDE.md

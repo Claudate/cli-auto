@@ -419,6 +419,17 @@ export function personaDirectExec(id) {
   return getPersonaProfile(id).directExec || "offer";
 }
 
+/**
+ * pathBias for chat mode default (F1): L→fast · M/H→deep.
+ * @param {PersonaId} [id]
+ * @returns {'L'|'M'|'H'}
+ */
+export function personaPathBias(id) {
+  const b = getPersonaProfile(id).pathBias;
+  if (b === "L" || b === "H") return b;
+  return "M";
+}
+
 function escapeHtml(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")

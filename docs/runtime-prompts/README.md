@@ -7,7 +7,7 @@
 
 | 文件 | 注入点 |
 |------|--------|
-| [`chat-plan-writing.md`](./chat-plan-writing.md) | 桌面聊天 system prompt（计划写作助手；含澄清相三入口 / Brief / V1 闸） |
+| [`chat-plan-writing.md`](./chat-plan-writing.md) | 桌面聊天 system prompt（计划写作助手；含澄清相三入口 + **快速出产品** / Brief / V1 闸） |
 | [`chat-visual-review.md`](./chat-visual-review.md) | 桌面聊天追加：**截图验收**（真截图 → `![](path)` 内联 → 分析 → 优化建议） |
 | [`worker-delivery-discipline.md`](./worker-delivery-discipline.md) | 拆分 Agent 追加（worker 交付纪律：结论先行 · 意图分档 · 失败换路） |
 | [`inspect-acceptance-checklist.md`](./inspect-acceptance-checklist.md) | role=inspect 任务 system prompt 追加（验收清单推导 · 证据逐项核对） |

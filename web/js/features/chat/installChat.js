@@ -18,6 +18,7 @@ import * as chatActions from "./chatActions.js";
 import * as planFull from "./planFull.js";
 import * as chatApi from "./chatApi.js";
 import * as chatClarify from "./chatClarify.js";
+import * as chatMode from "./chatMode.js";
 import * as chatMsgEnhance from "./chatMsgEnhance.js";
 import { installChatControls } from "./chatControls.js";
 import { createChatViewModel } from "./ChatViewModel.js";
@@ -31,6 +32,17 @@ function renderPlanRailCompat() {
 
 function loadPlanRailCompat() {
   return planRail.loadPlanItems();
+}
+
+function paintModeAfter(fn) {
+  if (typeof fn !== "function") return fn;
+  return (...args) => {
+    const out = fn(...args);
+    try {
+      chatMode.paintChatMode();
+    } catch (_) {}
+    return out;
+  };
 }
 
 /** Wire host bag once (idempotent). */
@@ -50,10 +62,15 @@ export function installChatHost() {
     ...planFull,
     ...chatClarify,
     ...chatMsgEnhance,
+    ...chatMode,
   });
   // t3: bind clarify click once at host install
   try {
     chatClarify.installClarifyUi();
+  } catch (_) {}
+  // F1: mode chips above composer
+  try {
+    chatMode.installChatModeUi();
   } catch (_) {}
   // Direct paint hook — skip/pick must not rely only on host-bag order
   // (missing renderChatMessages made skip look like toast-only).
@@ -62,12 +79,25 @@ export function installChatHost() {
       chatClarify.setClarifyPaint(() => {
         if (typeof chatActions.renderChatMessages === "function") {
           chatActions.renderChatMessages({ force: true });
-          return;
-        }
-        if (typeof host.renderChatMessages === "function") {
+        } else if (typeof host.renderChatMessages === "function") {
           host.renderChatMessages({ force: true });
         }
+        try {
+          chatMode.paintChatMode();
+        } catch (_) {}
       });
+    }
+  } catch (_) {}
+  // Keep mode bar in sync when page/messages paint via host
+  try {
+    if (!host.__modePaintWrapped) {
+      if (host.renderChatPage) {
+        host.renderChatPage = paintModeAfter(host.renderChatPage);
+      }
+      if (host.renderChatMessages) {
+        host.renderChatMessages = paintModeAfter(host.renderChatMessages);
+      }
+      host.__modePaintWrapped = true;
     }
   } catch (_) {}
   return host;
@@ -160,6 +190,14 @@ export function createChatDesk(opts = {}) {
     shouldShowBrief: chatClarify.shouldShowBrief,
     renderHollowBarHtml: chatClarify.renderHollowBarHtml,
     CLARIFY_COPY: chatClarify.CLARIFY_COPY,
+    // F1 双模式 chip（setMode 只写 entry；fast 首 send 见 prepareFastSendIfNeeded）
+    setChatMode: chatMode.setChatMode,
+    getChatMode: chatMode.getChatMode,
+    paintChatMode: chatMode.paintChatMode,
+    prepareFastSendIfNeeded: chatMode.prepareFastSendIfNeeded,
+    renderClarifySecondaryHtml: chatMode.renderClarifySecondaryHtml,
+    ensureModeDefault: chatMode.ensureModeDefault,
+    CHAT_MODES: chatMode.CHAT_MODES,
     // 可点选 A/B/C + 历史折叠
     pickChatQuizOption: chatMsgEnhance.pickChatQuizOption,
     fillChatQuizDraft: chatMsgEnhance.fillChatQuizDraft,
@@ -238,6 +276,9 @@ export function createChatDesk(opts = {}) {
     window.pickClarifyOption = chatClarify.pickClarifyOption;
     window.skipClarify = chatClarify.skipClarify;
     window.selectClarifyEntry = chatClarify.selectClarifyEntry;
+    window.setChatMode = chatMode.setChatMode;
+    window.getChatMode = chatMode.getChatMode;
+    window.paintChatMode = chatMode.paintChatMode;
     window.claimBriefToPlan = chatClarify.claimBriefToPlan;
     window.rechatFromBrief = chatClarify.rechatFromBrief;
     window.ensureClarifyState = chatClarify.ensureClarifyState;

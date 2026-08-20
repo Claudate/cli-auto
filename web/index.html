@@ -616,12 +616,14 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
             </div>
             <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
             <div id="chat-env-bar" class="chat-env-bar" hidden role="status">
+              <span class="dot warn chat-env-dot" aria-hidden="true"></span>
               <span id="chat-env-note" class="chat-env-note">—</span>
               <div class="chat-env-actions">
                 <button class="btn ghost sm" id="btn-chat-env-doctor" type="button">环境检查</button>
                 <button class="btn ghost sm" id="btn-chat-env-dismiss" type="button" title="关闭">关闭</button>
               </div>
             </div>
+            <!-- F4 R1: ready-bar DOM kept for compat; always hidden — CTAs on plan cards -->
             <div id="chat-ready-bar" class="chat-ready-bar" hidden>
               <span id="chat-ready-fake-note" class="chat-ready-fake-note" hidden>本地模板 · 非真实小叶</span>
               <span id="chat-saved-path" class="chat-ready-path">—</span>

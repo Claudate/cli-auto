@@ -35,7 +35,7 @@ ui-redesign-dsh-2026-08-15.md: **DSH UI 收口**（P4-8 视觉终验待授权通
 ### 还在做（活跃落地 · 可有 ☐）
 
 harness-inspired-roadmap-2026-08-14.md: **Harness 启示方向参考**（A1 Run Resume · A2 能力预设 · A3 工具门控 · A3bis PermissionTier · B1 事件总线(架构A级) · B2 Headless · §四 UI影响面(U-A1…U-B2) · 不做 Cordis/ACP/遥测；方向参考，非阶段表）
-chat-dual-mode-empty-guard-2026-08-20.md: **聊天双模式 + 壳层空态引导**（快速出产品/深度思考两模式 chip=plan_only/idea_to_plan 映射不动 domain · tab 空态弹窗守卫 · 聊天信息密度残余折叠 R1–R4；**F0 ✅ · F1–F5 ☐ · F 系列为本能力唯一勾选**）
+chat-dual-mode-empty-guard-2026-08-20.md: **聊天双模式 + 壳层空态引导**（chip=plan_only/idea_to_plan 不动 domain · §4.5 fast 首 send 时序 · tab 空态仅 view-ring+confirmDialog · F1∥最小 R4；**F0–F5 ✅ · F 系列唯一勾选**）
 event-bus-landing-2026-08-18.md: **B1 事件总线落地**（**B1-0/1/2/3 ✅ 全部完成** · events.jsonl → Tauri emit → 前端订阅；M3 事件派生+轮询降级 · 消除 2s 双源不一致 · A1/A3bis/B3 前端基座 · 金样测试 4 用例 · 架构门禁通过；**本能力唯一勾选**）；UX 配套 [`event-bus-ux-2026-08-18.md`](./event-bus-ux-2026-08-18.md)（U1-U6 用户操作流/易用性/防抖/降级体感/安全标签默认关 · P0/P1 ✅）
 run-resume-checkpoint-2026-08-14.md: **A1 Run Resume 检查点恢复**（R1 Scheduler checkpoint 事件 ✅ · R2 prepare_for_resume 增量+has_checkpoint ✅ · R3 CLI 透传 ✅ · R4 RunView 按钮文案 ✅；**本能力唯一勾选**；改 finish.rs + state/mod.rs + services/live.rs + RunView.js）
 permission-tier-audit-2026-08-14.md: **A3bis PermissionTier 安全层级审计**（D1 Domain 枚举 ReadOnly/WorkspaceWrite/FullAccess ✅ · D2 WorkerPort default_permission_tier() 默认 FullAccess 向后兼容 ✅ · D3 Scheduler task_start 记 tier 到 events.jsonl ✅ · D4 ProjectLiveView permission_tier_label 人话 ✅ · U-A3bis 设置页人话安全标签 ✅；**本能力唯一勾选**；不破坏 bypassPermissions 默认 · 规则 13 路由不动）

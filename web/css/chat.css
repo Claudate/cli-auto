@@ -659,9 +659,55 @@
 }
 
 /* W0-7: scene chips → persona (not occupation gate) */
+/* F4 R3: default-collapsed under「换个例子」; label inside fold is secondary */
+.chat-scene-fold {
+  margin: 0.45rem auto 0.55rem;
+  max-width: 32rem;
+  border: 0;
+  background: transparent;
+}
+.chat-scene-fold > summary.chat-scene-fold-sum {
+  list-style: none;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+  padding: 0.2rem 0.4rem;
+  user-select: none;
+}
+.chat-scene-fold > summary.chat-scene-fold-sum::-webkit-details-marker {
+  display: none;
+}
+.chat-scene-fold > summary.chat-scene-fold-sum::before {
+  content: "";
+  display: inline-block;
+  width: 0.35rem;
+  height: 0.35rem;
+  margin-right: 0.35rem;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg);
+  vertical-align: 0.15em;
+  transition: transform 0.12s ease;
+}
+.chat-scene-fold[open] > summary.chat-scene-fold-sum::before {
+  transform: rotate(45deg);
+  vertical-align: 0.05em;
+}
+.chat-scene-fold-body {
+  margin-top: 0.35rem;
+}
+.chat-scene-fold .chat-scene-label {
+  /* summary already names the action */
+  display: none;
+}
 .chat-scene-chips {
   margin: 0.55rem auto 0.65rem;
   max-width: 32rem;
+}
+.chat-scene-fold .chat-scene-chips {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
 }
 .chat-scene-label {
   margin: 0 0 0.35rem;
@@ -684,7 +730,7 @@
 }
 .chat-scene-chip:hover {
   border-color: color-mix(in srgb, var(--accent, #2563eb) 45%, var(--border));
-  background: #f4f8fd;
+  background: color-mix(in srgb, var(--accent, #2563eb) 6%, var(--bg, #fff));
   color: var(--accent, #2563eb);
 }
 .chat-scene-chip.is-active {
@@ -1129,26 +1175,29 @@ a.md-ext-link:hover {
   font-size: 0.8rem;
 }
 
-/* 系统环境条：CLI/fake 故障提示（非 assistant 气泡） */
+/* F4 R1: env abnormal = sole top strip (StateDot + note); ready always hidden */
 .chat-env-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.45rem 0.75rem;
-  padding: 0.5rem 0.75rem;
+  justify-content: flex-start;
+  gap: 0.45rem 0.65rem;
+  padding: 0.45rem 0.7rem;
   border-radius: 10px;
-  background: #fff4e5;
-  border: 1px solid #f0d4a0;
+  background: color-mix(in srgb, var(--warn, var(--leaf-alias-status-warn, #d97706)) 12%, var(--bg2, #fff));
+  border: 1px solid color-mix(in srgb, var(--warn, var(--leaf-alias-status-warn, #d97706)) 35%, var(--border));
 }
 .chat-env-bar[hidden] {
   display: none !important;
+}
+.chat-env-bar .chat-env-dot {
+  flex-shrink: 0;
 }
 .chat-env-bar .chat-env-note {
   flex: 1 1 12rem;
   min-width: 0;
   font-size: 0.85rem;
-  color: #6b4e12;
+  color: var(--text);
   line-height: 1.4;
   word-break: break-word;
 }
@@ -1158,8 +1207,10 @@ a.md-ext-link:hover {
   gap: 0.35rem;
   align-items: center;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
+/* Ready-bar: DOM compat only — F4 R1 never shows alongside env / last_summary */
 .chat-ready-bar {
   display: flex;
   flex-wrap: wrap;
@@ -1168,23 +1219,23 @@ a.md-ext-link:hover {
   gap: 0.5rem 0.75rem;
   padding: 0.55rem 0.75rem;
   border-radius: 10px;
-  background: #eef7ee;
-  border: 1px solid #c5e4c5;
+  background: color-mix(in srgb, var(--ok, var(--leaf-alias-status-ok, #16a34a)) 10%, var(--bg2, #fff));
+  border: 1px solid color-mix(in srgb, var(--ok, var(--leaf-alias-status-ok, #16a34a)) 28%, var(--border));
 }
 .chat-ready-bar.is-fake {
-  background: #fff8e8;
-  border-color: #f0e0b0;
+  background: color-mix(in srgb, var(--warn, var(--leaf-alias-status-warn, #d97706)) 12%, var(--bg2, #fff));
+  border-color: color-mix(in srgb, var(--warn, var(--leaf-alias-status-warn, #d97706)) 35%, var(--border));
 }
 .chat-ready-bar .chat-ready-path {
   font-size: 0.85rem;
-  color: #1a5c1a;
+  color: var(--text);
   font-weight: 500;
   word-break: break-all;
   flex: 1 1 12rem;
   min-width: 0;
 }
 .chat-ready-bar.is-fake .chat-ready-path {
-  color: #6b5a20;
+  color: var(--muted);
 }
 .chat-ready-fake-note {
   display: inline-flex;
@@ -1192,9 +1243,9 @@ a.md-ext-link:hover {
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: #8a6d1d;
-  background: #f5e8b8;
-  border: 1px solid #e0c878;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--warn, var(--leaf-alias-status-warn, #d97706)) 14%, var(--bg2, #fff));
+  border: 1px solid color-mix(in srgb, var(--warn, var(--leaf-alias-status-warn, #d97706)) 30%, var(--border));
   border-radius: 999px;
   padding: 0.15rem 0.55rem;
   flex-shrink: 0;
@@ -1208,15 +1259,86 @@ a.md-ext-link:hover {
   gap: 0.4rem;
   align-items: center;
 }
-/* 就绪条 CTA：未保存 primary 保存；已保存 primary 分配 + ghost 重新保存 */
-.chat-ready-actions #btn-chat-save.btn.primary,
-.chat-ready-actions #btn-chat-assign.btn.primary {
-  /* inherit global primary */
-}
+/* 就绪条 CTA：未保存 primary 保存；已保存 primary 分配 + ghost 重新保存
+ * primary/ghost 均继承全局 .btn 样式，此处无附加规则 */
 .chat-ready-actions #btn-chat-assign[hidden],
 .chat-ready-actions #btn-chat-save[hidden],
 .chat-ready-actions #btn-chat-preview[hidden] {
   display: none !important;
+}
+
+/* F1: dual-mode chips above composer（快速出产品 / 深度思考） */
+.chat-mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 40rem;
+  margin-inline: auto;
+  padding: 0.2rem 0.15rem 0.4rem;
+  box-sizing: border-box;
+}
+.chat-mode-bar[hidden] {
+  display: none !important;
+}
+.chat-mode-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+.chat-mode-chip {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg2, #fff);
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1.3;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.chat-mode-chip:hover:not(:disabled) {
+  border-color: color-mix(
+    in srgb,
+    var(--leaf-alias-brand-primary, var(--accent, #2563eb)) 45%,
+    var(--border)
+  );
+  color: var(--leaf-alias-brand-primary, var(--accent, #2563eb));
+}
+.chat-mode-chip.is-active {
+  border-color: var(--leaf-alias-brand-primary, var(--accent, #2563eb));
+  background: color-mix(
+    in srgb,
+    var(--leaf-alias-brand-primary, var(--accent, #2563eb)) 12%,
+    var(--bg2, #fff)
+  );
+  color: var(--leaf-alias-brand-primary, var(--accent, #2563eb));
+  font-weight: 600;
+}
+.chat-mode-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.chat-mode-side {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.chat-mode-link,
+.chat-mode-escape {
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+.chat-clarify-moreways {
+  text-align: center;
+  margin: 0.25rem 0 0.45rem;
 }
 
 /* Codex-style composer: one card, tools + send on bottom bar
@@ -1689,10 +1811,7 @@ a.md-ext-link:hover {
   color: var(--text);
 }
 
-/* topbar chat button sits with plan actions */
-#btn-open-chat.chat-top-btn {
-  /* ghost already; ensure not primary */
-}
+/* topbar chat button sits with plan actions — ghost 继承全局，非 primary */
 
 /* ── H1/G0: plan-rail (右轨，默认 hidden) ── */
 .plan-rail {

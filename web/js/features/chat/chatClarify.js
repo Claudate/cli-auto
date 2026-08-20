@@ -1889,28 +1889,27 @@ export async function claimBriefToPlan() {
 
 // ─── Render ──────────────────────────────────────────────────────────────────
 
+/**
+ * F1 最小 R4：旧三入口主按钮行已撤；委托 chatMode 逃生舱 linkish（直接写计划）。
+ * 主路径 2 chip 在 composer 上方（chatMode.paintChatMode），禁止与本行双轨并排。
+ */
 function renderEntryChips(c, { disabled } = {}) {
+  if (!c || c.phase === "claimed_to_plan") return "";
+  try {
+    const api =
+      (typeof window !== "undefined" && window.ccoChat) || null;
+    if (api && typeof api.renderClarifySecondaryHtml === "function") {
+      return api.renderClarifySecondaryHtml(c, { disabled }) || "";
+    }
+  } catch (_) {}
+  // Fallback before desk mount: single escape link (still not 3 main buttons)
+  if (c.entry === "plan_only" && c.skip_requested) return "";
   const dis = disabled ? " disabled" : "";
-  // Default path first and larger; alt paths quieter (concept budget).
-  const ordered = [
-    ...CLARIFY_ENTRIES.filter((e) => e.isDefault),
-    ...CLARIFY_ENTRIES.filter((e) => !e.isDefault),
-  ];
   return (
-    `<div class="chat-clarify-entries" role="group" aria-label="开始方式">` +
-    ordered
-      .map((e) => {
-        const active = c.entry === e.id ? " is-active" : "";
-        const def = e.isDefault ? " is-default" : " is-alt";
-        const aria =
-          c.entry === e.id ? ' aria-pressed="true"' : ' aria-pressed="false"';
-        return (
-          `<button type="button" class="chat-clarify-entry${def}${active}"` +
-          ` data-clarify-entry="${chatEsc(e.id)}"` +
-          ` title="${chatEsc(e.hint)}"${aria}${dis}>${chatEsc(e.label)}</button>`
-        );
-      })
-      .join("") +
+    `<div class="chat-clarify-moreways" data-clarify-moreways="1">` +
+    `<button type="button" class="linkish muted"` +
+    ` data-clarify-entry="plan_only"` +
+    ` title="跳过追问，立刻出一版草稿"${dis}>直接写计划</button>` +
     `</div>`
   );
 }

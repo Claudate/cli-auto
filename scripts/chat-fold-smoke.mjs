@@ -2,6 +2,10 @@
 /**
  * Smoke: chat fold policy (Claude Code / Codex-like — fold = single-line summary,
  * only for genuinely long messages; folding must save real space).
+ *
+ * F5 (§6): also asserts F4 R1–R4 source markers in chatRender / chatMode / css / index
+ * (env sole strip · last_summary↔brief_ready · scene「换个例子」· mode chips R4).
+ *
  * Run: node scripts/chat-fold-smoke.mjs
  *
  * Loads chatMsgEnhance with a tiny mock of legacy/chatFormat/chatState.
@@ -155,6 +159,78 @@ assert(
 try {
   rmSync(dir, { recursive: true, force: true });
 } catch (_) {}
+
+// ─── F5 / F4 R1–R4 source markers (docs/chat-dual-mode-empty-guard §6) ───────
+{
+  const renderSrc = readFileSync(
+    join(root, "web/js/features/chat/chatRender.js"),
+    "utf8"
+  );
+  const cssSrc = readFileSync(join(root, "web/css/chat.css"), "utf8");
+  const modeSrc = readFileSync(
+    join(root, "web/js/features/chat/chatMode.js"),
+    "utf8"
+  );
+  const indexSrc = readFileSync(join(root, "web/index.html"), "utf8");
+
+  // R1: env abnormal = sole top strip; ready always collapsed
+  assert(
+    /F4 R1/.test(renderSrc) && /chat-env-bar|#chat-env-bar/.test(renderSrc),
+    "F4 R1: renderChatEnvBar / chat-env-bar present"
+  );
+  assert(
+    /export function renderChatReadyBar/.test(renderSrc) &&
+      /bar\.hidden\s*=\s*true/.test(renderSrc),
+    "F4 R1: ready-bar forced hidden (single top strip)"
+  );
+  assert(
+    /id="chat-env-bar"/.test(indexSrc) && /id="chat-ready-bar"/.test(indexSrc),
+    "F4 R1: index has env + ready bar DOM hooks"
+  );
+  assert(
+    /\.chat-env-bar/.test(cssSrc) && /F4 R1/.test(cssSrc),
+    "F4 R1: css chat-env-bar + comment"
+  );
+
+  // R2: last_summary banner vs brief_ready 二选一
+  assert(
+    /F4 R2/.test(renderSrc) && /last_summary|lastSummary/.test(renderSrc),
+    "F4 R2: last_summary banner path present"
+  );
+  assert(
+    /brief_ready/.test(renderSrc) &&
+      (/skip banner|二选一|unclaimed Brief/i.test(renderSrc) ||
+        /clarify panel is the resume/.test(renderSrc)),
+    "F4 R2: brief_ready skips last_summary banner"
+  );
+
+  // R3: scene chips behind default-collapsed「换个例子」
+  assert(
+    /sceneChipsFoldHtml|chat-scene-fold/.test(renderSrc) &&
+      /换个例子/.test(renderSrc),
+    "F4 R3: scene fold html + 换个例子"
+  );
+  assert(
+    /\.chat-scene-fold/.test(cssSrc) && /换个例子|F4 R3/.test(cssSrc),
+    "F4 R3: css chat-scene-fold"
+  );
+
+  // R4: mode chips replace three-entry main row
+  assert(
+    /chat-mode-chip/.test(modeSrc) &&
+      /快速出产品/.test(modeSrc) &&
+      /深度思考/.test(modeSrc),
+    "F4 R4: mode chips 快速出产品 / 深度思考"
+  );
+  assert(
+    /renderClarifySecondaryHtml/.test(modeSrc) && /直接写计划/.test(modeSrc),
+    "F4 R4: secondary escape linkish 直接写计划 (not 3 main buttons)"
+  );
+  assert(
+    /chat-mode-bar|\.chat-mode-chip/.test(cssSrc),
+    "F4 R4: css mode bar/chip"
+  );
+}
 
 if (process.exitCode) {
   console.error("chat-fold-smoke: failed");
