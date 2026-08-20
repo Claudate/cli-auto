@@ -23,9 +23,11 @@ pub use acceptance::{
 pub use plan_md::{normalize_plan_markdown, structure_plan_markdown};
 pub use plan_writing_guidance::{
     backend_architecture_guidance, chat_plan_writing_guidance, chat_visual_review_guidance,
-    planner_greenfield_stack_blurb, split_agent_delivery_guidance, ui_color_systems_guidance,
-    ui_copy_systems_guidance, ui_delivery_recipes_guidance, ui_layout_systems_guidance,
-    ui_motion_effects_guidance, ui_typography_systems_guidance,
+    inspect_acceptance_checklist_guidance, planner_greenfield_stack_blurb,
+    split_agent_delivery_guidance, ui_color_systems_guidance, ui_copy_systems_guidance,
+    ui_delivery_recipes_guidance, ui_layout_systems_guidance, ui_motion_effects_guidance,
+    ui_premium_styles_guidance, ui_style_router_guidance, ui_typography_systems_guidance,
+    worker_delivery_discipline_guidance,
 };
 pub use verification::{
     build_verification, VerificationInputs, VerificationItem, VerificationItemStatus,

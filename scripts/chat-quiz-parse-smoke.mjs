@@ -98,6 +98,52 @@ check(
   quiz?.questions?.[0]?.options?.map((o) => o.key).join("")
 );
 
+// Semantic multi: 「哪些」 without the （可多选） marker, only ABC
+const semantic = `对齐两问：
+
+1. 主要给谁用？
+A. 自己
+B. 客户
+C. 团队
+
+2. 明确不做哪些？
+A. 不做会员
+B. 不做后台
+C. 先不做支付`;
+const sem = parseAssistantQuiz(semantic);
+check(
+  "哪些 without marker is multi",
+  sem && sem.questions[1]?.multi === true && sem.questions[1]?.options?.length === 3,
+  JSON.stringify(sem?.questions?.[1] && {
+    multi: sem.questions[1].multi,
+    nOpts: sem.questions[1].options.length,
+    title: sem.questions[1].title,
+  })
+);
+check(
+  "谁用 stays single",
+  sem && sem.questions[0]?.multi !== true,
+  JSON.stringify({ multi: sem?.questions?.[0]?.multi, title: sem?.questions?.[0]?.title })
+);
+
+const paren = `对齐两问：
+
+1. 做成啥？
+A. 计划
+B. 可跑
+C. 演示
+
+2. 范围闸（多选）
+A. 砍社区
+B. 砍后台
+C. 砍多端`;
+const par = parseAssistantQuiz(paren);
+check(
+  "（多选） marker is multi",
+  par && par.questions[1]?.multi === true,
+  JSON.stringify({ multi: par?.questions?.[1]?.multi, title: par?.questions?.[1]?.title })
+);
+
 // Plain (no bold) still works
 const plain = `对齐两问：
 
@@ -132,12 +178,50 @@ check(
   b?.questions?.[0]?.options?.[0]?.text
 );
 
+// Claude/Codex-style label — description options (two-line render)
+const labeled = `对齐两问：
+
+1. 主要给谁用？
+A. 海外养宠人 — 浏览加下单的 C 端用户
+B. 经销商买手 — 看品类、在线询价
+C. 内部演示 — 路演给投资人看
+
+2. 明确不做哪些？（可多选）
+A. 不做会员 — 不做账号体系
+B. 不做后台 — 只留演示数据
+C. 先不做多语言`;
+const lb = parseAssistantQuiz(labeled);
+check("label—desc options parse", !!lb && lb.questions.length === 2);
+check(
+  "label/desc split on —",
+  lb && lb.questions[0]?.options?.[0]?.label === "海外养宠人" &&
+    lb.questions[0].options[0].desc === "浏览加下单的 C 端用户",
+  JSON.stringify(lb?.questions?.[0]?.options?.[0])
+);
+check(
+  "desc-less option keeps single-line shape",
+  lb && lb.questions[1]?.options?.[2]?.label === "先不做多语言" &&
+    lb.questions[1].options[2].desc === "",
+  JSON.stringify(lb?.questions?.[1]?.options?.[2])
+);
+check(
+  "label—desc keeps multi flag",
+  lb && lb.questions[1]?.multi === true,
+  String(lb?.questions?.[1]?.multi)
+);
+
 // Source must keep normalize helper (regression anchor)
 const src = fs.readFileSync(enhancePath, "utf8");
 check(
   "normalizeQuizSource present",
   /function normalizeQuizSource\s*\(/.test(src)
 );
+// Anchors: escape hatch + two-line option style
+check(
+  "escape hint present",
+  src.includes("选项不合适？直接打字回复即可")
+);
+check("option desc style present", src.includes("qt-d"));
 // Anchor: bold-wrapped numbered title rewrite lives in normalizeQuizSource
 check(
   "bold title rewrite present",

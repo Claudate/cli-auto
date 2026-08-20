@@ -1364,11 +1364,12 @@ export function setClarifyPaint(fn) {
 }
 
 function repaint() {
-  // Prefer messages-only paint; fall through on throw so skip never looks dead.
+  // 澄清/认领等交互型 repaint：必须真正重绘（指纹空转会吞掉视觉反馈）。
+  const forceMsgs = { force: true };
   const tryCall = (fn) => {
     if (typeof fn !== "function") return false;
     try {
-      fn();
+      fn(forceMsgs);
       return true;
     } catch (err) {
       console.warn("clarify repaint step failed", err);

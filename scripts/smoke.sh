@@ -13,6 +13,13 @@ DEMO=/tmp/cco-smoke-proj
 rm -rf "$DEMO"
 mkdir -p "$DEMO/docs/plans"
 cp examples/plans/hello.cco.yaml "$DEMO/docs/plans/"
+# ~/.cco/config.toml (not CCO_STATE_ROOT) governs auto-commit; a real config
+# with auto_commit on would otherwise abort every run below on a non-repo dir.
+git -C "$DEMO" init -q
+git -C "$DEMO" config user.email cco@test
+git -C "$DEMO" config user.name cco
+git -C "$DEMO" add -A
+git -C "$DEMO" commit -q -m init --allow-empty
 
 cargo build -q
 BIN=./target/debug/cco

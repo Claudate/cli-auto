@@ -64,6 +64,11 @@ mod tests {
             "A/B/C options"
         );
         assert!(
+            g.contains("短标签"),
+            "option short-label — description format"
+        );
+        assert!(g.contains("可多选"), "multi-select marker for 不做/哪些");
+        assert!(
             g.contains("你定") || g.contains("直接出计划"),
             "skip phrase"
         );

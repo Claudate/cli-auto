@@ -269,13 +269,18 @@ pub(crate) fn inject_inspect_system_prompt(
     if existing.contains(INSPECT_SYSTEM_PROMPT_MARKER) {
         return;
     }
-    let segment = if allow_business_write {
+    let base_segment = if allow_business_write {
         format!(
             "{INSPECT_SYSTEM_PROMPT} Note: allow_business_write=true — prefer still writing only under `.cco-out/inspect/**`; do not silently rework features."
         )
     } else {
         INSPECT_SYSTEM_PROMPT.to_string()
     };
+    // Acceptance-checklist derivation discipline (docs/runtime-prompts/inspect-acceptance-checklist.md).
+    let segment = format!(
+        "{base_segment}\n\n{}",
+        crate::domain::chat::inspect_acceptance_checklist_guidance()
+    );
     let merged = if existing.trim().is_empty() {
         segment
     } else {

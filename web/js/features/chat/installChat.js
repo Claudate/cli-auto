@@ -61,11 +61,11 @@ export function installChatHost() {
     if (typeof chatClarify.setClarifyPaint === "function") {
       chatClarify.setClarifyPaint(() => {
         if (typeof chatActions.renderChatMessages === "function") {
-          chatActions.renderChatMessages();
+          chatActions.renderChatMessages({ force: true });
           return;
         }
         if (typeof host.renderChatMessages === "function") {
-          host.renderChatMessages();
+          host.renderChatMessages({ force: true });
         }
       });
     }

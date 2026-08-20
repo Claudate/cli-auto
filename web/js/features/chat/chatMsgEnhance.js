@@ -1,16 +1,17 @@
 /**
  * [INPUT]: assistant plain text · state.chatQuizDraft / chatMsgFold
- * [OUTPUT]: 编号题 A/B/C 可点选 · 历史消息折叠（Cursor 风：少折、摘要可读、气泡内渐隐）
+ * [OUTPUT]: 编号题 A/B/C 可点选（选项=短标签—一句说明 · 底部打字逃生口）· 历史消息折叠（Cursor 风：少折、摘要可读、气泡内渐隐）
  * [POS]: features/chat/chatMsgEnhance.js — 不进 chatFormat 厚文件
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
  * 解析须容忍模型常见 markdown：`**1. 标题？**`、硬换行尾空格、`---` 分隔。
  * 回归：`node scripts/chat-quiz-parse-smoke.mjs`（真实会话 shape）。
  *
- * 折叠策略（对齐 Cursor / Claude.ai）：
- * - 短会话不整条折；只折「更早」的长消息
- * - 短用户句永远展开；优先气泡内 clamp，而不是整条灰条
- * - 摘要去 markdown 符号，像正常预览而不是源码一行
+ * 折叠策略（对齐 Claude Code / Codex CLI：折叠 = 单行摘要，折了必须真省空间）：
+ * - 折叠态只有一行：角色 · 单行摘要 · N 行（像 Codex “Called slack 3 times”）
+ * - 只折真正长的旧消息（≥400 字或 ≥10 行）；摘要条本身就一两行高的消息永不折
+ * - 短会话 / 最近消息 / 短用户句永远展开；超长正文走气泡内 clamp
+ * - 「收起」只出现在用户手动展开过的消息上，不给尾部消息撒噪音行
  *
  * 不做：改 Mode B / confirm；不在 JS 写业务策略；不堆进 chatFormat/chatClarify。
  */
@@ -29,6 +30,9 @@ const KEEP_OPEN_TAIL = 8;
 const MIN_TOTAL_TO_AUTO_FOLD = 12;
 /** 短于此时长的内容不自动整条折（用户短句 / 短确认） */
 const SHORT_MSG_CHARS = 160;
+/** 折叠必须省出真实空间：低于此体量，单行摘要条 ≈ 展开后的高度，折了白折 */
+const FOLD_WORTHY_CHARS = 400;
+const FOLD_WORTHY_LINES = 10;
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
@@ -44,8 +48,8 @@ export function ensureChatMsgEnhanceStyles() {
 }
 .chat-msg.is-folded > .chat-msg-body { display: none; }
 .chat-msg-fold-bar {
-  display: flex; align-items: center; gap: 0.55rem;
-  margin: 0.1rem 0; padding: 0.55rem 0.75rem;
+  display: flex; align-items: center; gap: 0.5rem;
+  margin: 0.1rem 0; padding: 0.4rem 0.7rem;
   border-radius: 14px; border: 1px solid color-mix(in srgb, var(--border, #e5e7eb) 85%, transparent);
   background: color-mix(in srgb, var(--bg2, #fff) 88%, var(--bg3, #f3f4f6));
   cursor: pointer; text-align: left; width: auto; max-width: min(100%, 36rem);
@@ -81,16 +85,15 @@ export function ensureChatMsgEnhanceStyles() {
   background: color-mix(in srgb, var(--bg3, #f3f4f6) 80%, transparent);
 }
 .chat-msg-fold-main {
-  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.12rem;
+  flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 0.5rem;
 }
 .chat-msg-fold-sum {
-  font-size: 0.86rem; line-height: 1.45;
+  flex: 1; min-width: 0; font-size: 0.84rem; line-height: 1.35;
   color: color-mix(in srgb, var(--text, #111) 78%, var(--muted, #6b7280));
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden; word-break: break-word;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .chat-msg-fold-meta {
-  font-size: 0.7rem; color: var(--muted, #6b7280); line-height: 1.2;
+  flex-shrink: 0; font-size: 0.7rem; color: var(--muted, #6b7280); white-space: nowrap;
 }
 .chat-msg-fold-cta {
   flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.2rem;
@@ -184,11 +187,18 @@ export function ensureChatMsgEnhanceStyles() {
   border: 1px solid var(--border); background: var(--bg, #f5f5f7);
   color: var(--text); cursor: pointer;
   display: flex; gap: 0.45rem; align-items: flex-start;
+  transition: border-color var(--duration, 150ms) var(--ease, ease),
+    background var(--duration, 150ms) var(--ease, ease);
 }
 .chat-quiz-opt:hover {
   border-color: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 40%, var(--border));
   background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 7%, var(--bg2, #fff));
 }
+.chat-quiz-opt:focus-visible {
+  outline: 2px solid var(--leaf-alias-brand-primary, #4176E6);
+  outline-offset: 2px;
+}
+.chat-quiz-opt:disabled { opacity: 0.45; cursor: not-allowed; }
 .chat-quiz-opt.is-on {
   border-color: var(--leaf-alias-brand-primary, #4176E6);
   background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 12%, var(--bg2, #fff));
@@ -196,15 +206,24 @@ export function ensureChatMsgEnhanceStyles() {
 }
 .chat-quiz-opt .qk {
   flex-shrink: 0; width: 1.35rem; height: 1.35rem;
-  border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
   font-size: 0.72rem; font-weight: 700;
   background: color-mix(in srgb, var(--leaf-alias-brand-primary, #4176E6) 12%, transparent);
   color: var(--leaf-alias-brand-primary, #4176E6);
 }
+.chat-quiz-q.is-multi .chat-quiz-opt .qk { border-radius: 4px; }
 .chat-quiz-opt.is-on .qk {
   background: var(--leaf-alias-brand-primary, #4176E6); color: #fff;
 }
 .chat-quiz-opt .qt { flex: 1; min-width: 0; }
+.chat-quiz-opt .qt-l { display: block; }
+.chat-quiz-opt .qt-d {
+  display: block; font-size: 0.74rem; font-weight: 400;
+  color: var(--muted); line-height: 1.35; margin-top: 0.08rem;
+}
+.chat-quiz-escape {
+  margin: 0.45rem 0 0; font-size: 0.72rem; color: var(--muted);
+}
 .chat-quiz-foot {
   display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
   margin-top: 0.65rem; padding-top: 0.5rem;
@@ -265,6 +284,45 @@ function stripMdLight(s) {
     .trim();
 }
 
+const QUIZ_MULTI_MARK =
+  /可多选|可选多个|可同时选|可勾选多项|多选题|[（(【\[]\s*多选\s*[）)】\]]|multi[\s-]?select|\(\s*multiple\s*\)/i;
+const QUIZ_MULTI_ASK = /哪些|哪几[个项题]?|明确不做/;
+
+/**
+ * Multi when the title says so, asks "哪些/明确不做", or has 4+ lettered options.
+ * Models often omit "（可多选）" on the 不做/范围闸 slot — that must still toggle.
+ */
+function detectQuizMulti(titleRaw, blockHead, optionCount) {
+  const t = String(titleRaw || "");
+  const head = String(blockHead || "");
+  if (QUIZ_MULTI_MARK.test(t) || QUIZ_MULTI_MARK.test(head) || QUIZ_MULTI_ASK.test(t)) {
+    return true;
+  }
+  return Number(optionCount) >= 4;
+}
+
+/**
+ * `A. 短标签 — 一句说明` → { key, label, desc }（Claude/Codex 的 label+description 结构；
+ * 无破折号时整句当 label，旧格式照常渲染单行）。
+ */
+function splitQuizOption(key, text) {
+  const full = String(text).trim();
+  const parts = full.split(/\s*[—–－]\s*/);
+  if (parts.length >= 2 && parts[0] && parts.slice(1).join("").trim()) {
+    return { key, text: full, label: parts[0], desc: parts.slice(1).join(" — ").trim() };
+  }
+  return { key, text: full, label: full, desc: "" };
+}
+
+function stripQuizMultiMarker(titleRaw) {
+  return String(titleRaw || "")
+    .replace(
+      /\s*[（(【\[]\s*(可多选|多选|multiple|multi[\s-]?select)\s*[）)】\]]\s*$/iu,
+      ""
+    )
+    .trim();
+}
+
 /**
  * Detect numbered questions with A/B/C(…) options in assistant prose.
  * Tolerates markdown bold on titles (`**1. …**`) and hard-break spacing.
@@ -306,14 +364,6 @@ export function parseAssistantQuiz(text) {
     if (!lines.length) continue;
 
     const titleRaw = stripMdLight(lines[0]);
-    const multi =
-      /可多选/.test(titleRaw) ||
-      /可多选/.test(block.slice(0, 100)) ||
-      lines.filter((l) =>
-        /^(?:\*{1,2}[ \t]*)?[A-Da-d][ \t]*[.、．)]/.test(l)
-      ).length >= 4;
-    const title = titleRaw.replace(/\s*[（(]可多选[）)]\s*$/u, "").trim();
-
     const options = [];
     for (const line of lines.slice(1)) {
       const om = line.match(
@@ -321,13 +371,15 @@ export function parseAssistantQuiz(text) {
       );
       if (om) {
         const optText = stripMdLight(om[2]);
-        if (optText) options.push({ key: om[1].toUpperCase(), text: optText });
+        if (optText) options.push(splitQuizOption(om[1].toUpperCase(), optText));
         continue;
       }
       // stop at "其他" freestyle line — keep as non-option note, ignore
       if (/^其他/.test(stripMdLight(line))) break;
     }
     if (options.length < 2) continue;
+    const multi = detectQuizMulti(titleRaw, block.slice(0, 120), options.length);
+    const title = stripQuizMultiMarker(titleRaw);
     questions.push({ n: String(hits[i].n), title, multi, options });
   }
 
@@ -380,6 +432,13 @@ export function composeQuizDraft(msgKey, questions) {
   return parts.join(" ");
 }
 
+/** Option body: 短标签一行 + 说明一行（无说明时单行，旧文案不受影响）。 */
+function quizOptBodyHtml(o) {
+  const label = o.label ?? o.text ?? "";
+  if (!o.desc) return chatEsc(label);
+  return `<span class="qt-l">${chatEsc(label)}</span><span class="qt-d">${chatEsc(o.desc)}</span>`;
+}
+
 export function renderQuizPanelHtml(quiz, msgIndex) {
   if (!quiz || !quiz.questions?.length) return "";
   ensureQuizDraftBag();
@@ -402,28 +461,30 @@ export function renderQuizPanelHtml(quiz, msgIndex) {
         .map((o) => {
           const on = selSet.has(o.key) ? " is-on" : "";
           return (
-            `<button type="button" class="chat-quiz-opt${on}"` +
+            `<button type="button" class="chat-quiz-opt${on}${q.multi ? " is-multi" : ""}"` +
             ` data-chat-quiz-opt="1"` +
             ` data-quiz-msg="${chatEsc(msgKey)}"` +
             ` data-quiz-q="${chatEsc(q.n)}"` +
             ` data-quiz-key="${chatEsc(o.key)}"` +
             ` data-quiz-multi="${q.multi ? "1" : "0"}"` +
+            ` role="${q.multi ? "checkbox" : "radio"}"` +
+            ` aria-checked="${on ? "true" : "false"}"` +
             ` aria-pressed="${on ? "true" : "false"}">` +
             `<span class="qk">${chatEsc(o.key)}</span>` +
-            `<span class="qt">${chatEsc(o.text)}</span>` +
+            `<span class="qt">${quizOptBodyHtml(o)}</span>` +
             `</button>`
           );
         })
         .join("");
       return (
-        `<div class="chat-quiz-q" data-quiz-q-block="${chatEsc(q.n)}">` +
+        `<div class="chat-quiz-q${q.multi ? " is-multi" : ""}" data-quiz-q-block="${chatEsc(q.n)}">` +
         `<p class="chat-quiz-q-title">` +
         `${chatEsc(q.n)}. ${chatEsc(q.title)}` +
         (q.multi
           ? `<span class="chat-quiz-q-multi">可多选</span>`
           : "") +
         `</p>` +
-        `<div class="chat-quiz-opts">${opts}</div>` +
+        `<div class="chat-quiz-opts"${q.multi ? "" : ` role="radiogroup" aria-label="${chatEsc(q.title)}"`}>${opts}</div>` +
         `</div>`
       );
     })
@@ -456,7 +517,9 @@ export function renderQuizPanelHtml(quiz, msgIndex) {
     `<button type="button" class="btn primary sm" data-chat-quiz-send="${chatEsc(
       msgKey
     )}" title="填入并发送">发送所选</button>` +
-    `</div></div>`
+    `</div>` +
+    `<p class="chat-quiz-escape">选项不合适？直接打字回复即可</p>` +
+    `</div>`
   );
 }
 
@@ -539,11 +602,12 @@ export function shouldFoldMessage(msgIndex, total, content, opts = {}) {
   if (fromEnd < KEEP_OPEN_TAIL) return false;
   if (total < MIN_TOTAL_TO_AUTO_FOLD) return false;
 
-  const { chars } = contentStats(content);
+  const { chars, lines } = contentStats(content);
   const role = String(opts.role || "");
   // Short user pings / short AI acks stay visible — folding them into pills is hostile
   if (role === "user" && chars <= SHORT_MSG_CHARS * 1.5) return false;
-  if (chars <= SHORT_MSG_CHARS) return false;
+  // 折了必须真省空间：不够长的内容折成摘要条，展开只多一两行，正是被抱怨的行为
+  if (chars < FOLD_WORTHY_CHARS && lines < FOLD_WORTHY_LINES) return false;
 
   return true;
 }
@@ -602,18 +666,9 @@ export function wrapExpandedBody(innerHtml, msgIndex) {
 export function renderFoldBarHtml(roleLabel, content, msgIndex, opts = {}) {
   const key = quizMsgKey(msgIndex);
   const sum = oneLineSummary(content);
-  const { chars, lines } = contentStats(content);
-  let meta = "";
-  if (chars > 240 || lines > 6) {
-    meta =
-      lines > 8
-        ? `${lines} 行 · 点击展开`
-        : chars > 500
-          ? `较长回复 · 点击展开`
-          : `点击展开`;
-  } else {
-    meta = "点击展开";
-  }
+  const { lines } = contentStats(content);
+  // 单行摘要条右侧只给一个事实：多少行（Codex 风），不再堆形容句
+  const meta = lines > 3 ? `${lines} 行` : "展开";
   const role = String(opts.role || "");
   const aria =
     role === "user" ? "展开我的这条消息" : "展开 AI 的这条消息";
@@ -643,41 +698,29 @@ export function renderFoldAgainBtn(msgIndex) {
 }
 
 /**
- * Show whole-message 「收起」 when:
- * - user explicitly unfolded a folded pill, or
- * - message is long enough that auto-fold would apply (older long turns)
- * Not for the newest couple turns / short pings.
+ * Claude/Codex 语义：整条「收起」只出现在用户手动展开过的消息上（chatMsgFold=false）。
+ * 旧版给所有 ≥2 条外的长消息都挂「收起」行，正是「展开只多一行」噪音的另一半；
+ * 现在旧消息离开最近区后自然回到单行折叠条，尾部消息保持干净。
  */
-export function shouldShowFoldAgain(msgIndex, total, content, opts = {}) {
+export function shouldShowFoldAgain(msgIndex) {
   ensureQuizDraftBag();
-  const key = quizMsgKey(msgIndex);
-  // User explicitly unfolded → always offer re-fold (even if now near tail)
-  if (state.chatMsgFold[key] === false) return true;
-  if (opts.forceOpen) return false;
-  const fromEnd = total - 1 - msgIndex;
-  // Keep the live end clean — no collapse chrome on the last 2
-  if (fromEnd < 2) return false;
-  const { chars } = contentStats(content);
-  if (chars <= SHORT_MSG_CHARS) return false;
-  // Long body: allow manual whole-fold even in mid-session (not only auto-fold band)
-  if (isLongChatBody(content) && fromEnd >= 2) return true;
-  if (fromEnd < KEEP_OPEN_TAIL) return false;
-  if (total < MIN_TOTAL_TO_AUTO_FOLD) return false;
-  return true;
+  return state.chatMsgFold[quizMsgKey(msgIndex)] === false;
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
 function repaintMessages() {
+  // 交互型 repaint（点选/折叠）必须真正重绘新状态，跳过指纹空转会丢掉视觉反馈。
+  const force = { force: true };
   try {
     if (typeof window !== "undefined" && window.ccoChat?.renderChatMessages) {
-      window.ccoChat.renderChatMessages();
+      window.ccoChat.renderChatMessages(force);
       return;
     }
   } catch (_) {}
   try {
     if (typeof window !== "undefined" && typeof window.renderChatMessages === "function") {
-      window.renderChatMessages();
+      window.renderChatMessages(force);
     }
   } catch (_) {}
 }

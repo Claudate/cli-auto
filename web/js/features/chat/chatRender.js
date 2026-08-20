@@ -78,7 +78,7 @@ export function setPathModeAndPaint(id) {
   const next = setPathMode(id);
   applyPathModeHeadStep(next);
   try {
-    renderChatMessages();
+    renderChatMessages({ force: true });
   } catch (_) {}
   return next;
 }
@@ -107,7 +107,7 @@ export function setPersonaAndPaint(id, opts = {}) {
     } catch (_) {}
   }
   try {
-    renderChatMessages();
+    renderChatMessages({ force: true });
   } catch (_) {}
   return next;
 }
@@ -186,7 +186,7 @@ export async function claimWaveBundle(btn) {
       }
     } catch (_) {}
     try {
-      renderChatMessages();
+      renderChatMessages({ force: true });
     } catch (_) {}
     // W2-5: jump to 计划管理 so user sees 本波 group
     try {
@@ -249,10 +249,55 @@ export function renderLastSummaryBanner(text) {
 // Scroll anchoring: remember which session was painted last so a session /
 // project switch snaps to bottom while in-place repaints keep reading position.
 let _lastScrollKey = null;
+// 渲染指纹：同一会话 + 同一内容快照 → 直接跳过重建（切页/轮询空转主源）。
+let _lastRenderFingerprint = null;
+
+/** 强制下一帧重建（发送、切换会话等业务入口显式调用）。 */
+export function clearChatRenderFingerprint() {
+  _lastRenderFingerprint = null;
+}
+
+/**
+ * 轻量指纹：会话键 + 消息条数 + 最后一条消息的 id/角色/长度 + busy 态。
+ * 轮询空转、同会话重进都命中相同指纹 → 跳过 innerHTML 重建。
+ */
+function chatRenderFingerprint() {
+  ensureChatState();
+  const msgs = state.chatSession?.messages || [];
+  const last = msgs[msgs.length - 1] || null;
+  const streamLen = String(state.chatStreamText || "").length;
+  const busy = !!state.chatBusy;
+  const clarify = String(state.chatClarify?.phase || "");
+  return [
+    `${state.chatProjectPath || state.selectedPath || ""}::${
+      state.chatSession?.session_id || "default"
+    }`,
+    msgs.length,
+    last?.id || last?.ts || last?.role || "",
+    String(last?.content || "").length,
+    streamLen,
+    busy,
+    clarify,
+  ].join("|");
+}
+
+/** 是否需要重建消息区（内容未变且 busy 未翻转 → false）。 */
+function needChatRender() {
+  const fp = chatRenderFingerprint();
+  const changed = fp !== _lastRenderFingerprint;
+  _lastRenderFingerprint = fp;
+  if (changed) return true;
+  const list = $("#chat-messages");
+  return !!(list && !list.childElementCount);
+}
 
 export function renderChatMessages(opts = {}) {
   const list = $("#chat-messages");
   if (!list) return;
+  if (!opts.force && !needChatRender()) {
+    // 内容未变：保持当前滚动/阅读位置，不重建 DOM（切页卡顿主源）
+    return;
+  }
   const nearBottom =
     list.scrollHeight - list.scrollTop - list.clientHeight < 80;
   const prevScrollTop = list.scrollTop;
@@ -263,6 +308,7 @@ export function renderChatMessages(opts = {}) {
   const sessionSwitched = scrollKey !== _lastScrollKey;
   _lastScrollKey = scrollKey;
   const stickBottom = !!opts.stickBottom || sessionSwitched || nearBottom;
+  clearChatRenderFingerprint();
   ensureClarifyState();
   installClarifyUi();
   // t4: after claim + reload, draft_plan may exist without a ```plan bubble
@@ -439,8 +485,7 @@ export function renderChatMessages(opts = {}) {
         usedQuiz,
       });
       const showFoldAgain =
-        !bodyAlreadyHasCollapse &&
-        shouldShowFoldAgain(idx, total, content, { forceOpen, role });
+        !bodyAlreadyHasCollapse && shouldShowFoldAgain(idx);
       const foldAgain = showFoldAgain ? renderFoldAgainBtn(idx) : "";
       return (
         `<div class="chat-msg chat-msg-${role}" data-msg-idx="${idx}">` +
@@ -500,7 +545,6 @@ export function renderChatMessages(opts = {}) {
         wrap.innerHTML = hollowHtml;
         const bar = wrap.firstElementChild;
         if (bar) {
-          // Prefer after card actions (still inside message flow)
           card.insertAdjacentElement("afterend", bar);
         }
       } else if (
@@ -576,7 +620,11 @@ export function renderChatReadyBar() {
   if (normalizeBtn) normalizeBtn.hidden = true;
 }
 
-export function renderChatPage() {
+/**
+ * 面板重绘（顶栏/输入框/控件），opts.skipMessages 时跳过消息区全量重建。
+ * 切回已渲染的聊天页走 skipMessages，避免每次切换都 innerHTML 重建全部气泡。
+ */
+export function renderChatPage(opts = {}) {
   const projLabel = $("#chat-project-label");
   if (projLabel) {
     projLabel.textContent = state.selectedPath
@@ -634,10 +682,11 @@ export function renderChatPage() {
   }
   renderChatSessionSelect();
   renderChatAttachPreview();
-  renderChatMessages();
   renderChatEnvBar();
   renderChatReadyBar();
   renderChatComposerContext();
   host.renderPlanRail();
   host.renderPlanFullView();
+  if (opts.skipMessages) return;
+  renderChatMessages();
 }

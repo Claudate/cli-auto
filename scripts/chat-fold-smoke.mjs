@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Smoke: chat fold policy (Cursor-like — less aggressive whole-message collapse).
+ * Smoke: chat fold policy (Claude Code / Codex-like — fold = single-line summary,
+ * only for genuinely long messages; folding must save real space).
  * Run: node scripts/chat-fold-smoke.mjs
  *
  * Loads chatMsgEnhance with a tiny mock of legacy/chatFormat/chatState.
@@ -93,10 +94,20 @@ assert(
   "short user never folds"
 );
 
-// Old long assistant can fold
+// Old genuinely-long assistant can fold
 assert(
   shouldFoldMessage(0, 20, "截图报告\n".repeat(40), { role: "assistant" }) === true,
   "old long assistant folds"
+);
+
+// Mid-size old message stays open — a fold bar wouldn't save real space
+assert(
+  shouldFoldMessage(0, 20, "中等长度的内容".repeat(20), { role: "assistant" }) === false,
+  "mid old message stays open (fold must save real space)"
+);
+assert(
+  shouldFoldMessage(0, 20, "一行不折的短句\n".repeat(6), { role: "assistant" }) === false,
+  "few-line old message stays open"
 );
 
 // Clamp only for long bodies
@@ -106,13 +117,14 @@ assert(
   "long lines clamped"
 );
 
-// Fold bar summary strips md
-const bar = renderFoldBarHtml("AI", "## 标题 **加粗** 内容说明够长一点再截断看看", 0, {
+// Fold bar summary strips md — single line + line count meta
+const bar = renderFoldBarHtml("AI", `## 标题 **加粗** 内容说明\n${"细节行\n".repeat(5)}`, 0, {
   role: "assistant",
 });
 assert(bar.includes("标题 加粗"), "summary strips md markers");
 assert(!bar.includes("##"), "no raw ## in summary");
 assert(bar.includes("chat-msg-fold-meta"), "has meta line");
+assert(bar.includes("7 行"), "meta shows line count");
 assert(bar.includes("展开"), "has expand cta");
 
 // After 展开全部 → show 收起
@@ -127,11 +139,16 @@ const expanded = wrapExpandedBody("<p>x</p>", 0);
 assert(expanded.includes("data-chat-body-less"), "expanded wrap has 收起");
 assert(expanded.includes("收起"), "expanded wrap label 收起");
 
-// Explicit unfold → always offer whole-message 收起
+// Fold-again chrome: ONLY on messages the user manually unfolded
+state.chatMsgFold = {};
+assert(
+  shouldShowFoldAgain(0) === false,
+  "no fold-again chrome by default"
+);
 state.chatMsgFold = { m0: false };
 assert(
-  shouldShowFoldAgain(0, 6, longBody, { role: "assistant" }) === true,
-  "explicit unfold shows fold-again even in short session"
+  shouldShowFoldAgain(0) === true,
+  "manual unfold shows fold-again"
 );
 
 // Cleanup

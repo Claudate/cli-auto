@@ -164,8 +164,20 @@ pub async fn run(
             .expect("ParseOnly path always loads IR before confirm");
         // Documented ParseOnly — not Mode B; still drops optional && !include (A0-R4).
         // Use **returned** IR for the scheduler (D-T3-1). Stamp route_source from report.
-        let (run_id, st, ir, cost_line) =
-            run_uc::materialize_run_with_route(config, project.clone(), &ir, report.as_ref())?;
+        // CLI --provider / --force-provider is last write → skip cost auto on those
+        // tasks' path (mirrors split_uc::confirm_materialize's skip_cost wiring above;
+        // soft-fill otherwise leaves plan.default_provider == the override, which fools
+        // cost-aware routing's is_still_default_route into rewriting it to a real CLI).
+        let skip_cost = provider.is_some() || force_provider.is_some();
+        let (run_id, st, ir, cost_line) = run_uc::materialize_run_with_route_opts(
+            config,
+            project.clone(),
+            &ir,
+            report.as_ref(),
+            run_uc::MaterializeRouteOpts {
+                skip_cost_route: skip_cost,
+            },
+        )?;
         (run_id, st, ir, cost_line)
     };
 

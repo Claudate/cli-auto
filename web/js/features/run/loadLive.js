@@ -203,7 +203,9 @@ export async function loadLive(deps = {}) {
       call(deps.renderPlanPicker, "renderPlanPicker");
       call(deps.updateSplitPlanChip, "updateSplitPlanChip");
     }
-    // Run lock toggles canExec on plan-card CTAs — re-paint without openChatPage.
+    // Run lock toggles canExec on plan-card CTAs — re-paint without destroying
+    // composer scroll/state. Fingerprint in renderChatMessages dedups no-op
+    // rebuilds, so this is cheap when nothing visible changed.
     if (onChat) {
       call(deps.renderChatMessages, "renderChatMessages");
       if (
@@ -214,6 +216,14 @@ export async function loadLive(deps = {}) {
       ) {
         call(deps.renderChatPage, "renderChatPage");
       }
+    }
+  } else if (nowLive) {
+    // 本轮仍在跑：轮询业务数据已变（live 对象每次 fetch 都新鲜），
+    // 但用户视野只有 run-lock 翻转值得重绘——锁没变就别整页重渲染。
+    // 指纹（deps.msgFingerprint）未变时 renderChatMessages 直接跳过，
+    // 因此这里只在聊天页调用一次「可能空转」的重绘即可。
+    if (onChat) {
+      call(deps.renderChatMessages, "renderChatMessages");
     }
   } else if (!onChat && state.page !== "workspace") {
     call(deps.renderPlanPicker, "renderPlanPicker");

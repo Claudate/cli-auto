@@ -31,7 +31,7 @@ import {
   startChatWaitTicker,
   stopChatWaitTicker,
 } from "./chatSessions.js";
-import { renderChatPage, renderChatMessages } from "./chatRender.js";
+import { renderChatPage, renderChatMessages, clearChatRenderFingerprint } from "./chatRender.js";
 import { applyPathModeHeadStep, getPathMode } from "./chatPathMode.js";
 import { applyPersonaOpener, getPersonaId } from "./chatPersona.js";
 import { syncChatModelFromResponse } from "./chatControls.js";
@@ -111,10 +111,39 @@ export async function openChatPage() {
     toast("请先选择项目");
     return;
   }
+  // 同项目同会话再次进入：聊天页 DOM 已渲染（fingerprint 相同）→ 直接复用，
+  // 跳过 renderChatMessages 全量重建（切页卡顿主源）。仅当切了项目/会话时重绘。
+  const sameChatView =
+    state.page === "chat" &&
+    (state.chatProjectPath || state.selectedPath) === state.selectedPath &&
+    state.chatSession?.session_id === lastOpenChatSessionKey();
   // Leaving another page: keep current chat in cache first.
   if (state.chatProjectPath) stashChatSession(state.chatProjectPath);
   // 聊天右栏已撤：强制关轨
   showPage("chat");
+  state.chatProjectPath = state.selectedPath;
+  if (sameChatView) {
+    // 已在此页：只刷新一次性面板（环境条/CLI 选项/会话下拉），不重绘消息。
+    try {
+      ensureChatCliOptions();
+    } catch (_) {}
+    try {
+      applyPathModeHeadStep(getPathMode());
+    } catch (_) {}
+    try {
+      applyPersonaOpener(getPersonaId());
+    } catch (_) {}
+    renderChatPage({ skipMessages: true });
+    try {
+      loadChatSessionList().catch(() => {});
+    } catch (_) {}
+    return;
+  }
+  rememberOpenChatSessionKey();
+  // 进入不同项目/会话：上一次的消息 DOM 不能复用，强制本帧重建
+  try {
+    clearChatRenderFingerprint();
+  } catch (_) {}
   // Restore immediately so history is never blank while disk loads.
   restoreChatSession(state.selectedPath);
   applyPlanRailVisibility();
@@ -151,6 +180,18 @@ export async function openChatPage() {
   // 计划列表数据在打开「计划管理」时再扫；聊天页不占右栏
   // Re-paint after split index (and session) so card CTAs match disk state.
   renderChatPage();
+}
+
+// 记忆「最近一次打开聊天页时的会话」：openChatPage 同项目同会话快速路用
+let _lastOpenChatSessionKey = null;
+function lastOpenChatSessionKey() {
+  return _lastOpenChatSessionKey;
+}
+function rememberOpenChatSessionKey() {
+  _lastOpenChatSessionKey =
+    `${state.chatProjectPath || state.selectedPath || ""}::${
+      state.chatSession?.session_id || "default"
+    }`;
 }
 
 /**
@@ -264,6 +305,10 @@ export async function sendChatMessage() {
 
   const projectPath = state.selectedPath;
   state.chatProjectPath = projectPath;
+  // 发送瞬间清指纹：本轮发送前必须先重建（即使内容与上轮指纹意外相同）
+  try {
+    clearChatRenderFingerprint();
+  } catch (_) {}
   state.chatBusy = true;
   state.chatCancelRequested = false;
   state.chatWaitStartedAt = Date.now();

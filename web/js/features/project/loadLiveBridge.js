@@ -142,6 +142,7 @@ export async function loadLive() {
     }
     if (onChat) {
       try {
+        // 轮询空转保底：内容未变时 renderChatMessages 指纹命中直接跳过重建
         (window.renderChatMessages || window.renderChatPage)?.();
       } catch (_) {}
     }

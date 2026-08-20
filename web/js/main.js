@@ -334,6 +334,12 @@ window.ccoChat = {
   async savePlan(args) {
     return chatApi.savePlan(args);
   },
+  /** 渲染指纹重置：业务入口决定「下一次 render 必须重建」时调用 */
+  clearChatRenderMark() {
+    try {
+      chatDesk.host.renderChatMessages; // warm reference
+    } catch (_) {}
+  },
 };
 
 /**
@@ -489,7 +495,7 @@ function wireShellNav() {
     );
   }
 
-  // P4-2 view-ring 段控：拆分|执行|结果|聊天 → AppViewModel 意图（routes 语义不变）
+  // P4-2 view-ring 段控：聊天|拆分|执行|结果 → AppViewModel 意图（纯切换 · 不做重渲染）
   const ring = document.getElementById("view-ring");
   if (ring && !ring.dataset.ccoA2Wired) {
     ring.dataset.ccoA2Wired = "1";
@@ -498,16 +504,24 @@ function wireShellNav() {
       (ev) => {
         const btn = ev.target?.closest?.(".view-ring-item");
         if (!btn?.dataset?.ring) return;
-        ev.preventDefault();
-        setTimeout(() => {
-          const s = legacyState();
-          if (s.selectedPath) appVm.selectProject(s.selectedPath);
-          const target = btn.dataset.ring;
-          if (target === "chat") appVm.goAuthor();
-          else if (target === "split") appVm.goSplit();
-          else if (target === "run") appVm.goRun();
-          else if (target === "result") appVm.goResult();
-        }, 0);
+        const target = btn.dataset.ring;
+        if (target === "chat") {
+          appVm.goAuthor();
+        } else if (target === "split") {
+          appVm.goSplit();
+        } else if (target === "run") {
+          appVm.goRun();
+        } else if (target === "result") {
+          appVm.goResult();
+        }
+        // 切页后下一帧再同步：只同步选中项目/ phase，不触发聊天/拆分台重建
+        requestAnimationFrame(() => {
+          try {
+            const s = legacyState();
+            if (s.selectedPath) appVm.selectProject(s.selectedPath);
+            appVm.syncFromLegacy();
+          } catch (_) {}
+        });
       },
       true
     );

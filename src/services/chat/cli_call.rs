@@ -22,6 +22,8 @@ pub(crate) fn system_prompt(project: &Path) -> String {
     let typeface = crate::domain::chat::ui_typography_systems_guidance();
     let copy = crate::domain::chat::ui_copy_systems_guidance();
     let motion = crate::domain::chat::ui_motion_effects_guidance();
+    let premium = crate::domain::chat::ui_premium_styles_guidance();
+    let style_router = crate::domain::chat::ui_style_router_guidance();
     let backend = crate::domain::chat::backend_architecture_guidance();
     let visual = crate::domain::chat::chat_visual_review_guidance();
     format!(
@@ -104,6 +106,10 @@ pub(crate) fn system_prompt(project: &Path) -> String {
 
 {motion}
 
+{style_router}
+
+{premium}
+
 {visual}
 "#,
         project = project.display(),
@@ -115,6 +121,7 @@ pub(crate) fn system_prompt(project: &Path) -> String {
         typeface = typeface,
         copy = copy,
         motion = motion,
+        premium = premium,
         visual = visual,
     )
 }

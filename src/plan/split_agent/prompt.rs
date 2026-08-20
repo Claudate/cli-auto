@@ -44,9 +44,10 @@ pub fn system_prompt() -> String {
 - 一步一个可验收结果；任务数宜 3–12，除非计划明确更多
 - **验收/巡检任务 ≠ 关账**：check 类只对照计划写 VERDICT/ISSUES 语义；**禁止**在 title/body 写「并回写台账 / commit / 勾选进度」——台账关账由 host `sys-closeout` 注入，勿揉进巡检一步
 "#;
-    // Product delivery + recipes + backend + layout + color + type + copy + motion.
+    // Product delivery + discipline + recipes + backend + layout + color + type + copy + motion.
     format!(
-        "{base}{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}",
+        "{base}{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}",
+        crate::domain::chat::worker_delivery_discipline_guidance(),
         crate::domain::chat::split_agent_delivery_guidance(),
         crate::domain::chat::ui_delivery_recipes_guidance(),
         crate::domain::chat::backend_architecture_guidance(),
@@ -54,7 +55,9 @@ pub fn system_prompt() -> String {
         crate::domain::chat::ui_color_systems_guidance(),
         crate::domain::chat::ui_typography_systems_guidance(),
         crate::domain::chat::ui_copy_systems_guidance(),
-        crate::domain::chat::ui_motion_effects_guidance()
+        crate::domain::chat::ui_motion_effects_guidance(),
+        crate::domain::chat::ui_style_router_guidance(),
+        crate::domain::chat::ui_premium_styles_guidance()
     )
 }
 
@@ -184,6 +187,10 @@ mod tests {
                 || s.contains("界面文案")
                 || s.contains("Lorem"),
             "ui copy systems must append"
+        );
+        assert!(
+            s.contains("结论先行") || s.contains("失败"),
+            "worker delivery discipline must append"
         );
     }
 

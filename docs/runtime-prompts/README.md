@@ -9,12 +9,16 @@
 |------|--------|
 | [`chat-plan-writing.md`](./chat-plan-writing.md) | 桌面聊天 system prompt（计划写作助手；含澄清相三入口 / Brief / V1 闸） |
 | [`chat-visual-review.md`](./chat-visual-review.md) | 桌面聊天追加：**截图验收**（真截图 → `![](path)` 内联 → 分析 → 优化建议） |
+| [`worker-delivery-discipline.md`](./worker-delivery-discipline.md) | 拆分 Agent 追加（worker 交付纪律：结论先行 · 意图分档 · 失败换路） |
+| [`inspect-acceptance-checklist.md`](./inspect-acceptance-checklist.md) | role=inspect 任务 system prompt 追加（验收清单推导 · 证据逐项核对） |
 | [`ui-delivery-recipes.md`](./ui-delivery-recipes.md) | 聊天 + 拆分 **优先**（效果配方：布局·色·字·文案·动效·图·后端） |
 | [`ui-layout-systems.md`](./ui-layout-systems.md) | 聊天 + 拆分 Agent 追加（站点类型 · 区块顺序 · 变体） |
 | [`ui-color-systems.md`](./ui-color-systems.md) | 聊天 + 拆分 Agent 追加（色系 kit / CSS token） |
 | [`ui-typography-systems.md`](./ui-typography-systems.md) | 聊天 + 拆分 Agent 追加（字体包 display/body/ui · 与色系同 kit） |
 | [`ui-copy-systems.md`](./ui-copy-systems.md) | 聊天 + 拆分 Agent 追加（网站+App 界面文案 / 微文案） |
 | [`ui-motion-effects.md`](./ui-motion-effects.md) | 聊天 + 拆分 Agent 追加（动效档 · 开源白名单 · reduced-motion） |
+| [`ui-premium-styles.md`](./ui-premium-styles.md) | 聊天 + 拆分 Agent 追加（**高级风格配方 A–E** · MotionSites 328 例提炼 · 一次选一套） |
+| [`ui-style-router.md`](./ui-style-router.md) | 聊天 + 拆分 Agent 追加（**风格路由**：用户一句话 → 品类/配方/载体三步定位 · web/app 通用） |
 | [`backend-architecture.md`](./backend-architecture.md) | 聊天 + 拆分 Agent 追加（交付深度 A–D · 语言 · MVC/MVVM/DDD） |
 | [`split-agent-delivery.md`](./split-agent-delivery.md) | Mode B 拆分 Agent system prompt 追加段 |
 | [`planner-greenfield-stack.md`](./planner-greenfield-stack.md) | 旧路径 LLM Planner · greenfield 模式追加 |

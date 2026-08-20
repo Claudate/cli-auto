@@ -16,6 +16,7 @@ import {
 } from "./chatState.js";
 import { chatEsc, chatFormatStreamBody } from "./chatFormat.js";
 import { resetClarifyState, hydrateClarifyFromSession } from "./chatClarify.js";
+import { clearChatRenderFingerprint } from "./chatRender.js";
 import { paintPendingWait, stopPendingOrb } from "./chatThinkingOrb.js";
 import { confirmDialog } from "../../shared/confirmDialog.js";
 
@@ -446,6 +447,10 @@ export async function switchChatSession(sessionId) {
   state.chatEnvNote = null;
   // t3: reset clarify until restore/load hydrates
   resetClarifyState();
+  // 切换会话：上一会话 DOM 不可复用 → 强制本帧重建
+  try {
+    clearChatRenderFingerprint();
+  } catch (_) {}
   // Prefer cache for instant paint
   restoreChatSession(state.selectedPath, sid);
   host.renderChatPage();
@@ -489,6 +494,10 @@ export async function newChatSession() {
     state.chatProjectPath = state.selectedPath;
     stashChatSession(state.selectedPath, sid);
     toast(`已新建会话`);
+    // 新会话：清指纹强制首帧重建（内容为空也需画空态）
+    try {
+      clearChatRenderFingerprint();
+    } catch (_) {}
     host.renderChatPage();
     await loadChatSessionList();
     collapseChatSessionMore();
@@ -686,6 +695,7 @@ export async function loadChatSession(opts) {
     }
     state.chatProjectPath = path;
   }
+  // 会话数据落盘后统一重绘（指纹不变时 renderChatMessages 内部跳过重建）
   host.renderChatPage();
   if (state.chatBusy) startChatWaitTicker();
 }

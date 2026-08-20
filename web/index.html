@@ -80,12 +80,12 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
           <!-- shell-chrome A1: 顶栏阶段条已撤；节点保留供旧脚本 no-op 写 -->
           <div id="flow-strip-global" class="flow-strip-host flow-strip-global" hidden aria-hidden="true"></div>
         </div>
-        <!-- P4-2 view-ring 段控：拆分|执行|结果|聊天（routes.js 语义不变） -->
+        <!-- P4-2 view-ring 段控：聊天|拆分|执行|结果（聊天前置 · 主路径首选；routes.js 语义不变） -->
         <nav class="view-ring" id="view-ring" aria-label="阶段导航">
+          <button type="button" class="view-ring-item" data-ring="chat">聊天</button>
           <button type="button" class="view-ring-item" data-ring="split">拆分</button>
           <button type="button" class="view-ring-item" data-ring="run">执行</button>
           <button type="button" class="view-ring-item" data-ring="result">结果</button>
-          <button type="button" class="view-ring-item" data-ring="chat">聊天</button>
         </nav>
         <div class="top-actions" id="top-actions">
           <button class="icon-btn chat-top-btn" id="btn-open-chat" type="button" hidden title="聊天" aria-label="聊天" data-icon="message-square" data-icon-size="16"></button>

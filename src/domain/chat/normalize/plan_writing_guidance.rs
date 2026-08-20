@@ -17,9 +17,13 @@ pub const FILE_UI_LAYOUT: &str = "ui-layout-systems.md";
 pub const FILE_UI_COLOR_SYSTEMS: &str = "ui-color-systems.md";
 pub const FILE_UI_TYPOGRAPHY: &str = "ui-typography-systems.md";
 pub const FILE_UI_MOTION: &str = "ui-motion-effects.md";
+pub const FILE_UI_PREMIUM_STYLES: &str = "ui-premium-styles.md";
+pub const FILE_UI_STYLE_ROUTER: &str = "ui-style-router.md";
 pub const FILE_UI_COPY: &str = "ui-copy-systems.md";
 pub const FILE_BACKEND_ARCHITECTURE: &str = "backend-architecture.md";
 pub const FILE_CHAT_VISUAL_REVIEW: &str = "chat-visual-review.md";
+pub const FILE_WORKER_DISCIPLINE: &str = "worker-delivery-discipline.md";
+pub const FILE_INSPECT_CHECKLIST: &str = "inspect-acceptance-checklist.md";
 
 /// Env: absolute or relative dir containing the markdown files above.
 pub const ENV_RUNTIME_PROMPTS_DIR: &str = "CCO_RUNTIME_PROMPTS_DIR";
@@ -34,9 +38,17 @@ const EMBED_UI_LAYOUT: &str = include_str!("../../../../docs/runtime-prompts/ui-
 const EMBED_UI_COLOR: &str = include_str!("../../../../docs/runtime-prompts/ui-color-systems.md");
 const EMBED_UI_TYPE: &str = include_str!("../../../../docs/runtime-prompts/ui-typography-systems.md");
 const EMBED_UI_MOTION: &str = include_str!("../../../../docs/runtime-prompts/ui-motion-effects.md");
+const EMBED_UI_PREMIUM: &str =
+    include_str!("../../../../docs/runtime-prompts/ui-premium-styles.md");
+const EMBED_UI_STYLE_ROUTER: &str =
+    include_str!("../../../../docs/runtime-prompts/ui-style-router.md");
 const EMBED_UI_COPY: &str = include_str!("../../../../docs/runtime-prompts/ui-copy-systems.md");
 const EMBED_BACKEND: &str = include_str!("../../../../docs/runtime-prompts/backend-architecture.md");
 const EMBED_CHAT_VISUAL: &str = include_str!("../../../../docs/runtime-prompts/chat-visual-review.md");
+const EMBED_WORKER_DISCIPLINE: &str =
+    include_str!("../../../../docs/runtime-prompts/worker-delivery-discipline.md");
+const EMBED_INSPECT_CHECKLIST: &str =
+    include_str!("../../../../docs/runtime-prompts/inspect-acceptance-checklist.md");
 
 /// Compact architect + frontend co-plan rules for the desktop chat system prompt.
 pub fn chat_plan_writing_guidance() -> &'static str {
@@ -78,6 +90,16 @@ pub fn ui_motion_effects_guidance() -> &'static str {
     load_cached(FILE_UI_MOTION, EMBED_UI_MOTION)
 }
 
+/// Premium visual style recipes (append to chat / split; pick one per site).
+pub fn ui_premium_styles_guidance() -> &'static str {
+    load_cached(FILE_UI_PREMIUM_STYLES, EMBED_UI_PREMIUM)
+}
+
+/// Style router: user intent -> category -> recipe A-E -> web/app carrier.
+pub fn ui_style_router_guidance() -> &'static str {
+    load_cached(FILE_UI_STYLE_ROUTER, EMBED_UI_STYLE_ROUTER)
+}
+
 /// Product UI copy: website + app/software microcopy (append to chat / split).
 pub fn ui_copy_systems_guidance() -> &'static str {
     load_cached(FILE_UI_COPY, EMBED_UI_COPY)
@@ -91,6 +113,16 @@ pub fn backend_architecture_guidance() -> &'static str {
 /// Chat visual QA: screenshot → analyze → embed `![](path)` → optimize advice.
 pub fn chat_visual_review_guidance() -> &'static str {
     load_cached(FILE_CHAT_VISUAL_REVIEW, EMBED_CHAT_VISUAL)
+}
+
+/// Worker delivery discipline: outcome-first, honest reporting, failure handling.
+pub fn worker_delivery_discipline_guidance() -> &'static str {
+    load_cached(FILE_WORKER_DISCIPLINE, EMBED_WORKER_DISCIPLINE)
+}
+
+/// Inspect acceptance checklist derivation: plan → checklist → evidence per item.
+pub fn inspect_acceptance_checklist_guidance() -> &'static str {
+    load_cached(FILE_INSPECT_CHECKLIST, EMBED_INSPECT_CHECKLIST)
 }
 
 fn load_cached(file_name: &'static str, embedded: &'static str) -> &'static str {
@@ -135,6 +167,16 @@ fn load_cached(file_name: &'static str, embedded: &'static str) -> &'static str 
             CELL.get_or_init(|| resolve_text(file_name, embedded))
                 .as_str()
         }
+        FILE_UI_PREMIUM_STYLES => {
+            static CELL: OnceLock<String> = OnceLock::new();
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
+        }
+        FILE_UI_STYLE_ROUTER => {
+            static CELL: OnceLock<String> = OnceLock::new();
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
+        }
         FILE_UI_COPY => {
             static CELL: OnceLock<String> = OnceLock::new();
             CELL.get_or_init(|| resolve_text(file_name, embedded))
@@ -146,6 +188,16 @@ fn load_cached(file_name: &'static str, embedded: &'static str) -> &'static str 
                 .as_str()
         }
         FILE_CHAT_VISUAL_REVIEW => {
+            static CELL: OnceLock<String> = OnceLock::new();
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
+        }
+        FILE_WORKER_DISCIPLINE => {
+            static CELL: OnceLock<String> = OnceLock::new();
+            CELL.get_or_init(|| resolve_text(file_name, embedded))
+                .as_str()
+        }
+        FILE_INSPECT_CHECKLIST => {
             static CELL: OnceLock<String> = OnceLock::new();
             CELL.get_or_init(|| resolve_text(file_name, embedded))
                 .as_str()
