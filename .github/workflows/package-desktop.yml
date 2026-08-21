@@ -1,6 +1,6 @@
 # Leaf 桌面端跨平台打包（macOS arm64 + Windows x64）
 # 触发：push 到 feat/ui-redesign-dsh（自动）或手动 workflow_dispatch
-# 产物：Actions run 的 Artifacts（dmg/app · nsis setup.exe）
+# 产物：发布为 GitHub Release 资产（不占 Actions artifact 存储配额）
 name: Package Desktop (Win + Mac)
 
 on:
@@ -11,9 +11,33 @@ on:
       - "docs/**"
       - "**/*.md"
 
+permissions:
+  contents: write
+
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.mk.outputs.tag }}
+    steps:
+      - name: Create release (idempotent)
+        id: mk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="desktop-${GITHUB_RUN_ID}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Leaf 桌面端 $TAG" \
+              --notes "自动打包：macOS arm64 (dmg) + Windows x64 (nsis setup.exe)。commit ${GITHUB_SHA}" \
+              --prerelease
+
   build:
     name: ${{ matrix.artifact }}
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -68,13 +92,25 @@ jobs:
         shell: bash
         run: tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
 
-      - name: Collect artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          if-no-files-found: error
-          path: |
+      - name: Zip macOS .app
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release/bundle/macos
+          ditto -c -k --keepParent Leaf.app "Leaf-macos-arm64.zip"
+
+      - name: Upload to Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          files=(
             target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            target/${{ matrix.target }}/release/bundle/macos/*.app
+            target/${{ matrix.target }}/release/bundle/macos/*.zip
             target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe
-            target/${{ matrix.target }}/release/bundle/nsis/*.nsis.zip
+          )
+          if [ ${#files[@]} -eq 0 ]; then echo "NO_ARTIFACTS_FOUND"; exit 1; fi
+          echo "uploading: ${files[*]}"
+          gh release upload "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
