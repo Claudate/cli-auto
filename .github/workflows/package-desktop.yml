@@ -1,0 +1,80 @@
+# Leaf 桌面端跨平台打包（macOS arm64 + Windows x64）
+# 触发：push 到 feat/ui-redesign-dsh（自动）或手动 workflow_dispatch
+# 产物：Actions run 的 Artifacts（dmg/app · nsis setup.exe）
+name: Package Desktop (Win + Mac)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/ui-redesign-dsh]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+
+jobs:
+  build:
+    name: ${{ matrix.artifact }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+            artifact: leaf-macos-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+            artifact: leaf-windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build web bundle (esbuild + terser)
+        shell: bash
+        run: |
+          cd web
+          npm install
+          node build.mjs
+          test -f dist/app.js || { echo "WEB_BUILD_FAIL: dist/app.js missing"; exit 1; }
+
+      - name: Purge plaintext web source (anti-reverse)
+        shell: bash
+        run: |
+          rm -rf web/node_modules web/js web/build.mjs web/mock-tauri-ipc.js
+          rm -f web/package.json web/package-lock.json web/dist/app.bundle.js
+          if [ -e web/js ]; then echo "PURGE_FAIL"; exit 1; fi
+          echo "PURGE_OK"
+
+      - name: Install Tauri CLI
+        shell: bash
+        run: npm install -g @tauri-apps/cli@2
+
+      - name: Tauri build
+        shell: bash
+        run: tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+      - name: Collect artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          path: |
+            target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            target/${{ matrix.target }}/release/bundle/macos/*.app
+            target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe
+            target/${{ matrix.target }}/release/bundle/nsis/*.nsis.zip
