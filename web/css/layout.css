@@ -5,6 +5,7 @@
  * note: 2026-08-15 P4-2 两栏壳 — `#view-ring` 段控（phase 高亮 · workspace/chat 页显示）· 侧栏 rail 折叠（`body.cco-sidebar-collapsed` 56px · ≥901px 几何瞬态）· `.project-hover-card` 路径复制卡 · token 化旧硬色 → `--leaf-alias-*`
  * note: 2026-08-17 侧栏只列项目，不嵌计划树
  * note: 2026-08-21 侧栏可拖宽（`.sidebar-resize-handle` · `--sidebar-w-min/max` · 折叠时隐藏）
+ * note: 2026-08-21 侧栏禁横滑（hover 路径卡改 fixed，避免 absolute 撑出空白右滑条）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -22,14 +23,15 @@
   min-width: 0;
   width: 100%;
   max-width: var(--sidebar-w-max, 380px);
+  overflow-x: hidden; /* 禁空白右滑；路径卡走 fixed 飞出 */
   z-index: 2;
 }
 
-/* 侧栏右缘拖拽把手（col-resize · 折叠 rail 时隐藏） */
+/* 侧栏右缘拖拽把手（col-resize · 折叠 rail 时隐藏 · 落在边界内不撑横滑） */
 .sidebar-resize-handle {
   position: absolute;
   top: 0;
-  right: -3px;
+  right: 0;
   width: 6px;
   height: 100%;
   z-index: 8;
@@ -44,7 +46,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 2px;
+  right: 0;
   width: 2px;
   border-radius: 1px;
   background: transparent;
@@ -169,6 +171,7 @@ body[data-leaf-theme="dark"] .brand .logo {
 
 .project-list {
   flex: 1;
+  overflow-x: hidden; /* overflow-y:auto 时 x 默认可变 auto，禁 absolute 子孙撑横条 */
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -1727,10 +1730,11 @@ body[data-cco-app-phase="author"] .view-ring-item[data-ring="chat"] {
   font-weight: 600;
 }
 
-/* ── hover 复制卡（项目路径 · 一键复制）── */
+/* ── hover 复制卡（项目路径 · 一键复制）──
+ * fixed + shellUi 按行 rect 定位：不进 project-list 滚动溢出盒，避免侧栏空白横滑 */
 .project-hover-card {
-  position: absolute;
-  left: calc(100% + 8px);
+  position: fixed;
+  left: 0;
   top: 0;
   z-index: 60;
   min-width: 280px;
@@ -1742,15 +1746,19 @@ body[data-cco-app-phase="author"] .view-ring-item[data-ring="chat"] {
   box-shadow: var(--leaf-alias-shadow-2);
   opacity: 0;
   visibility: hidden;
+  pointer-events: none;
   transform: translateY(-4px);
   transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0.15s;
 }
-.project-item-row:hover .project-hover-card,
-.project-item-row:focus-within .project-hover-card {
+.project-item-row.is-hover-card-open > .project-hover-card {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
   transform: none;
   transition: opacity 0.15s ease, transform 0.15s ease;
+}
+body.cco-sidebar-collapsed .project-hover-card {
+  display: none !important;
 }
 .project-hover-label {
   font-size: var(--leaf-font-caption);

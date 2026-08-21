@@ -10,6 +10,7 @@
  * note: 2026-08-17 侧栏只列项目，不嵌计划树（菜单栏不堆计划信息）
  * note: 2026-08-21 项目右键菜单 → projectContextMenu（打开/复制/执行/移除）
  * note: 2026-08-21 侧栏拖宽 installSidebarResize（`--sidebar-w` · min/max token · localStorage cco.sidebarWidth）
+ * note: 2026-08-21 项目路径 hover 卡 fixed 定位（wireProjectHoverCards）——禁侧栏空白横滑
  */
 
 import {
@@ -528,9 +529,103 @@ export function renderProjectList() {
       }
     };
   });
+  wireProjectHoverCards(el);
   try {
     if (typeof window.ccoHydrateIcons === "function") window.ccoHydrateIcons(el);
   } catch (_) {}
+}
+
+/** 路径 hover 卡：fixed 按行 rect 飞出，不撑 project-list 横滑空白 */
+function placeProjectHoverCard(row) {
+  const card = row?.querySelector?.(".project-hover-card");
+  if (!card || !row) return;
+  const rect = row.getBoundingClientRect();
+  const gap = 8;
+  const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+  const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+  // 先露出再量宽高（visibility 仍由 is-hover-card-open 控）
+  const prevVis = card.style.visibility;
+  const prevPtr = card.style.pointerEvents;
+  card.style.visibility = "hidden";
+  card.style.pointerEvents = "none";
+  card.style.left = "0px";
+  card.style.top = "0px";
+  const cardW = Math.min(360, Math.max(280, card.offsetWidth || 280));
+  const cardH = card.offsetHeight || 120;
+  card.style.visibility = prevVis;
+  card.style.pointerEvents = prevPtr;
+
+  let left = rect.right + gap;
+  if (left + cardW > vw - 8) {
+    left = Math.max(8, rect.left - cardW - gap);
+  }
+  let top = rect.top;
+  if (top + cardH > vh - 8) {
+    top = Math.max(8, vh - cardH - 8);
+  }
+  if (top < 8) top = 8;
+  card.style.left = `${Math.round(left)}px`;
+  card.style.top = `${Math.round(top)}px`;
+}
+
+function closeAllProjectHoverCards(root) {
+  const scope = root || document;
+  $$el(".project-item-row.is-hover-card-open", scope).forEach((row) => {
+    if (row._ccoHoverCloseTimer) {
+      clearTimeout(row._ccoHoverCloseTimer);
+      row._ccoHoverCloseTimer = null;
+    }
+    row.classList.remove("is-hover-card-open");
+  });
+}
+
+function wireProjectHoverCards(listEl) {
+  if (!listEl) return;
+  $$el(".project-item-row", listEl).forEach((row) => {
+    if (row.dataset.ccoHoverWired === "1") return;
+    row.dataset.ccoHoverWired = "1";
+    const open = () => {
+      if (document.body.classList.contains("cco-sidebar-collapsed")) return;
+      if (row._ccoHoverCloseTimer) {
+        clearTimeout(row._ccoHoverCloseTimer);
+        row._ccoHoverCloseTimer = null;
+      }
+      // 同时只开一张
+      $$el(".project-item-row.is-hover-card-open", listEl).forEach((other) => {
+        if (other === row) return;
+        if (other._ccoHoverCloseTimer) {
+          clearTimeout(other._ccoHoverCloseTimer);
+          other._ccoHoverCloseTimer = null;
+        }
+        other.classList.remove("is-hover-card-open");
+      });
+      placeProjectHoverCard(row);
+      row.classList.add("is-hover-card-open");
+    };
+    const scheduleClose = () => {
+      if (row._ccoHoverCloseTimer) clearTimeout(row._ccoHoverCloseTimer);
+      // 给 8px 空隙 + 移入卡按钮一点时间，避免横跨 gap 闪关
+      row._ccoHoverCloseTimer = setTimeout(() => {
+        row._ccoHoverCloseTimer = null;
+        row.classList.remove("is-hover-card-open");
+      }, 160);
+    };
+    row.addEventListener("mouseenter", open);
+    row.addEventListener("mouseleave", scheduleClose);
+    row.addEventListener("focusin", open);
+    row.addEventListener("focusout", (ev) => {
+      if (row.contains(ev.relatedTarget)) return;
+      scheduleClose();
+    });
+  });
+  if (listEl.dataset.ccoHoverScrollWired !== "1") {
+    listEl.dataset.ccoHoverScrollWired = "1";
+    listEl.addEventListener(
+      "scroll",
+      () => closeAllProjectHoverCards(listEl),
+      { passive: true }
+    );
+  }
 }
 
 /* ── P4-2 侧栏 chrome：折叠 rail · 搜索 · hover 复制（几何瞬态，不入 localStorage）── */
