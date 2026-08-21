@@ -232,6 +232,10 @@ function flowStallUserText(raw) {
     .replace(/codex/gi, "Codex")
     .replace(/卡死/g, "卡住")
     .replace(/阈值/g, "等待上限");
+  // 余额/Key/限流：不要再拼「拍拍肩膀」趣味旁白，避免掩盖真实原因。
+  if (/余额|充值|Key 失效|限流|通道接口|额度|quota|payment|402|401|429/i.test(out)) {
+    return out;
+  }
   // Prefer fun blurb as suffix when serious already has numbers
   const fun = flowPickBlurb("stall", out.slice(0, 24));
   if (fun && !out.includes(fun.slice(0, 6))) {

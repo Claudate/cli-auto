@@ -1,7 +1,7 @@
 //! Desktop/CLI settings subset of Config.
 //!
 //! [INPUT]: Config · SettingsUpdate
-//! [OUTPUT]: get_settings · set_settings · SettingsView（H4 failover · 费用优选 cost_* · 系统收尾 · 自动提交粒度 · planner_critic · browser）
+//! [OUTPUT]: get_settings · set_settings · SettingsView（**channels 全局通道目录** · H4 failover · 费用优选 cost_* · 系统收尾 · 自动提交粒度 · planner_critic · browser）
 //! [POS]: services 子模块
 //! [PROTOCOL]: 变更时更新此头部，然后检查 src/services/CLAUDE.md
 
@@ -9,6 +9,21 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::config::{normalize_auto_commit_granularity, AutoCommitGranularity, Config};
+
+/// One worker channel from `config.providers` — **global catalog SoT** for desktop pickers.
+///
+/// Health (binary/auth/funds) is overlaid on the FE from `doctorCache`, not duplicated here
+/// (probe is slow / network). Switch / split / settings must not invent a private list.
+#[derive(Debug, Clone, Serialize)]
+pub struct ChannelView {
+    pub id: String,
+    /// Product-facing label (Claude / Codex / CodeWhale …).
+    pub label: String,
+    pub enabled: bool,
+    pub bin: String,
+    /// Manual switch / failover candidates (excludes fake · sdk).
+    pub switchable: bool,
+}
 
 /// Subset of config exposed to the desktop UI for reading.
 #[derive(Debug, Clone, Serialize)]
@@ -18,6 +33,8 @@ pub struct SettingsView {
     pub default_mode: String,
     pub max_parallel: usize,
     pub ui_refresh_secs: u64,
+    /// Global channel catalog from `config.providers` (enabled + disabled; stable order).
+    pub channels: Vec<ChannelView>,
     /// 同 CLI 最多再试几次（不含首次；0–10）。
     pub retry_max: u32,
     /// 多久没新日志算卡死（秒；无日志增长 → stop + 重试）。
@@ -123,6 +140,69 @@ fn failover_order_note(order: &[String]) -> String {
     )
 }
 
+fn channel_product_label(id: &str) -> String {
+    match id {
+        "claude" => "Claude".into(),
+        "codex" => "Codex".into(),
+        "gemini" => "Gemini".into(),
+        "qwen" => "通义 Qwen".into(),
+        "kimi" => "Kimi".into(),
+        "deepseek" => "CodeWhale".into(),
+        "copilot" => "Copilot".into(),
+        "codebuddy" => "CodeBuddy".into(),
+        "fake" | "mock" => "演练".into(),
+        "sdk" | "claude-sdk" | "claude_sdk" => "SDK".into(),
+        other => other.to_string(),
+    }
+}
+
+fn channel_switchable(id: &str) -> bool {
+    !matches!(
+        id,
+        "fake" | "mock" | "sdk" | "claude-sdk" | "claude_sdk"
+    )
+}
+
+/// Stable catalog: failover_order → default_provider → remaining keys (alpha).
+fn build_channels(config: &Config) -> Vec<ChannelView> {
+    let mut seen = std::collections::HashSet::new();
+    let mut ids: Vec<String> = Vec::new();
+    for p in &config.default.failover_order {
+        let id = p.trim().to_ascii_lowercase();
+        if id.is_empty() || !seen.insert(id.clone()) {
+            continue;
+        }
+        if config.providers.contains_key(&id) {
+            ids.push(id);
+        }
+    }
+    let def = config.default.default_provider.trim().to_ascii_lowercase();
+    if !def.is_empty() && seen.insert(def.clone()) && config.providers.contains_key(&def) {
+        ids.push(def);
+    }
+    let mut rest: Vec<String> = config
+        .providers
+        .keys()
+        .map(|k| k.trim().to_ascii_lowercase())
+        .filter(|k| !k.is_empty() && !seen.contains(k))
+        .collect();
+    rest.sort();
+    ids.extend(rest);
+
+    ids.into_iter()
+        .filter_map(|id| {
+            let pc = config.providers.get(&id)?;
+            Some(ChannelView {
+                id: id.clone(),
+                label: channel_product_label(&id),
+                enabled: pc.enabled,
+                bin: pc.bin.clone(),
+                switchable: channel_switchable(&id),
+            })
+        })
+        .collect()
+}
+
 pub fn get_settings(config: &Config) -> SettingsView {
     let order = config.default.failover_order.clone();
     SettingsView {
@@ -131,6 +211,7 @@ pub fn get_settings(config: &Config) -> SettingsView {
         default_mode: config.default.default_mode.clone(),
         max_parallel: config.default.max_parallel,
         ui_refresh_secs: 2, // UI hardcoded; could become configurable later
+        channels: build_channels(config),
         retry_max: config.default.retry_max,
         stall_secs: config.default.stall_secs,
         failover_enabled: config.default.failover_enabled,
@@ -386,6 +467,39 @@ mod tests {
             vec!["claude".to_string(), "codex".to_string()]
         );
         assert!(v.failover_order_note.contains("claude"));
+    }
+
+    #[test]
+    fn get_settings_channels_global_catalog() {
+        let cfg = Config::default();
+        let v = get_settings(&cfg);
+        assert!(
+            v.channels.len() >= 4,
+            "builtin map should list claude/codex + multi-cli"
+        );
+        let claude = v
+            .channels
+            .iter()
+            .find(|c| c.id == "claude")
+            .expect("claude");
+        assert!(claude.enabled);
+        assert!(claude.switchable);
+        assert_eq!(claude.label, "Claude");
+        let fake = v.channels.iter().find(|c| c.id == "fake").expect("fake");
+        assert!(!fake.switchable);
+        // failover_order leads the catalog
+        assert_eq!(v.channels[0].id, "claude");
+        assert_eq!(v.channels[1].id, "codex");
+        let switchable: Vec<_> = v
+            .channels
+            .iter()
+            .filter(|c| c.switchable && c.enabled)
+            .map(|c| c.id.as_str())
+            .collect();
+        assert!(switchable.contains(&"claude"));
+        assert!(switchable.contains(&"codex"));
+        assert!(!switchable.contains(&"fake"));
+        assert!(!switchable.contains(&"sdk"));
     }
 
     #[test]

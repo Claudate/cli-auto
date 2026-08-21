@@ -3,6 +3,7 @@
  * [OUTPUT]: confirm desk → ccoSplit; replan/sanitize via gateway
  * [POS]: A5-2b-fin features/project/confirmActions.js
  * note: confirm desk → ccoSplit; replan/sanitize via gateway
+ * note: 无 job/无 tasks 必 paintConfirmEmptyState（CTA）；setJob force + post-paint 空白守卫
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -49,14 +50,109 @@ import {
   requireGateway,
 } from "./legacy.js";
 import { host } from "./host.js";
+import {
+  getBoundPlanJob,
+  setBoundPlanJob,
+  scrubForeignPlanJob,
+  clearSplitUiBinding,
+  rebindSplitToOpenProject,
+  stampSplitDeskProject,
+} from "./projectScope.js";
+
+/**
+ * Explicit empty/error surface for confirm desk — never leave #confirm-waves blank
+ * with no copy when the user is on phase=confirm.
+ * @param {string} message
+ */
+function paintConfirmEmptyState(message) {
+  const waves = $("#confirm-waves");
+  const msg = String(message || "这里还没有拆分结果。").trim();
+  if (waves) {
+    waves.innerHTML =
+      `<div class="split-empty-state" role="status">` +
+      `<p class="muted">${esc(msg)}</p>` +
+      `<p class="split-empty-actions">` +
+      `<button type="button" class="btn primary sm" id="btn-split-empty-replan">拆成步骤</button>` +
+      `</p>` +
+      `</div>`;
+    delete waves.dataset.sig;
+    delete waves.dataset.ccoAwaitSplit;
+    const btn = waves.querySelector("#btn-split-empty-replan");
+    if (btn && !btn.dataset.ccoWired) {
+      btn.dataset.ccoWired = "1";
+      btn.onclick = () => {
+        try {
+          if (typeof host.replanFromConfirm === "function") {
+            host.replanFromConfirm();
+            return;
+          }
+        } catch (_) {}
+        try {
+          if (typeof host.openPlanChooser === "function") {
+            host.openPlanChooser(true);
+            return;
+          }
+        } catch (_) {}
+        toast("请从计划列表选择计划后拆成步骤");
+      };
+    }
+  }
+  const titleEl = $("#confirm-title");
+  if (titleEl) titleEl.textContent = "拆分结果";
+  const meta = $("#confirm-meta");
+  if (meta) meta.textContent = "";
+}
 
 /**
  * A5-2b：确认台只委托 ccoSplit（fillMeta + 三栏 + 开跑）。
  * main.js 未就绪时：仅 toast，不在本文件堆 classic 三栏逻辑。
  */
 export function renderConfirmPanel() {
-  const job = state.planJob;
-  if (!job) return;
+  // Drop foreign/stale job before paint (tab switch / delayed restore race).
+  try {
+    scrubForeignPlanJob(state.selectedPath);
+  } catch (_) {}
+
+  const job = getBoundPlanJob(state.selectedPath);
+  if (!job) {
+    // No bound job for this project — must clear desk so other project's
+    // steps cannot linger in #confirm-waves after ring/tab navigation.
+    // When user is on confirm phase, never leave a silent blank: explain + CTA.
+    try {
+      clearSplitUiBinding({ scrubState: false });
+    } catch (_) {}
+    if (state.phase === "confirm") {
+      paintConfirmEmptyState(
+        state.selectedPath
+          ? "当前项目还没有可展示的拆分结果。请先「拆成步骤」，或从计划列表打开已有拆分。"
+          : "请先选择项目，再拆计划。"
+      );
+    }
+    return;
+  }
+
+  const tasks = Array.isArray(job.tasks) ? job.tasks : [];
+  if (!tasks.length) {
+    // planned/confirmed meta without task payloads — not a usable desk
+    const metaN = Number(job.task_count || job.taskCount || 0) || 0;
+    paintConfirmEmptyState(
+      metaN > 0
+        ? `拆分记录有 ${metaN} 步，但步骤明细没加载出来。请点「重新规划」或稍后再打开。`
+        : "这份拆分没有步骤可展示。请重新规划，或改用快速拆分。"
+    );
+    const err = $("#confirm-error");
+    if (err) {
+      err.textContent =
+        metaN > 0
+          ? "步骤明细缺失"
+          : "没有可执行步骤";
+      err.hidden = false;
+    }
+    try {
+      stampSplitDeskProject(state.selectedPath);
+    } catch (_) {}
+    return;
+  }
 
   if (window.ccoSplit && typeof window.ccoSplit.render === "function") {
     try {
@@ -65,12 +161,28 @@ export function renderConfirmPanel() {
           jobId: state.planJobId,
           selectedTaskId: state.confirmTaskId,
           editing: state.confirmEditing,
+          force: true, // confirm paint always applies — avoids DOM-wipe no-op blank
         });
       }
       window.ccoSplit.render();
+      stampSplitDeskProject(state.selectedPath);
+      // Post-paint guard: if waves still empty despite tasks, surface instead of silent blank
+      try {
+        const waves = $("#confirm-waves");
+        const html = String(waves?.innerHTML || "").trim();
+        if (waves && (!html || html.includes("暂无步骤"))) {
+          paintConfirmEmptyState(
+            "步骤已绑定但界面未画出卡片。请点「重新规划」，或切换到聊天再回到拆分台。"
+          );
+        }
+      } catch (_) {}
       return;
     } catch (e) {
       console.error("[renderConfirmPanel] ccoSplit", e);
+      paintConfirmEmptyState(
+        `拆分台渲染失败：${e?.message || e}。请刷新窗口后重试。`
+      );
+      return;
     }
   }
 
@@ -90,6 +202,7 @@ export function renderConfirmPanel() {
     waves.innerHTML =
       "<p class='muted'>拆分台加载中…若长时间空白请刷新窗口</p>";
   }
+  stampSplitDeskProject(state.selectedPath);
   host.updateSplitPlanChip();
 }
 
@@ -149,8 +262,10 @@ export function cancelPlanning() {
   // C2：用户取消规划 / 拆分失败后「回到计划」— 清 session，不进历史执行台
   host.clearPlanSession(state.selectedPath);
   state.phase = "pick";
-  state.planJobId = null;
-  state.planJob = null;
+  setBoundPlanJob(null, { projectPath: state.selectedPath });
+  try {
+    clearSplitUiBinding({ scrubState: false });
+  } catch (_) {}
   host.renderPhasePanels();
   host.renderPlanPicker();
   host.updateBgPlanBanner();
@@ -359,9 +474,13 @@ export async function sanitizeDepsFromConfirm() {
     const removed = resp?.removed ?? resp?.Removed ?? 0;
     const view = resp?.view || resp;
     if (view) {
-      state.planJob = view;
-      state.planJobId = view.job_id || view.jobId || state.planJobId;
+      setBoundPlanJob(view, {
+        projectPath: state.selectedPath,
+        allowMissingProjectField: true,
+        keepConfirmTask: true,
+      });
       host.stashPlanSession(state.selectedPath);
+      rebindSplitToOpenProject();
     }
     if (removed > 0) {
       toast(`已去掉 ${removed} 条可疑依赖 · 可并行步骤更多了`);

@@ -2,6 +2,7 @@
  * [INPUT]: splitApi · 展示状态
  * [OUTPUT]: 拆分台意图（选步 / 勾选 / 改通道 / 保存 / 确认开跑）
  * [POS]: A3 SplitViewModel；禁止 soft-fill / optional 自动策略 / start_run 旁路
+ * note: setJob sig 含 task id 指纹；invalidateJobSig/force 防 DOM 清空后 no-op 空白台
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -44,6 +45,7 @@ export function createSplitViewModel(deps = {}) {
    * Prevents the 2s poll tick (softSyncFromLegacy) from churning the store
    * with a structurally-identical planJob, which would trigger unnecessary
    * re-renders on every tick. Computed from job identity + opts.
+   * Include task id fingerprint so "same count, different graph" still updates.
    */
   let lastJobSig = "";
 
@@ -70,28 +72,49 @@ export function createSplitViewModel(deps = {}) {
     return job?.job_id || job?.jobId || fallback || null;
   }
 
+  function taskSigOf(job) {
+    const tasks = job?.tasks;
+    if (!Array.isArray(tasks) || !tasks.length) return "0";
+    // id list is enough to catch empty→filled and replan graph swaps
+    return `${tasks.length}:${tasks
+      .map((t) => t?.id || "")
+      .slice(0, 24)
+      .join(",")}`;
+  }
+
   return {
     store,
     getSnapshot: snap,
     subscribe: (fn) => store.subscribe(fn),
 
     /**
+     * Force next setJob to apply even if the job signature matches.
+     * Call after DOM-only desk wipes so softSync/rebind cannot leave a blank
+     * #confirm-waves while the VM still holds the same job.
+     */
+    invalidateJobSig() {
+      lastJobSig = "";
+    },
+
+    /**
      * Mirror legacy planJob into VM (strangler). Does not fetch.
      * @param {object|null} job
-     * @param {{ jobId?: string|null, selectedTaskId?: string|null, editing?: boolean }} [opts]
+     * @param {{ jobId?: string|null, selectedTaskId?: string|null, editing?: boolean, force?: boolean }} [opts]
      */
     setJob(job, opts = {}) {
       // No-op guard: skip when the job + opts signature hasn't changed.
       // The 2s poll tick calls this every cycle; without the guard, each
       // tick replaces the store object (new reference) → triggers subscribers
       // → full SplitView.render() → innerHTML churn even when nothing moved.
-      const jobId = opts.jobId ?? jobIdOf(job, snap().jobId);
+      // Clearing (job==null) always applies so cross-project bleed cannot stick.
+      const jobId = opts.jobId ?? jobIdOf(job, job ? snap().jobId : null);
       const sig =
-        `${job?.job_id || job?.jobId || jobId || ""}|${job?.status || ""}|${
-          job?.tasks?.length || 0
-        }|${opts.selectedTaskId ?? ""}|${opts.editing ?? ""}`;
-      if (sig === lastJobSig && !snap().busy) {
-        // Structural unchanged and not mid-mutation: skip store churn.
+        `${job?.job_id || job?.jobId || jobId || ""}|${job?.status || ""}|${taskSigOf(
+          job
+        )}|${opts.selectedTaskId ?? ""}|${opts.editing ?? ""}`;
+      // Allow no-op for both bound job AND already-cleared null (softSync every 2s).
+      // opts.force / empty lastJobSig (after invalidateJobSig) always apply.
+      if (!opts.force && sig === lastJobSig && lastJobSig !== "" && !snap().busy) {
         return snap();
       }
       lastJobSig = sig;
@@ -104,16 +127,38 @@ export function createSplitViewModel(deps = {}) {
         if (!selected || !ids.has(selected)) {
           selected = job.tasks[0].id;
         }
-      } else if (!job) {
+      } else {
         selected = null;
       }
       return setPatch({
         job: job || null,
-        jobId: jobId || null,
+        jobId: job ? jobId || null : null,
         selectedTaskId: selected,
-        editing:
-          opts.editing !== undefined ? !!opts.editing : snap().editing,
+        editing: job
+          ? opts.editing !== undefined
+            ? !!opts.editing
+            : snap().editing
+          : false,
         lastError: null,
+      });
+    },
+
+    /** Explicit clear for project switch / unbound desk. */
+    clearJob() {
+      const cur = snap();
+      if (!cur.job && !cur.jobId && !cur.selectedTaskId && !cur.editing) {
+        lastJobSig = "";
+        return cur;
+      }
+      lastJobSig = "";
+      return setPatch({
+        job: null,
+        jobId: null,
+        selectedTaskId: null,
+        editing: false,
+        busy: false,
+        lastError: null,
+        lastToast: null,
       });
     },
 

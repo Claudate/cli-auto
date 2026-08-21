@@ -75,40 +75,7 @@ export function createUiActions() {
       }
       return call("writeSplitSummaryToPlan");
     },
-    "btn-refresh": async () => {
-      const st = state();
-      if (st?.page === "workspace" && st.selectedPath) {
-        await call("loadProjects");
-        if (st.phase === "planning" && st.planJobId) {
-          await Promise.resolve(call("refreshPlanJob")).catch(() => {});
-        }
-        await call("loadLive");
-        await Promise.resolve(call("loadPlansForPicker")).catch(() => {});
-        if (typeof g("isPlanSessionActive") === "function" && !call("isPlanSessionActive")) {
-          const proj = (st.projects || []).find((p) => p.path === st.selectedPath);
-          const raw =
-            st.live?.plan_path ||
-            proj?.default_plan ||
-            proj?.last_plan ||
-            st.selectedPlan;
-          const cand =
-            (typeof g("normalizePlanPath") === "function"
-              ? call("normalizePlanPath", raw)
-              : null) || raw;
-          if (cand) await Promise.resolve(call("selectPlan", cand, { keepSession: true })).catch(() => {});
-          else call("updateTopPlanInfo");
-        } else {
-          call("renderPhasePanels");
-          call("updateTopPlanInfo");
-        }
-      } else {
-        if (st?.planJobId && st.phase === "planning") {
-          await Promise.resolve(call("refreshPlanJob")).catch(() => {});
-        }
-        await call("loadProjects");
-      }
-      toast("已刷新");
-    },
+    // 顶栏刷新 icon 已撤；loadProjects/loadLive 仍由轮询与其它入口调用
     "modal-close": () => call("closeModal"),
     "modal-backdrop": () => call("closeModal"),
     "m-pick-folder": () => call("pickFolderToModal"),
@@ -340,8 +307,17 @@ export function createUiActions() {
       const st = state();
       if (!st) return;
       st.phase = "pick";
-      st.planJobId = null;
-      st.planJob = null;
+      if (typeof g("setBoundPlanJob") === "function") {
+        g("setBoundPlanJob")(null, { projectPath: st.selectedPath });
+      } else {
+        st.planJobId = null;
+        st.planJob = null;
+      }
+      try {
+        if (typeof g("clearSplitUiBinding") === "function") {
+          g("clearSplitUiBinding")({ scrubState: false });
+        }
+      } catch (_) {}
       st.closedPanels = {};
       st.taskDashCollapsed = false;
       localStorage.setItem("cco.taskDashCollapsed", "0");
@@ -411,13 +387,9 @@ export function createUiActions() {
         ? window.ccoSettings.backFromSubpage()
         : call("backFromSubpage"),
     "brand-home": () => call("goHome"),
-    "btn-open-chat": () => call("openChatPage"),
+    // 顶栏「聊天」「计划管理」icon 已撤；聊天走 view-ring；计划页仍可由 openPlanManagement 打开
     "btn-monitor-plan": () => call("goToPlanMonitor"),
-    "btn-plan-mgmt": () =>
-      typeof g("openPlanManagement") === "function"
-        ? call("openPlanManagement")
-        : call("showPage", "plans"),
-    // 聊天右栏已撤；旧 toggle 入口 → 计划管理页
+    // 聊天右栏已撤；旧 toggle 入口 → 计划管理页（程序路径保留）
     "btn-chat-rail-toggle": () =>
       typeof g("openPlanManagement") === "function"
         ? call("openPlanManagement")

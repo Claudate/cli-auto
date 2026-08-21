@@ -605,23 +605,46 @@ fn spawn_resume(
     let mut ir: PlanIR = serde_json::from_str(&std::fs::read_to_string(&plan_path)?)?;
     if let Some(ref tid) = only_task {
         rs.prepare_task_retry(tid)?;
-        // User-initiated provider override: patch the task's provider in plan.resolved.json.
+        // User-initiated provider override: patch the task's provider in plan.resolved.json
+        // AND TaskState (spawn reads plan; provenance stays on state).
         if let Some(new_provider) = provider_override.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            let old = rs
+                .tasks
+                .get(tid)
+                .map(|t| t.provider.clone())
+                .unwrap_or_default();
             if let Some(task) = ir.tasks.iter_mut().find(|t| t.id == *tid) {
-                let old = task.provider.clone();
                 task.provider = new_provider.to_string();
-                let _ = rs.event(
-                    "task_retry",
-                    serde_json::json!({
-                        "task_id": tid,
-                        "reason": "manual",
-                        "via": "desktop",
-                        "provider_override": new_provider,
-                        "from_provider": old,
-                    }),
-                );
             }
+            if let Some(ts) = rs.tasks.get_mut(tid) {
+                ts.provider = new_provider.to_string();
+                ts.route_source = Some(crate::state::RouteSource::Force);
+                ts.route_previous = Some(old.clone());
+                ts.route_note = Some("manual_switch".into());
+                ts.failover_tried.clear();
+                ts.failover_used = false;
+            }
+            let _ = rs.event(
+                "task_retry",
+                serde_json::json!({
+                    "task_id": tid,
+                    "reason": "manual",
+                    "via": "desktop",
+                    "provider_override": new_provider,
+                    "from_provider": old,
+                }),
+            );
         } else {
+            // No override: keep / restore original channel from prepare_task_retry,
+            // and align plan.resolved.json so spawn doesn't re-use a prior auto-switch.
+            if let Some(ts) = rs.tasks.get(tid) {
+                let keep = ts.provider.clone();
+                if let Some(task) = ir.tasks.iter_mut().find(|t| t.id == *tid) {
+                    if !keep.is_empty() && task.provider != keep {
+                        task.provider = keep;
+                    }
+                }
+            }
             let _ = rs.event(
                 "task_retry",
                 serde_json::json!({
@@ -641,8 +664,8 @@ fn spawn_resume(
     }
     rs.save()?;
 
-    // Persist plan.resolved.json with the provider override applied (if any).
-    if provider_override.is_some() {
+    // Always persist plan when single-task retry may have restored/switched provider.
+    if only_task.is_some() {
         let _ = std::fs::write(&plan_path, serde_json::to_string_pretty(&ir)?);
     }
 
@@ -828,7 +851,18 @@ pub fn start_rework_from_run(
         ),
     );
 
-    let new_run_id = start_run_from_plan(config, project, &rework_ir, event_emitter)?;
+    // 回补不走费用优选重写：保持 build_rework_plan 选中的原通道
+    // （用户没改通道时，不应在「补充」时被静默换成别的 CLI）。
+    let new_run_id = start_run_from_plan_with_route_opts(
+        config,
+        project,
+        &rework_ir,
+        None,
+        crate::app::run::MaterializeRouteOpts {
+            skip_cost_route: true,
+        },
+        event_emitter,
+    )?;
     Ok(ReworkStartResponse {
         run_id: new_run_id,
         source_run_id: source_run_id.into(),

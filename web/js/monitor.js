@@ -2,6 +2,7 @@
  * [INPUT]: window 全局 · A4+ ccoRun
  * [OUTPUT]: workspace 壳 + classic helper（taskBucket/fitCli…）
  * [POS]: A5-2f D2 ≤200；进度只 ccoRun；无 KPI/stall/tile 副本
+ * note: body mode-plan 含 planning/confirm/plan_failed（失败不落 idle）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 /* cco desktop — monitor workspace shell (A5-2f D2) */
@@ -26,7 +27,13 @@ function renderWorkspace() {
   const body = $("#workspace-body");
   if (body) {
     body.classList.remove("mode-idle", "mode-running", "mode-done", "mode-plan");
-    if (state.phase === "planning" || state.phase === "confirm") body.classList.add("mode-plan");
+    if (
+      state.phase === "planning" ||
+      state.phase === "confirm" ||
+      state.phase === "plan_failed"
+    ) {
+      body.classList.add("mode-plan");
+    }
     else if (active) body.classList.add("mode-running");
     else if (finished) body.classList.add("mode-done");
     else body.classList.add("mode-idle");

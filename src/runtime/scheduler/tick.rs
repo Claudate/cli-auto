@@ -197,14 +197,24 @@ impl Scheduler {
                             }
                         });
                         result.status = TaskStatus::Timeout;
-                        if result.error.is_none() {
-                            result.error = Some(action.reason.clone());
-                        }
+                        // Prefer classified platform error (余额/Key/429/坏端点) over generic "stall".
+                        // Codex out-of-credit often looks like a hang until collect reads stderr.
+                        let reason_code = if let Some(ref pe_kind) = result.platform_error {
+                            if result.error.is_none() {
+                                result.error = Some(pe_kind.human_hint().to_string());
+                            }
+                            pe_kind.reason_str().to_string()
+                        } else {
+                            if result.error.is_none() {
+                                result.error = Some(action.reason.clone());
+                            }
+                            action.reason_code.clone()
+                        };
                         let _ = self
                             .finish_or_retry(
                                 &id,
                                 result,
-                                &action.reason_code,
+                                &reason_code,
                                 done,
                                 failed,
                                 started,

@@ -149,6 +149,10 @@ export function createChatDesk(opts = {}) {
     assignAndDirectFromChat: chatActions.assignAndDirectFromChat,
     previewChatPlan: chatActions.previewChatPlan,
     normalizeChatDraft: chatActions.normalizeChatDraft,
+    toggleChatPlanExpand: chatFormat.toggleChatPlanExpand,
+    adoptChatPlanFromCard: chatFormat.adoptChatPlanFromCard,
+    dismissChatPlanFromCard: chatFormat.dismissChatPlanFromCard,
+    copyChatMessageFromBtn: chatFormat.copyChatMessageFromBtn,
     loadChatSession: chatSessions.loadChatSession,
     loadChatSessionList: chatSessions.loadChatSessionList,
     switchChatSession: chatSessions.switchChatSession,
@@ -206,8 +210,6 @@ export function createChatDesk(opts = {}) {
     foldChatMessage: chatMsgEnhance.foldChatMessage,
     expandChatMsgBody: chatMsgEnhance.expandChatMsgBody,
     collapseChatMsgBody: chatMsgEnhance.collapseChatMsgBody,
-    toggleChatPlanExpand: chatFormat.toggleChatPlanExpand,
-    adoptChatPlanFromCard: chatFormat.adoptChatPlanFromCard,
     dismissChatEnvBar: chatActions.dismissChatEnvBar,
     openChatEnvDoctor: chatActions.openChatEnvDoctor,
     toggleChatPlanRail: planDir.toggleChatPlanRail,
@@ -304,6 +306,10 @@ export function createChatDesk(opts = {}) {
     window.foldChatMessage = chatMsgEnhance.foldChatMessage;
     window.expandChatMsgBody = chatMsgEnhance.expandChatMsgBody;
     window.collapseChatMsgBody = chatMsgEnhance.collapseChatMsgBody;
+    window.toggleChatPlanExpand = chatFormat.toggleChatPlanExpand;
+    window.adoptChatPlanFromCard = chatFormat.adoptChatPlanFromCard;
+    window.dismissChatPlanFromCard = chatFormat.dismissChatPlanFromCard;
+    window.copyChatMessageFromBtn = chatFormat.copyChatMessageFromBtn;
   }
 
   return desk;

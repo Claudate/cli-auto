@@ -8,7 +8,7 @@ live_status.rs: **H1** 组装 `status_one_liner`（委托 app/domain；**禁止*
 preview/: **可选本地预览 API**（`detect`/`http_ready` · HTTP 就绪后报 URL · stop/status）；**聊天短句不拦截**，起服由 CLI Bash 真执行；`annotate_false_preview_claims` 仅核验回复里的假 localhost
 projects.rs: list/add/remove projects
 runs.rs: list/start/stop/resume · plan job re-export · confirm_start（→ app::split::confirm）· start_run_from_plan（**materialize_selected_tasks 后写盘/spawn · A0-R4/D-T3-1**）· sanitize/update/remove proposed · list_plans · list_plan_meta · start_rework_from_run · accept_run_residual · **stop_run 含 Pending + meta.json pid + SIGKILL** · **新逻辑勿进本文件**
-settings.rs: get/set settings view（failover H4 · **cost_route/escalate/intent** · post_* 系统收尾 · **git_auto_commit_granularity** · planner_critic · **effort** · **permission_mode** · **browser_enabled**）
+settings.rs: get/set settings view（**channels 全局通道目录** ChannelView=id/label/enabled/bin/switchable ← config.providers · failover H4 · **cost_route/escalate/intent** · post_* 系统收尾 · **git_auto_commit_granularity** · planner_critic · **effort** · **permission_mode** · **browser_enabled**）
 git.rs: host-level git 操作适配（status/remote/identity/**commit_with_git_config**/commit/push/doctor + **gh auth** 检测）；薄封装 git/gh CLI，禁止 force-push 默认开启，identity 只写 repo-local
 chat/: **A1-6 多文件 IO 适配**（单文件 ≤600；出巨石榜）
   · mod.rs: facade re-export + domain pure re-export

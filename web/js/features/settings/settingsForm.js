@@ -23,6 +23,7 @@ import {
   suggestedMaxParallel,
   resolvedWorkStyle,
 } from "../../shared/workStyle.js";
+import { fillProviderSelect } from "../../shared/providers.js";
 
 function $(sel) {
   return typeof window.$ === "function"
@@ -233,13 +234,21 @@ export async function loadSettings() {
     wirePermissionUi();
     wireSettingsNav();
     const s = await settingsApi.getSettings();
+    const st = state();
+    // Global settings cache — channels catalog SoT for switch / split / doctor UI.
+    if (st) st.settings = s;
     const poll = $("#s-poll-interval");
     if (poll) poll.value = s.poll_interval_secs;
     const modeIdx = { print: 0, bg: 1, auto: 2 };
     const modeEl = $("#s-default-mode");
     if (modeEl) modeEl.value = modeIdx[s.default_mode] ?? 0;
     const prov = $("#s-default-provider");
-    if (prov) prov.value = s.default_provider;
+    if (prov) {
+      fillProviderSelect(prov, {
+        selected: s.default_provider,
+        channels: s.channels,
+      });
+    }
     const effortEl = $("#s-effort");
     if (effortEl && s.effort) {
       const e = String(s.effort).toLowerCase();
@@ -348,13 +357,13 @@ export async function loadSettings() {
     ) {
       $("#s-chat-assign-direct").checked = !window.chatAssignDirectEnabled();
     }
-    const st = state();
-    const projectPath = st?.selectedPath || null;
+    const stCache = state();
+    const projectPath = stCache?.selectedPath || null;
     try {
       loadWorkStyleSetting(projectPath);
     } catch (_) {}
     const fontEl = $("#s-log-font");
-    if (fontEl && st) fontEl.value = String(st.logFontSize);
+    if (fontEl && stCache) fontEl.value = String(stCache.logFontSize);
     // Seed split-time concurrency: config × work-style hint when user hasn't touched pickers
     const seedMp = suggestedMaxParallel(s.max_parallel || 2, projectPath);
     if ($("#pp-max-parallel") && !$("#pp-max-parallel").dataset.touched) {
@@ -655,6 +664,8 @@ export async function saveSettings() {
       update.cost_intent_enabled = costIntentEnabled;
     }
     const updated = await settingsApi.setSettings(update);
+    const stNow = state();
+    if (stNow && updated) stNow.settings = updated;
     if (typeof window.applyLogFontSize === "function") {
       window.applyLogFontSize(fontVal);
     }

@@ -2,6 +2,7 @@
  * [INPUT]: SplitViewModel · 既有 DOM ids（confirm-* / split-*）
  * [OUTPUT]: 三栏绑定 + 意图转发；只发意图
  * [POS]: A3-1/A3-2 SplitView；禁止 invoke / start_run
+ * note: pullFromLegacy 必须同步 null；无 job 时 clearDeskDom（防跨项目步骤残留）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -48,13 +49,73 @@ export function bindSplitView(vm, bridge = {}) {
 
   function pullFromLegacy() {
     const L = legacy();
-    if (L.planJob || L.planJobId) {
-      vm.setJob(L.planJob || null, {
-        jobId: L.planJobId || null,
+    const path = g("state")?.selectedPath || null;
+    let job = L.planJob || null;
+    let jobId = L.planJobId || null;
+    // Ownership: never mirror another project's job into this desk.
+    if (job && path) {
+      const belongs =
+        typeof g("planJobBelongsToProject") === "function"
+          ? g("planJobBelongsToProject")(job, path)
+          : true;
+      if (!belongs) {
+        job = null;
+        jobId = null;
+      }
+    }
+    // Always sync — including null — so project switch clears the VM.
+    // Previous code only setJob when planJob truthy → stale VM after clear.
+    if (job || jobId) {
+      vm.setJob(job, {
+        jobId: jobId || null,
         selectedTaskId: L.confirmTaskId ?? undefined,
         editing: L.confirmEditing,
       });
+    } else if (typeof vm.clearJob === "function") {
+      vm.clearJob();
+    } else {
+      vm.setJob(null);
     }
+  }
+
+  /** Wipe confirm desk DOM when there is no bound job for the open project. */
+  function clearDeskDom() {
+    const waves = $("confirm-waves");
+    if (waves) {
+      waves.innerHTML = "";
+      delete waves.dataset.sig;
+      delete waves.dataset.ccoAwaitSplit;
+    }
+    const titleEl = $("confirm-title");
+    if (titleEl) titleEl.textContent = "拆分结果";
+    const err = $("confirm-error");
+    if (err) {
+      err.hidden = true;
+      err.textContent = "";
+    }
+    // Detail body placeholders
+    for (const id of [
+      "confirm-task-title",
+      "confirm-task-body",
+      "confirm-detail-body",
+      "confirm-acceptance",
+    ]) {
+      const el = $(id);
+      if (el) {
+        if ("value" in el) el.value = "";
+        else el.textContent = "";
+        if (el.innerHTML !== undefined && el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") {
+          try {
+            el.innerHTML = "";
+          } catch (_) {}
+        }
+      }
+    }
+    wavesDirty = true;
+    // DOM wipe must not leave setJob no-op with a stale sig — next bind must re-apply.
+    try {
+      if (typeof vm.invalidateJobSig === "function") vm.invalidateJobSig();
+    } catch (_) {}
   }
 
   function pushSelection() {
@@ -71,7 +132,20 @@ export function bindSplitView(vm, bridge = {}) {
     pullFromLegacy();
     const s = vm.getSnapshot();
     const job = s.job;
-    if (!job) return;
+    if (!job) {
+      clearDeskDom();
+      try {
+        const stamp = g("stampSplitDeskProject");
+        if (typeof stamp === "function") stamp(null);
+      } catch (_) {}
+      return;
+    }
+    // Stamp desk with open project so residual DOM is detectable
+    try {
+      const path = g("state")?.selectedPath || null;
+      const stamp = g("stampSplitDeskProject");
+      if (typeof stamp === "function") stamp(path);
+    } catch (_) {}
 
     if (typeof bridge.fillMeta === "function") {
       try {
@@ -187,6 +261,15 @@ export function bindSplitView(vm, bridge = {}) {
 
   const actions = {
     render,
+    clearDesk() {
+      if (typeof vm.clearJob === "function") vm.clearJob();
+      else vm.setJob(null);
+      clearDeskDom();
+      syncLegacy({
+        // Do not force-clear legacy planJob here when still bound — callers
+        // (selectProject / scrub) own state. Only wipe VM+DOM.
+      });
+    },
     beginEdit() {
       if (hasActiveRun()) {
         toast("运行中不可编辑，请先停止或待计划暂停");

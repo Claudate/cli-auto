@@ -69,10 +69,36 @@ export function formatCcoStepProgress(logText) {
 }
 
 /**
+ * Prefer platform/quota/auth copy over vague "卡住" — common root cause is
+ * Codex/CLI out of credit, not a hung agent.
+ * @param {object} t
+ * @returns {string}
+ */
+function platformStallOverride(t) {
+  if (!t) return "";
+  const byReason =
+    typeof g("platformErrorHintByReason") === "function"
+      ? g("platformErrorHintByReason")(t.last_retry_reason || "")
+      : "";
+  if (byReason) return byReason;
+  const blob = [t.error, t.error_summary, t.log_tail, t.last_retry_reason]
+    .filter(Boolean)
+    .join("\n");
+  if (!blob) return "";
+  if (typeof g("platformErrorHint") === "function") {
+    return g("platformErrorHint")(blob) || "";
+  }
+  return "";
+}
+
+/**
  * H3 / R2 stall strip — human first; threshold as secondary detail.
+ * Platform errors (余额/Key/限流) win over "没有新进展" fun copy.
  */
 export function stallStripText(t) {
   if (!t) return "";
+  const platform = platformStallOverride(t);
+  if (platform) return platform;
   const thr =
     t.stall_threshold_secs != null
       ? Number(t.stall_threshold_secs)
@@ -83,9 +109,9 @@ export function stallStripText(t) {
   // Approaching / over threshold while still running → warn strip.
   if (live && idle != null && thr != null && thr > 0 && idle >= Math.max(15, thr * 0.5)) {
     if (idle >= thr) {
-      return `已约 ${Math.round(idle)}s 没有新进展，系统将自动再推一把（阈值 ${Math.round(thr)}s）`;
+      return `已约 ${Math.round(idle)}s 没有新进展，系统将自动再推一把（等待上限 ${Math.round(thr)}s）`;
     }
-    return `已约 ${Math.round(idle)}s 没有新进展（超过一半等待阈值 ${Math.round(thr)}s）`;
+    return `已约 ${Math.round(idle)}s 没有新进展（超过一半等待上限 ${Math.round(thr)}s）`;
   }
   // After a stall-triggered retry, surface reason on the next attempt chrome.
   if (reason === "stall") {
@@ -318,7 +344,8 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
             : bucket === "wait"
               ? "排队等待前序步骤完成"
               : bucket === "stall"
-                ? "较久没有新进展，可点「详细日志」或停止后重试"
+                ? platformStallOverride(t) ||
+                  "较久没有新进展，可点「详细日志」或停止后重试"
                 : bucket === "done"
                   ? "本步已完成"
                   : bucket === "stop"

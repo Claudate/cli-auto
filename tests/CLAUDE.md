@@ -17,6 +17,8 @@ collab_runtime_wait.rs: CollabBus 直测（wait_condition output_match/step_done
 integration_collab_e2e.rs: wait_for 端到端（无 depends_on 等输出行开跑 · 不可满足等待快速判 Failed 不挂死）
 fixtures/: fake-claude · serial-prompts-sample.md · stream-json
 l2-interaction/tab-empty-guard.spec.js: **F3/F5** view-ring 空态 confirmDialog（无计划弹层 · draft 不弹 · 同因二次不弹 · CTA 去聊天→author）；mock-tauri + playwright；`npx playwright test tab-empty-guard`
+l2-interaction/cross-project-split-isolation.spec.js: **P0 跨项目拆分台隔离**（A job 注入→切 B→拆分 tab 无 A 标题 · softSync 清 residual VM · setBoundPlanJob 拒外键）；mock-tauri + playwright
+l2-interaction/project-scope-gate.node.mjs: **projectScope** 纯 gate 单测（归属/gen/scrub）；`node --test tests/l2-interaction/project-scope-gate.node.mjs`
 l2-interaction/w1-6-checklist.spec.js: path-depth W1-6 桌面交互清单骨架
 
 法则: 成员完整·一行一文件·父级链接·技术词前置

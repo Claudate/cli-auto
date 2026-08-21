@@ -112,11 +112,23 @@ export function bindRunView(vm, bridge = {}) {
     const title = first.title || first.task_id;
     const raw = stallStripText(first);
     const human = flowStallUserText(raw) || "较久没有新进展";
+    // 余额/Key/限流等平台问题：不要用「好像卡住了」误导用户。
+    const platformish =
+      /余额|充值|Key 失效|限流|通道接口|额度|quota|payment|402|401|429/i.test(
+        String(human)
+      );
     banner.hidden = false;
-    banner.textContent =
-      stalled.length === 1
-        ? `「${title}」好像卡住了 · ${human}`
-        : `${stalled.length} 个步骤好像卡住了（含「${title}」）· ${human}`;
+    if (platformish) {
+      banner.textContent =
+        stalled.length === 1
+          ? `「${title}」通道异常 · ${human}`
+          : `${stalled.length} 个步骤通道异常（含「${title}」）· ${human}`;
+    } else {
+      banner.textContent =
+        stalled.length === 1
+          ? `「${title}」好像卡住了 · ${human}`
+          : `${stalled.length} 个步骤好像卡住了（含「${title}」）· ${human}`;
+    }
   }
 
   function paintKpis(counts, ctx, live, tasks) {
@@ -209,9 +221,18 @@ export function bindRunView(vm, bridge = {}) {
         pill.hidden = false;
         // Short badge still uses five-state; full sentence lives in status-one-liner when present.
         if (active) {
+          const stallTasks = (tasks || []).filter((t) => isStalledTask(t));
+          const platformStall = stallTasks.some((t) => {
+            const raw = stallStripText(t) || "";
+            return /余额|充值|Key 失效|限流|通道接口|额度|quota|payment|402|401|429/i.test(
+              raw
+            );
+          });
           pill.textContent =
             stall > 0
-              ? "有步骤卡住"
+              ? platformStall
+                ? "通道异常"
+                : "有步骤卡住"
               : run > 0
                 ? "进行中"
                 : wait > 0
@@ -236,9 +257,18 @@ export function bindRunView(vm, bridge = {}) {
         }
       } else if (active) {
         pill.hidden = false;
+        const stallTasks = (tasks || []).filter((t) => isStalledTask(t));
+        const platformStall = stallTasks.some((t) => {
+          const raw = stallStripText(t) || "";
+          return /余额|充值|Key 失效|限流|通道接口|额度|quota|payment|402|401|429/i.test(
+            raw
+          );
+        });
         pill.textContent =
           stall > 0
-            ? "有步骤卡住"
+            ? platformStall
+              ? "通道异常"
+              : "有步骤卡住"
             : run > 0
               ? "进行中"
               : wait > 0

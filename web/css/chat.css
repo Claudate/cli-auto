@@ -45,14 +45,9 @@
 }
 .chat-head-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-end;
   gap: 0.5rem;
-}
-.chat-head-row .chat-head-step {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0;
 }
 .chat-head-actions {
   display: flex;
@@ -553,8 +548,7 @@
   font-size: 1.15rem;
   font-weight: 600;
 }
-.chat-head .muted,
-.chat-head-step {
+.chat-head .muted {
   font-size: 0.85rem;
   margin: 0;
   line-height: 1.45;
@@ -946,12 +940,42 @@
   width: 100%;
   max-width: min(100%, 52rem);
 }
+.chat-msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.chat-msg-user .chat-msg-meta {
+  justify-content: flex-end;
+}
 .chat-msg-role {
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--muted);
   padding: 0 0.35rem;
+}
+/* 快速复制：悬停气泡时才显，避免常驻噪音 */
+.chat-msg-copy {
+  opacity: 0;
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.chat-msg:hover .chat-msg-copy,
+.chat-msg:focus-within .chat-msg-copy,
+.chat-msg-copy:focus-visible {
+  opacity: 1;
+}
+.chat-msg-copy:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 .chat-msg-body {
   padding: 0.65rem 0.85rem;
@@ -1073,13 +1097,38 @@ a.md-ext-link:hover {
   background: #f4f8fd;
   overflow: hidden;
 }
+.chat-plan-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  background: #e3effc;
+  border-bottom: 1px solid #c5daf5;
+  padding-right: 0.25rem;
+}
 .chat-plan-card-label {
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--accent);
   padding: 0.35rem 0.65rem;
-  background: #e3effc;
-  border-bottom: 1px solid #c5daf5;
+  background: transparent;
+  border-bottom: none;
+  flex: 1;
+  min-width: 0;
+}
+.chat-plan-card-head .btn-chat-plan-dismiss {
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  opacity: 0.75;
+}
+.chat-plan-card-head .btn-chat-plan-dismiss:hover {
+  opacity: 1;
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 .chat-plan-card-title {
   font-size: 0.95rem;

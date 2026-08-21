@@ -58,6 +58,24 @@ impl ProbeResult {
         self.probe_status == "ok"
     }
 
+    /// Auth outcomes that must fail doctor for the **default** provider.
+    ///
+    /// Soft / non-blocking:
+    /// - `ok` — probe passed
+    /// - `not_supported` — no key or no probe endpoint (CLI subscription login is fine)
+    /// - `rate_limited` — transient; binary still usable
+    ///
+    /// Hard / blocking:
+    /// - `auth_invalid` — key rejected
+    /// - `insufficient_funds` — balance/quota gone
+    /// - `endpoint_broken` — configured endpoint dead (only when a key was present)
+    pub fn is_blocking_auth_fail(&self) -> bool {
+        matches!(
+            self.probe_status.as_str(),
+            "auth_invalid" | "insufficient_funds" | "endpoint_broken"
+        )
+    }
+
     /// One-line detail for the doctor table detail cell.
     pub fn detail_line(&self) -> String {
         let tail = self.key_tail.as_deref().unwrap_or("");
@@ -73,7 +91,10 @@ impl ProbeResult {
             "insufficient_funds" => format!("余额不足{key_part}"),
             "rate_limited" => format!("限流中{key_part}"),
             "endpoint_broken" => format!("通道接口异常{key_part}"),
-            "not_supported" => "无探活支持（仅查二进制）".to_string(),
+            "not_supported" if self.auth_status == "missing" => {
+                "未配置 API Key（CLI 登录仍可用，已跳过探活）".to_string()
+            }
+            "not_supported" => "无探活支持（仅查二进制 / CLI 登录）".to_string(),
             _ => "未知".to_string(),
         }
     }
@@ -481,6 +502,40 @@ mod tests {
             ..Default::default()
         };
         assert!(!bad.is_ok());
+    }
+
+    #[test]
+    fn blocking_auth_fail_excludes_cli_session_and_missing_key() {
+        let soft_missing = ProbeResult {
+            auth_status: "missing".into(),
+            probe_status: "not_supported".into(),
+            ..Default::default()
+        };
+        assert!(!soft_missing.is_blocking_auth_fail());
+        assert!(soft_missing.detail_line().contains("CLI"));
+
+        let soft_ok = ProbeResult {
+            probe_status: "ok".into(),
+            ..Default::default()
+        };
+        assert!(!soft_ok.is_blocking_auth_fail());
+
+        let soft_rate = ProbeResult {
+            probe_status: "rate_limited".into(),
+            ..Default::default()
+        };
+        assert!(!soft_rate.is_blocking_auth_fail());
+
+        for status in ["auth_invalid", "insufficient_funds", "endpoint_broken"] {
+            let hard = ProbeResult {
+                probe_status: status.into(),
+                ..Default::default()
+            };
+            assert!(
+                hard.is_blocking_auth_fail(),
+                "{status} should block default auth"
+            );
+        }
     }
 
     #[test]

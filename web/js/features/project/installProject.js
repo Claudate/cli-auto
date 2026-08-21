@@ -9,6 +9,7 @@
 import { register, host } from "./host.js";
 import * as projectApi from "./projectApi.js";
 import { createProjectViewModel } from "./ProjectViewModel.js";
+import * as projectScope from "./projectScope.js";
 import * as sessionEntry from "./sessionEntry.js";
 import * as shellChrome from "./shellChrome.js";
 import * as projectCrud from "./projectCrud.js";
@@ -22,6 +23,8 @@ import * as loadLiveBridge from "./loadLiveBridge.js";
 /** Wire host bag once. */
 export function installProjectHost() {
   register({
+    // projectScope first; sessionEntry re-exports override with same names (OK)
+    ...projectScope,
     ...sessionEntry,
     ...shellChrome,
     ...projectCrud,
@@ -80,6 +83,16 @@ export function createProjectDesk(opts = {}) {
     isPlanSessionActive: host.isPlanSessionActive,
     liveBelongsToOpenPlan: host.liveBelongsToOpenPlan,
     hasCurrentRoundLive: host.hasCurrentRoundLive,
+    planJobBelongsToProject: host.planJobBelongsToProject,
+    scrubForeignPlanJob: host.scrubForeignPlanJob,
+    clearSplitUiBinding: host.clearSplitUiBinding,
+    setBoundPlanJob: host.setBoundPlanJob,
+    getBoundPlanJob: host.getBoundPlanJob,
+    rebindSplitToOpenProject: host.rebindSplitToOpenProject,
+    bumpProjectScope: host.bumpProjectScope,
+    currentScopeGen: host.currentScopeGen,
+    scopeGenStillCurrent: host.scopeGenStillCurrent,
+    pathsEqualProject: host.pathsEqualProject,
     isPlanUnderProject: host.isPlanUnderProject,
     isSystemPostTask: host.isSystemPostTask,
     loadLive: host.loadLive,
@@ -176,6 +189,18 @@ export function installProjectHostGlobals(opts = {}) {
   window.isPlanSessionActive = host.isPlanSessionActive;
   window.liveBelongsToOpenPlan = host.liveBelongsToOpenPlan;
   window.hasCurrentRoundLive = host.hasCurrentRoundLive;
+  window.planJobBelongsToProject = host.planJobBelongsToProject;
+  window.scrubForeignPlanJob = host.scrubForeignPlanJob;
+  window.clearSplitUiBinding = host.clearSplitUiBinding;
+  window.setBoundPlanJob = host.setBoundPlanJob;
+  window.getBoundPlanJob = host.getBoundPlanJob;
+  window.rebindSplitToOpenProject = host.rebindSplitToOpenProject;
+  window.bumpProjectScope = host.bumpProjectScope;
+  window.currentScopeGen = host.currentScopeGen;
+  window.scopeGenStillCurrent = host.scopeGenStillCurrent;
+  window.pathsEqualProject = host.pathsEqualProject;
+  window.stampSplitDeskProject = host.stampSplitDeskProject;
+  window.splitDeskDomIsForeign = host.splitDeskDomIsForeign;
   window.isPlanUnderProject = host.isPlanUnderProject;
   window.isSystemPostTask = host.isSystemPostTask;
   window.loadLive = host.loadLive;

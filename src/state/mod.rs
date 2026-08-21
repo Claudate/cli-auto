@@ -404,6 +404,10 @@ impl RunState {
     /// Leaves Done / Skipped / other tasks untouched. Refuses live tasks
     /// (Pending/Queued/Starting/Running) — stop first. Clears attempt counters
     /// for a fresh retry budget on this task only.
+    ///
+    /// When the task was auto-switched (failover / cost escalate / budget) and the
+    /// user did **not** pick a new channel, restore `provider` to `route_previous`
+    /// so「再跑一次」stays on the original channel the user never changed.
     pub fn prepare_task_retry(&mut self, task_id: &str) -> Result<()> {
         let ts = self
             .tasks
@@ -420,6 +424,29 @@ impl RunState {
                 anyhow::bail!("任务 {task_id} 仍在进行中，请先停止再重跑")
             }
             TaskStatus::Failed | TaskStatus::Stopped | TaskStatus::Timeout => {
+                // Restore original channel after silent auto-switch (user didn't change it).
+                let restore = matches!(
+                    ts.route_source,
+                    Some(
+                        RouteSource::Failover
+                            | RouteSource::CostEscalate
+                            | RouteSource::CostBudget
+                    )
+                );
+                if restore {
+                    if let Some(prev) = ts
+                        .route_previous
+                        .as_ref()
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                    {
+                        ts.provider = prev;
+                        ts.route_source = None;
+                        ts.route_previous = None;
+                        ts.route_note = Some("manual_retry_restore".into());
+                        ts.failover_tried.clear();
+                    }
+                }
                 ts.status = TaskStatus::Pending;
                 ts.error = None;
                 ts.finished_at = None;
@@ -599,5 +626,45 @@ mod tests {
         assert!(rs.prepare_task_retry("ok").is_err());
         // Missing id
         assert!(rs.prepare_task_retry("nope").is_err());
+    }
+
+    /// Manual retry restores the original channel after silent auto-switch.
+    #[test]
+    fn prepare_task_retry_restores_route_previous() {
+        let dir = tempfile::tempdir().unwrap();
+        let run_dir = dir.path();
+        std::fs::create_dir_all(run_dir).unwrap();
+        let body = r#"{
+  "schema": "cco-run/v1",
+  "run_id": "r1",
+  "project_root": "/tmp/proj",
+  "plan_path": "/tmp/proj/plan.md",
+  "adapter": "cco-plan/v1",
+  "started_at": "2026-07-22T00:00:00Z",
+  "status": "failed",
+  "tasks": {
+    "bad": {
+      "status": "failed",
+      "provider": "claude",
+      "mode": "print",
+      "attempt": 2,
+      "failover_used": true,
+      "route_source": "cost_escalate",
+      "route_previous": "codex",
+      "error": "boom",
+      "last_retry_reason": "cost_escalate:stall"
+    }
+  }
+}"#;
+        let mut f = std::fs::File::create(run_dir.join("run.json")).unwrap();
+        f.write_all(body.as_bytes()).unwrap();
+        let mut rs = RunState::load(run_dir).expect("load");
+        rs.prepare_task_retry("bad").expect("retry");
+        let ts = &rs.tasks["bad"];
+        assert_eq!(ts.provider, "codex", "should restore original channel");
+        assert!(ts.route_previous.is_none());
+        assert!(ts.route_source.is_none());
+        assert!(!ts.failover_used);
+        assert_eq!(ts.status, TaskStatus::Pending);
     }
 }

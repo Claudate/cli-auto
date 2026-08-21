@@ -163,13 +163,31 @@ function applyConfirmedRun(out) {
   const s = legacyState();
   if (!s) return;
   if (out?.job) {
-    s.planJob = out.job;
+    if (typeof window.setBoundPlanJob === "function") {
+      window.setBoundPlanJob(out.job, {
+        projectPath: s.selectedPath,
+        allowMissingProjectField: true,
+        keepConfirmTask: true,
+      });
+    } else {
+      s.planJob = out.job;
+      s.planJobId = out.job?.job_id || out.job?.jobId || s.planJobId;
+    }
   } else if (s.planJob) {
-    s.planJob = {
+    const next = {
       ...s.planJob,
       status: "confirmed",
       run_id: out?.runId || s.planJob.run_id || null,
     };
+    if (typeof window.setBoundPlanJob === "function") {
+      window.setBoundPlanJob(next, {
+        projectPath: s.selectedPath,
+        allowMissingProjectField: true,
+        keepConfirmTask: true,
+      });
+    } else {
+      s.planJob = next;
+    }
   }
   s.phase = "running";
   s.confirmEditing = false;
@@ -216,8 +234,30 @@ const splitVm = createSplitViewModel({
   onJobUpdated: (job) => {
     const s = legacyState();
     if (!s) return;
-    s.planJob = job;
-    s.planJobId = job?.job_id || job?.jobId || s.planJobId;
+    if (typeof window.setBoundPlanJob === "function") {
+      if (job) {
+        const ok = window.setBoundPlanJob(job, {
+          projectPath: s.selectedPath,
+          allowMissingProjectField: true,
+          keepConfirmTask: true,
+        });
+        if (!ok) return;
+      } else {
+        window.setBoundPlanJob(null, { projectPath: s.selectedPath, keepConfirmTask: true });
+      }
+    } else {
+      // Refuse writing a foreign job into the open project's state
+      if (
+        s.selectedPath &&
+        job &&
+        typeof window.planJobBelongsToProject === "function" &&
+        !window.planJobBelongsToProject(job, s.selectedPath)
+      ) {
+        return;
+      }
+      s.planJob = job;
+      s.planJobId = job?.job_id || job?.jobId || s.planJobId;
+    }
     if (typeof window.stashPlanSession === "function") {
       try {
         window.stashPlanSession(s.selectedPath);
@@ -265,8 +305,30 @@ const splitView = bindSplitView(splitVm, {
   syncLegacy: (patch) => {
     const s = legacyState();
     if (!s) return;
-    if (patch.planJob !== undefined) s.planJob = patch.planJob;
-    if (patch.planJobId !== undefined) s.planJobId = patch.planJobId;
+    // Selection / editing may push; job body only via ownership gate
+    if (patch.planJob !== undefined || patch.planJobId !== undefined) {
+      if (typeof window.setBoundPlanJob === "function") {
+        if (patch.planJob) {
+          window.setBoundPlanJob(patch.planJob, {
+            projectPath: s.selectedPath,
+            allowMissingProjectField: true,
+            keepConfirmTask: true,
+            confirmTaskId:
+              patch.confirmTaskId !== undefined
+                ? patch.confirmTaskId
+                : undefined,
+          });
+        } else if (patch.planJob === null) {
+          window.setBoundPlanJob(null, {
+            projectPath: s.selectedPath,
+            keepConfirmTask: patch.confirmTaskId !== undefined,
+          });
+        }
+      } else {
+        if (patch.planJob !== undefined) s.planJob = patch.planJob;
+        if (patch.planJobId !== undefined) s.planJobId = patch.planJobId;
+      }
+    }
     if (patch.confirmTaskId !== undefined) s.confirmTaskId = patch.confirmTaskId;
     if (patch.confirmEditing !== undefined) s.confirmEditing = patch.confirmEditing;
   },
@@ -369,8 +431,27 @@ window.ccoSplit = {
   api: splitApi,
   view: splitView,
   fillMeta: (job) => window.ccoSplitFillMeta(job),
+  clearDesk() {
+    try {
+      if (typeof splitView.clearDesk === "function") splitView.clearDesk();
+      else if (typeof splitVm.clearJob === "function") splitVm.clearJob();
+      else splitVm.setJob(null);
+    } catch (_) {}
+  },
   render() {
-    const job = legacyState().planJob;
+    const s = legacyState();
+    // Prefer structural rebind (scrub + getBound + VM/DOM stamp)
+    try {
+      if (typeof window.rebindSplitToOpenProject === "function") {
+        window.rebindSplitToOpenProject();
+      } else if (typeof window.scrubForeignPlanJob === "function") {
+        window.scrubForeignPlanJob(s.selectedPath);
+      }
+    } catch (_) {}
+    const job =
+      typeof window.getBoundPlanJob === "function"
+        ? window.getBoundPlanJob(s?.selectedPath)
+        : legacyState().planJob;
     if (job && typeof window.ccoSplitFillMeta === "function") {
       try {
         window.ccoSplitFillMeta(job);
@@ -378,10 +459,17 @@ window.ccoSplit = {
         console.error("[ccoSplit] fillMeta", e);
       }
     }
+    if (!job) {
+      try {
+        window.ccoSplit.clearDesk();
+      } catch (_) {}
+      paintSplitExtraChrome();
+      return;
+    }
     splitView.render();
     if (typeof window.refreshSplitQualityOpen === "function") {
       try {
-        window.refreshSplitQualityOpen(legacyState().planJob);
+        window.refreshSplitQualityOpen(job);
       } catch (_) {}
     }
     paintSplitExtraChrome();
@@ -401,9 +489,85 @@ window.ccoSplit = {
   goSplitPhase() {
     const s = legacyState();
     if (s.selectedPath) appVm.selectProject(s.selectedPath);
+    bindSplitToSelectedProject();
     appVm.goSplit();
   },
 };
+
+/**
+ * Bind split VM to the open project's job (or clear). Used by ring tab + softSync.
+ * Prevents project A's graph from painting under project B.
+ */
+function bindSplitToSelectedProject() {
+  if (typeof window.rebindSplitToOpenProject === "function") {
+    try {
+      window.rebindSplitToOpenProject();
+      return;
+    } catch (_) {}
+  }
+  const s = legacyState();
+  if (!s) return;
+  const path = s.selectedPath;
+  // No project: only wipe desk VM/DOM — do not scrub state.planJob (goHome banner)
+  if (!path) {
+    try {
+      window.ccoSplit?.clearDesk?.();
+    } catch (_) {}
+    return;
+  }
+  try {
+    if (typeof window.scrubForeignPlanJob === "function") {
+      window.scrubForeignPlanJob(path);
+    }
+  } catch (_) {}
+  const job =
+    typeof window.getBoundPlanJob === "function"
+      ? window.getBoundPlanJob(path)
+      : s.planJob;
+  const belongs =
+    !!job &&
+    (typeof window.planJobBelongsToProject !== "function" ||
+      window.planJobBelongsToProject(job, path));
+  if (belongs) {
+    try {
+      // Match rebindSplitToOpenProject: force when waves wiped so setJob cannot no-op blank.
+      let force = false;
+      try {
+        const waves = document.getElementById("confirm-waves");
+        force = !!(
+          waves &&
+          (!waves.dataset.sig || !String(waves.innerHTML || "").trim())
+        );
+      } catch (_) {
+        force = false;
+      }
+      splitVm.setJob(job, {
+        jobId: s.planJobId,
+        selectedTaskId: s.confirmTaskId,
+        editing: s.confirmEditing,
+        force,
+      });
+      if (force && s.phase === "confirm") {
+        try {
+          if (typeof window.renderConfirmPanel === "function") {
+            window.renderConfirmPanel();
+          } else if (typeof window.ccoSplit?.render === "function") {
+            window.ccoSplit.render();
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  } else {
+    try {
+      window.ccoSplit.clearDesk();
+    } catch (_) {
+      try {
+        if (typeof splitVm.clearJob === "function") splitVm.clearJob();
+        else splitVm.setJob(null);
+      } catch (_) {}
+    }
+  }
+}
 
 /**
  * A5-2b: loadLive shell via features/run (IPC → gateway).
@@ -482,8 +646,8 @@ function wireShellNav() {
     list.addEventListener(
       "click",
       (ev) => {
-        // P4-2：hover 复制卡内点击只复制，不切项目（复制处理在 shellUi）
-        if (ev.target?.closest?.("[data-copy-path], .project-hover-card")) {
+        // P4-2：hover 复制卡内点击只复制/打开文件夹，不切项目（处理在 shellUi）
+        if (ev.target?.closest?.("[data-copy-path], [data-open-path], .project-hover-card")) {
           return;
         }
         const btn = ev.target?.closest?.("[data-path]");
@@ -535,7 +699,46 @@ function wireShellNav() {
           confirmDialog,
           openModal,
           goAuthor: () => appVm.goAuthor(),
-          goSplit: () => appVm.goSplit(),
+          goSplit: () => {
+            bindSplitToSelectedProject();
+            appVm.goSplit();
+            // After phase→confirm, paint (or clear) desk for open project only
+            try {
+              if (typeof window.renderWorkspaceShell === "function") {
+                window.renderWorkspaceShell();
+              }
+            } catch (_) {}
+            try {
+              if (typeof window.renderPhasePanels === "function") {
+                window.renderPhasePanels();
+              }
+            } catch (_) {}
+            // Soft restore: tab→拆分 with empty desk but known plan → pull last split
+            try {
+              const s = legacyState();
+              if (
+                s?.selectedPath &&
+                !s.planJob &&
+                s.selectedPlan &&
+                typeof window.tryRestorePlanJobForPlan === "function"
+              ) {
+                window
+                  .tryRestorePlanJobForPlan(s.selectedPlan, { silent: true })
+                  .then((ok) => {
+                    if (ok) {
+                      bindSplitToSelectedProject();
+                      if (typeof window.renderPhasePanels === "function") {
+                        window.renderPhasePanels();
+                      }
+                      if (typeof window.renderConfirmPanel === "function") {
+                        window.renderConfirmPanel();
+                      }
+                    }
+                  })
+                  .catch(() => {});
+              }
+            } catch (_) {}
+          },
           goRun: () => appVm.goRun(),
           goResult: () => appVm.goResult(),
         })
@@ -551,25 +754,7 @@ function wireShellNav() {
     );
   }
 
-  const btnChat = document.getElementById("btn-open-chat");
-  if (btnChat && !btnChat.dataset.ccoA2Wired) {
-    btnChat.dataset.ccoA2Wired = "1";
-    btnChat.addEventListener(
-      "click",
-      () => {
-        setTimeout(() => {
-          const s = legacyState();
-          if (s.selectedPath) {
-            appVm.selectProject(s.selectedPath);
-          }
-          appVm.goAuthor();
-          // Also sync chat sessions when navigating to chat page
-          softSyncFromLegacy();
-        }, 0);
-      },
-      true
-    );
-  }
+  // 顶栏「聊天」icon 已撤；进聊天只走 #view-ring → goAuthor
 
   const btnAnalyze = document.getElementById("btn-pp-analyze");
   if (btnAnalyze && !btnAnalyze.dataset.ccoA2Wired) {
@@ -632,15 +817,12 @@ function softSyncFromLegacy() {
       }
     }
   }
-  if (s.planJob && (s.phase === "confirm" || s.phase === "planning")) {
-    try {
-      splitVm.setJob(s.planJob, {
-        jobId: s.planJobId,
-        selectedTaskId: s.confirmTaskId,
-        editing: s.confirmEditing,
-      });
-    } catch (_) {}
-  }
+  // Always rebind split to the open project (or clear). Previous code only
+  // setJob when planJob truthy → after project switch splitVm kept A's graph
+  // and tab→拆分 painted foreign tasks under B.
+  try {
+    bindSplitToSelectedProject();
+  } catch (_) {}
 }
 
 /**

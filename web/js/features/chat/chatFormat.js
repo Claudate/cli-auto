@@ -388,9 +388,14 @@ export function chatFormatPlanCard(rawMd, opts = {}) {
     `<li><span class="k">怎样算完</span> ${chatEsc(doneWhen)}</li>` +
     `</ul>`;
   // Expand view = rendered markdown; raw kept in hidden pre for adopt/assign.
+  // Label row carries dismiss (去掉) so the card can leave the thread without
+  // deleting disk plans; matching session draft is cleared in dismiss handler.
   return (
-    `<div class="chat-plan-card" data-plan-md="1">` +
+    `<div class="chat-plan-card" data-plan-md="1" data-plan-key="${chatEsc(chatNormMdKey(md))}">` +
+    `<div class="chat-plan-card-head">` +
     `<div class="chat-plan-card-label">计划草稿</div>` +
+    `<button type="button" class="btn ghost sm icon-only btn-chat-plan-dismiss" title="从聊天去掉这版计划（不删本机已存文件）" aria-label="去掉这版计划" data-icon="x" data-icon-size="14"></button>` +
+    `</div>` +
     `<div class="chat-plan-card-title">${chatEsc(title)}</div>` +
     `<div class="chat-plan-summary">` +
     threeHtml +
@@ -550,4 +555,100 @@ export function adoptChatPlanFromCard(btn) {
   }
   stashChatSession(state.selectedPath || state.chatProjectPath);
   return host.saveChatPlan();
+}
+
+/**
+ * 「去掉」：从聊天线程拿掉这张计划卡（剥 ```plan fence），并解绑匹配的会话草稿。
+ * 不删本机已保存的计划文件；不写 Mode B / confirm。
+ */
+export function dismissChatPlanFromCard(btn) {
+  const card = btn?.closest?.(".chat-plan-card");
+  if (!card) return;
+  ensureChatState();
+  const md = chatPlanCardRaw(card);
+  const cardKey = chatNormMdKey(md);
+  const draft = state.chatSession?.draft_plan;
+  const draftKey = chatNormMdKey(draft?.markdown || "");
+  if (cardKey && draftKey && cardKey === draftKey) {
+    state.chatSession.draft_plan = null;
+    state.chatDraftPlan = null;
+  } else if (
+    draft?.path &&
+    card.querySelector?.(".btn-chat-plan-view-split")?.getAttribute("data-plan-path") ===
+      draft.path
+  ) {
+    state.chatSession.draft_plan = null;
+    state.chatDraftPlan = null;
+  }
+
+  const msgEl = card.closest?.(".chat-msg");
+  const idx = Number(msgEl?.getAttribute?.("data-msg-idx"));
+  const msgs = state.chatSession?.messages;
+  if (Array.isArray(msgs) && Number.isFinite(idx) && msgs[idx]) {
+    const before = String(msgs[idx].content || "");
+    // Drop fenced plan blocks; keep surrounding prose.
+    let after = before.replace(/```plan\b[^\n]*\n[\s\S]*?```/gi, "").trim();
+    after = after.replace(/\n{3,}/g, "\n\n").trim();
+    if (after) {
+      msgs[idx] = { ...msgs[idx], content: after };
+    } else {
+      // Empty shell after strip — remove the bubble.
+      msgs.splice(idx, 1);
+    }
+  } else {
+    // Fallback: DOM-only remove if message index missing
+    try {
+      card.remove();
+    } catch (_) {}
+  }
+
+  stashChatSession(state.selectedPath || state.chatProjectPath);
+  if (typeof host.renderChatMessages === "function") {
+    host.renderChatMessages({ force: true });
+  } else if (typeof host.renderChatPage === "function") {
+    host.renderChatPage();
+  }
+  toast("已从聊天去掉这版计划");
+}
+
+/** Copy plain text of a chat bubble (user / 小叶 / system). */
+export function copyChatMessageFromBtn(btn) {
+  const msgEl = btn?.closest?.(".chat-msg");
+  if (!msgEl) return;
+  const idx = Number(msgEl.getAttribute("data-msg-idx"));
+  let text = "";
+  if (Number.isFinite(idx) && state.chatSession?.messages?.[idx]) {
+    text = String(state.chatSession.messages[idx].content || "");
+  } else {
+    // Folded / fallback: visible body text
+    const body = msgEl.querySelector(".chat-msg-body");
+    text = String(body?.innerText || body?.textContent || "").trim();
+  }
+  text = text.trim();
+  if (!text) {
+    toast("这条没有可复制的文字");
+    return;
+  }
+  const done = () => toast("已复制");
+  const fail = () => toast("复制失败");
+  const clip = typeof navigator !== "undefined" ? navigator.clipboard : null;
+  if (clip?.writeText) {
+    clip.writeText(text).then(done).catch(fail);
+    return;
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    if (ok) done();
+    else fail();
+  } catch (_) {
+    fail();
+  }
 }

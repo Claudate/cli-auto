@@ -13,11 +13,24 @@ import {
   cancelTask,
 } from "./logActions.js";
 import * as host from "./logHost.js";
+import { selectTask } from "./runDetail.js";
 
 const S = host.S;
 const $$ = host.$$;
 const toast = host.toast;
 const callG = host.callG;
+
+function focusTask(taskId, tasks) {
+  if (!taskId) return;
+  if (typeof selectTask === "function") {
+    selectTask(taskId, tasks, { open: true });
+    return;
+  }
+  S().selectedTaskId = taskId;
+  if (typeof window.ccoRunDetail?.render === "function") {
+    window.ccoRunDetail.render(tasks);
+  }
+}
 
 /**
  * Rebind per-card controls after board paint.
@@ -39,16 +52,22 @@ export function bindCliBoardEvents(board, tasks, renderCliBoard) {
   $$("[data-focus]", board).forEach((b) => {
     b.onclick = (e) => {
       e.stopPropagation();
-      S().selectedTaskId = b.dataset.focus;
-      const card = board.querySelector(`.cli-window[data-task="${CSS.escape(b.dataset.focus)}"]`);
-      if (card) {
-        card.style.zIndex = String(Date.now() % 100000);
-        card.classList.add("selected");
+      focusTask(b.dataset.focus, tasks);
+    };
+  });
+  // 点流程卡（非按钮/日志体）→ 右侧详情快速切换
+  $$(".cli-window[data-task]", board).forEach((card) => {
+    card.onclick = (e) => {
+      if (
+        e.target?.closest?.(
+          "button, a, input, textarea, select, [data-drag], .cli-window-body"
+        )
+      ) {
+        return;
       }
-      // P4-4：聚焦同步右次级列
-      if (typeof window.ccoRunDetail?.render === "function") {
-        window.ccoRunDetail.render(tasks);
-      }
+      const id = card.dataset.task;
+      if (!id) return;
+      focusTask(id, tasks);
     };
   });
   $$("[data-copy]", board).forEach((b) => {

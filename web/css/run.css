@@ -88,12 +88,62 @@
   padding: 0.25rem 0.1rem;
 }
 
+/* 右侧任务快速切换 chip */
+.run-detail-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--leaf-alias-border-l1);
+  background: var(--leaf-alias-bg-layer-2);
+  max-height: 7.5rem;
+  overflow-y: auto;
+}
+.run-detail-switcher[hidden] {
+  display: none !important;
+}
+.run-detail-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  padding: 0.22rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--leaf-alias-border-l2);
+  background: var(--leaf-alias-bg-layer-1);
+  color: var(--leaf-alias-label-secondary);
+  font-size: var(--leaf-font-secondary);
+  line-height: 1.2;
+  cursor: pointer;
+  text-align: left;
+}
+.run-detail-chip:hover {
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary) 40%, transparent);
+  color: var(--leaf-alias-label-primary);
+}
+.run-detail-chip.is-selected {
+  border-color: color-mix(in srgb, var(--leaf-alias-brand-primary) 60%, transparent);
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary) 12%, transparent);
+  color: var(--leaf-alias-label-primary);
+  font-weight: 600;
+}
+.run-detail-chip.is-live .dot {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--leaf-alias-status-info) 28%, transparent);
+}
+.run-detail-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 11rem;
+}
+
 /* ============================================================
  * P4-4 流程卡 dsh 化（.cli-window 走 alias token；覆盖 monitor.css 旧硬色）
  * ============================================================ */
 .cli-window {
   background: var(--leaf-alias-bg-layer-1);
   border-color: var(--leaf-alias-border-l2);
+  cursor: pointer;
 }
 .cli-window-head {
   background: var(--leaf-alias-bg-layer-2);

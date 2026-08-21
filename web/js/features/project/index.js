@@ -9,4 +9,14 @@
 export { createProjectViewModel } from "./ProjectViewModel.js";
 export { createProjectDesk, installProjectHost, installProjectHostGlobals } from "./installProject.js";
 export * as projectApi from "./projectApi.js";
+export * as projectScope from "./projectScope.js";
+export {
+  setBoundPlanJob,
+  getBoundPlanJob,
+  bumpProjectScope,
+  rebindSplitToOpenProject,
+  planJobBelongsToProject,
+  scrubForeignPlanJob,
+  clearSplitUiBinding,
+} from "./projectScope.js";
 export { host } from "./host.js";

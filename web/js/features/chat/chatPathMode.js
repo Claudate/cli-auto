@@ -1,10 +1,11 @@
 /**
  * [INPUT]: localStorage
- * [OUTPUT]: 对内 delivery（旧 L/M/H）+ 空态 coach / 高级纠正 / 顶栏人话
+ * [OUTPUT]: 对内 delivery（旧 L/M/H）+ 空态 advanced 纠正 / coach 文案
  * [POS]: features/chat — W0-8 主路径不教三档；与 workStyle / persona 正交
  * [PROTOCOL]: 对外禁止 L/M/H 英雄键；对内 trial|single|bundle（存盘仍用 L/M/H 兼容）
  *
  * 只影响 author 权重；不改 plan_mode、不写 gateway、不开跑。
+ * 聊天页头不再常驻全链路步骤条（方位靠 #page-title/#page-sub + 段控；绑定靠本轮上下文）。
  */
 
 const KEY = "cco.pathMode";
@@ -21,26 +22,20 @@ export const PATH_MODES = Object.freeze({
     delivery: /** @type {DeliveryId} */ ("trial"),
     label: "先看一版就好",
     hint: "一句话先验证像不像（系统内部 trial）",
-    headStep: "说清楚 → 写成计划 → 拆开做 → 看齐了没",
   },
   M: {
     delivery: /** @type {DeliveryId} */ ("single"),
     label: "就这一件事",
     hint: "一份计划拆开做（默认 single）",
-    headStep: "说清楚 → 写成计划 → 拆开做 → 看齐了没",
   },
   H: {
     delivery: /** @type {DeliveryId} */ ("bundle"),
     label: "好几件事一起排",
     hint: "多材料/多页时系统偏本波目录（bundle；引擎后置）",
-    headStep: "说清楚 → 本波几件事 → 拆开做 → 看齐了没",
   },
 });
 
 export const DEFAULT_PATH_MODE = /** @type {PathModeId} */ ("M");
-
-/** Fixed head step for normal author path (W0-8: no mode class). */
-export const HEAD_STEP_DEFAULT = "说清楚 → 写成计划 → 拆开做 → 看齐了没";
 
 /** @returns {PathModeId} */
 export function getPathMode() {
@@ -77,29 +72,6 @@ export function setPathMode(id) {
   return next;
 }
 
-/** @param {PathModeId} [mode] */
-export function pathModeHeadStepText(mode) {
-  const m = mode || getPathMode();
-  if (m === "H") return PATH_MODES.H.headStep;
-  return HEAD_STEP_DEFAULT;
-}
-
-/**
- * Update `.chat-head-step` — fixed human skeleton; bundle only soft-varies.
- * @param {PathModeId} [mode]
- */
-export function applyPathModeHeadStep(mode) {
-  if (typeof document === "undefined") return;
-  const el = document.querySelector(".chat-head-step");
-  if (!el) return;
-  const step = pathModeHeadStepText(mode);
-  const proj = el.querySelector("#chat-project-label");
-  const projHtml = proj ? proj.outerHTML : "";
-  el.innerHTML = projHtml
-    ? `${escapeHtml(step)} · ${projHtml}`
-    : escapeHtml(step);
-}
-
 /**
  * W0-8: **no hero segment**. Optional advanced fold with human corrects only.
  * @param {{ advanced?: boolean }} [opts]
@@ -131,12 +103,15 @@ export function pathModeSegmentHtml(opts = {}) {
   );
 }
 
-/** Coach — points at composer; no mode class. */
+/**
+ * Empty-state coach — action on this screen only; no full-product pipeline.
+ * Prefer persona coach in empty lead; this is a fallback one-liner.
+ */
 export function pathModeCoachHtml() {
   return (
     `<p class="chat-path-coach">` +
     `在<strong>下方输入框</strong>说要做成什么，或拖入文件；也可先点一个像你业务的例子。` +
-    `不必先学任何「模式」。` +
+    `计划写好后再去拆步执行。` +
     `</p>`
   );
 }

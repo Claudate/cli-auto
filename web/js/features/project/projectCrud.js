@@ -50,6 +50,11 @@ import {
   requireGateway,
 } from "./legacy.js";
 import { host } from "./host.js";
+import {
+  bumpProjectScope,
+  setBoundPlanJob,
+  clearSplitUiBinding,
+} from "./projectScope.js";
 
 export async function addProjectFromModal() {
   const path = $("#m-project-path").value.trim();
@@ -143,8 +148,9 @@ export async function removeSelectedProject(pathArg, opts = {}) {
     if (isCurrent) {
       host.stopPlanJobPoll?.();
       host.setAssignBusy?.(false);
-      state.planJobId = null;
-      state.planJob = null;
+      bumpProjectScope();
+      setBoundPlanJob(null, { projectPath: path });
+      clearSplitUiBinding({ scrubState: false });
       state.phase = "pick";
       state.selectedPath = null;
       state.live = null;
@@ -187,9 +193,10 @@ export async function dismissRun() {
   } catch (_) {}
   state.live = null;
   state.selectedTaskId = null;
-  state.planJobId = null;
-  state.planJob = null;
-  state.confirmTaskId = null;
+  setBoundPlanJob(null, { projectPath: path });
+  try {
+    clearSplitUiBinding({ scrubState: false });
+  } catch (_) {}
   state.phase = "pick";
   state.planCollapsed = false;
   state.planStartedAt = 0;

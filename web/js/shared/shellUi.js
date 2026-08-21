@@ -8,7 +8,14 @@
  * note: 不写 Mode B / confirm / soft-fill / optional 策略；纯壳导航 + 列表渲染
  * note: 2026-08-15 P4-2 —— installSidebarChrome（rail 折叠 · 搜索 + #sidebar-count N/M · hover 路径复制卡）模块级 sidebarQuery 瞬态
  * note: 2026-08-17 侧栏只列项目，不嵌计划树（菜单栏不堆计划信息）
+ * note: 2026-08-21 项目右键菜单 → projectContextMenu（打开/复制/执行/移除）
+ * note: 2026-08-21 侧栏拖宽 installSidebarResize（`--sidebar-w` · min/max token · localStorage cco.sidebarWidth）
  */
+
+import {
+  openProjectFolder,
+  showProjectContextMenu,
+} from "./projectContextMenu.js";
 
 function g(name) {
   return typeof window !== "undefined" ? window[name] : undefined;
@@ -262,10 +269,22 @@ export function goHome() {
       }
     } catch (_) {}
   }
+  // Invalidate in-flight project-scoped async writers (start/poll/restore)
+  try {
+    if (typeof g("bumpProjectScope") === "function") g("bumpProjectScope")();
+  } catch (_) {}
   state.selectedPath = null;
   state.live = null;
   state.selectedTaskId = null;
   // 不清 planJobId/phase：全局 poll 继续；悬浮条可点回
+  // 但必须清 split desk UI，避免欢迎页/下次进项目前残留他人步骤
+  try {
+    if (typeof g("clearSplitUiBinding") === "function") {
+      g("clearSplitUiBinding")({ scrubState: false });
+    } else if (typeof g("rebindSplitToOpenProject") === "function") {
+      g("rebindSplitToOpenProject")();
+    }
+  } catch (_) {}
   renderProjectList();
   try {
     call("updateBgPlanBanner");
@@ -455,9 +474,14 @@ export function renderProjectList() {
           <div class="project-hover-path" title="${esc(p.path)}">${esc(
         p.path
       )}</div>
-          <button type="button" class="btn ghost sm project-copy-path" data-copy-path="${esc(
+          <div class="project-hover-actions">
+            <button type="button" class="btn ghost sm project-open-folder" data-open-path="${esc(
+        p.path
+      )}" title="在访达中打开文件夹">打开文件夹</button>
+            <button type="button" class="btn ghost sm project-copy-path" data-copy-path="${esc(
         p.path
       )}">${copyIco}复制路径</button>
+          </div>
         </div>
       </div>`;
     })
@@ -466,6 +490,26 @@ export function renderProjectList() {
     b.onclick = () => {
       const fn = g("selectProject");
       if (typeof fn === "function") fn(b.dataset.path);
+    };
+    // 右键：菜单（打开文件夹 / 复制路径 / 查看执行 / 移除）
+    b.oncontextmenu = (ev) => {
+      try {
+        ev.preventDefault();
+        ev.stopPropagation();
+      } catch (_) {}
+      const path = b.dataset.path || b.getAttribute("data-path");
+      if (!path) return;
+      const row = b.closest(".project-item-row");
+      const live = row?.querySelector?.('[data-run-locked="1"]');
+      const name =
+        b.querySelector(".name-text")?.textContent?.trim() ||
+        b.getAttribute("title") ||
+        path;
+      showProjectContextMenu(ev.clientX, ev.clientY, {
+        path,
+        name,
+        live: !!live,
+      });
     };
   });
   $$el(".project-item-remove", el).forEach((b) => {
@@ -491,8 +535,176 @@ export function renderProjectList() {
 
 /* ── P4-2 侧栏 chrome：折叠 rail · 搜索 · hover 复制（几何瞬态，不入 localStorage）── */
 
+const SIDEBAR_W_KEY = "cco.sidebarWidth";
+const SIDEBAR_W_DEFAULT = 200;
+
+function readCssPx(name, fallback) {
+  try {
+    const raw = getComputedStyle(document.body).getPropertyValue(name).trim();
+    const n = parseFloat(raw);
+    if (Number.isFinite(n) && n > 0) return n;
+  } catch (_) {}
+  return fallback;
+}
+
+function sidebarWidthBounds() {
+  const min = readCssPx("--sidebar-w-min", 160);
+  const hardMax = readCssPx("--sidebar-w-max", 380);
+  // 窄窗别把主区挤没：最多约 40vw，且不低于 min
+  let max = hardMax;
+  try {
+    const vwCap = Math.floor(window.innerWidth * 0.4);
+    if (Number.isFinite(vwCap) && vwCap > 0) max = Math.min(hardMax, vwCap);
+  } catch (_) {}
+  max = Math.max(min, max);
+  return { min, max };
+}
+
+function applySidebarWidth(px, { persist = false } = {}) {
+  if (typeof document === "undefined") return SIDEBAR_W_DEFAULT;
+  const { min, max } = sidebarWidthBounds();
+  const n = Number(px);
+  const w = Math.min(
+    max,
+    Math.max(min, Number.isFinite(n) ? Math.round(n) : SIDEBAR_W_DEFAULT)
+  );
+  try {
+    document.body.style.setProperty("--sidebar-w", `${w}px`);
+  } catch (_) {}
+  if (persist) {
+    try {
+      localStorage.setItem(SIDEBAR_W_KEY, String(w));
+    } catch (_) {}
+  }
+  const handle = document.getElementById("sidebar-resize-handle");
+  if (handle) {
+    handle.setAttribute("aria-valuenow", String(w));
+    handle.setAttribute("aria-valuemin", String(min));
+    handle.setAttribute("aria-valuemax", String(max));
+  }
+  return w;
+}
+
+function restoreSidebarWidth() {
+  let saved = null;
+  try {
+    const raw = localStorage.getItem(SIDEBAR_W_KEY);
+    if (raw != null && raw !== "") saved = Number(raw);
+  } catch (_) {}
+  if (Number.isFinite(saved) && saved > 0) {
+    applySidebarWidth(saved, { persist: false });
+    return;
+  }
+  // 无偏好：只同步 aria，不写 inline，保留 CSS token 默认
+  const { min, max } = sidebarWidthBounds();
+  const w = readCssPx("--sidebar-w", SIDEBAR_W_DEFAULT);
+  const handle = document.getElementById("sidebar-resize-handle");
+  if (handle) {
+    handle.setAttribute("aria-valuenow", String(Math.round(w)));
+    handle.setAttribute("aria-valuemin", String(min));
+    handle.setAttribute("aria-valuemax", String(max));
+  }
+}
+
+/** 右缘拖拽 / 键盘调宽；折叠 rail 时把手隐藏。宽度入 localStorage。 */
+function installSidebarResize() {
+  if (typeof document === "undefined") return;
+  const handle = document.getElementById("sidebar-resize-handle");
+  if (!handle || handle.dataset.ccoResizeWired) return;
+  handle.dataset.ccoResizeWired = "1";
+
+  restoreSidebarWidth();
+
+  let dragging = false;
+  let startX = 0;
+  let startW = SIDEBAR_W_DEFAULT;
+
+  const onMove = (ev) => {
+    if (!dragging) return;
+    if (!Number.isFinite(ev.clientX)) return;
+    applySidebarWidth(startW + (ev.clientX - startX), { persist: false });
+  };
+
+  const endDrag = () => {
+    if (!dragging) return;
+    dragging = false;
+    try {
+      document.body.classList.remove("cco-sidebar-resizing");
+    } catch (_) {}
+    const cur = readCssPx("--sidebar-w", SIDEBAR_W_DEFAULT);
+    applySidebarWidth(cur, { persist: true });
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", endDrag);
+    window.removeEventListener("pointercancel", endDrag);
+  };
+
+  const beginDrag = (clientX, pointerId) => {
+    if (document.body.classList.contains("cco-sidebar-collapsed")) return;
+    dragging = true;
+    startX = clientX;
+    startW = readCssPx("--sidebar-w", SIDEBAR_W_DEFAULT);
+    try {
+      document.body.classList.add("cco-sidebar-resizing");
+    } catch (_) {}
+    if (pointerId != null && handle.setPointerCapture) {
+      try {
+        handle.setPointerCapture(pointerId);
+      } catch (_) {}
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", endDrag);
+  };
+
+  handle.addEventListener("pointerdown", (ev) => {
+    if (ev.button != null && ev.button !== 0) return;
+    ev.preventDefault();
+    beginDrag(ev.clientX, ev.pointerId);
+  });
+
+  // 双击恢复默认宽
+  handle.addEventListener("dblclick", (ev) => {
+    ev.preventDefault();
+    applySidebarWidth(SIDEBAR_W_DEFAULT, { persist: true });
+  });
+
+  // 键盘：← → 微调 8px · Home 默认
+  handle.addEventListener("keydown", (ev) => {
+    if (document.body.classList.contains("cco-sidebar-collapsed")) return;
+    const cur = readCssPx("--sidebar-w", SIDEBAR_W_DEFAULT);
+    if (ev.key === "ArrowLeft") {
+      ev.preventDefault();
+      applySidebarWidth(cur - 8, { persist: true });
+    } else if (ev.key === "ArrowRight") {
+      ev.preventDefault();
+      applySidebarWidth(cur + 8, { persist: true });
+    } else if (ev.key === "Home") {
+      ev.preventDefault();
+      applySidebarWidth(SIDEBAR_W_DEFAULT, { persist: true });
+    }
+  });
+
+  // 窗宽变窄时把超限宽度夹回 max（仅当用户已调过宽）
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (document.body.classList.contains("cco-sidebar-collapsed")) return;
+      let hasPref = false;
+      try {
+        hasPref = !!localStorage.getItem(SIDEBAR_W_KEY);
+      } catch (_) {}
+      const hasInline = !!document.body.style.getPropertyValue("--sidebar-w");
+      if (!hasPref && !hasInline) return;
+      const cur = readCssPx("--sidebar-w", SIDEBAR_W_DEFAULT);
+      applySidebarWidth(cur, { persist: hasPref });
+    }, 120);
+  });
+}
+
 function installSidebarChrome() {
   if (typeof document === "undefined") return;
+  installSidebarResize();
   const collapse = document.getElementById("btn-sidebar-collapse");
   if (collapse && !collapse.dataset.ccoA2Wired) {
     collapse.dataset.ccoA2Wired = "1";
@@ -560,6 +772,13 @@ function installSidebarChrome() {
   if (list && !list.dataset.ccoCopyWired) {
     list.dataset.ccoCopyWired = "1";
     list.addEventListener("click", (ev) => {
+      const openBtn = ev.target?.closest?.("[data-open-path]");
+      if (openBtn) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openProjectFolder(openBtn.getAttribute("data-open-path") || "");
+        return;
+      }
       const copyBtn = ev.target?.closest?.("[data-copy-path]");
       if (!copyBtn) return;
       ev.preventDefault();

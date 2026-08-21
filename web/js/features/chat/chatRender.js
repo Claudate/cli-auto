@@ -5,6 +5,7 @@
  * note: P0-B setPersonaAndPaint 时 best-effort 保存项目 persona/芯片（chatPersonaSync）
  * note: 渲染后 hydrateChatImages — 本地截图/附件 path → data URL 内联
  * note: F4 R1 顶栏 env+ready 合并（ready 常隐）· R2 last_summary 与 brief_ready 二选一 · R3 场景 chips「换个例子」折
+ * note: 聊天页头无全链路步骤条（方位 #page-sub + 段控；项目/计划绑定 = 本轮上下文）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 import {
@@ -20,7 +21,6 @@ import {
 import { host } from "./host.js";
 import {
   ensureChatState,
-  chatProjectName,
   stashChatSession,
 } from "./chatState.js";
 import { chatEsc, chatFormatBody, chatFormatStreamBody } from "./chatFormat.js";
@@ -56,8 +56,6 @@ import {
   pathModeSegmentHtml,
   pathModeClarifyWeight,
   thinClaimSuccessHtml,
-  applyPathModeHeadStep,
-  getPathMode,
   setPathMode,
 } from "./chatPathMode.js";
 import {
@@ -73,10 +71,9 @@ import {
   beginReviseInComposer,
 } from "./chatUnderstand.js";
 
-/** W0: switch path L/M/H and repaint empty / head step. */
+/** W0: switch path L/M/H and repaint empty state. */
 export function setPathModeAndPaint(id) {
   const next = setPathMode(id);
-  applyPathModeHeadStep(next);
   try {
     renderChatMessages({ force: true });
   } catch (_) {}
@@ -103,7 +100,6 @@ export function setPersonaAndPaint(id, opts = {}) {
   if (opts.applyPathBias && p?.pathBias) {
     try {
       setPathMode(p.pathBias);
-      applyPathModeHeadStep(p.pathBias);
     } catch (_) {}
   }
   try {
@@ -341,8 +337,8 @@ export function renderChatMessages(opts = {}) {
   // Re-read after ensureClaimDraftMessageVisible may have injected a plan bubble
   const msgsNow = state.chatSession.messages || [];
   if (!msgsNow.length && !state.chatBusy) {
-    // W0: path L/M/H + coach first; W0-7 scene chips + persona examples
-    applyPathModeHeadStep(getPathMode());
+    // W0: empty lead = persona coach + examples; W0-7 scene chips
+    // (no chat-head pipeline strip — orientation is #page-sub + view-ring)
     applyPersonaOpener(getPersonaId());
     const claimed =
       state.chatClarify?.phase === "claimed_to_plan" ||
@@ -422,7 +418,6 @@ export function renderChatMessages(opts = {}) {
   // (or stream partials, which force activePlan:false). Earlier "last assistant
   // only" froze unexecuted drafts after any later leaf turn / preview reply.
   // t3: inline clarify strip when still in clarify flow with messages present
-  applyPathModeHeadStep(getPathMode());
   applyPersonaOpener(getPersonaId());
   ensureChatMsgEnhanceStyles();
   let clarifyInline = renderClarifyInlineIfNeeded();
@@ -512,9 +507,14 @@ export function renderChatMessages(opts = {}) {
       const showFoldAgain =
         !bodyAlreadyHasCollapse && shouldShowFoldAgain(idx);
       const foldAgain = showFoldAgain ? renderFoldAgainBtn(idx) : "";
+      const copyBtn =
+        `<button type="button" class="btn ghost sm icon-only chat-msg-copy" data-msg-idx="${idx}" title="复制这条消息" aria-label="复制这条消息" data-icon="copy" data-icon-size="13"></button>`;
       return (
         `<div class="chat-msg chat-msg-${role}" data-msg-idx="${idx}">` +
+        `<div class="chat-msg-meta">` +
         `<div class="chat-msg-role">${label}</div>` +
+        copyBtn +
+        `</div>` +
         `<div class="chat-msg-body md-body">${bodyInner}${attHtml}</div>` +
         foldAgain +
         `</div>`
@@ -651,12 +651,7 @@ export function renderChatReadyBar() {
  * 切回已渲染的聊天页走 skipMessages，避免每次切换都 innerHTML 重建全部气泡。
  */
 export function renderChatPage(opts = {}) {
-  const projLabel = $("#chat-project-label");
-  if (projLabel) {
-    projLabel.textContent = state.selectedPath
-      ? chatProjectName()
-      : "未选择项目";
-  }
+  // Project name lives in #page-sub + 本轮上下文 only (no chat-head-step label).
   const input = $("#chat-input");
   const sendBtn = $("#btn-chat-send");
   const attachBtn = $("#btn-chat-attach");

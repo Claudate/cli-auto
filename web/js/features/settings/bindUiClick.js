@@ -5,6 +5,12 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
+import {
+  listSwitchableChannels,
+  productLabel,
+} from "../../shared/providers.js";
+import { confirmDialog } from "../../shared/confirmDialog.js";
+
 /**
  * Capture-phase document click: intention-only via cco* / classic globals.
  * @param {{
@@ -29,6 +35,84 @@ function eventTargetEl(e) {
     return t.parentElement || null;
   }
   return null;
+}
+
+/**
+ * @param {{ id: string, label: string, healthHint?: string }} c
+ * @returns {string}
+ */
+function channelPickLabel(c) {
+  const base = c.label || productLabel(c.id) || c.id;
+  return c.healthHint ? `${base} · ${c.healthHint}` : base;
+}
+
+/**
+ * Pick a channel and call retryTask. Uses global catalog (settings.channels + doctor).
+ * @param {{ taskId: string, state: any, cco: any, toast: (s: string) => void, anchor?: HTMLElement }} opts
+ */
+async function pickChannelAndRetry(opts) {
+  const { taskId, state: st, cco, toast } = opts;
+  const task =
+    (Array.isArray(st?.live?.tasks) && st.live.tasks.find((t) => t.task_id === taskId || t.id === taskId)) ||
+    st?.live?.tasks?.[taskId] ||
+    {};
+  const current = String(task.provider || "").trim().toLowerCase();
+  // Global SoT: settings.channels (+ doctor health overlay). Never local private list.
+  const choices = listSwitchableChannels(st, current);
+  if (!choices.length) {
+    toast("没有其他通道可选（配置里只有当前这一条可切换通道）");
+    return;
+  }
+  const currentLabel = productLabel(current) || current || "未知";
+  // One alternate → single confirm. Multiple → list + first as primary, second as extra when ≤2.
+  if (choices.length === 1) {
+    const target = choices[0];
+    const label = channelPickLabel(target);
+    const ok = await confirmDialog({
+      title: "切换通道",
+      body: `当前：${currentLabel}\n切换到：${label}\n\n将用新通道再跑这一步。`,
+      okLabel: `用 ${target.label || productLabel(target.id)} 再跑`,
+      cancelLabel: "取消",
+    });
+    if (!ok) return;
+    await cco.retryTask(taskId, { provider: target.id });
+    return;
+  }
+  if (choices.length === 2) {
+    const [a, b] = choices;
+    const la = channelPickLabel(a);
+    const lb = channelPickLabel(b);
+    const pick = await confirmDialog({
+      title: "切换通道",
+      body: `当前：${currentLabel}\n可选：${la} / ${lb}\n\n点按钮选择通道并再跑。`,
+      okLabel: a.label || productLabel(a.id),
+      cancelLabel: "取消",
+      extraButton: { label: b.label || productLabel(b.id), value: b.id },
+    });
+    if (!pick) return;
+    const target = pick === true ? a.id : String(pick).toLowerCase();
+    await cco.retryTask(taskId, { provider: target });
+    return;
+  }
+  // 3+：确认层列清单；主按钮=第一项，extra=第二项，其余写进文案。
+  const a = choices[0];
+  const b = choices[1];
+  const labels = choices.map((c) => channelPickLabel(c));
+  const la = a.label || productLabel(a.id);
+  const lb = b.label || productLabel(b.id);
+  const rest = labels.slice(2).join("、");
+  const pick = await confirmDialog({
+    title: "切换通道",
+    body: `当前：${currentLabel}\n全部可选：${labels.join(" / ")}${
+      rest ? `\n（其余：${rest} — 可先切到邻近通道）` : ""
+    }\n\n点按钮选择并再跑。`,
+    okLabel: la,
+    cancelLabel: "取消",
+    extraButton: { label: lb, value: b.id },
+  });
+  if (!pick) return;
+  const target = pick === true ? a.id : String(pick).toLowerCase();
+  await cco.retryTask(taskId, { provider: target });
 }
 
 function runClarify(name, ...args) {
@@ -389,6 +473,40 @@ export function attachDocumentClick(deps) {
         call("toggleChatPlanExpand", planExpand);
         return;
       }
+      const planDismiss = el?.closest?.(".btn-chat-plan-dismiss");
+      if (planDismiss) {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          if (typeof g("dismissChatPlanFromCard") === "function") {
+            call("dismissChatPlanFromCard", planDismiss);
+          } else if (window.ccoChat?.dismissChatPlanFromCard) {
+            window.ccoChat.dismissChatPlanFromCard(planDismiss);
+          } else {
+            toast("去掉计划不可用");
+          }
+        } catch (err) {
+          toast(String(err?.message || err));
+        }
+        return;
+      }
+      const msgCopy = el?.closest?.(".chat-msg-copy");
+      if (msgCopy) {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          if (typeof g("copyChatMessageFromBtn") === "function") {
+            call("copyChatMessageFromBtn", msgCopy);
+          } else if (window.ccoChat?.copyChatMessageFromBtn) {
+            window.ccoChat.copyChatMessageFromBtn(msgCopy);
+          } else {
+            toast("复制不可用");
+          }
+        } catch (err) {
+          toast(String(err?.message || err));
+        }
+        return;
+      }
       const planAdopt = el?.closest?.(".btn-chat-plan-adopt");
       if (planAdopt) {
         e.preventDefault();
@@ -539,7 +657,8 @@ export function attachDocumentClick(deps) {
         toast("结果台未就绪，请稍后重试");
         return;
       }
-      // 「切换通道」: open a quick provider picker and retry with the selected channel.
+      // 「切换通道」: picker from known CLIs + this-run peers（不依赖 settings.providers，
+      // SettingsView 根本没有该字段；WKWebView 也不靠 window.prompt）。
       const switchBtn = el?.closest?.("[data-switch]");
       if (switchBtn?.dataset?.switch) {
         e.preventDefault();
@@ -552,35 +671,8 @@ export function attachDocumentClick(deps) {
           toast("执行台未就绪，请稍后重试");
           return;
         }
-        const settings = st?.settings || {};
-        const order = Array.isArray(settings.failover_order) ? settings.failover_order : [];
-        const providers = Object.entries(settings.providers || {}).map(([id, v]) => ({
-          id,
-          ...(typeof v === "object" && v ? v : {}),
-        }));
-        const enabled = providers.filter((p) => p.enabled !== false);
-        const candidates = [...new Set([...order, ...enabled.map((p) => p.id)])].filter(Boolean);
-        const current = String(
-          (st?.live?.tasks?.[taskId] || {}).provider || ""
-        );
-        const choices = candidates.filter((p) => p !== current);
-        if (choices.length === 0) {
-          toast("没有其他可用通道，请先在设置中启用更多 provider");
-          return;
-        }
-        const pick = window.prompt
-          ? window.prompt(
-              `切换通道（当前 ${current || "未知"}），可选：\n${choices.join(" / ")}\n\n输入通道名：`
-            )
-          : null;
-        if (!pick || !pick.trim()) return;
-        const target = pick.trim().toLowerCase();
-        if (!choices.map((c) => c.toLowerCase()).includes(target)) {
-          toast(`未知通道：${pick}（可选：${choices.join(" / ")}）`);
-          return;
-        }
-        Promise.resolve(cco.retryTask(taskId, { provider: target })).catch((err) =>
-          toast(String(err?.message || err))
+        Promise.resolve(pickChannelAndRetry({ taskId, state: st, cco, toast, anchor: switchBtn })).catch(
+          (err) => toast(String(err?.message || err))
         );
         return;
       }

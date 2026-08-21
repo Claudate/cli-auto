@@ -4,6 +4,7 @@
  * [POS]: A5-2b-fin features/project/jobPoll.js
  * note: start_plan_job · poll · optional gate · advance (no silent auto-start past optionals)
  * note: P0-A persona 芯片：clarify_depth 透传 start_plan_job；grain 芯片仅在未选工作习惯时作默认
+ * note: 空拆分台护栏：ownership/bind 失败→plan_failed+toast；empty tasks≠成功；cancelled 出失败面；paintConfirmDesk 强制 paint
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -50,6 +51,13 @@ import {
   requireGateway,
 } from "./legacy.js";
 import { host } from "./host.js";
+import {
+  currentScopeGen,
+  scopeGenStillCurrent,
+  setBoundPlanJob,
+  planJobBelongsToProject,
+  rebindSplitToOpenProject,
+} from "./projectScope.js";
 import {
   suggestedMaxParallel,
   suggestedGrainHint,
@@ -234,8 +242,13 @@ export async function analyzePlanFromPicker(planPathArg) {
 
   host.setAssignBusy(true);
   state.phase = "planning";
-  state.planJob = null;
-  state.planJobId = null;
+  const startGen = currentScopeGen();
+  const projectAtStart = state.selectedPath;
+  setBoundPlanJob(null, {
+    projectPath: projectAtStart,
+    gen: startGen,
+    keepConfirmTask: false,
+  });
   state.confirmEditing = false;
   // C2：仅「新开拆分」supersede 旧 session；非旁路静默丢
   host.clearPlanSession(state.selectedPath);
@@ -282,7 +295,6 @@ export async function analyzePlanFromPicker(planPathArg) {
         : core;
   }
 
-  const projectAtStart = state.selectedPath;
   try {
     // Final identity assertion — never send a different path than toast/top bar.
     state.selectedPlan = plan;
@@ -304,16 +316,46 @@ export async function analyzePlanFromPicker(planPathArg) {
         effort: effort || null,
       },
     });
-    if (state.selectedPath !== projectAtStart) {
+    if (
+      !scopeGenStillCurrent(startGen) ||
+      state.selectedPath !== projectAtStart
+    ) {
       // User switched project mid-flight — drop the stale response instead of
       // polluting the new project's state (job stays queryable via 计划列表).
       console.warn("startPlanJob response dropped: project switched mid-flight");
       return;
     }
-    state.planJob = view;
+    const bound = setBoundPlanJob(view, {
+      projectPath: projectAtStart,
+      gen: startGen,
+      allowMissingProjectField: true,
+    });
+    if (!bound) {
+      // Never silent-drop: user would see empty planning desk with no error.
+      console.warn("startPlanJob response dropped: ownership gate", {
+        jobProject: view?.project || view?.project_path || null,
+        selected: projectAtStart,
+        jobId: view?.job_id || view?.jobId || null,
+      });
+      host.setAssignBusy(false);
+      state.phase = "plan_failed";
+      const msg =
+        "拆分结果无法绑定到当前项目（路径不一致）。请确认打开的是同一个项目文件夹后「再拆一次」。";
+      if (err) {
+        err.textContent = msg;
+        err.hidden = false;
+      }
+      toast(msg);
+      try {
+        if (window.ccoApp && typeof window.ccoApp.goSplit === "function") {
+          window.ccoApp.goSplit();
+        }
+      } catch (_) {}
+      host.renderPhasePanels();
+      host.renderPlanPicker();
+      return;
+    }
     if (revEl0) revEl0.value = "";
-    // Tauri/serde 字段兼容
-    state.planJobId = view.job_id || view.jobId || null;
     // Job is source of truth after start — top bar + selectedPlan follow job path.
     const jobPlan =
       normalizePlanPath(view.plan_path || view.planPath, state.selectedPath) ||
@@ -327,6 +369,7 @@ export async function analyzePlanFromPicker(planPathArg) {
     host.stashPlanSession(state.selectedPath);
     host.updateTopPlanInfo?.();
     fillPlannerLog(view);
+    rebindSplitToOpenProject();
 
     const status = String(view.status || "").toLowerCase();
     if (status === "planned") {
@@ -359,7 +402,10 @@ export async function analyzePlanFromPicker(planPathArg) {
     // One-shot direct flags must not stick across failures.
     state.forcePlanModeDirect = false;
     state.forceAutoStartAfterPlan = false;
-    if (state.selectedPath !== projectAtStart) {
+    if (
+      !scopeGenStillCurrent(startGen) ||
+      state.selectedPath !== projectAtStart
+    ) {
       // Project switched mid-flight: leave the new project's state untouched.
       console.warn("startPlanJob failed after project switch", e);
       return;
@@ -377,10 +423,14 @@ export async function analyzePlanFromPicker(planPathArg) {
     ) {
       // Replan start failed → keep the previous good split on the desk
       // instead of dropping the user to an empty pick screen.
-      state.planJob = prevJob;
-      state.planJobId = prevJobId;
+      setBoundPlanJob(prevJob, {
+        projectPath: projectAtStart,
+        gen: startGen,
+        allowMissingProjectField: true,
+      });
       state.phase = "confirm";
       host.stashPlanSession(state.selectedPath);
+      rebindSplitToOpenProject();
       toast("重新规划没有发起成功，已回到上一次的拆分结果");
     } else {
       state.phase = "pick";
@@ -468,9 +518,88 @@ export async function advancePlannedJob(view) {
   // (and possibly auto-start via confirmAndStart) the same planned job twice.
   const advJobId = view?.job_id || view?.jobId || null;
   if (advJobId && state.planAdvancedJobId === advJobId) return;
-  if (advJobId) state.planAdvancedJobId = advJobId;
+  const path = state.selectedPath;
+  // Never advance a foreign project's graph into the open project's desk.
+  if (
+    path &&
+    view &&
+    (view.project || view.project_path || view.projectPath) &&
+    !planJobBelongsToProject(view, path)
+  ) {
+    console.warn("advancePlannedJob skipped: foreign project", {
+      jobProject: view.project || view.project_path || view.projectPath,
+      selected: path,
+      jobId: advJobId,
+    });
+    // Do NOT mark planAdvancedJobId — a later path fix / restore can retry.
+    toast("拆分完成，但结果不属于当前打开的项目，未显示在拆分台");
+    return;
+  }
+
+  const taskN = Array.isArray(view?.tasks) ? view.tasks.length : 0;
+  const metaN = Number(view?.task_count || view?.taskCount || 0) || 0;
+  // planned with empty tasks = incomplete payload (not success). Showing confirm
+  // with「暂无步骤」looks like a silent blank desk.
+  if (taskN === 0) {
+    stopPlanJobPoll();
+    host.setAssignBusy(false);
+    setBoundPlanJob(view, {
+      projectPath: path,
+      allowMissingProjectField: true,
+      keepConfirmTask: true,
+    });
+    state.phase = "plan_failed";
+    const msg =
+      metaN > 0
+        ? `拆分标记完成（${metaN} 步）但步骤明细未加载到界面。请点「再拆一次」，或稍后在计划列表回看。`
+        : "拆分完成但没有可展示的步骤。请再拆一次，或改用「快速拆分（本地规则）」。";
+    const err = $("#pp-error") || $("#planning-fail-detail");
+    if (err) {
+      err.textContent = msg;
+      err.hidden = false;
+    }
+    toast(msg);
+    try {
+      if (window.ccoApp && typeof window.ccoApp.goSplit === "function") {
+        window.ccoApp.goSplit();
+      }
+    } catch (_) {}
+    host.renderPhasePanels();
+    host.renderPlanPicker();
+    // Only mark advanced after we surfaced failure so a retry can re-enter if needed.
+    if (advJobId) state.planAdvancedJobId = advJobId;
+    return;
+  }
+
   stopPlanJobPoll();
-  state.planJob = view;
+  const ok = setBoundPlanJob(view, {
+    projectPath: path,
+    allowMissingProjectField: true,
+    keepConfirmTask: !!state.confirmTaskId,
+  });
+  if (!ok) {
+    // Must not mark advanced or leave busy/planning empty — user sees nothing.
+    host.setAssignBusy(false);
+    state.phase = "plan_failed";
+    const msg =
+      "拆分已完成，但无法绑定到当前项目显示。请确认项目文件夹后「再拆一次」。";
+    toast(msg);
+    const err = $("#pp-error");
+    if (err) {
+      err.textContent = msg;
+      err.hidden = false;
+    }
+    try {
+      if (window.ccoApp && typeof window.ccoApp.goSplit === "function") {
+        window.ccoApp.goSplit();
+      }
+    } catch (_) {}
+    host.renderPhasePanels();
+    host.renderPlanPicker();
+    return;
+  }
+  // Mark advanced only after a successful bind so a failed gate can retry.
+  if (advJobId) state.planAdvancedJobId = advJobId;
   if (!state.confirmTaskId && view.tasks?.length) {
     state.confirmTaskId = view.tasks[0].id;
   }
@@ -480,7 +609,7 @@ export async function advancePlannedJob(view) {
   if (state.page !== "workspace") {
     showPage("workspace");
   }
-  const n = view.task_count || view.tasks?.length || 0;
+  const n = taskN || metaN;
   const adapter = view.adapter || "";
   const mode = String(view.plan_mode || view.planMode || "").toLowerCase();
   const isDirect = mode === "direct" || adapter === "raw-single";
@@ -500,21 +629,33 @@ export async function advancePlannedJob(view) {
   const needsOpt = planNeedsOptionalConfirm(view);
   const hasOptional = planHasOptionalTasks(view);
   const wantAuto = (forceAuto || state.autoStartAfterPlan) && !needsOpt;
-  if (wantAuto) {
-    toast(
-      isDirect
-        ? "正在按整份计划直接启动…"
-        : `${how}：${n} 个任务，正在启动…`
-    );
+
+  const paintConfirmDesk = () => {
     state.phase = "confirm";
     try {
       if (window.ccoApp && typeof window.ccoApp.goSplit === "function") {
         window.ccoApp.goSplit();
       }
     } catch (_) {}
+    try {
+      host.renderWorkspaceShell();
+    } catch (_) {}
+    rebindSplitToOpenProject();
     host.renderPhasePanels();
+    if (typeof host.renderConfirmPanel === "function") {
+      host.renderConfirmPanel();
+    }
     host.renderPlanPicker();
     host.setAssignBusy(false);
+  };
+
+  if (wantAuto) {
+    toast(
+      isDirect
+        ? "正在按整份计划直接启动…"
+        : `${how}：${n} 个任务，正在启动…`
+    );
+    paintConfirmDesk();
     await host.confirmAndStart();
   } else {
     const optHint = needsOpt
@@ -527,15 +668,7 @@ export async function advancePlannedJob(view) {
         ? `已准备直接执行（1 个主任务）${optHint}`
         : `${how}：${n} 个任务${optHint}`
     );
-    state.phase = "confirm";
-    try {
-      if (window.ccoApp && typeof window.ccoApp.goSplit === "function") {
-        window.ccoApp.goSplit();
-      }
-    } catch (_) {}
-    host.renderPhasePanels();
-    host.renderPlanPicker();
-    host.setAssignBusy(false);
+    paintConfirmDesk();
   }
 }
 
@@ -545,12 +678,51 @@ export async function refreshPlanJob() {
   if (state.planPollInFlight) return;
   state.planPollInFlight = true;
   const jobId = state.planJobId;
+  const gen = currentScopeGen();
+  const pathAtStart = state.selectedPath;
   try {
     const view = await requireGateway().getPlanJob(jobId);
     // Stale response: job replaced/cleared (project or plan switched) mid-flight.
     if (jobId !== state.planJobId) return;
+    if (!scopeGenStillCurrent(gen) || state.selectedPath !== pathAtStart) return;
+    // Cross-project bleed: IPC returned a job that is not for the open project.
+    if (
+      state.selectedPath &&
+      (view.project || view.project_path || view.projectPath) &&
+      !planJobBelongsToProject(view, state.selectedPath)
+    ) {
+      return;
+    }
     state.planPollFails = 0;
-    state.planJob = view;
+    const bound = setBoundPlanJob(view, {
+      projectPath: pathAtStart,
+      gen,
+      allowMissingProjectField: true,
+      keepConfirmTask: true,
+    });
+    if (!bound) {
+      // Mid-poll bind fail must not leave planning spinner with a blank desk.
+      if (state.phase === "planning" || state.phase === "confirm") {
+        host.setAssignBusy(false);
+        state.phase = "plan_failed";
+        const msg =
+          "拆分进度已返回，但无法绑定到当前项目显示。请确认项目后「再拆一次」。";
+        toast(msg);
+        const err = $("#pp-error");
+        if (err) {
+          err.textContent = msg;
+          err.hidden = false;
+        }
+        try {
+          if (window.ccoApp && typeof window.ccoApp.goSplit === "function") {
+            window.ccoApp.goSplit();
+          }
+        } catch (_) {}
+        host.renderPhasePanels();
+        host.renderPlanPicker();
+      }
+      return;
+    }
     const status = String(view.status || "").toLowerCase();
     fillPlannerLog(view);
 
@@ -570,6 +742,7 @@ export async function refreshPlanJob() {
             state.selectedPath,
             planPath
           );
+          if (!scopeGenStillCurrent(gen)) return;
           const pst = String(prior?.status || "").toLowerCase();
           const priorId = prior?.job_id || prior?.jobId || null;
           const failedId = state.planJobId;
@@ -602,7 +775,12 @@ export async function refreshPlanJob() {
         );
       } else {
         state.phase = "plan_failed";
-        state.planJob = view;
+        setBoundPlanJob(view, {
+          projectPath: pathAtStart,
+          gen,
+          allowMissingProjectField: true,
+          keepConfirmTask: true,
+        });
         const err = $("#pp-error");
         if (err) {
           err.textContent = view.error || "拆分失败";
@@ -655,6 +833,42 @@ export async function refreshPlanJob() {
       host.setAssignBusy(false);
       state.phase = "running";
       host.renderPhasePanels();
+    } else if (status === "cancelled") {
+      // Superseded/cancelled job must not leave planning spinner forever with empty desk.
+      stopPlanJobPoll();
+      host.setAssignBusy(false);
+      const errText = String(view.error || "").trim();
+      const superseded = /superseded/i.test(errText);
+      if (superseded) {
+        // Newer job should already own planJobId; if we still point here, surface fail.
+        state.phase = "plan_failed";
+        const msg =
+          "这次拆分已被更新的一次取代。请重新点「拆成步骤」，或到计划列表打开最新结果。";
+        toast(msg);
+        const err = $("#pp-error");
+        if (err) {
+          err.textContent = msg;
+          err.hidden = false;
+        }
+      } else {
+        state.phase = "plan_failed";
+        const msg = errText
+          ? humanPlanFail(errText) || errText
+          : "拆分已取消，没有可展示的步骤。";
+        toast(msg);
+        const err = $("#pp-error");
+        if (err) {
+          err.textContent = msg;
+          err.hidden = false;
+        }
+      }
+      try {
+        if (window.ccoApp && typeof window.ccoApp.goSplit === "function") {
+          window.ccoApp.goSplit();
+        }
+      } catch (_) {}
+      host.renderPhasePanels();
+      host.renderPlanPicker();
     } else {
       host.renderPhasePanels();
     }

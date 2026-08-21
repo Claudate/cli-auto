@@ -77,7 +77,20 @@ pub fn build_rework_plan(
     };
 
     let only_map = target.iter().all(|i| i.severity == IssueSeverity::Map);
-    let provider = base.default_provider.clone();
+    // Prefer a real business task's channel (user never changed it on desk) over a
+    // cost-routed default that may no longer match what they saw for implement steps.
+    let provider = base
+        .tasks
+        .iter()
+        .find(|t| {
+            !crate::plan::is_system_ensure_task(&t.id)
+                && !crate::plan::is_system_post_task(&t.id)
+                && t.role != Some(crate::plan::TaskRole::Inspect)
+                && !t.provider.trim().is_empty()
+        })
+        .map(|t| t.provider.clone())
+        .filter(|p| !p.trim().is_empty())
+        .unwrap_or_else(|| base.default_provider.clone());
     let mode = base.default_mode.clone();
     let opts = base
         .tasks

@@ -3,7 +3,7 @@
 <head>
 <!--
 [INPUT]: 无静态依赖；由 Tauri 加载 app.css + web/js/*（D4）+ A2/A3 js/main.js module
-[OUTPUT]: DOM 结构：sidebar（P4-2 两栏壳：brand + collapse rail + 新建/搜索 + 项目列表 + hover 复制卡 + 底部图标设置；不嵌计划树）· topbar `#view-ring` 段控 拆分|执行|结果|聊天 · welcome · workspace(plan/monitor/result 局部巡检列) · chat · settings 父级分区两栏（左侧图标菜单 · Git·版本发布 大区）· modals
+[OUTPUT]: DOM 结构：sidebar（P4-2 两栏壳：brand + collapse rail + 新建/搜索 + 项目列表 + hover 复制卡 + 底部图标设置 + 右缘 resize handle；不嵌计划树）· topbar `#view-ring` 段控 拆分|执行|结果|聊天 · welcome · workspace(plan/monitor/result 局部巡检列) · chat · settings 父级分区两栏（左侧图标菜单 · Git·版本发布 大区）· modals
 [POS]: 桌面壳结构真源；规划相位 spinner · 合并选计划弹窗 · task-dash · 执行看板 · 聊天建计划 · 设置分区
 [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
 note: 主路径文案走 flow.js（流程/趣味）；引擎名仅设置与高级选项
@@ -70,6 +70,16 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
           <button type="button" class="linkish" id="btn-open-help" title="帮助"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg><span>帮助</span></button>
         </div>
       </div>
+      <!-- 右缘拖拽把手：调宽 · min/max 见 --sidebar-w-min/max · 折叠 rail 时隐藏 -->
+      <div
+        class="sidebar-resize-handle"
+        id="sidebar-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整侧栏宽度"
+        title="拖拽调整宽度 · 双击恢复默认"
+        tabindex="0"
+      ></div>
     </aside>
 
     <main>
@@ -88,7 +98,7 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
           <button type="button" class="view-ring-item" data-ring="result">结果</button>
         </nav>
         <div class="top-actions" id="top-actions">
-          <button class="icon-btn chat-top-btn" id="btn-open-chat" type="button" hidden title="聊天" aria-label="聊天" data-icon="message-square" data-icon-size="16"></button>
+          <!-- shell-chrome: 顶栏右侧不再放 聊天/计划管理/刷新 icon；聊天走 #view-ring；计划页仍可由程序打开 -->
           <button class="btn primary sm" id="btn-pp-analyze" type="button" hidden disabled>拆成步骤</button>
           <button class="btn ghost sm" id="btn-monitor-plan" type="button" hidden title="回到拆分台或执行进度">继续核对拆分</button>
           <div id="split-plan-chip" class="split-plan-chip" hidden title="查看拆分结果">
@@ -96,15 +106,12 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
             <strong id="split-plan-chip-name">—</strong>
             <span id="split-plan-chip-meta" class="muted">—</span>
           </div>
-          <!-- 直出顶栏按钮（不再收进「更多」） -->
-          <button class="icon-btn" id="btn-plan-mgmt" type="button" hidden title="管理计划文件" aria-label="管理计划文件" data-icon="list" data-icon-size="16"></button>
           <button class="btn ghost sm" id="btn-plan-choose" type="button" hidden>选择计划</button>
           <!-- A3: 顶栏「编辑任务」已撤；步骤编辑仍在拆分台详情 -->
           <!-- 费用改到 #result-cost-chip（本轮结果标题右侧）；顶栏 budget 钩子保留 hidden -->
           <div id="budget-chip" class="budget-chip muted" hidden title="规划成本 · 执行成本">
             <span id="budget-chip-text">—</span>
           </div>
-          <button class="icon-btn" id="btn-refresh" type="button" title="刷新项目与运行状态" aria-label="刷新项目与运行状态" data-icon="refresh" data-icon-size="16"></button>
         </div>
       </header>
 
@@ -545,14 +552,16 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
             <button id="btn-stop-task" type="button" hidden>停止</button>
           </div>
           <!-- P4-4 右次级列：选中任务详情（Terminal/Diff/Read · 琥珀条 · 日志折叠）；内容由 features/run/runDetail.js 渲染 -->
-          <aside id="run-detail-column" class="run-detail-column" hidden aria-label="任务详情">
+          <aside id="run-detail-column" class="run-detail-column" hidden aria-label="正在执行">
             <div class="run-detail-head">
               <div class="run-detail-title-row">
                 <span class="dot" id="run-detail-dot"></span>
-                <strong class="run-detail-title" id="run-detail-title">任务详情</strong>
+                <strong class="run-detail-title" id="run-detail-title">正在执行</strong>
               </div>
               <button type="button" class="icon-btn sm" id="btn-run-detail-close" title="收起详情列" aria-label="收起详情列" data-icon="panel-right-close" data-icon-size="14"></button>
             </div>
+            <!-- 快速切换：运行中 / 全部步骤 chip；点选同步主列选中 -->
+            <div id="run-detail-switcher" class="run-detail-switcher" hidden role="tablist" aria-label="切换任务"></div>
             <div class="run-detail-body" id="run-detail-body"></div>
           </aside>
           </div>
@@ -573,9 +582,8 @@ note: P4-3 拆分台底部确认 dock —— `#btn-confirm-start`「执行规划
         <div class="chat-layout">
           <div class="chat-shell">
             <div class="chat-head">
-              <!-- 页头单源：顶栏 #page-title/#page-sub；此处只留一句步骤 + C3 会话切换 -->
+              <!-- 页头：顶栏 #page-title/#page-sub 管方位；此处只留会话工具（历史+新建）。全链路步骤不进聊天页头。 -->
               <div class="chat-head-row">
-                <p class="muted chat-head-step">说清目标 → 生成计划 → 点「拆成步骤」 · <span id="chat-project-label">—</span></p>
                 <div class="chat-head-actions">
                   <!-- 会话工具条（对齐 Claude for VS Code：历史 + 新建） -->
                   <div class="chat-session-toolbar" role="group" aria-label="会话">

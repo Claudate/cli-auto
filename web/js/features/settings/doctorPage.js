@@ -193,6 +193,39 @@ export async function ensureDoctor(force = false) {
   return st.doctorCache;
 }
 
+/**
+ * Failures that should appear on the workspace warn bar.
+ * Backend already marks optional CLI misses as line.ok=true; keep a
+ * defensive filter so binary soft-tips never steal the first two slots.
+ * @param {{ name?: string, ok?: boolean, kind?: string }} line
+ */
+function isBlockingDoctorFail(line) {
+  if (!line || line.ok) return false;
+  const name = String(line.name || "");
+  // Non-default optional binary rows use kind=binary and stay soft when ok=true.
+  // If a stale client still marks them ok=false, drop pure non-default binary noise
+  // only when overall doctor was already computed server-side — here we trust !ok.
+  // Prefer auth/binary/default-ish names; exclude pure info.
+  if ((line.kind || "") === "info") return false;
+  return true;
+}
+
+function humanDoctorFailLine(l) {
+  const name = String(l.name || "");
+  const short = String(l.detail || "")
+    .split("·")[0]
+    .trim();
+  // Prefer short human labels over provider:foo:binary noise when possible.
+  const m = name.match(/^provider:([^:]+):(binary|auth)$/);
+  if (m) {
+    const prov = m[1];
+    const kind = m[2];
+    if (kind === "binary") return `${prov} 未安装或找不到`;
+    if (kind === "auth") return short || `${prov} 通道认证异常`;
+  }
+  return short ? `${name}: ${short}` : name;
+}
+
 /** Soft workspace banner when doctor fails (no strategy). */
 export function renderDoctorWarn() {
   const st = state();
@@ -203,7 +236,7 @@ export function renderDoctorWarn() {
     bar.hidden = true;
     return;
   }
-  const fails = (d.lines || []).filter((l) => !l.ok);
+  const fails = (d.lines || []).filter(isBlockingDoctorFail);
   const key = fails.map((l) => l.name + ":" + l.detail).join("|");
   if (st.doctorDismissedKey && st.doctorDismissedKey === key) {
     bar.hidden = true;
@@ -218,19 +251,34 @@ export function renderDoctorWarn() {
     bar.hidden = true;
     return;
   }
-  const detail = fails
-    .map((l) => {
-      const short = String(l.detail || "").split("·")[0].trim();
-      return `${l.name}: ${short}`;
-    })
+  // Prefer default-channel lines first if present in the fail set.
+  const defaultProv =
+    ($("#s-default-provider") && $("#s-default-provider").value) ||
+    "claude";
+  const ranked = fails.slice().sort((a, b) => {
+    const an = String(a.name || "");
+    const bn = String(b.name || "");
+    const aDef = an.includes(`provider:${defaultProv}:`) ? 0 : 1;
+    const bDef = bn.includes(`provider:${defaultProv}:`) ? 0 : 1;
+    if (aDef !== bDef) return aDef - bDef;
+    // auth before binary within same provider
+    const aAuth = an.endsWith(":auth") ? 0 : 1;
+    const bAuth = bn.endsWith(":auth") ? 0 : 1;
+    return aAuth - bAuth;
+  });
+  const detail = ranked
     .slice(0, 2)
+    .map(humanDoctorFailLine)
+    .filter(Boolean)
     .join(" · ");
   bar.classList.add("soft");
   const textEl = $("#doctor-warn-text");
   if (textEl) {
-    textEl.textContent =
-      (detail ? detail + "。" : "") +
-      "可到「环境检查」点「官网下载」安装缺失 CLI，装好后重新检查。";
+    const tail =
+      ranked.some((l) => String(l.name || "").endsWith(":binary"))
+        ? "可到「环境检查」点「官网下载」安装缺失 CLI，装好后重新检查。"
+        : "可到「环境检查」查看详情并处理。";
+    textEl.textContent = (detail ? detail + "。" : "") + tail;
   }
   bar.hidden = false;
 }
@@ -240,7 +288,7 @@ export function dismissDoctorWarn() {
   const st = state();
   if (!st) return;
   const d = st.doctorCache;
-  const fails = (d?.lines || []).filter((l) => !l.ok);
+  const fails = (d?.lines || []).filter(isBlockingDoctorFail);
   st.doctorDismissedKey =
     fails.map((l) => l.name + ":" + l.detail).join("|") || "dismissed";
   renderDoctorWarn();

@@ -3,6 +3,8 @@
  * [POS]: web/css 桌面样式真源（D4 纵切）；tokens.css = 设计 token 唯一真源
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
+ * note: 2026-08-21 侧栏宽 token：--sidebar-w / --sidebar-w-min / --sidebar-w-max（拖宽见 shellUi）
+ *
  * 分层（借鉴 dsh `--dsw-*` 三层）：
  *   1) 静态色阶  --leaf-static-*    （:root 浅色默认；暗色整体覆写）
  *   2) 语义别名  --leaf-alias-*    （body 上；组件只准用这一层，禁止写死颜色）
@@ -224,7 +226,9 @@ body {
   --radius: 12px;
   --font: "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
-  --sidebar-w: 200px; /* V1: narrower sidebar, main area max */
+  --sidebar-w: 200px; /* 默认侧栏宽；可拖拽，落点见 shellUi installSidebarResize */
+  --sidebar-w-min: 160px;
+  --sidebar-w-max: 380px; /* 硬上限，拖拽与 CSS 同值 */
   --task-list-w: 260px;
   --log-font-size: 0.875rem; /* 14px */
   /* A2-3 主 CTA 单一视觉（primary 按钮共用） */

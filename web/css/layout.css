@@ -4,11 +4,13 @@
  * note: 2026-07-22 三区视觉 — sidebar 独立列 · topbar 白底底边 · page 独占滚动
  * note: 2026-08-15 P4-2 两栏壳 — `#view-ring` 段控（phase 高亮 · workspace/chat 页显示）· 侧栏 rail 折叠（`body.cco-sidebar-collapsed` 56px · ≥901px 几何瞬态）· `.project-hover-card` 路径复制卡 · token 化旧硬色 → `--leaf-alias-*`
  * note: 2026-08-17 侧栏只列项目，不嵌计划树
+ * note: 2026-08-21 侧栏可拖宽（`.sidebar-resize-handle` · `--sidebar-w-min/max` · 折叠时隐藏）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
-/* ── ① Sidebar（左菜单 · 独立列） ── */
+/* ── ① Sidebar（左菜单 · 独立列 · 可拖宽） ── */
 .sidebar {
+  position: relative;
   background: var(--bg2);
   border-right: 1px solid var(--border);
   box-shadow: 1px 0 0 rgba(0, 0, 0, 0.02);
@@ -18,7 +20,53 @@
   gap: 0.65rem;
   min-height: 0;
   min-width: 0;
+  width: 100%;
+  max-width: var(--sidebar-w-max, 380px);
   z-index: 2;
+}
+
+/* 侧栏右缘拖拽把手（col-resize · 折叠 rail 时隐藏） */
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  z-index: 8;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.sidebar-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle:focus-visible::after,
+body.cco-sidebar-resizing .sidebar-resize-handle::after {
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, var(--accent)) 55%, transparent);
+}
+.sidebar-resize-handle:focus-visible {
+  outline: none;
+}
+body.cco-sidebar-resizing {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+body.cco-sidebar-resizing * {
+  cursor: col-resize !important;
+}
+body.cco-sidebar-collapsed .sidebar-resize-handle {
+  display: none !important;
 }
 .brand { cursor: pointer; padding: 0.15rem 0.25rem 0.35rem; display: flex; align-items: center; gap: 0.5rem; }
 .brand .logo {
@@ -1515,10 +1563,8 @@ body.cco-window-monitor .topbar {
   padding: 0.65rem 1rem 0.55rem;
 }
 body.cco-window-monitor .topbar .chat-top-btn,
-body.cco-window-monitor #btn-plan-mgmt,
 body.cco-window-monitor #btn-plan-choose,
 body.cco-window-monitor #btn-pp-analyze,
-body.cco-window-monitor #btn-open-chat,
 body.cco-window-monitor #btn-open-monitor-window {
   display: none !important;
 }
@@ -1562,7 +1608,8 @@ body.cco-window-monitor .task-dash-heading {
 /* ══════════════════════════════════════════════════════════════
  * P4-2 两栏壳 + 侧栏（dsh Web UI 语言）
  * sidebar-head/actions/search · view-ring 段控 · 56px rail · hover 复制卡 · 脚 pin
- * 只引用 --leaf-alias-*（暗色自动跟随）；几何瞬态不入 localStorage
+ * 侧栏拖宽：.sidebar-resize-handle · --sidebar-w / min / max（shellUi）
+ * 只引用 --leaf-alias-*（暗色自动跟随）；折叠几何瞬态不入 localStorage；宽持久 cco.sidebarWidth
  * ══════════════════════════════════════════════════════════════ */
 
 /* ── 侧栏头部：brand + 折叠控制 ── */
@@ -1713,12 +1760,66 @@ body[data-cco-app-phase="author"] .view-ring-item[data-ring="chat"] {
   margin-bottom: 0.3rem;
 }
 .project-hover-path {
-  font-family: var(--mono);
-  font-size: var(--leaf-font-secondary);
-  color: var(--leaf-alias-label-primary);
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.72rem;
+  line-height: 1.35;
   word-break: break-all;
-  line-height: 1.5;
-  margin-bottom: 0.5rem;
+  color: var(--text);
+  margin-bottom: 0.45rem;
+}
+.project-hover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+.project-hover-actions .btn {
+  font-size: 0.75rem;
+}
+
+/* 项目右键菜单（fixed · clickOutside 收） */
+.cco-menu.project-ctx-menu {
+  position: fixed;
+  z-index: 9000;
+  min-width: 10.5rem;
+  padding: 0.28rem;
+  border-radius: 10px;
+  border: 1px solid var(--leaf-alias-border-l2, var(--border));
+  background: var(--leaf-alias-bg-layer-1, var(--bg));
+  box-shadow: 0 10px 28px color-mix(in srgb, #000 22%, transparent);
+  display: none;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.cco-menu.project-ctx-menu.is-open {
+  display: flex;
+}
+.cco-menu-item {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--leaf-alias-label-primary, var(--text));
+  text-align: left;
+  padding: 0.42rem 0.65rem;
+  border-radius: 7px;
+  font-size: 0.84rem;
+  cursor: pointer;
+  line-height: 1.3;
+}
+.cco-menu-item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--leaf-alias-brand-primary, var(--accent)) 12%, transparent);
+}
+.cco-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.cco-menu-item.is-danger {
+  color: var(--leaf-alias-status-danger, #c44);
+}
+.cco-menu-sep {
+  height: 1px;
+  margin: 0.2rem 0.35rem;
+  background: var(--leaf-alias-border-l1, var(--border));
 }
 
 /* ── 脚部 pin：设置/环境检查/帮助（图标 + 文案）── */

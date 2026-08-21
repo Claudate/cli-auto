@@ -34,6 +34,9 @@ function isLiveStatus(st) {
 async function settingsPollMs(fallbackMs = 2000) {
   try {
     const s = await settingsApi.getSettings();
+    const st = state();
+    // Seed global settings cache (channels catalog) as early as boot poll.
+    if (st && s) st.settings = s;
     const secs = Number(s?.poll_interval_secs);
     if (Number.isFinite(secs) && secs > 0) {
       return Math.min(secs * 1000, 5000);
@@ -58,19 +61,41 @@ export function setSoftSyncHook(fn) {
  */
 let unsubscribeRunEvents = null;
 let eventStaleCounter = 0; // B1: consecutive ticks without events
-let eventFailureCounter = 0; // B2: consecutive event failures (for degradation)
+let eventFailureCounter = 0; // B2: consecutive stale ticks **while a run is live**
 let isDegraded = false; // B2: degradation state flag
+/** Ticks without events during an active run before showing degrade banner (~8s @2s). */
+const DEGRADE_AFTER_LIVE_STALE_TICKS = 4;
+
+/**
+ * True when live run status means workers may emit run events.
+ * Idle chat / finished history must not count as "event bus failure".
+ */
+function hasActiveRunForEvents(st) {
+  if (!st) return false;
+  const runSt = String(st.live?.run_status || "").toLowerCase();
+  if (!runSt) return false;
+  if (typeof window.isLiveStatus === "function") {
+    return !!window.isLiveStatus(runSt);
+  }
+  return ["running", "starting", "queued", "pausing", "stopping"].includes(runSt);
+}
 
 /**
  * B2: Show degradation banner (dismissible, non-blocking).
+ * Only meaningful on workspace while a run is active.
  */
 function showDegradationBanner() {
   if (isDegraded) return; // Already showing
+  const st = state();
+  if (!st || st.page !== "workspace" || !hasActiveRunForEvents(st)) return;
   isDegraded = true;
   const banner = document.getElementById("event-degradation-banner");
   if (banner) {
     banner.hidden = false;
-    banner.textContent = "实时连接已降级";
+    // Keep label stable; close button is in HTML markup — don't wipe children.
+    const label = banner.querySelector("span");
+    if (label) label.textContent = "实时连接已降级";
+    else if (!banner.textContent.trim()) banner.textContent = "实时连接已降级";
   }
 }
 
@@ -78,8 +103,13 @@ function showDegradationBanner() {
  * B2: Hide degradation banner.
  */
 function hideDegradationBanner() {
-  if (!isDegraded) return; // Already hidden
+  if (!isDegraded) {
+    const banner = document.getElementById("event-degradation-banner");
+    if (banner) banner.hidden = true;
+    return;
+  }
   isDegraded = false;
+  eventFailureCounter = 0;
   const banner = document.getElementById("event-degradation-banner");
   if (banner) {
     banner.hidden = true;
@@ -88,23 +118,23 @@ function hideDegradationBanner() {
 
 /**
  * B1: Handle incoming run event and dispatch to ccoRun.
+ * Any received event proves the bus is alive — always reset degrade counters
+ * (even when not on workspace / no selected project).
  * @param {object} evt
  */
 function handleRunEvent(evt) {
+  // Channel alive: clear stale + failure regardless of page.
+  eventStaleCounter = 0;
+  eventFailureCounter = 0;
+  hideDegradationBanner();
+
   const st = state();
   if (!st) return;
-  // Only handle when on run page and have a selected project
+  // Only dispatch incremental patches on workspace with a project.
   if (st.page !== "workspace" || !st.selectedPath) return;
-  // Dispatch to RunViewModel if available
   if (window.ccoRun?.handleRunEvent) {
     window.ccoRun.handleRunEvent(evt);
   }
-  // Reset stale counter: event arrived
-  eventStaleCounter = 0;
-  // B2: Reset failure counter on successful event
-  eventFailureCounter = 0;
-  // B2: Hide degradation banner if event stream recovered
-  hideDegradationBanner();
 }
 
 /** Workspace / plan-job poll tick (no business policy). */
@@ -115,12 +145,14 @@ export function startPolling(intervalMs = 2000) {
 
   // B1: Subscribe to run events once (global, not per-VM)
   if (!unsubscribeRunEvents && typeof window !== "undefined") {
-    import("../../shared/gateway.js").then(({ subscribeRunEvents }) => {
-      if (!subscribeRunEvents) return;
-      unsubscribeRunEvents = subscribeRunEvents((evt) => {
-        handleRunEvent(evt);
-      });
-    }).catch(() => {});
+    import("../../shared/gateway.js")
+      .then(({ subscribeRunEvents }) => {
+        if (!subscribeRunEvents) return;
+        unsubscribeRunEvents = subscribeRunEvents((evt) => {
+          handleRunEvent(evt);
+        });
+      })
+      .catch(() => {});
   }
 
   st.pollTimer = setInterval(() => {
@@ -154,20 +186,31 @@ export function startPolling(intervalMs = 2000) {
       }
     }
 
-    // B2: Degradation logic — consecutive failures trigger fallback to polling
-    // 1-3 failures: continue attempting event stream
-    // 4+ failures: degrade to 2s polling + show dismissible banner
-    if (unsubscribeRunEvents && eventStaleCounter >= 1) {
-      eventFailureCounter += 1;
-      if (eventFailureCounter >= 4) {
+    // B2: Degradation — only while a run is live and the bus stays silent.
+    // Idle chat / finished runs have no events by design; never treat silence
+    // as "实时连接已降级".
+    const runLive = hasActiveRunForEvents(st);
+    if (runLive && unsubscribeRunEvents) {
+      if (eventStaleCounter >= DEGRADE_AFTER_LIVE_STALE_TICKS) {
+        eventFailureCounter = eventStaleCounter;
         showDegradationBanner();
+      }
+    } else {
+      if (isDegraded || eventFailureCounter > 0) {
+        hideDegradationBanner();
+      }
+      // Non-workspace (e.g. chat) never expects run events — don't let idle
+      // ticks accumulate into an instant degrade when a run starts later.
+      if (st.page !== "workspace") {
+        eventStaleCounter = 0;
       }
     }
 
     // B1: Reconciliation logic — if 3+ ticks without events, force loadLive
     const shouldReconcile = eventStaleCounter >= 3;
-    // B2: When degraded (4+ failures) OR no event subscription, always poll
-    const shouldPoll = !unsubscribeRunEvents || eventFailureCounter >= 4 || shouldReconcile;
+    // B2: When degraded (live-run silence) OR no event subscription, always poll
+    const shouldPoll =
+      !unsubscribeRunEvents || isDegraded || shouldReconcile;
 
     if (st.page === "workspace" && st.selectedPath) {
       if (typeof window.loadProjects === "function") {
@@ -178,7 +221,11 @@ export function startPolling(intervalMs = 2000) {
         if (typeof window.loadLive === "function") {
           window.loadLive().catch(() => {});
         }
-        eventStaleCounter = 0; // Reset after reconciliation
+        // Idle: reset after reconcile. Live run: keep accumulating stale so
+        // DEGRADE_AFTER_LIVE_STALE_TICKS can trip (events alone clear it).
+        if (!runLive) {
+          eventStaleCounter = 0;
+        }
       }
     } else if (st.page === "chat" && st.selectedPath) {
       // Keep live SoT fresh while authoring so plan-card canExec unlocks when
@@ -269,6 +316,11 @@ export async function boot(opts = {}) {
     const meta = await settingsApi.meta();
     const cs = $("#conn-status");
     if (cs) cs.textContent = `桌面应用 · v${meta.version}`;
+    // Global channel catalog cache before any workspace click (switch / split).
+    try {
+      const s = await settingsApi.getSettings();
+      if (st && s) st.settings = s;
+    } catch (_) {}
     if (typeof window.loadProjects === "function") {
       await window.loadProjects();
     }

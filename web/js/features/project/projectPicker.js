@@ -49,6 +49,7 @@ import {
   requireGateway,
 } from "./legacy.js";
 import { host } from "./host.js";
+import { setBoundPlanJob, clearSplitUiBinding } from "./projectScope.js";
 
 export function defaultAssignLabel(btnId) {
   // S10/F2：主 CTA 统一「拆成步骤」；选项层确认后也是同一动作
@@ -174,10 +175,12 @@ export async function startExecuteFromSelection(planPath, opts = {}) {
     try {
       host.clearPlanSession(state.selectedPath);
     } catch (_) {}
-    state.planJob = null;
-    state.planJobId = null;
+    setBoundPlanJob(null, { projectPath: state.selectedPath });
     state.phase = "pick";
     state.confirmEditing = false;
+    try {
+      clearSplitUiBinding({ scrubState: false });
+    } catch (_) {}
     try {
       host.setAssignBusy?.(false);
     } catch (_) {}
@@ -405,14 +408,12 @@ export function renderPlanPicker() {
   const pp = $("#plan-picker");
   const btnChoose = $("#btn-plan-choose");
   const btnAssign = $("#btn-pp-analyze");
-  const btnChat = $("#btn-open-chat");
   const btnMonitor = $("#btn-monitor-plan");
-  const btnPlanMgmt = $("#btn-plan-mgmt");
 
   const inWorkspace = !!state.selectedPath && state.page === "workspace";
   const inChat = !!state.selectedPath && state.page === "chat";
   const inPlans = !!state.selectedPath && state.page === "plans";
-  // 系统页：顶栏只留刷新，不展示业务 CTA / 阶段相关入口
+  // 系统页：顶栏不展示业务 CTA / 阶段相关入口
   const isSystemPage =
     state.page === "settings" ||
     state.page === "doctor" ||
@@ -424,34 +425,11 @@ export function renderPlanPicker() {
     !!state.planJob &&
     ["planned", "confirmed"].includes(String(state.planJob.status || "").toLowerCase());
 
-  // shell-chrome A4：顶栏「聊天」icon；业务页有项目时；chat 自指 / 系统页隐藏
-  if (btnChat) {
-    btnChat.hidden =
-      isSystemPage ||
-      !state.selectedPath ||
-      state.page === "welcome" ||
-      state.page === "chat";
-    btnChat.disabled = false;
-    btnChat.title = "聊天";
-    btnChat.setAttribute("aria-label", "聊天");
-  }
-
-  // shell-chrome A4：计划管理 icon — 业务页有项目；plans 自指 / 系统页隐藏
-  if (btnPlanMgmt) {
-    const showMgmt =
-      !isSystemPage &&
-      !!state.selectedPath &&
-      state.page !== "welcome" &&
-      state.page !== "plans";
-    btnPlanMgmt.hidden = !showMgmt;
-    btnPlanMgmt.disabled = false;
-    btnPlanMgmt.title = "管理计划文件";
-    btnPlanMgmt.setAttribute("aria-label", "管理计划文件");
-    // icon-btn：勿写 textContent（会冲掉 SVG）
-    btnPlanMgmt.classList.remove("primary", "ghost", "btn", "sm");
-    if (!btnPlanMgmt.classList.contains("icon-btn")) {
-      btnPlanMgmt.classList.add("icon-btn");
-    }
+  // 顶栏 icon 已撤：聊天走 view-ring；计划管理页仍可由程序 openPlanManagement；刷新无入口
+  // 兼容旧 DOM（若缓存页仍有节点则强制 hidden）
+  for (const id of ["btn-open-chat", "btn-plan-mgmt", "btn-refresh"]) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
   }
 
   // A4：有待确认且在 chat →「继续核对拆分」；有活动 run →「返回执行」；终态 →「查看结果」
@@ -556,17 +534,6 @@ export function renderPlanPicker() {
         ? "运行中，请先停止后再拆分新计划"
         : "把当前计划拆成可执行步骤";
     }
-  }
-  // shell-chrome A4：刷新 icon；系统页 / 业务页可用；纯冷启动欢迎页隐藏
-  const btnRefresh = $("#btn-refresh");
-  if (btnRefresh) {
-    btnRefresh.hidden = state.page === "welcome" && !state.selectedPath;
-    btnRefresh.title = "刷新项目与运行状态";
-    btnRefresh.setAttribute("aria-label", "刷新项目与运行状态");
-    if (!btnRefresh.classList.contains("icon-btn")) {
-      btnRefresh.classList.add("icon-btn");
-    }
-    btnRefresh.classList.remove("btn", "ghost", "sm");
   }
   try {
     document.body.dataset.ccoPhase = state.phase || "pick";

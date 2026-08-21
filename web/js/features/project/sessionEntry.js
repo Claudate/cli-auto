@@ -5,6 +5,7 @@
  * note: 打开项目默认 chat；仅活动 run/暂停 → workspace 运行页；拆分台不默认抢入口
  * note: goToPlanMonitor 活动→running、终态→done（勿停 pick 空引导 / 历史拆分只读）
  * note: P0-B selectProject 时 best-effort 恢复项目 persona/芯片（chatPersonaSync）
+ * note: P0 防串台真源 projectScope（setBoundPlanJob · gen · rebind）；本文件 re-export
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -52,6 +53,36 @@ import {
 } from "./legacy.js";
 import { host } from "./host.js";
 import { restorePersonaForProject } from "../chat/chatPersonaSync.js";
+import {
+  bumpProjectScope,
+  currentScopeGen,
+  normalizeProjectPathKey,
+  pathsEqualProject,
+  planJobBelongsToProject,
+  scrubForeignPlanJob,
+  clearSplitUiBinding,
+  setBoundPlanJob,
+  getBoundPlanJob,
+  rebindSplitToOpenProject,
+  scopeGenStillCurrent,
+  stampSplitDeskProject,
+} from "./projectScope.js";
+
+// Re-export ownership gate — single SoT is projectScope.js
+export {
+  bumpProjectScope,
+  currentScopeGen,
+  normalizeProjectPathKey,
+  pathsEqualProject,
+  planJobBelongsToProject,
+  scrubForeignPlanJob,
+  clearSplitUiBinding,
+  setBoundPlanJob,
+  getBoundPlanJob,
+  rebindSplitToOpenProject,
+  scopeGenStillCurrent,
+  stampSplitDeskProject,
+};
 
 export function isPlanSessionActive(phase = state.phase) {
   return (
@@ -180,7 +211,10 @@ function stampJobRunIdFromLiveIfSafe() {
   const st = String(state.planJob.status || "").toLowerCase();
   if (st !== "confirmed") return;
   if (!liveBelongsToOpenPlan()) return;
-  state.planJob = { ...state.planJob, run_id: state.live.run_id };
+  setBoundPlanJob(
+    { ...state.planJob, run_id: state.live.run_id },
+    { allowMissingProjectField: true, keepConfirmTask: true }
+  );
 }
 
 /**
@@ -224,11 +258,30 @@ export function restorePlanSession(projectPath) {
     delete state.planSessions[projectPath];
     return false;
   }
+  // Ownership: never restore another project's job under this path key
+  const job = s.planJob || null;
+  if (job && !planJobBelongsToProject(job, projectPath)) {
+    delete state.planSessions[projectPath];
+    return false;
+  }
   state.phase = phase;
-  state.planJobId = s.planJobId || null;
-  state.planJob = s.planJob || null;
+  // Seed planSessions id first so missing project field on job can still pass gate
+  if (s.planJobId) {
+    state.planSessions[projectPath] = {
+      ...s,
+      planJobId: s.planJobId,
+    };
+  }
+  const bound = setBoundPlanJob(job, {
+    projectPath,
+    confirmTaskId: s.confirmTaskId || null,
+    allowMissingProjectField: true,
+  });
+  if (!bound) {
+    delete state.planSessions[projectPath];
+    return false;
+  }
   state.selectedPlan = s.selectedPlan || state.selectedPlan;
-  state.confirmTaskId = s.confirmTaskId || null;
   state.planStartedAt = s.planStartedAt || 0;
   if (s.assigning) host.setAssignBusy(true);
   if (state.phase === "planning" && state.planJobId) host.startPlanJobPoll();
@@ -250,12 +303,53 @@ export function clearPlanSession(projectPath = state.selectedPath) {
 export function applyRestoredPlanJob(view, { resumePoll = true } = {}) {
   if (!view) return false;
   const status = String(view.status || "").toLowerCase();
-  state.planJob = view;
-  state.planJobId = view.job_id || view.jobId || null;
+  if (
+    status !== "planning" &&
+    status !== "planned" &&
+    status !== "confirmed"
+  ) {
+    return false;
+  }
+  // Ownership: project field must match; if missing, only accept when this path
+  // already stashed the same job id OR caller is path-scoped (latestPlanJob).
+  const path = state.selectedPath;
+  const jp = view.project || view.project_path || view.projectPath || null;
+  if (path && jp && !pathsEqualProject(jp, path)) {
+    console.warn(
+      "[applyRestoredPlanJob] refuse foreign plan job",
+      jp,
+      "≠",
+      path
+    );
+    return false;
+  }
+  if (path && !jp && !planJobBelongsToProject(view, path)) {
+    // Path-scoped API restore: seed stash id so gate can accept once
+    const jid = view.job_id || view.jobId;
+    if (!jid) return false;
+    const prev = state.planSessions?.[path];
+    state.planSessions[path] = {
+      ...(prev || {}),
+      planJobId: jid,
+      phase: status === "planning" ? "planning" : "confirm",
+    };
+  }
+  const bound = setBoundPlanJob(view, {
+    projectPath: path,
+    confirmTaskId: view.tasks?.[0]?.id || state.confirmTaskId || null,
+    allowMissingProjectField: !jp,
+  });
+  if (!bound) {
+    console.warn(
+      "[applyRestoredPlanJob] refuse bind",
+      jp || "(no project field)",
+      path
+    );
+    return false;
+  }
   state.selectedPlan =
     normalizePlanPath(view.plan_path || view.planPath) ||
     state.selectedPlan;
-  state.confirmTaskId = view.tasks?.[0]?.id || state.confirmTaskId || null;
   // Elapsed/timeout clock = job creation time, not restore time — restoring an
   // old planning job must not silently grant it another fresh 12 minutes.
   const createdMs = Date.parse(view.created_at || view.createdAt || "");
@@ -265,15 +359,14 @@ export function applyRestoredPlanJob(view, { resumePoll = true } = {}) {
   if (status === "planning") {
     state.phase = "planning";
     if (resumePoll) host.startPlanJobPoll();
-  } else if (status === "planned" || status === "confirmed") {
-    // confirmed 也可再次「执行规划」，不必重新规划
+  } else {
+    // planned | confirmed — confirmed 也可再次「执行规划」
     state.phase = "confirm";
     host.stopPlanJobPoll();
     host.setAssignBusy(false);
-  } else {
-    return false;
   }
   stashPlanSession(state.selectedPath);
+  rebindSplitToOpenProject();
   return true;
 }
 
@@ -779,6 +872,11 @@ export async function selectProject(path) {
   host.stopPlanJobPoll();
   host.setAssignBusy(false);
 
+  // Structural: bump generation FIRST so in-flight async writers (start/poll/
+  // restore) see stale gen and drop — before any state mutation for the new path.
+  bumpProjectScope();
+  const scopeGen = currentScopeGen();
+
   state.selectedPath = path;
   state.logStick = true;
   // P0 防串显：切项目瞬间立即清旧项目 live / task 选择 / 日志签名。
@@ -800,10 +898,10 @@ export async function selectProject(path) {
   state.cliStatusFilter = "all";
   state.closedPanels = {};
   state.selectedPlan = null;
-  state.planJobId = null;
-  state.planJob = null;
-  state.confirmTaskId = null;
+  setBoundPlanJob(null, { projectPath: path, gen: scopeGen });
   state.phase = "pick";
+  // P0 防串台：立刻清 splitVm + 确认台 DOM，避免异步 restore 前仍画旧项目步骤
+  clearSplitUiBinding({ scrubState: false, projectPath: path });
   // 计划管理页作用域随项目重置
   state.plansMgmtScopeDir = null;
   // 聊天按项目隔离：先 stash 旧项目，再切到新项目缓存（或空会话）
@@ -826,10 +924,16 @@ export async function selectProject(path) {
   }
 
   const restoredMem = restorePlanSession(path);
+  // Bind VM/DOM to restored job (or keep clear) before any async paint path
+  rebindSplitToOpenProject();
 
   // H0：先拉 live / plans，再 applyEntryRoute（禁止提前 showPage("workspace")）
   renderProjectList();
   await Promise.all([host.loadLive(), host.loadPlansForPicker(), host.ensureDoctor()]);
+  // Stale selectProject: user switched again while we awaited
+  if (!scopeGenStillCurrent(scopeGen) || state.selectedPath !== path) {
+    return;
+  }
 
   if (restoredMem) {
     // 活动 run 优先看板；否则保留内存 plan 会话 phase（待确认不抢 chat）
@@ -839,7 +943,9 @@ export async function selectProject(path) {
       // 仅当 job 已 confirmed 且缺 run_id 时回填；planned 新图禁止偷绑历史 live
       stampJobRunIdFromLiveIfSafe();
     }
+    rebindSplitToOpenProject();
     await applyEntryRoute();
+    if (!scopeGenStillCurrent(scopeGen)) return;
     if (state.phase === "planning" && state.planJobId) {
       await host.refreshPlanJob().catch(() => {});
     }
@@ -859,7 +965,11 @@ export async function selectProject(path) {
   const activeRun = hasActiveRun();
   if (!activeRun) {
     const restoredDisk = await tryRestorePersistedPlanJob(path);
+    if (!scopeGenStillCurrent(scopeGen) || state.selectedPath !== path) {
+      return;
+    }
     if (restoredDisk) {
+      rebindSplitToOpenProject();
       await applyEntryRoute();
       if (state.phase === "planning" && state.planJobId) {
         await host.refreshPlanJob().catch(() => {});

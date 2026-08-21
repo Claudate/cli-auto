@@ -143,8 +143,14 @@ export function bindResultView(vm, bridge = {}) {
   }
 
   function pullLive(live) {
-    if (live !== undefined) vm.setLive(live);
-    else if (legacy().live) vm.setLive(legacy().live);
+    if (live !== undefined) {
+      vm.setLive(live || null);
+      return;
+    }
+    // Always mirror legacy — including null — so project switch clears result VM.
+    // Previous `else if (legacy().live)` left foreign completed run on the desk.
+    const leg = legacy().live;
+    vm.setLive(leg || null);
   }
 
   /**

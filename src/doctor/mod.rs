@@ -148,9 +148,11 @@ pub async fn run_doctor(config: &Config, project_root: Option<&Path>) -> Result<
     // providers
     let registry = ProviderRegistry::from_config(config)?;
     let mut any_provider_ok = false;
+    let default_name = config.default.default_provider.as_str();
     let preflight_results = registry.preflight_all().await;
     for (name, res) in &preflight_results {
         let binary_name = format!("provider:{name}:binary");
+        let is_default = name.as_str() == default_name;
         match res {
             Ok(()) => {
                 any_provider_ok = true;
@@ -163,9 +165,11 @@ pub async fn run_doctor(config: &Config, project_root: Option<&Path>) -> Result<
                 } else {
                     format!("{e:#}")
                 };
+                // Non-default missing CLI = soft tip (line.ok=true so it won't
+                // pollute the workspace warn bar). Default binary fail stays hard.
                 lines.push(CheckLine {
                     name: binary_name,
-                    ok: false,
+                    ok: !is_default,
                     detail,
                     help_url: help,
                     kind: "binary".into(),
@@ -176,6 +180,10 @@ pub async fn run_doctor(config: &Config, project_root: Option<&Path>) -> Result<
     }
 
     // Auth/balance probe per enabled provider (A: doctor enhancement).
+    // Default provider: only hard auth fails (invalid key / no balance / dead
+    // endpoint) mark the line failed. Missing API Key + CLI login
+    // (`not_supported`) must NOT fail — Claude subscription users have no
+    // ANTHROPIC_API_KEY and still work. Non-default auth never fails the line.
     for (name, _binary_ok) in &preflight_results {
         // fake is a drill/demo stub — always ok, no key to probe.
         if name == "fake" {
@@ -183,14 +191,13 @@ pub async fn run_doctor(config: &Config, project_root: Option<&Path>) -> Result<
         }
         let probe = probe_provider(name, config).await;
         let auth_name = format!("provider:{name}:auth");
-        let is_default = name.as_str() == config.default.default_provider.as_str();
-        let ok = probe.is_ok();
+        let is_default = name.as_str() == default_name;
+        let line_ok = !is_default || !probe.is_blocking_auth_fail();
         let detail = probe.detail_line();
-        lines.push(CheckLine::auth_line(auth_name, ok || !is_default, detail, probe));
+        lines.push(CheckLine::auth_line(auth_name, line_ok, detail, probe));
     }
 
     // 汇总：默认 provider binary 不可用则整体失败；否则通过
-    let default_name = config.default.default_provider.as_str();
     let default_binary_ok = preflight_results
         .iter()
         .find(|(n, _)| n == default_name)
@@ -199,7 +206,7 @@ pub async fn run_doctor(config: &Config, project_root: Option<&Path>) -> Result<
     if !default_binary_ok {
         ok = false;
     }
-    // 默认 provider auth 失败也拉红（Key 无效/余额耗尽 → 必须处理）
+    // 默认 provider 硬 auth 失败才拉红（Key 无效/余额耗尽/接口挂）
     let default_auth_ok = lines
         .iter()
         .find(|l| l.name == format!("provider:{default_name}:auth"))

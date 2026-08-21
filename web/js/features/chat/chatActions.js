@@ -32,7 +32,6 @@ import {
   stopChatWaitTicker,
 } from "./chatSessions.js";
 import { renderChatPage, renderChatMessages, clearChatRenderFingerprint } from "./chatRender.js";
-import { applyPathModeHeadStep, getPathMode } from "./chatPathMode.js";
 import { applyPersonaOpener, getPersonaId } from "./chatPersona.js";
 import { syncChatModelFromResponse } from "./chatControls.js";
 import {
@@ -129,9 +128,6 @@ export async function openChatPage() {
       ensureChatCliOptions();
     } catch (_) {}
     try {
-      applyPathModeHeadStep(getPathMode());
-    } catch (_) {}
-    try {
       applyPersonaOpener(getPersonaId());
     } catch (_) {}
     renderChatPage({ skipMessages: true });
@@ -153,9 +149,8 @@ export async function openChatPage() {
   // t3: install clarify click/styles once; ensure default entry
   installClarifyUi();
   ensureClarifyState();
-  // W0 / W0-7: head step + persona opener
+  // W0-7: persona opener on composer
   try {
-    applyPathModeHeadStep(getPathMode());
     applyPersonaOpener(getPersonaId());
   } catch (_) {}
   // P2-2: clear stale last_summary until load

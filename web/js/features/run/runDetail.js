@@ -1,11 +1,12 @@
 /**
  * [INPUT]: live task DTO · logContent · logBoardCard · logHost · ccoIcon
- * [OUTPUT]: #run-detail-column 右次级列渲染（Terminal/Diff/Read 卡 · wait/stall 琥珀条 · 日志折叠）
+ * [OUTPUT]: #run-detail-column 右次级列（任务 chip 快切 · Terminal/Diff/Read · wait/stall 琥珀条 · 日志折叠）
  * [POS]: P4-4 features/run；无新 IPC · 停/续/重跑仍经 ccoRun → runApi → gateway
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  *
  * 只渲染 app 下发 DTO；琥珀条只用既有 wait（排队）/ stall（卡住）语义，不造假「等待审批」。
  * 几何瞬态（展开/折叠）只在会话内，不入 localStorage。
+ * 右侧 = 正在执行信息：chip 快切 + 点主列流程卡同步；ensureOpen 在选中时展开列。
  */
 
 import { S, $, esc, toast } from "./logHost.js";
@@ -244,16 +245,106 @@ function renderHead(t) {
   const titleEl = $("run-detail-title");
   if (!t) {
     if (dotEl) dotEl.className = "dot";
-    if (titleEl) titleEl.textContent = "任务详情";
+    if (titleEl) titleEl.textContent = "正在执行";
     return;
   }
-  const bucket = safeBucket(t);
   const dotCls = statusDot(String(t.status || ""), t) || "";
   if (dotEl) dotEl.className = "dot" + (dotCls ? " " + dotCls : "");
   if (titleEl) {
-    titleEl.textContent = String(t.title || t.task_id || "任务详情").slice(0, 60);
+    const label = String(t.title || t.task_id || "正在执行").slice(0, 60);
+    titleEl.textContent = label;
     titleEl.title = String(t.title || t.task_id || "");
   }
+}
+
+/** 右侧任务 chip 列表：优先展示运行中，点击快速切换。 */
+function renderSwitcher(list, selectedId) {
+  const el = $("run-detail-switcher");
+  if (!el) return;
+  if (!list.length) {
+    el.hidden = true;
+    el.innerHTML = "";
+    el.dataset.sig = "";
+    return;
+  }
+  const running = list.filter((t) => {
+    const b = safeBucket(t);
+    return b === "run" || b === "wait";
+  });
+  // 仅 1 步且无运行中时收起 chip，避免占位；多步或有活动时展示
+  const show = list.length > 1 || running.length > 0;
+  if (!show) {
+    el.hidden = true;
+    el.innerHTML = "";
+    el.dataset.sig = "";
+    return;
+  }
+  // 运行中在前，其余保持原序
+  const ordered = [
+    ...running,
+    ...list.filter((t) => !running.includes(t)),
+  ].slice(0, 12);
+  const sig = ordered
+    .map((t) => `${t.task_id}:${safeBucket(t)}:${t.task_id === selectedId ? 1 : 0}`)
+    .join("|");
+  if (el.dataset.sig === sig) {
+    el.hidden = false;
+    return;
+  }
+  el.hidden = false;
+  el.dataset.sig = sig;
+  el.innerHTML = ordered
+    .map((t) => {
+      const id = String(t.task_id || "");
+      const bucket = safeBucket(t);
+      const sel = id === selectedId ? " is-selected" : "";
+      const live = bucket === "run" ? " is-live" : "";
+      const name = String(t.title || id).slice(0, 28);
+      const dot = statusDot(String(t.status || ""), t) || (bucket === "run" ? "live" : "");
+      return `<button type="button" class="run-detail-chip${sel}${live}" role="tab" aria-selected="${
+        id === selectedId ? "true" : "false"
+      }" data-select-task="${esc(id)}" title="${esc(String(t.title || id))}">
+        <span class="dot ${esc(dot)}"></span>
+        <span class="run-detail-chip-label">${esc(name)}</span>
+      </button>`;
+    })
+    .join("");
+  if (typeof window.ccoHydrateIcons === "function") {
+    window.ccoHydrateIcons(el);
+  }
+}
+
+function bindSwitcher(el, list) {
+  if (!el) return;
+  el._ccoTaskList = list;
+}
+
+/** 选中任务并刷新右列 + 主列 selected 态；可展开详情列。 */
+export function selectTask(taskId, tasks, opts = {}) {
+  const id = taskId || null;
+  if (id) S().selectedTaskId = id;
+  if (opts.open !== false && typeof window.ccoRunDetail?.ensureOpen === "function") {
+    window.ccoRunDetail.ensureOpen();
+  }
+  const list = Array.isArray(tasks) ? tasks : S().live?.tasks || [];
+  render(list);
+  // 主列卡选中态轻量同步
+  try {
+    const board = document.getElementById("cli-board");
+    if (board && id) {
+      board.querySelectorAll(".cli-window.selected").forEach((c) => c.classList.remove("selected"));
+      const card = board.querySelector(`.cli-window[data-task="${CSS.escape(id)}"]`);
+      if (card) {
+        card.classList.add("selected");
+        card.style.zIndex = String(Date.now() % 100000);
+      }
+    }
+  } catch (_) {}
+  try {
+    if (typeof window.ccoRun?.vm?.selectTask === "function") {
+      window.ccoRun.vm.selectTask(id);
+    }
+  } catch (_) {}
 }
 
 function bindDetailEvents(bodyEl, t) {
@@ -285,12 +376,28 @@ export function render(tasks, live) {
   if (!bodyEl) return;
   const list = Array.isArray(tasks) ? tasks : [];
   const sel = S().selectedTaskId;
-  const t = list.find((x) => x.task_id === sel) || list[0] || null;
+  // 优先当前选中；否则运行中 → 首步
+  let t = list.find((x) => x.task_id === sel) || null;
+  if (!t) {
+    t =
+      list.find((x) => safeBucket(x) === "run") ||
+      list.find((x) => safeBucket(x) === "wait") ||
+      list[0] ||
+      null;
+    if (t?.task_id) S().selectedTaskId = t.task_id;
+  }
+  const selectedId = t?.task_id || sel || null;
   renderHead(t);
+  renderSwitcher(list, selectedId);
+  const switcher = $("run-detail-switcher");
+  bindSwitcher(switcher, list);
+  // 每次 render 刷新 switcher 闭包用的 list（重绑 click 用最新 list）
+  if (switcher) switcher._ccoTaskList = list;
+
   if (!t) {
     if (bodyEl.dataset.sig !== "") {
       bodyEl.innerHTML =
-        '<div class="run-detail-empty">点流程卡右上角「聚焦」查看该步骤的终端输出与文件变更。</div>';
+        '<div class="run-detail-empty">执行开始后，这里会显示当前步骤的终端与文件变更。<br/>也可点左侧流程卡快速切换。</div>';
       bodyEl.dataset.sig = "";
       if (typeof window.ccoHydrateIcons === "function") {
         window.ccoHydrateIcons(bodyEl);
@@ -334,6 +441,12 @@ export function installRunDetail({ vm } = {}) {
     if (vm && typeof vm.toggleDetailCollapsed === "function") vm.toggleDetailCollapsed();
     applyVisibility();
   }
+  function ensureOpen() {
+    if (collapsed() && vm && typeof vm.setDetailCollapsed === "function") {
+      vm.setDetailCollapsed(false);
+    }
+    applyVisibility();
+  }
 
   if (toggle && !toggle.dataset.ccoA2Wired) {
     toggle.dataset.ccoA2Wired = "1";
@@ -350,7 +463,23 @@ export function installRunDetail({ vm } = {}) {
   }
   applyVisibility();
 
-  return { render, toggleDetail, applyVisibility };
+  // switcher 委托：用最新 list
+  const switcher = $("run-detail-switcher");
+  if (switcher && switcher.dataset.ccoSwitcherWired !== "1") {
+    switcher.dataset.ccoSwitcherWired = "1";
+    switcher.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-select-task]");
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const id = btn.getAttribute("data-select-task");
+      if (!id) return;
+      const list = switcher._ccoTaskList || S().live?.tasks || [];
+      selectTask(id, list);
+    });
+  }
+
+  return { render, toggleDetail, applyVisibility, ensureOpen, selectTask };
 }
 
-export default { render, installRunDetail };
+export default { render, installRunDetail, selectTask };
