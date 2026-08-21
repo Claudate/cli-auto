@@ -54,7 +54,8 @@ reqwest = { version = "0.13.4", features = ["json"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 sha2 = "0.10"            # B3: session-digest compression event hash (dedup/match, not crypto)
 # P3: Lightweight memory system dependencies
-ort = "2.0.0-rc.13"      # ONNX Runtime for embedding (latest stable RC)
+# ort（ONNX Runtime）见文件末尾 [target.*] —— Windows 用 load-dynamic 运行期加载，
+# 避免其预编译库把 C++ CRT（libcpmt/msvcprt）静态拽进链接，触发 LNK2005/LNK1169。
 tantivy = "0.22"         # Full-text search (BM25)
 hnsw = { version = "0.11", optional = true }  # Vector index (optional for P4)
 tokenizers = "0.20"      # HuggingFace tokenizers for BERT/Sentence-BERT
@@ -63,3 +64,14 @@ tokenizers = "0.20"      # HuggingFace tokenizers for BERT/Sentence-BERT
 assert_cmd = "2"
 predicates = "3"
 tempfile = "3"
+
+# --- ort (ONNX Runtime) 按平台分链接策略 ---
+# mac/linux：默认（download-binaries + 静态链接），与既有可用构建一致。
+[target.'cfg(not(windows))'.dependencies]
+ort = "2.0.0-rc.13"
+
+# Windows：load-dynamic —— 运行期 dlopen onnxruntime.dll，不静态链接 ONNX 预编译库，
+# 从根上消除其 C++ CRT 与 Rust std/其它依赖的 /MT vs /MD 冲突（LNK2005/LNK1169）。
+# 缺 dll 时 MemoryStore 已优雅回退到 stub 向量 + tantivy BM25（见 memory_store/mod.rs:150）。
+[target.'cfg(windows)'.dependencies]
+ort = { version = "2.0.0-rc.13", features = ["load-dynamic"] }
