@@ -46,3 +46,22 @@ pub fn try_clear_dismissed_run(config: &Config, project: &Path) {
 pub fn try_get_dismissed_run(config: &Config, project: &Path) -> Option<String> {
     store::try_get_dismissed_run_id(config, project)
 }
+
+/// Best-effort: stamp the project's current-run pointer at a run-start choke
+/// point so project_live can `load_run` directly without scanning all history.
+pub fn try_set_current_run(config: &Config, project: &Path, run_id: &str) {
+    let rid = run_id.trim();
+    if rid.is_empty() {
+        return;
+    }
+    store::try_set_current_run_id(config, project, rid);
+}
+
+/// Read the current-run pointer if any.
+pub fn try_get_current_run(config: &Config, project: &Path) -> Option<String> {
+    store::try_get_current_run_id(config, project)
+}
+
+pub fn try_clear_current_run(config: &Config, project: &Path) {
+    store::try_clear_current_run_id(config, project);
+}

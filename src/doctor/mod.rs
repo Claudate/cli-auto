@@ -184,12 +184,25 @@ pub async fn run_doctor(config: &Config, project_root: Option<&Path>) -> Result<
     // endpoint) mark the line failed. Missing API Key + CLI login
     // (`not_supported`) must NOT fail — Claude subscription users have no
     // ANTHROPIC_API_KEY and still work. Non-default auth never fails the line.
-    for (name, _binary_ok) in &preflight_results {
+    //
+    // Each probe is a network round-trip with a 6s timeout; run them
+    // concurrently, then fold in registration order for a stable report.
+    let cfg_arc = std::sync::Arc::new(config.clone());
+    let probe_handles: Vec<_> = preflight_results
+        .iter()
+        .map(|(name, _)| name.clone())
         // fake is a drill/demo stub — always ok, no key to probe.
-        if name == "fake" {
-            continue;
-        }
-        let probe = probe_provider(name, config).await;
+        .filter(|name| name != "fake")
+        .map(|name| {
+            let cfg = std::sync::Arc::clone(&cfg_arc);
+            tokio::spawn(async move {
+                let probe = probe_provider(&name, &cfg).await;
+                (name, probe)
+            })
+        })
+        .collect();
+    for h in probe_handles {
+        let Ok((name, probe)) = h.await else { continue };
         let auth_name = format!("provider:{name}:auth");
         let is_default = name.as_str() == default_name;
         let line_ok = !is_default || !probe.is_blocking_auth_fail();

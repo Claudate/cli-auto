@@ -7,6 +7,8 @@
 //!
 //! Keys (convention):
 //! - `dismissed_run_id` — user finished this run in UI; project_live must not re-bind it as current
+//! - `current_run_id` — pointer to the project's current run; lets project_live jump straight
+//!   to `load_run` instead of scanning all history (see docs/project-switch-lazyload-landing).
 
 use anyhow::Result;
 use chrono::Utc;
@@ -18,6 +20,9 @@ use super::sqlite::with_conn;
 
 /// Key: last run the user dismissed via「结束计划」.
 pub const KEY_DISMISSED_RUN_ID: &str = "dismissed_run_id";
+
+/// Key: the project's current run pointer (written at run-start choke points).
+pub const KEY_CURRENT_RUN_ID: &str = "current_run_id";
 
 fn project_id(project: &std::path::Path) -> String {
     project.display().to_string()
@@ -120,6 +125,55 @@ pub fn try_clear_dismissed_run_id(config: &Config, project: &std::path::Path) {
     }
 }
 
+/// Set the current-run pointer for this project (run-start choke points).
+pub fn set_current_run_id(config: &Config, project: &std::path::Path, run_id: &str) -> Result<()> {
+    set_pref(config, project, KEY_CURRENT_RUN_ID, run_id.trim())
+}
+
+pub fn get_current_run_id(config: &Config, project: &std::path::Path) -> Result<Option<String>> {
+    get_pref(config, project, KEY_CURRENT_RUN_ID)
+}
+
+pub fn clear_current_run_id(config: &Config, project: &std::path::Path) -> Result<()> {
+    delete_pref(config, project, KEY_CURRENT_RUN_ID)
+}
+
+/// Best-effort: never fail the run-start path on a pointer write.
+pub fn try_set_current_run_id(config: &Config, project: &std::path::Path, run_id: &str) {
+    if let Err(e) = set_current_run_id(config, project, run_id) {
+        tracing::warn!(
+            error = %e,
+            project = %project.display(),
+            run_id = %run_id,
+            "sqlite set current_run_id failed"
+        );
+    }
+}
+
+pub fn try_get_current_run_id(config: &Config, project: &std::path::Path) -> Option<String> {
+    match get_current_run_id(config, project) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                project = %project.display(),
+                "sqlite get current_run_id failed"
+            );
+            None
+        }
+    }
+}
+
+pub fn try_clear_current_run_id(config: &Config, project: &std::path::Path) {
+    if let Err(e) = clear_current_run_id(config, project) {
+        tracing::warn!(
+            error = %e,
+            project = %project.display(),
+            "sqlite clear current_run_id failed"
+        );
+    }
+}
+
 /// True when this run was user-dismissed and must not bind as project live.
 ///
 /// 「结束计划」soft-ends the desk even when status is `paused` (common after
@@ -195,5 +249,26 @@ mod tests {
         ));
         clear_dismissed_run_id(&cfg, proj).unwrap();
         assert!(get_dismissed_run_id(&cfg, proj).unwrap().is_none());
+    }
+
+    #[test]
+    fn current_run_roundtrip() {
+        let (_dir, cfg) = test_cfg();
+        let proj = std::path::Path::new("/tmp/proj-cur");
+        assert!(get_current_run_id(&cfg, proj).unwrap().is_none());
+        set_current_run_id(&cfg, proj, "run-9").unwrap();
+        assert_eq!(
+            get_current_run_id(&cfg, proj).unwrap().as_deref(),
+            Some("run-9")
+        );
+        // Independent from dismissed pointer (distinct keys).
+        assert!(get_dismissed_run_id(&cfg, proj).unwrap().is_none());
+        set_current_run_id(&cfg, proj, "run-10").unwrap();
+        assert_eq!(
+            get_current_run_id(&cfg, proj).unwrap().as_deref(),
+            Some("run-10")
+        );
+        clear_current_run_id(&cfg, proj).unwrap();
+        assert!(get_current_run_id(&cfg, proj).unwrap().is_none());
     }
 }

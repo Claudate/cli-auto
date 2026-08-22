@@ -123,6 +123,80 @@ pub fn load_run(config: &Config, run_id: &str) -> Result<RunState> {
     RunState::load(&dir)
 }
 
+/// Cheap peek of a run.json — only `project_root`, without deserializing the
+/// (potentially large) task map. Used to skip other projects' runs before a
+/// full [`RunState`] parse.
+#[derive(Deserialize)]
+struct RunProjectPeek {
+    #[serde(default)]
+    project_root: PathBuf,
+}
+
+/// Walk run dirs newest-first, cheaply peek `project_root`, and invoke `f` with a
+/// fully-loaded [`RunState`] **only** for runs matching `project`. Non-matching
+/// runs are never deserialized into a full RunState (peek-and-skip). Stops once
+/// `max_matches` matching runs have been visited (bounds per-project full-loads;
+/// the peek pass stays cheap even across long global history).
+fn for_each_project_run<F: FnMut(RunState)>(
+    config: &Config,
+    project: &Path,
+    max_matches: usize,
+    mut f: F,
+) -> Result<()> {
+    let root = config.runs_dir();
+    if !root.is_dir() {
+        return Ok(());
+    }
+    let mut dirs: Vec<_> = std::fs::read_dir(&root)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.join("run.json").exists())
+        .collect();
+    dirs.sort();
+    dirs.reverse();
+    let mut seen = 0usize;
+    for d in dirs {
+        if seen >= max_matches {
+            break;
+        }
+        let path = d.join("run.json");
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        // Peek project_root only — other projects never get a full parse.
+        let Ok(peek) = serde_json::from_str::<RunProjectPeek>(&text) else {
+            continue;
+        };
+        if !paths_match(&peek.project_root, project) {
+            continue;
+        }
+        let Ok(mut rs) = serde_json::from_str::<RunState>(&text) else {
+            continue;
+        };
+        rs.run_dir = d.clone();
+        f(rs);
+        seen += 1;
+    }
+    Ok(())
+}
+
+/// Per-project run summaries (newest-first), scanning without loading other
+/// projects' runs. Bounded to the project's most recent runs.
+pub fn list_runs_for_project(config: &Config, project: &Path) -> Result<Vec<RunSummary>> {
+    let mut out = Vec::new();
+    for_each_project_run(config, project, 80, |rs| {
+        out.push(RunSummary {
+            run_id: rs.run_id.clone(),
+            status: format!("{:?}", rs.status).to_ascii_lowercase(),
+            project_root: rs.project_root.display().to_string(),
+            plan_path: rs.plan_path.display().to_string(),
+            started_at: rs.started_at.to_rfc3339(),
+            task_count: rs.tasks.len(),
+        });
+    })?;
+    Ok(out)
+}
+
 pub fn list_plans(project: &Path) -> Result<Vec<String>> {
     let plans = plan::list_plans(project)?;
     Ok(plans
@@ -166,31 +240,13 @@ pub fn list_plan_meta(config: &Config, project: &Path) -> Result<Vec<PlanMeta>> 
 /// Input order is newest-first (same as [`list_runs`]); first sighting of a
 /// plan key fills `last_run_*`. Any `Completed` status sets `ever_completed`.
 fn aggregate_plan_runs(config: &Config, project: &Path) -> Result<HashMap<String, PlanRunAgg>> {
-    let root = config.runs_dir();
     let mut by_key: HashMap<String, PlanRunAgg> = HashMap::new();
-    if !root.is_dir() {
-        return Ok(by_key);
-    }
-    let mut dirs: Vec<_> = std::fs::read_dir(&root)?
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.join("run.json").exists())
-        .collect();
-    dirs.sort();
-    dirs.reverse();
-
-    // Cap scan like list_runs; enough for recent history without walking forever.
-    for d in dirs.into_iter().take(200) {
-        let rs = match RunState::load(&d) {
-            Ok(rs) => rs,
-            Err(_) => continue,
-        };
-        if !paths_match(&rs.project_root, project) {
-            continue;
-        }
+    // Per-project narrow scan: other projects' runs are peeked-and-skipped, never
+    // fully deserialized. Cap is now per-project (not a global 200-dir cap).
+    for_each_project_run(config, project, 200, |rs| {
         let key = normalize_plan_key(project, &rs.plan_path);
         if key.is_empty() {
-            continue;
+            return;
         }
         let status = format!("{:?}", rs.status).to_ascii_lowercase();
         let completed = matches!(rs.status, RunStatus::Completed);
@@ -204,7 +260,7 @@ fn aggregate_plan_runs(config: &Config, project: &Path) -> Result<HashMap<String
         if completed {
             entry.ever_completed = true;
         }
-    }
+    })?;
     Ok(by_key)
 }
 
@@ -364,6 +420,10 @@ pub fn start_run_from_plan_with_route_opts(
     let (run_id, run_state, ir, _cost_line) =
         crate::app::run::materialize_run_with_route_opts(&config, project, ir, route_report, opts)?;
     let run_dir = run_state.run_dir.clone();
+    // T1: stamp project → current-run pointer at this desktop start choke point.
+    if !run_state.project_root.as_os_str().is_empty() {
+        crate::app::project_ui::try_set_current_run(&config, &run_state.project_root, &run_id);
+    }
 
     let registry = ProviderRegistry::from_config(&config)?;
     let max_parallel = ir.max_parallel;
@@ -601,6 +661,10 @@ fn spawn_resume(
     let plan_path = dir.join("plan.resolved.json");
     if !plan_path.exists() {
         bail!("缺少 plan.resolved.json");
+    }
+    // T1: resuming makes this the project's current run again.
+    if !rs.project_root.as_os_str().is_empty() {
+        crate::app::project_ui::try_set_current_run(&config, &rs.project_root, &rs.run_id);
     }
     let mut ir: PlanIR = serde_json::from_str(&std::fs::read_to_string(&plan_path)?)?;
     if let Some(ref tid) = only_task {
@@ -999,6 +1063,52 @@ mod tests {
         );
         assert!(draft.last_run_id.is_none());
         assert_eq!(draft.title.as_deref(), Some("Draft Plan"));
+    }
+
+    #[test]
+    fn list_runs_for_project_excludes_other_projects() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj-a");
+        let other = tmp.path().join("proj-b");
+        let mut config = Config::default();
+        config.state_root = tmp.path().join("state");
+        std::fs::create_dir_all(config.runs_dir()).unwrap();
+        let runs = config.runs_dir();
+
+        write_run_json(
+            &runs,
+            "20260101T000000Z-aaaa",
+            &project,
+            &project.join("plans/p.md"),
+            "completed",
+            true,
+        );
+        write_run_json(
+            &runs,
+            "20260102T000000Z-bbbb",
+            &project,
+            &project.join("plans/p.md"),
+            "running",
+            false,
+        );
+        // Other project's runs must never appear.
+        write_run_json(
+            &runs,
+            "20260103T000000Z-cccc",
+            &other,
+            &other.join("plans/x.md"),
+            "completed",
+            true,
+        );
+
+        let summaries = list_runs_for_project(&config, &project).unwrap();
+        assert_eq!(summaries.len(), 2, "only proj-a runs: {summaries:?}");
+        assert!(summaries.iter().all(|s| paths_match(
+            Path::new(&s.project_root),
+            &project
+        )));
+        // Newest-first ordering preserved.
+        assert_eq!(summaries[0].run_id, "20260102T000000Z-bbbb");
     }
 
     #[test]

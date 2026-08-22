@@ -57,6 +57,11 @@ pub fn prepare_scheduler(
     event_emitter: Option<std::sync::Arc<dyn crate::ports::EventEmitter>>,
 ) -> Result<Scheduler> {
     let registry = ProviderRegistry::from_config(config)?;
+    // T1: stamp the project → current-run pointer so project_live can load_run
+    // directly instead of scanning all history. Best-effort; never fails the run.
+    if !state.project_root.as_os_str().is_empty() && !state.run_id.trim().is_empty() {
+        crate::app::project_ui::try_set_current_run(config, &state.project_root, &state.run_id);
+    }
     let max_parallel = opts.max_parallel.unwrap_or(ir.max_parallel);
     let tm = TerminalManager::for_run(
         &state.run_dir,

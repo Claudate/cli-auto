@@ -929,7 +929,10 @@ export async function selectProject(path) {
 
   // H0：先拉 live / plans，再 applyEntryRoute（禁止提前 showPage("workspace")）
   renderProjectList();
-  await Promise.all([host.loadLive(), host.loadPlansForPicker(), host.ensureDoctor()]);
+  // T5: 切项目关键路径只等本地 SoT（live/plans）。doctor 与切换彻底解耦——
+  // 环境检查有独立生命周期（用户点「环境检查」/ confirm 开跑前预检 / doctor 页自身），
+  // 不由切换触发。此处不再 ensureDoctor；warn bar 在用户进环境检查后自行显示。
+  await Promise.all([host.loadLive(), host.loadPlansForPicker()]);
   // Stale selectProject: user switched again while we awaited
   if (!scopeGenStillCurrent(scopeGen) || state.selectedPath !== path) {
     return;

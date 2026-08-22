@@ -1,0 +1,39 @@
+# LX1 · TickDecision 纯决策收敛（scheduler 瘦身 · 行为零漂移）
+## 目标
+- 给谁：内部工程（brownfield 重构），间接服务 PM 的「续跑/不烧钱」体感与 harness-roadmap §A1。
+- 场景：scheduler 每拍靠散落 `if`（budget/slot/ready）决定是否推进，违反硬规则 8 且难测。
+- 可观察结果：新增 `domain/run` 纯决策函数，scheduler tick 改为「算 snapshot → decide_tick → match 副作用」；裸 `"__budget__"` 魔法串由 `Halt` 驱动；三分支可单测。
+## 范围
+### 做
+- LX1-a 收尾：把 `tick_decision.rs` 的类型/函数 `pub use` 导出（现为私有 `mod`），使 scheduler 可消费；跑绿既有 8 个单测。
+- LX1-b：改 `src/runtime/scheduler/tick.rs` 三处（226/333/631 附近）——组装 `RunTickSnapshot` → `decide_tick` → 用 `Halt/Wait/Spawn` 替代内联 `if` 与裸插 `"__budget__"`。
+- 用既有金样证明行为零漂移。
+### 不做
+- 不新增任何策略/阈值常量（只搬家 + 命名）。
+- 不读 `any_stalled`（保留给未来 heartbeat）。
+- 不动 schema/IPC/run_dir；不做 LX3 旁路。
+## 会失去什么
+- 决策从「就地读代码」变成「隔一层枚举」；换来可单测 + 薄编排器（硬规则 8）。风险：碰热路径，靠金样 diff 兜底。
+## 建议技术
+- 交付深度：D 改现有（brownfield）
+- 形态：CLI / 编排核心（Rust 后端，无 UI）
+- 语言/框架：Rust（冻结现有栈，不引入第二套）
+- 架构：轻分层——组合逻辑落 `domain/run`，`runtime/scheduler` 仅消费枚举（硬规则 8）
+- 数据：无
+- 为什么：把散在编排器的判断收敛为纯函数，既满足硬规则 8，又为续跑/heartbeat 打「这拍要不要动、还是安静跳过不计费」的前置闸。
+## 任务大纲（V1）
+1. `domain/run/mod.rs`：`mod tick_decision;` → 加 `pub use tick_decision::{RunTickSnapshot, TickDecision, decide_tick};`；`cargo test -p cco domain::run` 跑绿现有 8 个单测。
+2. `runtime/scheduler/tick.rs`：在每拍推进处组装 `RunTickSnapshot`（spent/cap/ready_ids/running/slot_cap/any_stalled 来自现有取值点）。
+3. 用 `match decide_tick(&snap)` 替换内联判断：`Halt` → 走现有预算收口（替代裸插 `"__budget__"` 的 226/333/631 三点）；`Wait` → 本拍不派生、不计费；`Spawn(ids)` → 交给现有派生阶段。
+4. 跑金样：A0 / mode_b / scheduler_fake / mixed 全绿，diff 为零（行为等价）。
+5. 清理：确认 `"__budget__"` 仅剩由 `Halt` 语义驱动的落点，无遗留裸串。
+## 成功标准（怎样算做完）
+- [ ] `pub use` 导出后 scheduler 能引用；`cargo test -p cco domain::run` 绿，覆盖 Halt/Wait/Spawn 三分支
+- [ ] `tick.rs` 无内联 budget/slot/ready `if` 决策，改由 `decide_tick` 驱动；tick 更薄
+- [ ] A0 金样 + scheduler_fake + mixed + mode_b 全绿，行为零漂移（diff 空）
+- [ ] 未新增阈值常量；未改 schema/IPC/run_dir；`TickDecision` 可随时退回内联（可回滚）
+## 风险 / 待确认
+- 假设：现有 8 个单测在当前树可编译通过（LX1-a 草稿）——接线前先本地 `cargo test` 确认基线。
+- 热路径改动：LX1-b 严格「等价替换」，先跑金样 diff 再合。
+## V1 边界
+仅 LX1-a 收尾 + LX1-b 等价替换 + 金样验证；不扩到 heartbeat/self-repair 消费 `any_stalled`。

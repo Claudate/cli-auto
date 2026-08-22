@@ -53,12 +53,18 @@ import { host } from "./host.js";
 /* ── Workspace live：唯一路径 ccoLoadLive（server SoT） ── */
 export async function loadLive() {
   if (typeof window.ccoLoadLive === "function") {
+    // T6: 按落地视图分层。chat / idle 落地只要锁态 + 计划卡最小 DTO（0 日志预算，
+    // 服务端跳过每任务 log tail）；执行/结果台 (phase running|done+活跃) 才拉全量日志。
+    // 与 features/run/loadLive 的 phase-aware 预算对齐，不再无条件 96KB。
+    const phaseNeedsLogs =
+      state.phase === "running" ||
+      (state.phase === "done" && hasActiveRun());
     return window.ccoLoadLive({
       getState: () => state,
       hasActiveRun: () => hasActiveRun(),
       refreshPlanJob: () => host.refreshPlanJob(),
       loadProjects: typeof loadProjects === "function" ? () => loadProjects() : undefined,
-      logMaxBytes: 96000,
+      logMaxBytes: phaseNeedsLogs ? 96000 : 0,
     });
   }
   // main.js 未就绪：直读 gateway（仍信服务端过滤）

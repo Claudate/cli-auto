@@ -228,9 +228,11 @@ export function startPolling(intervalMs = 2000) {
         }
       }
     } else if (st.page === "chat" && st.selectedPath) {
-      // Keep live SoT fresh while authoring so plan-card canExec unlocks when
-      // a background / other-desk run ends (loadLive re-paints chat on lock flip).
-      if (typeof window.loadLive === "function") {
+      // T4: idle chat must NOT trigger a full run scan every tick. Only refresh
+      // live SoT while a run is actually live (so the plan-card canExec unlocks
+      // when it ends — loadLive re-paints chat on the lock flip); run events keep
+      // it fresh otherwise. Idle chat with no active run = zero polling scan.
+      if (runLive && typeof window.loadLive === "function") {
         window.loadLive().catch(() => {});
       }
     } else if (st.page === "welcome") {
