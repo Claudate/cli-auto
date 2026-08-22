@@ -177,6 +177,9 @@ export function fillSplitMeta(job, ctx = {}) {
   // W3-1: when local / smart-missed, offer one-click smart re-split (sets plan_mode=ai).
   paintSmartResplitHint(sourceLabel, { runLocked });
 
+  // LX2: 「等你回答」人话 gate（Rust DTO；无 JS 业务策略）——最显眼的一条。
+  paintPendingGateBanner(job, { runLocked });
+
   // B6：业务可选未勾 — 固定非 dismiss 提示条（与卡片 include===false 同构）
   let optBanner = $("split-optional-banner") || $("#split-optional-banner");
   if (!optBanner) {
@@ -230,6 +233,47 @@ export function fillSplitMeta(job, ctx = {}) {
     editing,
     planJobId,
   });
+}
+
+/**
+ * LX2: render the Rust-provided pending user gate as「等你回答：X」.
+ * Copy comes entirely from `job.pending_user_gate` (no JS policy; rule 22).
+ * Hidden when running/locked or when there is no gate.
+ */
+function paintPendingGateBanner(job, { runLocked } = {}) {
+  let bar = $("split-gate-banner") || $("#split-gate-banner");
+  if (!bar) {
+    const head = document.querySelector("#plan-phase-confirm .split-head-main");
+    if (head) {
+      bar = document.createElement("div");
+      bar.id = "split-gate-banner";
+      bar.className = "split-gate-banner";
+      bar.setAttribute("role", "status");
+      // Front of the head-main so it reads before secondary nudges.
+      head.insertBefore(bar, head.firstChild);
+    }
+  }
+  if (!bar) return;
+  const gate = job.pending_user_gate || job.pendingUserGate || null;
+  const question = String(gate?.question || "").trim();
+  if (question && !runLocked) {
+    const why = String(gate?.why || "").trim();
+    bar.hidden = false;
+    bar.innerHTML = "";
+    const q = document.createElement("div");
+    q.className = "split-gate-q";
+    q.textContent = `等你回答：${question}`;
+    bar.appendChild(q);
+    if (why) {
+      const w = document.createElement("div");
+      w.className = "split-gate-why muted";
+      w.textContent = why;
+      bar.appendChild(w);
+    }
+  } else {
+    bar.hidden = true;
+    bar.textContent = "";
+  }
 }
 
 /**

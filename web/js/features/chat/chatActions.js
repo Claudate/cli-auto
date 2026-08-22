@@ -32,6 +32,7 @@ import {
   stopChatWaitTicker,
 } from "./chatSessions.js";
 import { renderChatPage, renderChatMessages, clearChatRenderFingerprint } from "./chatRender.js";
+import { detectQuickSplitPath, quickSplitFromChat } from "./chatPlanOps.js";
 import { applyPersonaOpener, getPersonaId } from "./chatPersona.js";
 import { syncChatModelFromResponse } from "./chatControls.js";
 import {
@@ -104,6 +105,8 @@ export {
   assignAndSplitFromChat,
   assignAndDirectFromChat,
   previewChatPlan,
+  detectQuickSplitPath,
+  quickSplitFromChat,
 } from "./chatPlanOps.js";
 
 export async function openChatPage() {
@@ -297,6 +300,24 @@ export async function sendChatMessage() {
   if (state.chatBusy) {
     toast("小叶正在回复，等本轮结束再发；等太久可点红色按钮停止");
     return;
+  }
+
+  // 快速拆分：整条输入是一个可读的计划文件路径（或 `/拆分 <路径>`）→ 直接进拆分台，
+  // 不发给小叶。裸路径读不到就回退成普通消息；显式命令读不到则给提示后停下。
+  if (text && !hasAtt) {
+    const qs = detectQuickSplitPath(text);
+    if (qs) {
+      const routed = await quickSplitFromChat(qs.path, { explicit: qs.explicit });
+      if (routed) {
+        if (input) {
+          input.value = "";
+          input.style.height = "auto";
+        }
+        return;
+      }
+      if (qs.explicit) return; // 已提示读不到，不再当普通消息发
+      // 裸路径读不到：继续当普通聊天消息发送。
+    }
   }
 
   // F1 §4.5: fast 首 send 前 skip+假设；不预 claim 空模板

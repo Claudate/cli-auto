@@ -46,7 +46,6 @@ import {
   flowSanitizeDepsLabel,
   flowRunningMonitorTitle,
   esc,
-  requireGateway,
 } from "./legacy.js";
 import { host } from "./host.js";
 import { setBoundPlanJob, clearSplitUiBinding } from "./projectScope.js";
@@ -263,6 +262,7 @@ export function openPlanChooser(open = true, opts = {}) {
   if (!sheet) return;
   sheet.hidden = !open;
   if (open) {
+    host.bindChooserQuickSplitInput?.();
     renderPlanChooser();
     updateChooserAssignState();
   }

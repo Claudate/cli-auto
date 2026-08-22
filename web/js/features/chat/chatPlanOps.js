@@ -1,6 +1,6 @@
 /**
  * [INPUT]: legacy · chatApi · chatState · format · planDir · host · chatRender
- * [OUTPUT]: normalize · save · assign · direct · preview（计划草稿操作）
+ * [OUTPUT]: normalize · save · assign · direct · preview · quickSplit（计划草稿操作 + 输入路径直进拆分台）
  * [POS]: A5-2a features/chat；自 chatActions 纵切（P-ship-D）
  * note: 「直接执行」= plan_mode=direct + forceAutoStart；禁止 start_run
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
@@ -13,6 +13,7 @@ import {
   toastRunLocked,
   selectPlan,
   startExecuteFromSelection,
+  quickSplitFromPath,
   openPlanChooser,
   updateChooserAssignState,
   loadPlansForPicker,
@@ -343,4 +344,44 @@ export async function assignAndDirectFromChat(btn) {
 export async function previewChatPlan() {
   if (!state.chatDraftPlan || !state.selectedPath) return;
   await host.openPlanFullView(state.chatDraftPlan);
+}
+
+/** 计划文件后缀（快速拆分识别）。 */
+const QUICK_SPLIT_PLAN_EXT = /\.(md|markdown|ya?ml|json)$/i;
+
+/**
+ * 识别「输入计划路径直接进拆分台」意图：
+ *  - 显式：`/拆分 <路径>` 或 `/split <路径>`（explicit=true，读不到要给提示）；
+ *  - 裸路径：整条输入就是一个像计划文件的单 token（explicit=false，读不到就当普通消息发）。
+ * @param {string} text composer 文本
+ * @returns {{path:string, explicit:boolean}|null}
+ */
+export function detectQuickSplitPath(text) {
+  const t = String(text || "").trim();
+  if (!t) return null;
+  const m = t.match(/^\/(?:拆分|split)\s+(.+)$/i);
+  if (m) {
+    const p = m[1].trim().replace(/^['"`]+|['"`]+$/g, "").trim();
+    return p ? { path: p, explicit: true } : null;
+  }
+  // 裸路径：无空白、无换行、像计划文件；用引号/反引号包裹也认。
+  const bare = t.replace(/^['"`]+|['"`]+$/g, "").trim();
+  if (bare && !/\s/.test(bare) && QUICK_SPLIT_PLAN_EXT.test(bare)) {
+    return { path: bare, explicit: false };
+  }
+  return null;
+}
+
+/**
+ * 走 project 侧的 quickSplitFromPath（校验可读 → 拆分台；禁止 start_run）。
+ * @param {string} path
+ * @param {{explicit?:boolean}} [opts] explicit=false 时读不到静默返回 false（回退普通聊天）
+ * @returns {Promise<boolean>} 是否已路由到拆分台
+ */
+export async function quickSplitFromChat(path, opts = {}) {
+  if (typeof quickSplitFromPath !== "function") return false;
+  return !!(await quickSplitFromPath(path, {
+    source: "chat",
+    silentFail: !opts.explicit,
+  }));
 }

@@ -170,6 +170,15 @@ export function createUiActions() {
       call("renderPlanChooser");
     },
     "btn-chooser-pick": () => call("pickPlanFileForPicker"),
+    "btn-chooser-path-go": () => {
+      const el = $("#chooser-path-input");
+      const v = (el?.value || "").trim();
+      if (!v) return toast("请输入计划文件路径");
+      if (typeof g("quickSplitFromPath") !== "function") {
+        return toast("快速拆分不可用，请刷新窗口后重试");
+      }
+      return call("quickSplitFromPath", v, { source: "chooser" });
+    },
     "btn-chooser-close": () => call("openPlanChooser", false),
     "btn-plan-choose": async () => {
       call("openPlanChooser", true, { expandList: true });

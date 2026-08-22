@@ -814,6 +814,29 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* LX2: pending user gate — 「等你回答：X」primary call (Rust DTO copy). */
+.split-gate-banner {
+  margin: 0 0 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent, #0071e3) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent, #0071e3) 12%, transparent);
+  color: var(--text, inherit);
+  flex-shrink: 0;
+}
+.split-gate-banner[hidden] {
+  display: none !important;
+}
+.split-gate-banner .split-gate-q {
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.split-gate-banner .split-gate-why {
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
 /* B6: optional-not-checked banner (non-dismiss) */
 .split-optional-banner {
   margin: 0.4rem 0 0;
@@ -1170,6 +1193,29 @@
   margin-left: auto;
   font-size: 0.8rem;
   color: var(--text);
+}
+.plan-chooser-quicksplit {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.65rem;
+}
+.plan-chooser-quicksplit .chooser-path-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.82rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.plan-chooser-quicksplit .chooser-path-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.plan-chooser-quicksplit #btn-chooser-path-go {
+  flex: 0 0 auto;
 }
 .chooser-list {
   max-height: 42vh;

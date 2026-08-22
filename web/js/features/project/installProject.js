@@ -133,6 +133,7 @@ export function createProjectDesk(opts = {}) {
     setShowExecutedPlans: host.setShowExecutedPlans,
     showSplitPlanConfirm: host.showSplitPlanConfirm,
     startExecuteFromSelection: host.startExecuteFromSelection,
+    quickSplitFromPath: host.quickSplitFromPath,
     startPlanJobPoll: host.startPlanJobPoll,
     stashPlanSession: host.stashPlanSession,
     stopPlanJobPoll: host.stopPlanJobPoll,
@@ -241,6 +242,7 @@ export function installProjectHostGlobals(opts = {}) {
   window.setShowExecutedPlans = host.setShowExecutedPlans;
   window.showSplitPlanConfirm = host.showSplitPlanConfirm;
   window.startExecuteFromSelection = host.startExecuteFromSelection;
+  window.quickSplitFromPath = host.quickSplitFromPath;
   window.startPlanJobPoll = host.startPlanJobPoll;
   window.stashPlanSession = host.stashPlanSession;
   window.stopPlanJobPoll = host.stopPlanJobPoll;

@@ -9,11 +9,14 @@
 //! [PROTOCOL]: 变更时更新此头部与 src/domain/CLAUDE.md
 
 mod active;
+mod pending_gate;
 mod retry;
 mod status;
 mod status_line;
+mod tick_decision;
 
 pub use active::{expand_from_task, resolve_active_ids, ActiveFilter};
+pub use pending_gate::{pending_optional_gate, GateKind, OptionalTaskSnap, PendingUserGate};
 pub use retry::{
     attempt_budget, can_same_provider_retry, classify_retry, default_failover_order,
     effective_retry_max, is_inspect_gate_error, is_non_failover_provider, is_non_retryable,
@@ -27,3 +30,4 @@ pub use status_line::{
     from_plan_job, from_run, resolve_status_one_liner, PlanJobSnap, StatusOneLiner, StatusPhase,
     TaskStatusSnap,
 };
+pub use tick_decision::{decide_tick, RunTickSnapshot, TickDecision};

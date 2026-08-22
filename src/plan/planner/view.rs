@@ -135,6 +135,10 @@ pub struct PlanJobView {
     /// Confirm desk banner: cost-route dry-run one-liner (None when off / no rewrite).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cost_route_summary: Option<String>,
+    /// LX2: human-readable "waiting on you" gate (optional-confirm). None when the
+    /// plan can start without a decision. Web renders only (rule 22).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_user_gate: Option<crate::domain::run::PendingUserGate>,
     pub layers: Vec<Vec<String>>,
     pub tasks: Vec<PlanTaskView>,
     pub planner_log_tail: String,
@@ -381,6 +385,8 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
     }
     // Cost-route desk preview (dry-run; does not mutate proposed SoT).
     let (cost_route_summary, tasks) = annotate_cost_route_preview(config, job, tasks);
+    // LX2: derive the human "waiting on you" gate from optional tasks (pure domain).
+    let pending_user_gate = pending_gate_from_tasks(&tasks);
     Ok(PlanJobView {
         job_id: job.job_id.clone(),
         status: job.status.as_str().to_string(),
@@ -409,6 +415,7 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
         acceptance_hint,
         merge_check,
         cost_route_summary,
+        pending_user_gate,
         layers,
         tasks,
         planner_log_tail,
@@ -416,6 +423,28 @@ pub fn job_view(config: &Config, job: &PlanJob, log_max: usize) -> Result<PlanJo
         created_at: job.created_at.to_rfc3339(),
         updated_at: job.updated_at.to_rfc3339(),
     })
+}
+
+/// LX2: project optional tasks to the pure domain gate (system-post detection
+/// mirrors the confirm desk: id `sys-post-*` or group「系统收尾」or kind `system`).
+fn pending_gate_from_tasks(
+    tasks: &[PlanTaskView],
+) -> Option<crate::domain::run::PendingUserGate> {
+    let snaps: Vec<crate::domain::run::OptionalTaskSnap> = tasks
+        .iter()
+        .filter(|t| t.optional)
+        .map(|t| {
+            let is_system_post = t.id.starts_with("sys-post-")
+                || t.group.as_deref() == Some("系统收尾")
+                || t.kind.as_deref() == Some("system");
+            crate::domain::run::OptionalTaskSnap {
+                title: t.title.clone(),
+                is_system_post,
+                include: t.include,
+            }
+        })
+        .collect();
+    crate::domain::run::pending_optional_gate(&snaps)
 }
 
 /// Attach cost-auto preview hints for the confirm desk (banner + per-task chip).
