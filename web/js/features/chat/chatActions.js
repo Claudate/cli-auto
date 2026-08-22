@@ -159,23 +159,21 @@ export async function openChatPage() {
   // P2-2: clear stale last_summary until load
   state.chatLastSummary = null;
   renderChatPage();
-  await loadChatSession();
-  // Plan-card footer hides 仅保存/拆成步骤 when path is already split —
-  // best-effort refresh SQLite index so reopening chat after 拆分 is correct.
-  try {
-    const loadIdx =
-      (typeof window !== "undefined" && window.loadPlanSplitIndex) ||
-      host.loadPlanSplitIndex;
-    if (typeof loadIdx === "function") await loadIdx(state.selectedPath);
-  } catch (_) {}
-  // C3: session switcher list (best-effort)
-  try {
-    await loadChatSessionList();
-  } catch (_) {}
-  // P2-2: author empty-state last_summary line (best-effort)
-  try {
-    await loadChatLastSummary();
-  } catch (_) {}
+  // Switch-latency: session history, split index, session list, and last-summary
+  // are independent — fire them in one parallel batch (was 4 serial IPC round-trips).
+  await Promise.all([
+    loadChatSession(),
+    (async () => {
+      try {
+        const loadIdx =
+          (typeof window !== "undefined" && window.loadPlanSplitIndex) ||
+          host.loadPlanSplitIndex;
+        if (typeof loadIdx === "function") await loadIdx(state.selectedPath);
+      } catch (_) {}
+    })(),
+    loadChatSessionList().catch(() => {}),
+    loadChatLastSummary().catch(() => {}),
+  ]);
   // 计划列表数据在打开「计划管理」时再扫；聊天页不占右栏
   // Re-paint after split index (and session) so card CTAs match disk state.
   renderChatPage();

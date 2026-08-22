@@ -739,8 +739,25 @@ function wireShellNav() {
               }
             } catch (_) {}
           },
-          goRun: () => appVm.goRun(),
-          goResult: () => appVm.goResult(),
+          goRun: () => {
+            appVm.goRun();
+            // 病根④：切进执行台不再空等下一个 poll tick（最长 ~2s 陈旧板）；
+            // 立刻拉一次 live SoT 让看板即时刷新（单次 IPC，与轮询同源、幂等）。
+            try {
+              if (typeof window.loadLive === "function") {
+                window.loadLive().catch(() => {});
+              }
+            } catch (_) {}
+          },
+          goResult: () => {
+            appVm.goResult();
+            // 结果台同样读 live SoT：切入即拉一次，避免等轮询。
+            try {
+              if (typeof window.loadLive === "function") {
+                window.loadLive().catch(() => {});
+              }
+            } catch (_) {}
+          },
         })
           .then((navigated) => {
             if (navigated) syncAfterRing();

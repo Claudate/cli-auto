@@ -137,30 +137,33 @@ export async function loadPlanItems() {
         }
       }
     }
-    // 仅 pin 仍在磁盘上的选中/草稿
-    const pinInject = [
-      state.selectedPlan,
-      state.chatDraftPlan,
-    ];
-    for (const raw of pinInject) {
-      if (!raw) continue;
-      const path = normalizePlanPath(raw, root) || raw;
-      if (!path) continue;
-      if (
-        typeof isPlanUnderProject === "function" &&
-        !isPlanUnderProject(path, root)
-      ) {
-        continue;
-      }
-      if (items.some((it) => it.path === path)) continue;
-      // eslint-disable-next-line no-await-in-loop
-      let exists = false;
-      try {
-        exists = await chatApi.planMdExists(root, path);
-      } catch (_) {
-        exists = false;
-      }
-      if (!exists) {
+    // 仅 pin 仍在磁盘上的选中/草稿（存在性检查并行，避免逐个 await 的切换延迟）
+    const pinInject = (() => {
+      const seenPin = new Set();
+      return [
+        { raw: state.selectedPlan },
+        { raw: state.chatDraftPlan },
+      ]
+        .filter((e) => e.raw)
+        .map((e) => ({ raw: e.raw, path: normalizePlanPath(e.raw, root) || e.raw }))
+        .filter((e) => {
+          if (
+            !e.path ||
+            (typeof isPlanUnderProject === "function" && !isPlanUnderProject(e.path, root)) ||
+            items.some((it) => it.path === e.path) ||
+            seenPin.has(e.path)
+          ) {
+            return false;
+          }
+          seenPin.add(e.path);
+          return true;
+        });
+    })();
+    const pinExists = await Promise.all(
+      pinInject.map((e) => chatApi.planMdExists(root, e.path).catch(() => false))
+    );
+    pinInject.forEach(({ raw, path }, i) => {
+      if (!pinExists[i]) {
         // 清掉指向已删文件的选中
         if (state.selectedPlan === raw || state.selectedPlan === path) {
           state.selectedPlan = null;
@@ -168,7 +171,7 @@ export async function loadPlanItems() {
         if (state.chatDraftPlan === raw || state.chatDraftPlan === path) {
           state.chatDraftPlan = null;
         }
-        continue;
+        return;
       }
       items.unshift({
         path,
@@ -176,7 +179,7 @@ export async function loadPlanItems() {
         ever_completed: false,
         last_run_status: null,
       });
-    }
+    });
     // 全量保留在 planItemsAll
     state.planItemsAll = items;
     // Sync chooser path list when rail loads first

@@ -83,22 +83,33 @@ async function ensurePinnedPlanItems(items, pinPaths, root) {
     state.selectedPlan,
     state.planItems,
   ].filter(Boolean);
+  // Normalize + dedup candidates first, then check disk existence in parallel
+  // (was one serial planMdExists IPC per candidate — switch-latency on plans page).
+  const pending = [];
+  const pinSeen = new Set();
   for (const raw of candidates) {
     const path =
       typeof normalizePlanPath === "function"
         ? normalizePlanPath(raw, root) || raw
         : raw;
-    if (!path || seen.has(path)) continue;
+    if (!path || typeof path !== "string" || seen.has(path) || pinSeen.has(path)) continue;
     if (
       typeof host.isPlanUnderProject === "function" &&
       !host.isPlanUnderProject(path, root)
     ) {
       continue;
     }
-    // Source must exist on disk; deleted chat-*.md must not reappear
-    // eslint-disable-next-line no-await-in-loop
-    const ok = await chatApi.planMdExists(root, path);
-    if (!ok) continue;
+    pinSeen.add(path);
+    pending.push(path);
+  }
+  // Source must exist on disk; deleted chat-*.md must not reappear.
+  const oks = await Promise.all(
+    pending.map((path) =>
+      chatApi.planMdExists(root, path).catch(() => false)
+    )
+  );
+  pending.forEach((path, i) => {
+    if (!oks[i] || seen.has(path)) return;
     seen.add(path);
     const meta =
       typeof host.planMetaForPath === "function"
@@ -109,7 +120,7 @@ async function ensurePinnedPlanItems(items, pinPaths, root) {
       path,
       title: meta.title || null,
     });
-  }
+  });
   return list;
 }
 

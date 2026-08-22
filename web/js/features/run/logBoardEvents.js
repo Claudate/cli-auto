@@ -1,6 +1,6 @@
 /**
  * [INPUT]: board DOM · tasks · logActions · logHost · renderCliBoard cb
- * [OUTPUT]: bindCliBoardEvents — 窗内 click/drag 重绑
+ * [OUTPUT]: bindCliBoardEvents — 窗内 click/drag 重绑 · setBoardTasks 活引用（跳过重绑时仍读新数据）
  * [POS]: A5-2c features/run；自 logBoard 纵切（P-ship-D）· P4-4 聚焦分发同步右次级列
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
@@ -19,6 +19,15 @@ const S = host.S;
 const $$ = host.$$;
 const toast = host.toast;
 const callG = host.callG;
+
+// Live task snapshot for the currently painted board. Handlers read from this
+// module ref instead of closing over the per-render `tasks` array, so a bound
+// handler always acts on fresh data — which is what makes it safe to SKIP
+// re-binding on incremental (canPatch) renders where no card chrome changed.
+let _boardTasks = [];
+export function setBoardTasks(tasks) {
+  _boardTasks = Array.isArray(tasks) ? tasks : [];
+}
 
 function focusTask(taskId, tasks) {
   if (!taskId) return;
@@ -42,17 +51,18 @@ function focusTask(taskId, tasks) {
  * @param {(tasks: Array) => void} renderCliBoard
  */
 export function bindCliBoardEvents(board, tasks, renderCliBoard) {
+  setBoardTasks(tasks);
   $$("[data-close]", board).forEach((b) => {
     b.onclick = (e) => {
       e.stopPropagation();
       S().closedPanels[b.dataset.close] = true;
-      renderCliBoard(tasks);
+      renderCliBoard(_boardTasks);
     };
   });
   $$("[data-focus]", board).forEach((b) => {
     b.onclick = (e) => {
       e.stopPropagation();
-      focusTask(b.dataset.focus, tasks);
+      focusTask(b.dataset.focus, _boardTasks);
     };
   });
   // 点流程卡（非按钮/日志体）→ 右侧详情快速切换
@@ -67,13 +77,13 @@ export function bindCliBoardEvents(board, tasks, renderCliBoard) {
       }
       const id = card.dataset.task;
       if (!id) return;
-      focusTask(id, tasks);
+      focusTask(id, _boardTasks);
     };
   });
   $$("[data-copy]", board).forEach((b) => {
     b.onclick = async (e) => {
       e.stopPropagation();
-      const t = tasks.find((x) => x.task_id === b.dataset.copy);
+      const t = _boardTasks.find((x) => x.task_id === b.dataset.copy);
       const text = aiLogPlainText(t);
       try {
         await navigator.clipboard.writeText(text || "");
@@ -113,7 +123,7 @@ export function bindCliBoardEvents(board, tasks, renderCliBoard) {
         // Force log body refill when expanding
         if (next) delete S().logPanelSig[id];
       }
-      if (next) renderCliBoard(tasks);
+      if (next) renderCliBoard(_boardTasks);
     };
   });
 

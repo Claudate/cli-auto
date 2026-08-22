@@ -239,17 +239,18 @@ export async function loadPlansForPicker() {
   if (state.planChooserOpen) host.renderPlanChooser();
   try {
     const root = state.selectedPath;
-    // Parallel: run meta + SQLite split index (plan list reopen / 已拆分 badge)
-    try {
-      if (typeof host.loadPlanSplitIndex === "function") {
-        await host.loadPlanSplitIndex(root);
-      }
-    } catch (_) {}
-    // H2: prefer list_plan_meta (path + ever_completed / last_run_*); fall back to paths
+    // Parallel: SQLite split index + plan meta are independent — one round-trip
+    // wall-time instead of two serial awaits (switch-latency).
     let list = [];
     let metas = null;
     try {
-      metas = await requireGateway().getPlanMeta(root);
+      const [, m] = await Promise.all([
+        typeof host.loadPlanSplitIndex === "function"
+          ? host.loadPlanSplitIndex(root).catch(() => {})
+          : Promise.resolve(),
+        requireGateway().getPlanMeta(root).catch(() => null),
+      ]);
+      metas = m;
     } catch (_) {
       metas = null;
     }

@@ -400,7 +400,17 @@ export function renderPlanChooser() {
     );
   }
 
-  list.innerHTML = rows.join("");
+  // Fingerprint guard: renderPlanChooser fires ~3× per loadPlansForPicker
+  // (loading → loaded → post-select). Skip the innerHTML churn when the row
+  // markup is byte-identical to what's already painted.
+  const html = rows.join("");
+  const sig = `${expanded ? 1 : 0}|${state.selectedPlan || ""}|${html.length}|${html}`;
+  if (list.dataset.chooserSig === sig && list.childElementCount > 0) {
+    updateChooserAssignState();
+    return;
+  }
+  list.innerHTML = html;
+  list.dataset.chooserSig = sig;
   updateChooserAssignState();
 }
 

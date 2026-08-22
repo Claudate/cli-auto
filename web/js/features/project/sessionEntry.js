@@ -84,6 +84,47 @@ export {
   stampSplitDeskProject,
 };
 
+/**
+ * TEMP switch profiler (opt-in): `localStorage['cco.perfSwitch']='1'` to enable.
+ * Times each awaited step of selectProject so we can pinpoint the 2–3s stall
+ * (backend project_live_view/list_plan_meta measured ~40ms — the cost is here).
+ * `window.__ccoSwitchPerf` holds the last breakdown for inspection.
+ */
+function switchPerfOn() {
+  try {
+    return localStorage.getItem("cco.perfSwitch") === "1";
+  } catch (_) {
+    return false;
+  }
+}
+function makeSwitchPerf(path) {
+  if (!switchPerfOn() || typeof performance === "undefined") {
+    return { step: async (_l, fn) => fn(), done: () => {} };
+  }
+  const t0 = performance.now();
+  const rows = [];
+  return {
+    async step(label, fn) {
+      const s = performance.now();
+      try {
+        return await fn();
+      } finally {
+        rows.push([label, +(performance.now() - s).toFixed(1)]);
+      }
+    },
+    done() {
+      const total = +(performance.now() - t0).toFixed(1);
+      const out = { path, total_ms: total, steps: rows };
+      window.__ccoSwitchPerf = out;
+      // eslint-disable-next-line no-console
+      console.table(rows.map(([step, ms]) => ({ step, ms })));
+      // eslint-disable-next-line no-console
+      console.log(`[switch] ${path} total ${total}ms`);
+    },
+  };
+}
+
+
 export function isPlanSessionActive(phase = state.phase) {
   return (
     phase === "planning" ||
@@ -459,13 +500,30 @@ export async function tryRestorePlanJobForPlan(planPath, opts = {}) {
 
 /**
  * Load SQLite split index into state.planSplitByPath for list badges.
+ * Switch-latency: one switch fans this IPC out 2–4× (project→chat, plansMgmt
+ * double). Short TTL + inflight dedupe collapses the burst to one round-trip;
+ * pass { force:true } after a split completes to bypass and re-read disk truth.
  * @param {string} [projectPath]
+ * @param {{force?:boolean}} [opts]
  */
-export async function loadPlanSplitIndex(projectPath = state.selectedPath) {
+const _splitIdxCache = new Map(); // projectPath -> { at, by }
+const _splitIdxInflight = new Map(); // projectPath -> Promise
+const SPLIT_IDX_TTL_MS = 1500;
+export async function loadPlanSplitIndex(projectPath = state.selectedPath, opts = {}) {
   if (!projectPath) {
     state.planSplitByPath = {};
     return {};
   }
+  if (!opts.force) {
+    const cached = _splitIdxCache.get(projectPath);
+    if (cached && Date.now() - cached.at < SPLIT_IDX_TTL_MS) {
+      state.planSplitByPath = cached.by;
+      return cached.by;
+    }
+    const inflight = _splitIdxInflight.get(projectPath);
+    if (inflight) return inflight;
+  }
+  const run = (async () => {
   try {
     const rows = (await requireGateway().listPlanSplitIndex(projectPath)) || [];
     const by = {};
@@ -489,12 +547,19 @@ export async function loadPlanSplitIndex(projectPath = state.selectedPath) {
       by[raw] = entry;
     }
     state.planSplitByPath = by;
+    _splitIdxCache.set(projectPath, { at: Date.now(), by });
     return by;
   } catch (e) {
     console.warn("loadPlanSplitIndex", e);
     state.planSplitByPath = state.planSplitByPath || {};
     return state.planSplitByPath;
   }
+  })();
+  _splitIdxInflight.set(projectPath, run);
+  run.finally(() => {
+    if (_splitIdxInflight.get(projectPath) === run) _splitIdxInflight.delete(projectPath);
+  });
+  return run;
 }
 
 /** Lookup restorable split index row for a plan path. */
@@ -927,12 +992,17 @@ export async function selectProject(path) {
   // Bind VM/DOM to restored job (or keep clear) before any async paint path
   rebindSplitToOpenProject();
 
+  // TEMP profiler: enable via localStorage['cco.perfSwitch']='1'
+  const perf = makeSwitchPerf(path);
+
   // H0：先拉 live / plans，再 applyEntryRoute（禁止提前 showPage("workspace")）
   renderProjectList();
   // T5: 切项目关键路径只等本地 SoT（live/plans）。doctor 与切换彻底解耦——
   // 环境检查有独立生命周期（用户点「环境检查」/ confirm 开跑前预检 / doctor 页自身），
   // 不由切换触发。此处不再 ensureDoctor；warn bar 在用户进环境检查后自行显示。
-  await Promise.all([host.loadLive(), host.loadPlansForPicker()]);
+  await perf.step("loadLive+loadPlans", () =>
+    Promise.all([host.loadLive(), host.loadPlansForPicker()])
+  );
   // Stale selectProject: user switched again while we awaited
   if (!scopeGenStillCurrent(scopeGen) || state.selectedPath !== path) {
     return;
@@ -947,7 +1017,7 @@ export async function selectProject(path) {
       stampJobRunIdFromLiveIfSafe();
     }
     rebindSplitToOpenProject();
-    await applyEntryRoute();
+    await perf.step("applyEntryRoute(mem)", () => applyEntryRoute());
     if (!scopeGenStillCurrent(scopeGen)) return;
     if (state.phase === "planning" && state.planJobId) {
       await host.refreshPlanJob().catch(() => {});
@@ -960,6 +1030,7 @@ export async function selectProject(path) {
     ) {
       toast("已回到后台规划");
     }
+    perf.done();
     return;
   }
 
@@ -967,16 +1038,19 @@ export async function selectProject(path) {
   // 活动 run 优先；planned/confirmed 恢复后 A1 落拆分台
   const activeRun = hasActiveRun();
   if (!activeRun) {
-    const restoredDisk = await tryRestorePersistedPlanJob(path);
+    const restoredDisk = await perf.step("restorePersistedPlanJob", () =>
+      tryRestorePersistedPlanJob(path)
+    );
     if (!scopeGenStillCurrent(scopeGen) || state.selectedPath !== path) {
       return;
     }
     if (restoredDisk) {
       rebindSplitToOpenProject();
-      await applyEntryRoute();
+      await perf.step("applyEntryRoute(disk)", () => applyEntryRoute());
       if (state.phase === "planning" && state.planJobId) {
         await host.refreshPlanJob().catch(() => {});
       }
+      perf.done();
       return;
     }
   }
@@ -1008,14 +1082,16 @@ export async function selectProject(path) {
   const candidate = normalizePlanPath(rawCandidate, path) || rawCandidate;
   if (candidate) {
     try {
-      await host.selectPlan(candidate, { keepSession: true });
+      await perf.step("selectPlan(preview)", () =>
+        host.selectPlan(candidate, { keepSession: true })
+      );
     } catch (e) {
       console.warn("restore plan failed", e);
       state.selectedPlan = candidate;
     }
   }
   // 最终落点：仅活动 run / 暂停 → workspace；否则 chat
-  await applyEntryRoute();
+  await perf.step("applyEntryRoute(final)", () => applyEntryRoute());
   // 双保险：无在跑/暂停任务时不得停在 workspace
   if (state.page === "workspace") {
     const running =
@@ -1029,4 +1105,5 @@ export async function selectProject(path) {
       } catch (_) {}
     }
   }
+  perf.done();
 }

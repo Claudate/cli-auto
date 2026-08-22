@@ -301,6 +301,21 @@ export function renderChatSessionSelect() {
     "#chat-session-history > summary, .chat-session-history-btn"
   );
   const busyOrNoPath = !state.selectedPath || !!state.chatBusy;
+  // Switch-latency: renderChatPage runs ~3× per open; skip the session-list
+  // innerHTML rebuild when nothing that affects it changed (fingerprint guard).
+  const _sessSig = JSON.stringify({
+    cur,
+    np: !state.selectedPath,
+    busy: !!state.chatBusy,
+    loading: !!state.chatSessionListLoading,
+    rows: rows.map((r) => [
+      r.session_id || "",
+      r.title || "",
+      r.message_count ?? 0,
+      r.preview || "",
+      r.draft_plan_title || "",
+    ]),
+  });
   if (newBtn) newBtn.disabled = busyOrNoPath;
   if (newInPanel) newInPanel.disabled = busyOrNoPath;
   if (historyBtn) {
@@ -316,8 +331,14 @@ export function renderChatSessionSelect() {
   const panelList = $("#chat-session-panel-list");
   if (panelList) {
     bindChatSessionPanelPick(panelList);
-    if (panelList.querySelector(".chat-session-item.is-renaming")) {
-      // A rename input is open — a background refresh must not blow it away.
+    const _renaming = panelList.querySelector(".chat-session-item.is-renaming");
+    const _skipSessRebuild =
+      !_renaming &&
+      panelList.dataset.chatSig === _sessSig &&
+      panelList.childElementCount > 0;
+    if (_renaming || _skipSessRebuild) {
+      // A rename input is open, or the list is unchanged since last paint —
+      // a background refresh / repeated renderChatPage must not blow it away.
       // The list repaints on the next render after rename commits/cancels.
     } else if (!state.selectedPath) {
       panelList.innerHTML =
@@ -385,6 +406,7 @@ export function renderChatSessionSelect() {
         })
         .join("");
     }
+    panelList.dataset.chatSig = _renaming ? "" : _sessSig;
   }
 
   // Legacy select (if still in DOM from older shell)
@@ -454,8 +476,11 @@ export async function switchChatSession(sessionId) {
   // Prefer cache for instant paint
   restoreChatSession(state.selectedPath, sid);
   host.renderChatPage();
-  await loadChatSession({ force: true, sessionId: sid });
-  await loadChatSessionList();
+  // Switch-latency: target history + session-list refresh are independent → parallel.
+  await Promise.all([
+    loadChatSession({ force: true, sessionId: sid }),
+    loadChatSessionList().catch(() => {}),
+  ]);
   collapseChatSessionMore();
 }
 

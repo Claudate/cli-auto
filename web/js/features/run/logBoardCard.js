@@ -152,6 +152,9 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
   const sum = callG("taskErrorSummary", t) || "";
   const autoCommit = t.auto_commit || t.autoCommit || null;
   const autoCommitText = autoCommitSummary(autoCommit);
+  // Tracks whether this render recreated the card's inner chrome (innerHTML),
+  // which drops all per-button handlers → caller must re-bind events.
+  let chromeRebuilt = false;
   if (!S().panelPos) S().panelPos = {};
   const pos = S().panelPos[t.task_id];
   let card = canPatch
@@ -218,6 +221,7 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
   ].join("|");
 
   if (card.dataset.chrome !== chromeSig) {
+    chromeRebuilt = true;
     // Preserve log scroll across chrome rebuild (status/badge/cost changes).
     const prevBody = card.querySelector(".cli-window-body");
     const prevScroll = prevBody ? prevBody.scrollTop : 0;
@@ -468,5 +472,5 @@ export function upsertCliWindowCard(board, t, idx, canPatch) {
     }
   }
 
-  return card;
+  return { card, chromeRebuilt };
 }

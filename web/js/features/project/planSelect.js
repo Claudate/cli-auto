@@ -205,6 +205,16 @@ export async function selectPlan(planPath, opts = {}) {
 
   state.selectedPlan = next;
   if (next) state.chatDraftPlan = next;
+  // Re-click of the already-selected plan with preview cached → repaint only,
+  // no previewPlan IPC (switch-latency; also absorbs the double selectPlan call
+  // from startExecuteFromSelection → selectPlanRailItem).
+  if (samePlan && state.planPreview && !opts.force) {
+    host.renderPhasePanels();
+    host.renderPlanPicker();
+    host.updateTopPlanInfo();
+    if (state.planChooserOpen) host.updateChooserAssignState();
+    return;
+  }
   state.planPreview = null;
   host.renderPhasePanels();
   host.renderPlanPicker();

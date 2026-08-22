@@ -13,7 +13,7 @@ import {
   stallStripText,
   upsertCliWindowCard,
 } from "./logBoardCard.js";
-import { bindCliBoardEvents } from "./logBoardEvents.js";
+import { bindCliBoardEvents, setBoardTasks } from "./logBoardEvents.js";
 import { sortTasksByStatus, taskBucket } from "./runBuckets.js";
 
 const g = host.g;
@@ -205,8 +205,13 @@ function renderCliBoardInner(tasks) {
     board.dataset.visKey = visKey;
   }
 
+  // Track whether any card recreated its chrome this render. A full rebuild
+  // (!canPatch) always needs binding; an incremental render only needs it when
+  // some card's innerHTML was regenerated (which drops that card's handlers).
+  let anyChromeRebuilt = !canPatch;
   visible.forEach((t, idx) => {
-    upsertCliWindowCard(board, t, idx, canPatch);
+    const r = upsertCliWindowCard(board, t, idx, canPatch);
+    if (r && r.chromeRebuilt) anyChromeRebuilt = true;
   });
 
   // remove stale cards + re-order to match visible sort when patching
@@ -235,8 +240,13 @@ function renderCliBoardInner(tasks) {
     shell.scrollTop = shellScrollTop;
   }
 
-  // events (rebind only on full structure rebuild — capture-phase document handler covers clicks)
-  bindCliBoardEvents(board, tasks, renderCliBoard);
+  // events: always refresh the live task snapshot handlers read from; only
+  // re-bind DOM handlers when structure or some card's chrome actually changed
+  // (skips the ~7 querySelectorAll sweeps on quiet incremental polls).
+  setBoardTasks(tasks);
+  if (anyChromeRebuilt) {
+    bindCliBoardEvents(board, tasks, renderCliBoard);
+  }
   __fitAfter();
 }
 
