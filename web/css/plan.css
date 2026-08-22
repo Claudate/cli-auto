@@ -1844,6 +1844,11 @@
   flex: 1 1 240px;
   overflow: hidden;
 }
+/* 多计划：钻进单份步骤时的「← 本波总览」返回口 */
+.split-wave-back {
+  margin: 0.15rem 0 0.35rem;
+  font-size: 0.85rem;
+}
 .split-actions {
   display: flex;
   flex-wrap: wrap;

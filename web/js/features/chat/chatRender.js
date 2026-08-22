@@ -184,11 +184,12 @@ export async function claimWaveBundle(btn) {
     try {
       renderChatMessages({ force: true });
     } catch (_) {}
-    // W2-5: jump to 计划管理 so user sees 本波 group
+    // W2-6: land the saved wave in the 拆分 tab (overview) — not 计划管理.
+    // Disk/selection + nav only; no confirm_start / start_run.
     try {
-      const { openPlanManagement } = await import("./plansMgmt.js");
-      if (typeof openPlanManagement === "function") {
-        await openPlanManagement();
+      const m = await import("../project/splitWaveLanding.js");
+      if (typeof m.landWaveInSplitTab === "function") {
+        await m.landWaveInSplitTab(resp, host);
       }
     } catch (_) {}
     return resp;

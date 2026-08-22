@@ -4,6 +4,7 @@
  * [POS]: A5-2b-fin features/project/confirmActions.js
  * note: confirm desk → ccoSplit; replan/sanitize via gateway
  * note: 无 job/无 tasks 必 paintConfirmEmptyState（CTA）；setJob force + post-paint 空白守卫
+ * note: 无单份 job 但本项目是一波多计划 → 升级为本波总览（splitWaveLanding · 复用 chat wave 模块）
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
  */
 
@@ -58,6 +59,7 @@ import {
   rebindSplitToOpenProject,
   stampSplitDeskProject,
 } from "./projectScope.js";
+import { paintWaveLanding, toggleWaveBackLink } from "./splitWaveLanding.js";
 
 /**
  * Explicit empty/error surface for confirm desk — never leave #confirm-waves blank
@@ -122,11 +124,15 @@ export function renderConfirmPanel() {
       clearSplitUiBinding({ scrubState: false });
     } catch (_) {}
     if (state.phase === "confirm") {
+      const root = state.selectedPath;
+      // 先画保底空态（永不空白），再异步升级为本波总览（若本项目是一波多计划）
       paintConfirmEmptyState(
-        state.selectedPath
+        root
           ? "当前项目还没有可展示的拆分结果。请先「拆成步骤」，或从计划列表打开已有拆分。"
           : "请先选择项目，再拆计划。"
       );
+      toggleWaveBackLink(null);
+      paintWaveLanding(root).catch(() => {});
     }
     return;
   }
@@ -139,6 +145,10 @@ export function renderConfirmPanel() {
       metaN > 0
         ? `拆分记录有 ${metaN} 步，但步骤明细没加载出来。请点「重新规划」或稍后再打开。`
         : "这份拆分没有步骤可展示。请重新规划，或改用快速拆分。"
+    );
+    toggleWaveBackLink(
+      job.plan_path || job.planPath || state.selectedPlan || null,
+      renderConfirmPanel
     );
     const err = $("#confirm-error");
     if (err) {
@@ -166,6 +176,10 @@ export function renderConfirmPanel() {
       }
       window.ccoSplit.render();
       stampSplitDeskProject(state.selectedPath);
+      toggleWaveBackLink(
+        job.plan_path || job.planPath || state.selectedPlan || null,
+        renderConfirmPanel
+      );
       // Post-paint guard: if waves still empty despite tasks, surface instead of silent blank
       try {
         const waves = $("#confirm-waves");
@@ -204,6 +218,10 @@ export function renderConfirmPanel() {
   }
   stampSplitDeskProject(state.selectedPath);
   host.updateSplitPlanChip();
+  toggleWaveBackLink(
+    job.plan_path || job.planPath || state.selectedPlan || null,
+    renderConfirmPanel
+  );
 }
 
 /** A5-2b: one-line → features/split（无 classic fallback 业务） */
