@@ -29,7 +29,7 @@ use crate::runtime::provider::TaskStatus;
 use crate::state::{self, RouteSource, RunState, RunStatus, TaskAutoCommitResult};
 use crate::terminal::{SessionKind, TerminalManager};
 
-use super::runs::{list_runs, load_run, RunSummary};
+use super::runs::{list_runs_for_project, load_run, RunSummary};
 use super::util::{
     compact_log_tail_for_live, kill_pid, paths_match, read_log_tail, status_str, task_status_str,
 };
@@ -183,22 +183,19 @@ pub fn project_live_view(
         .map(|p| p.display_name())
         .unwrap_or(name);
 
-    let runs = list_runs(config)?;
-    let for_proj: Vec<&RunSummary> = runs
-        .iter()
-        .filter(|r| paths_match(Path::new(&r.project_root), project))
-        .collect();
     // SQLite：用户「结束计划」后的 run 不当作当前 live（避免重开项目又进结果台）
     // paused = 台态/残留，不是「真在跑」；不得盖住更新的 completed/aborted（wros 空台根因）。
     let dismissed = crate::state::project_ui::try_get_dismissed_run_id(config, project);
-    let Some(sum) = choose_current_run(&for_proj, dismissed.as_deref()) else {
+    // T2: pointer-first. Jump straight to load_run for the project's current run;
+    // only fall back to a narrow per-project scan on miss/dismissed/hidden.
+    // Never scans全历史 via list_runs.
+    let Some(rs) = resolve_current_run(config, project, dismissed.as_deref())? else {
         return Ok(empty_live_view(project, &name, config));
     };
-
-    let rs = load_run(config, &sum.run_id)?;
+    let sum_status = format!("{:?}", rs.status).to_ascii_lowercase();
     // New hard-live run id different from dismissed → clear dismiss (new round)
     if let Some(ref d) = dismissed {
-        if d != &sum.run_id && is_hard_live_run_status(&sum.status) {
+        if d != &rs.run_id && is_hard_live_run_status(&sum_status) {
             crate::state::project_ui::try_clear_dismissed_run_id(config, project);
         }
     }
@@ -483,6 +480,42 @@ fn is_hard_live_run_status(status: &str) -> bool {
         status.to_ascii_lowercase().as_str(),
         "running" | "validated" | "init" | "starting" | "queued" | "resuming"
     )
+}
+
+/// Resolve the project's current run without scanning all history.
+///
+/// 1. Pointer fast-path (`project_ui_prefs.current_run_id`): `load_run` directly.
+///    The pointed run must still belong to this project and must not be a
+///    dismissed/hidden run — otherwise fall through so an older result can show.
+/// 2. Fallback: narrow per-project scan (`list_runs_for_project`, peek-and-skip
+///    other projects) + [`choose_current_run`]. Never uses global `list_runs`.
+fn resolve_current_run(
+    config: &Config,
+    project: &Path,
+    dismissed: Option<&str>,
+) -> Result<Option<RunState>> {
+    if let Some(pid) = crate::state::project_ui::try_get_current_run_id(config, project) {
+        let pid = pid.trim();
+        if !pid.is_empty() {
+            if let Ok(rs) = load_run(config, pid) {
+                if paths_match(&rs.project_root, project) {
+                    let status = format!("{:?}", rs.status).to_ascii_lowercase();
+                    if !crate::state::project_ui::should_hide_run_as_current(
+                        dismissed, &rs.run_id, &status,
+                    ) {
+                        return Ok(Some(rs));
+                    }
+                }
+            }
+        }
+    }
+    // Fallback: narrow per-project scan (no global history walk).
+    let for_proj = list_runs_for_project(config, project)?;
+    let refs: Vec<&RunSummary> = for_proj.iter().collect();
+    match choose_current_run(&refs, dismissed) {
+        Some(sum) => Ok(Some(load_run(config, &sum.run_id)?)),
+        None => Ok(None),
+    }
 }
 
 /// Pick current project live among newest-first summaries.
@@ -864,5 +897,69 @@ mod tests {
         assert!(!is_hard_live_run_status("paused"));
         assert!(is_hard_live_run_status("running"));
         assert!(is_hard_live_run_status("Starting"));
+    }
+
+    fn write_run_json(runs_dir: &std::path::Path, run_id: &str, project: &std::path::Path, status: &str) {
+        let dir = runs_dir.join(run_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = format!(
+            r#"{{"schema":"cco-run/v1","run_id":"{run_id}","project_root":"{project}","plan_path":"{project}/plans/p.md","adapter":"raw-single","started_at":"2026-08-22T00:00:00Z","finished_at":"2026-08-22T00:00:01Z","status":"{status}","tasks":{{}}}}"#,
+            run_id = run_id,
+            project = project.display(),
+            status = status,
+        );
+        std::fs::write(dir.join("run.json"), body).unwrap();
+    }
+
+    #[test]
+    fn resolve_current_run_pointer_bypasses_newer_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj-a");
+        let mut config = crate::config::Config::default();
+        config.state_root = tmp.path().join("state");
+        std::fs::create_dir_all(config.runs_dir()).unwrap();
+        let runs = config.runs_dir();
+        // Older run A + newer run B, both completed. Newest-first fallback would pick B.
+        write_run_json(&runs, "20260101T000000Z-aaaa", &project, "completed");
+        write_run_json(&runs, "20260102T000000Z-bbbb", &project, "completed");
+        // Pointer → A. resolve must honor the pointer, NOT scan to newest B.
+        crate::state::project_ui::try_set_current_run_id(&config, &project, "20260101T000000Z-aaaa");
+
+        let got = resolve_current_run(&config, &project, None).unwrap().unwrap();
+        assert_eq!(got.run_id, "20260101T000000Z-aaaa", "pointer fast-path must win over newest");
+    }
+
+    #[test]
+    fn resolve_current_run_dismissed_pointer_falls_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj-a");
+        let mut config = crate::config::Config::default();
+        config.state_root = tmp.path().join("state");
+        std::fs::create_dir_all(config.runs_dir()).unwrap();
+        let runs = config.runs_dir();
+        write_run_json(&runs, "20260101T000000Z-aaaa", &project, "completed");
+        write_run_json(&runs, "20260102T000000Z-bbbb", &project, "completed");
+        crate::state::project_ui::try_set_current_run_id(&config, &project, "20260101T000000Z-aaaa");
+
+        // Pointed run A is dismissed & not hard-live → fall through to narrow scan → newest non-dismissed B.
+        let got = resolve_current_run(&config, &project, Some("20260101T000000Z-aaaa"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(got.run_id, "20260102T000000Z-bbbb", "dismissed pointer must fall back to newest");
+    }
+
+    #[test]
+    fn resolve_current_run_no_pointer_uses_narrow_scan() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj-a");
+        let mut config = crate::config::Config::default();
+        config.state_root = tmp.path().join("state");
+        std::fs::create_dir_all(config.runs_dir()).unwrap();
+        let runs = config.runs_dir();
+        write_run_json(&runs, "20260101T000000Z-aaaa", &project, "completed");
+        write_run_json(&runs, "20260102T000000Z-bbbb", &project, "completed");
+        // No pointer set → fallback narrow scan picks newest.
+        let got = resolve_current_run(&config, &project, None).unwrap().unwrap();
+        assert_eq!(got.run_id, "20260102T000000Z-bbbb");
     }
 }

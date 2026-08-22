@@ -124,10 +124,34 @@ impl ProviderRegistry {
         self.providers.iter().map(|p| p.name()).collect()
     }
 
+    /// Preflight every registered provider **concurrently**.
+    ///
+    /// Each shell-print provider preflight spawns a `--version` subprocess and
+    /// each claude/sdk preflight may touch the filesystem; running them serially
+    /// summed 8+ node-CLI cold starts on the doctor path. Spawn all, then await
+    /// in registration order so the returned Vec (and thus doctor line order)
+    /// stays stable while wall-clock collapses to the slowest single probe.
     pub async fn preflight_all(&self) -> Vec<(String, Result<()>)> {
-        let mut out = Vec::new();
-        for p in &self.providers {
-            out.push((p.name().to_string(), p.preflight().await));
+        let handles: Vec<_> = self
+            .providers
+            .iter()
+            .map(|p| {
+                let p = Arc::clone(p);
+                tokio::spawn(async move {
+                    let name = p.name().to_string();
+                    (name, p.preflight().await)
+                })
+            })
+            .collect();
+        let mut out = Vec::with_capacity(handles.len());
+        for h in handles {
+            match h.await {
+                Ok(pair) => out.push(pair),
+                Err(e) => out.push((
+                    "<preflight_panic>".to_string(),
+                    Err(anyhow::anyhow!(e)),
+                )),
+            }
         }
         out
     }
