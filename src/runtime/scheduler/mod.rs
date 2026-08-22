@@ -208,22 +208,45 @@ impl Scheduler {
                 }
             }
 
-            if (failed.is_empty() || matches!(self.plan.on_failure, OnFailure::Continue))
-                && !failed.contains("__budget__")
-            {
-                let mut ready = ready_tasks(&self.plan, &done, &started);
-                ready.retain(|id| active_ids.contains(id));
-                self.spawn_ready(
-                    &active_ids,
-                    &mut ready,
-                    &mut running,
-                    &mut progress,
-                    &mut done,
-                    &mut failed,
-                    &mut started,
-                    retry_budget,
-                )
-                .await?;
+            // LX1: one pure tick decision drives spawn (borrowed from LoopX should-run).
+            // Ready set + budget + slots collapse into a single domain enum; the loop
+            // only executes its side effects (hard rule 8: thin orchestrator).
+            let mut ready = ready_tasks(&self.plan, &done, &started);
+            ready.retain(|id| active_ids.contains(id));
+            let snapshot = crate::domain::run::RunTickSnapshot {
+                spent: self.state.total_cost_usd(),
+                cap: self.run_max_budget_usd,
+                ready_ids: ready,
+                running: running.len(),
+                slot_cap: Some(self.max_parallel),
+                any_stalled: false,
+            };
+            let spawn_allowed = (failed.is_empty()
+                || matches!(self.plan.on_failure, OnFailure::Continue))
+                && !failed.contains("__budget__");
+            match crate::domain::run::decide_tick(&snapshot) {
+                crate::domain::run::TickDecision::Spawn(mut ids) if spawn_allowed => {
+                    self.spawn_ready(
+                        &active_ids,
+                        &mut ids,
+                        &mut running,
+                        &mut progress,
+                        &mut done,
+                        &mut failed,
+                        &mut started,
+                        retry_budget,
+                    )
+                    .await?;
+                }
+                // Halt (over budget) / Wait (slots full or nothing ready) / Spawn while
+                // paused-on-failure → spawn nothing this tick (quiet skip, no spend).
+                _ => {}
+            }
+
+            // Single budget catch (was scattered across reap / spawn fast-path): mark
+            // __budget__ once spend crosses the cap so the pause path fires next tick.
+            if self.budget_exceeded()? {
+                failed.insert("__budget__".into());
             }
 
             if self.should_exit_loop(&active_ids, &done, &failed, &started, &running) {

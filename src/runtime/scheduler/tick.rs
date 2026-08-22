@@ -222,9 +222,6 @@ impl Scheduler {
                                 Some(&work_dir),
                             )
                             .await?;
-                        if self.budget_exceeded()? {
-                            failed.insert("__budget__".into());
-                        }
                     }
                 }
                 other => {
@@ -327,10 +324,6 @@ impl Scheduler {
                                 Some(&work_dir),
                             )
                             .await?;
-                    }
-
-                    if self.budget_exceeded()? {
-                        failed.insert("__budget__".into());
                     }
                 }
             }
@@ -626,9 +619,6 @@ impl Scheduler {
                                     Some(&work_dir),
                                 )
                                 .await?;
-                        }
-                        if self.budget_exceeded()? {
-                            failed.insert("__budget__".into());
                         }
                     } else {
                         running.insert(id, (provider, handle, work_dir));
