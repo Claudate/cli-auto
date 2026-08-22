@@ -62,6 +62,7 @@ export const isPlanUnderProject = (...a) => call("isPlanUnderProject", ...a);
 export const selectPlan = (...a) => call("selectPlan", ...a);
 export const startExecuteFromSelection = (...a) =>
   call("startExecuteFromSelection", ...a);
+export const quickSplitFromPath = (...a) => call("quickSplitFromPath", ...a);
 export const loadPlansForPicker = (...a) => call("loadPlansForPicker", ...a);
 export const openPlanChooser = (...a) => call("openPlanChooser", ...a);
 export const updateChooserAssignState = (...a) =>

@@ -1318,6 +1318,17 @@ bin = "/Users/你/.local/bin/claude"</pre>
               <span>显示已执行</span>
             </label>
           </div>
+          <div class="plan-chooser-quicksplit">
+            <input
+              type="text"
+              id="chooser-path-input"
+              class="chooser-path-input"
+              placeholder="输入计划路径，如 plans/xxx.md，回车直接拆分"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button class="btn ghost sm" id="btn-chooser-path-go" type="button" title="校验可读后直接进拆分台">拆分</button>
+          </div>
           <div id="chooser-empty" class="empty-state soft" hidden style="min-height:100px;padding:1rem">
             <p class="muted">未发现计划文档。可点「选择文件…」指定一份 .md</p>
             <p class="muted" style="margin-top:.5rem">

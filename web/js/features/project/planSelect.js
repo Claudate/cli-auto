@@ -1,6 +1,6 @@
 /**
  * [INPUT]: legacy host + gateway via requireGateway
- * [OUTPUT]: confirm open · max parallel · selectPlan · pick file · default
+ * [OUTPUT]: confirm open · max parallel · selectPlan · pick file · default · quickSplit
  * [POS]: A5-2b-fin features/project/planSelect.js
  * note: confirm open · max parallel · selectPlan · pick file · default
  * [PROTOCOL]: 变更时更新此头部，然后检查 web/CLAUDE.md
@@ -278,6 +278,75 @@ export async function pickPlanFileForPicker() {
   } catch (e) {
     toast(String(e?.message || e));
   }
+}
+
+/**
+ * 快速拆分：拿一个计划**文件路径**（聊天里给的 / 拆分台输入的）→ 先校验可读，
+ * 再走既有 startExecuteFromSelection（analyze → start_plan_job → 拆分台；禁止 start_run）。
+ * 只对**当前项目内**可读的计划生效——项目外/读不到不静默进坏状态。
+ * @param {string} rawPath 计划路径（项目相对或项目内绝对；可带引号/反引号）
+ * @param {{source?:string, silentFail?:boolean}} [opts]
+ *   silentFail=true：读不到时不弹提示、返回 false（供裸路径识别回退到普通聊天）
+ * @returns {Promise<boolean>} 是否已路由到拆分台
+ */
+export async function quickSplitFromPath(rawPath, opts = {}) {
+  if (!state.selectedPath) {
+    if (!opts.silentFail) toast("请先选择项目");
+    return false;
+  }
+  if (hasActiveRun()) {
+    if (!opts.silentFail) toastRunLocked("拆分计划");
+    return false;
+  }
+  const cleaned = String(rawPath || "")
+    .trim()
+    .replace(/^['"`]+|['"`]+$/g, "")
+    .trim();
+  if (!cleaned) {
+    if (!opts.silentFail) toast("请提供计划文件路径");
+    return false;
+  }
+  const rel =
+    (typeof normalizePlanPath === "function"
+      ? normalizePlanPath(cleaned, state.selectedPath)
+      : null) || cleaned;
+  // 校验可读：读不到（不存在 / 项目外 / 空）就不进拆分台。
+  let readable = false;
+  try {
+    const md = await requireGateway().readPlanMd(state.selectedPath, rel);
+    readable = !!(md && String(md).trim());
+  } catch (_) {
+    readable = false;
+  }
+  if (!readable) {
+    if (!opts.silentFail) {
+      toast(`读不到计划文件：${cleaned}（请确认是当前项目内的计划路径）`);
+    }
+    return false;
+  }
+  // startExecuteFromSelection 真源在 projectPicker，经 host 聚合调用避免环形依赖。
+  await host.startExecuteFromSelection(rel, {
+    source: opts.source || "quick-split",
+    direct: true,
+  });
+  return true;
+}
+
+/** 拆分台/选计划弹窗：路径输入框回车 = 校验可读后直接进拆分台（一次性绑定）。 */
+export function bindChooserQuickSplitInput() {
+  const el = $("#chooser-path-input");
+  if (!el || el.dataset.qsWired === "1") return;
+  el.dataset.qsWired = "1";
+  el.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.isComposing) return;
+    e.preventDefault();
+    const v = (el.value || "").trim();
+    if (!v) {
+      toast("请输入计划文件路径");
+      return;
+    }
+    quickSplitFromPath(v, { source: "chooser" });
+  });
 }
 
 export async function setDefaultPlan() {
